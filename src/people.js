@@ -1,9 +1,9 @@
 // Människor: utseende, resor, beslut, trapphus och platser.
 import { pick, rand, randi, rng, shuffle } from './rng.js';
 import { fl } from './util.js';
-import { activityRate, roomUnits, FLOOR_HOURS, FL, NAMES, ROLE_NAMES, floorOpen, OFFICE_FLOORS, SPOTS, STAIR_X, TOP, VISIT_WHY, WAIT_X1, WALK, RATED_KG, LOBBY, CAFE, floorWith, EL, SKY } from './config.js';
-import { S, clockStr, hour, log } from './state.js';
-import { inFireZone, requestRide, loadKg, personKg, operational, canTake, eta } from './dispatch.js';
+import { activityRate, roomUnits, FLOOR_HOURS, FL, NAMES, ROLE_NAMES, floorOpen, OFFICE_FLOORS, SPOTS, STAIR_X, VISIT_WHY, WAIT_X1, WALK, LOBBY, CAFE, floorWith, EL, SKY } from './config.js';
+import { S, clockStr, hour, log, occOf, setOcc } from './state.js';
+import { inFireZone, requestRide, loadKg, personKg, canTake, eta } from './dispatch.js';
 import { techNext } from './service.js';
 import { alwaysStairs, castBoard, castNext, castPizza, castWaitTick, flushSay, say } from './cast.js';
 import { kickOff } from './elevators.js';
@@ -110,7 +110,7 @@ export function setTrip(p, goal, why, leaving = goal === p.exitFloor) {
 }
 export function releaseSpot(p) {
   const s = p.spot;
-  if (s && !s.temp && s.occ === p.id) s.occ = null;
+  if (s && !s.temp && occOf(s) === p.id) setOcc(s, null);
   p.spot = null;
 }
 const ROLE_SPOT_DESC = {
@@ -125,7 +125,7 @@ export function pickSpot(p, f) {
   const own = p.role && list.find(s => s.role === p.role);
   if (own) return own;
   if (p.role) return { x: rand(150, 470), k: 'stand', face: pick([1, -1]), desc: p.task || ROLE_SPOT_DESC[p.role] || 'Jobbar', temp: true };
-  const free = s => s.k === 'door' || !s.occ;
+  const free = s => s.k === 'door' || occOf(s) === null;
   if (p.kind === 'emp' && f === p.home && p.homeSpot !== undefined && free(list[p.homeSpot])) return list[p.homeSpot];
   const pref = list.filter(s => free(s) && (p.kind === 'emp' ? s.staff : !s.staff));
   const any = list.filter(free);
@@ -135,7 +135,7 @@ export function pickSpot(p, f) {
 }
 export function gotoSpot(p, f) {
   p.spot = pickSpot(p, f);
-  if (!p.spot.temp && p.spot.k !== 'door') p.spot.occ = p.id;
+  if (!p.spot.temp && p.spot.k !== 'door') setOcc(p.spot, p.id);
   p.tx = p.spot.x;
 }
 export function spawnEmployee() {
@@ -407,7 +407,7 @@ export function spawnStaff(role) {
   if (role === 'väktare') { p.route = [...floors].reverse().concat(LOBBY); p.ri = -1; }
   if (role === 'städare') p.route = shuffle([...floors]).slice(0, 4); // tre städare delar på huset
   if (role === 'vaktmästare') p.route = shuffle([...floors]).slice(0, 3);
-  const first = roleNext(p, hour()) || [5, ''];
+  const first = roleNext(p, hour()) || [p.exitFloor, 'Inget att göra i kväll – går hem'];
   setTrip(p, first[0], first[1], first[2]);
   S.people.push(p);
   pev(p, `Kliver in i entrén · ${ROLE_NAMES[role]} · ${p.why}`);

@@ -1,10 +1,10 @@
 // Incidenter: brand och strömavbrott.
-import { pick, rand, randi, rng, shuffle } from './rng.js';
+import { pick, rand } from './rng.js';
 import { fl } from './util.js';
-import { BX0, CAR_W, TOP, WAIT_X1, floorY, shaftCX, shaftX, surf, RATED_KG, OFFICE_FLOORS, floorWith, FL } from './config.js';
+import { OFFICE_FLOORS } from './config.js';
 import { S, hooks, hour, log } from './state.js';
 import { arriveOnFloor, pev, pn, setTrip, toStairs } from './people.js';
-import { allowed, inFireZone, rebuildPicks, loadKg, safeFloor } from './dispatch.js';
+import { allowed, inFireZone, rebuildPicks, safeFloor } from './dispatch.js';
 import { bounceBoarders, exitAll, restoreElevator } from './elevators.js';
 import { triggerFault } from './service.js';
 
@@ -32,7 +32,7 @@ export function startFire(f = pick(OFFICE_FLOORS.slice(1))) {
       pev(p, `Brandlarmet går! Ändrar mål till ${fl(p.exitFloor)}`);
       // står redan vid utgången (t.ex. VIP-gästerna vid helikoptern på taket): gå ut direkt i stället för att köa
       if (p.floor === p.exitFloor) arriveOnFloor(p);
-    }
+    } else if (['wait', 'toQueue', 'stairs', 'instairs'].includes(p.state) && p.goal === p.exitFloor) p.evac = true; // redan på väg ut
   }
   rebuildPicks();
   incidentStarted(f);
@@ -52,7 +52,7 @@ export function setFireMode(m) {
     for (const p of S.people) if (p.state === 'wait') p.assigned = null;
     log('🚒 BRANDÅTERKALLNING: alla hissar kör direkt till sin hemvåning (oftast E) och stängs av', 'alert');
   } else if (m === 'zone') {
-    const zmax = Math.max(0, F.floor - 2);
+    const zmax = F.floor - 2; // högsta våningen hissarna får köra till
     for (const p of S.people) if (p.state === 'wait' && (!allowed(p.floor) || !allowed(p.dest))) toStairs(p, `Hissarna kör bara upp till ${fl(zmax)} – tar trapporna`);
     for (const e of S.elevators) {
       const safe = safeFloor(e), drop = safe ?? e.minF;
@@ -67,13 +67,13 @@ export function setFireMode(m) {
       if (e.zoneLock) log(`🚧 ${e.name} når ingen våning utanför brandzonen – kör till ${fl(drop)} och stängs av`, 'alert', e.color);
       if (e.parkTarget !== null && !allowed(e.parkTarget)) e.parkTarget = drop;
     }
-    log(`🚧 BRANDZON SPÄRRAD: hissarna kör bara E–${fl(zmax)}`, 'alert');
+    log(`🚧 BRANDZON SPÄRRAD: hissarna kör bara upp till ${fl(zmax)}`, 'alert');
   } else {
     log('Brandläge: normal drift – hissarna kör som vanligt (genom röken!)', 'alert');
   }
   rebuildPicks();
 }
-export function fireTick(dt) {
+export function fireTick() {
   const F = S.fire;
   if (!F.brigade && S.t >= F.brigadeAt) {
     F.brigade = true; F.outAt = S.t + 16;
@@ -155,7 +155,7 @@ export function endOutage() {
   log(`💡 Strömmen är tillbaka! (totalt ${trapped} instängd-sekunder idag)`, 'alert');
 }
 export function incidentTick(dt) {
-  if (S.fire) fireTick(dt);
+  if (S.fire) fireTick();
   if (S.outage) outageTick(dt);
   if (!S.autoInc) return;
   const h = hour();

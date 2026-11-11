@@ -1,13 +1,8 @@
 // Knappar, tangentbord och klick i spelet.
-import { startGenerator, toggleAutoRescue, toggleOff } from './incidents.js';
-import { pick, rng } from './rng.js';
+import { act, encodeReplay } from './replay.js';
 import { clamp } from './util.js';
-import { BX0, CAR_H, CAR_W, DOOR_X, FLOOR_H, GROUND_Y, H, INNER_X1, OFFICE_FLOORS, ROOF_Y, STRAT_HINT, TOP, WAIT_X1, floorY, shaftX, surf, LOBBY } from './config.js';
+import { BX0, CAR_H, CAR_W, DOOR_X, FLOOR_H, GROUND_Y, H, INNER_X1, ROOF_Y, STRAT_HINT, STRAT_NAMES, TOP, WAIT_X1, floorY, shaftX, surf, LOBBY } from './config.js';
 import { S, log } from './state.js';
-import { pev, spawnVisitor, spawnBus } from './people.js';
-import { rebuildPicks } from './dispatch.js';
-import { setFireMode, startRescue, trigger } from './incidents.js';
-import { step } from './sim.js';
 import { VIEW, cv, lookAt, resize, scrollBy, scrollToFloor } from './view.js';
 import { personHead, peopleBehindDoor } from './render.js';
 import { $, openCarPop, select, setTab, updateHud, updateRoster } from './hud.js';
@@ -18,20 +13,25 @@ export function setSpeed(v) {
   S.speed = v;
   /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll('#speeds .btn')).forEach(b => b.classList.toggle('on', +b.dataset.s === v));
 }
-const STRATS = ['smart', 'peak', 'eco', 'nearest', 'random', 'buttons'], STRAT_NAMES = { smart: 'SMART', peak: 'RUSNING', eco: 'ENERGISNÅL', nearest: 'NÄRMAST', random: 'KAOS', buttons: 'KNAPPAR' };
+const STRATS = ['smart', 'peak', 'eco', 'nearest', 'random', 'buttons'];
 export function cycleStrategy() { setStrategy(STRATS[(STRATS.indexOf(S.strategy) + 1) % STRATS.length]); }
 export function setStrategy(k) {
   if (S.strategy === k) return;
-  S.strategy = k;
-  $('btnStrat').textContent = STRAT_NAMES[k];
-  $('stratHint').innerHTML = STRAT_HINT[k];
-  // hallknapparna nollställs; i KNAPPAR-läget trycker de väntande på nytt
-  S.calls = {};
-  for (const p of S.people) if (p.state === 'wait') { p.assigned = null; p.bank = null; p.fixAt = 0; pev(p, 'Styrlogiken byttes – får en ny hiss'); }
-  for (const e of S.elevators) { e.parkTarget = null; e.sleep = false; }
-  S.peakMode = null;
-  rebuildPicks();
-  log(`Styrlogik bytt till ${STRAT_NAMES[k]} – alla väntande fördelas om`, 'sys');
+  act('strategy', k);
+  syncControls();
+}
+/** Knapparna visar simuleringens inställningar (de kan ändras av en replay eller ett nytt dygn) */
+let shown = '';
+export function syncControls() {
+  const key = `${S.strategy}|${S.autoInc}|${S.mistakes}|${S.maint}`;
+  if (key === shown) return;
+  shown = key;
+  $('btnStrat').textContent = STRAT_NAMES[S.strategy];
+  $('stratHint').innerHTML = STRAT_HINT[S.strategy];
+  /** @type {HTMLInputElement} */ ($('autoInc')).checked = S.autoInc;
+  for (const [id, key] of [['mistakeChips', 'mistakes'], ['maintChips', 'maint']]) {
+    $(id).querySelectorAll('.chip').forEach(c => c.classList.toggle('on', /** @type {HTMLElement} */ (c).dataset.f === S[key]));
+  }
 }
 export function toggleTags() { S.tags = !S.tags; $('btnTags').classList.toggle('on', S.tags); }
 export function toggleZoom() {
@@ -47,18 +47,20 @@ export function togglePop(id) {
   document.querySelectorAll('.pop.show').forEach(p => p.classList.remove('show'));
   el.classList.toggle('show', show);
 }
-export function chipGroup(id, key, after) {
+export function chipGroup(id, key, after, sim = false) {
   $(id).addEventListener('click', ev => {
     const b = /** @type {HTMLElement} */ (/** @type {HTMLElement} */ (ev.target).closest('.chip')); if (!b) return;
-    S[key] = b.dataset.f;
+    // inställningar som påverkar simuleringen spelas in (replay), filter i lådan gör det inte
+    if (sim) act('setting', key, b.dataset.f); else S[key] = b.dataset.f;
     $(id).querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c === b));
     after();
   });
 }
-export function doAction(act) {
-  const [a, b, c] = act.split(':');
-  if (a === 'trig') { if (S.started) trigger(b); }
-  else if (a === 'fire') setFireMode(b);
+export function doAction(cmd) {
+  const [a, b, c] = cmd.split(':');
+  if (a === 'trig') { if (S.started) act('trigger', b); }
+  else if (a === 'fire') act('fireMode', b);
+  else if (a === 'replay') { copyReplayLink(); return; }
   else if (a === 'show') scrollToFloor(+b);
   else if (a === 'tab') { setTab(b); return; }
   else if (a === 'hint') { togglePop('stratHint'); return; }
@@ -69,22 +71,22 @@ export function doAction(act) {
     if (VIEW.follow !== null && S.zoom !== 'wide') toggleZoom();
   }
   else if (a === 'pow') {
-    if (b === 'gen') startGenerator();
-    if (b === 'auto') toggleAutoRescue();
-    if (b === 'rescue') startRescue(S.elevators[+c], 'manual');
-  } else if (a === 'car') toggleOff(S.elevators[+c]);
+    if (b === 'gen') act('generator');
+    if (b === 'auto') act('autoRescue');
+    if (b === 'rescue') act('rescue', +c);
+  } else if (a === 'car') act('carOff', +c);
   S.incHtml = ''; updateHud();
 }
 $('btnPause').onclick = () => { if (!S.summaryShown) { S.paused = !S.paused; updatePauseBtn(); } };
 $('btnTags').onclick = toggleTags;
 $('btnZoom').onclick = toggleZoom;
-$('autoInc').onchange = ev => { S.autoInc = /** @type {HTMLInputElement} */ (ev.target).checked; };
+$('autoInc').onchange = ev => { act('setting', 'autoInc', /** @type {HTMLInputElement} */ (ev.target).checked); syncControls(); };
 /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll('#speeds .btn')).forEach(b => (b.onclick = () => setSpeed(+b.dataset.s)));
 $('btnStrat').onclick = cycleStrategy;
 chipGroup('rosterChips', 'rosterFilter', updateRoster);
 chipGroup('logChips', 'logFilter', () => { S.logDirty = true; updateHud(); });
-chipGroup('mistakeChips', 'mistakes', () => log(`Felknappar: ${S.mistakes}`, 'sys'));
-chipGroup('maintChips', 'maint', () => log(S.maint === 'natt' ? '🔧 Underhåll: nattservice av slitna hissar' : '🔧 Underhåll: bara när något går sönder', 'sys'));
+chipGroup('mistakeChips', 'mistakes', () => { log(`Felknappar: ${S.mistakes}`, 'sys'); syncControls(); }, true);
+chipGroup('maintChips', 'maint', () => { log(S.maint === 'natt' ? '🔧 Underhåll: nattservice av slitna hissar' : '🔧 Underhåll: bara när något går sönder', 'sys'); syncControls(); }, true);
 $('tkClose').onclick = () => select(null);
 // pointerdown i stället för click: incidentpanelen ritas om varje sekund (nedräkningar)
 document.addEventListener('pointerdown', ev => {
@@ -103,7 +105,8 @@ document.addEventListener('click', ev => {
 });
 $('btnBus').onclick = () => {
   if (!S.started || S.fire) return;
-  const n = spawnBus();
+  const n = act('bus');
+  if (n === null) return; // replay pågår
   if (!n) { S.fx.push({ x: 140, y: GROUND_Y - 100, text: 'STÄNGT – KOM IMORGON!', color: '#ff5d52', life: 2, size: 26 }); log('Bussen vände – allt i huset är stängt', 'sys'); return; }
   S.fx.push({ x: 140, y: GROUND_Y - 100, text: 'BUSSLAST!', color: '#ff8c42', life: 2, size: 30 });
   log('En busslast turister väller in i entrén!', 'sys');
@@ -181,8 +184,16 @@ cv.addEventListener('click', ev => {
   }
   if (x < BX0 || x > INNER_X1 || y < ROOF_Y || y > GROUND_Y || S.fire) return;
   const f = clamp(LOBBY + Math.floor((GROUND_Y - y) / FLOOR_H), 0, TOP);
-  const v = spawnVisitor(f, clamp(x, BX0 + 40, WAIT_X1 - 20));
+  if (S.replay) { act('visitor'); return; } // (loggar bara att replay pågår)
+  const v = act('visitor', f, clamp(x, BX0 + 40, WAIT_X1 - 20));
   if (!v) { S.fx.push({ x, y: surf(f) - 70, text: 'STÄNGT!', color: '#ff5d52', life: 1.2 }); return; }
   S.fx.push({ x, y: surf(f) - 70, text: '+1!', color: '#7cf06b', life: 1.2 });
   select(v);
 });
+
+// Replay-länk: frö + dygnets startläge + spelarens åtgärder hittills. Samma länk ger exakt samma dygn.
+function copyReplayLink() {
+  const url = `${location.origin}${location.pathname}?replay=${encodeReplay()}`;
+  const done = ok => log(ok ? `🔁 Replay-länken är kopierad (${S.actions.length} åtgärder hittills i dag)` : `🔁 Replay-länk: ${url}`, 'sys');
+  try { navigator.clipboard.writeText(url).then(() => done(true), () => done(false)); } catch (e) { done(false); }
+}

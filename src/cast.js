@@ -104,7 +104,7 @@ export function castNext(p, h) {
 }
 /** Doris håller upp dörren när någon är på väg till kön på våningen (en gång per stopp) */
 export function doorHold(e, f) {
-  if (e.heldTrip === e.trips) return 0;
+  if (e.heldTrip === e.trips || !e.passengers.length && !e.reserved) return 0; // Doris är inte med
   const doris = S.people.find(p => p.quirk === 'dörr' && p.car === e && (p.state === 'ride' || p.state === 'boarding'));
   if (!doris) return 0;
   if (!S.people.some(q => q.state === 'toQueue' && q.floor === f && q !== doris)) return 0;

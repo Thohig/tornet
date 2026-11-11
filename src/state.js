@@ -15,7 +15,18 @@ export const S = {
   calls: /** @type {Record<string, import('./buttons.js').HallCall>} */ ({}), mistakes: 'lite',
   // drift: underhåll 'natt' (nattservice) eller 'fel' (bara när något går sönder), när teknikern kommer, rusningsläge
   maint: 'natt', techCallAt: /** @type {number|null} */ (null), peakMode: /** @type {string|null} */ (null),
+  // replay: antal steg i dygnet, spelarens åtgärder, kön som spelas upp och dygnets startläge (se replay.js)
+  steps: 0, actions: /** @type {import('./replay.js').RecordedAction[]} */ ([]), replayQueue: /** @type {import('./replay.js').RecordedAction[]} */ ([]),
+  replay: false, recStart: /** @type {any} */ (null),
 };
+// Vem som sitter på vilken plats (plats i SPOTS → personens id). Ligger i tillståndet, inte i config,
+// så att config förblir ren data och flera simuleringar i samma process inte delar beläggning.
+/** @type {Map<import('./config.js').Spot, number>} */
+S.occ = new Map();
+/** id för den som sitter på platsen, eller null */
+export const occOf = s => S.occ.get(s) ?? null;
+/** sätt (id) eller töm (null) platsen */
+export function setOcc(s, id) { if (id === null) S.occ.delete(s); else S.occ.set(s, id); }
 // Krokar som gränssnittet kopplar in sig på. Simuleringen rör aldrig DOM själv.
 /** @type {{ incident: (floor: number|null) => void, dayEnd: () => void }} */
 export const hooks = { incident() {}, dayEnd() {} };

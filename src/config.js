@@ -5,7 +5,7 @@
 /**
  * En plats på en våning där folk sitter, står eller försvinner in (dörr).
  * @typedef {{ x: number, k: string, desc: string, face?: number, lift?: number, staff?: boolean, label?: string,
- *   style?: string, item?: string, front?: boolean, jump?: boolean, occ?: number|null, temp?: boolean, role?: string, apt?: number, bed?: boolean }} Spot
+ *   style?: string, item?: string, front?: boolean, jump?: boolean, temp?: boolean, role?: string, apt?: number, bed?: boolean }} Spot
  */
 
 // Märklast för vanliga hissar (varuhissen har egen) – används när byggnaden läses in nedan
@@ -280,6 +280,7 @@ export const CAST = [
     lines: { arrive: ['Pizza! Varm och god!', 'Kanal 97 – din kalzone är här!'] } },
 ];
 
+export const STRAT_NAMES = { smart: 'SMART', peak: 'RUSNING', eco: 'ENERGISNÅL', nearest: 'NÄRMAST', random: 'KAOS', buttons: 'KNAPPAR' };
 export const STRAT_HINT = {
   smart: '<b>Smart:</b> varje person får den hiss som snabbast kan hämta hen <i>och</i> köra till målet (resväg, stopp, last – rabatt om hissen redan ska dit). Omfördelar och parkerar lediga hissar smart.',
   peak: '<b>Rusning:</b> som Smart, men känner av trafikmönstret. På morgonen (UPP) kör lediga hissar direkt tillbaka till entrén och väntar en stund i dörren så att fler hinner med. Vid hemgång (NED) väntar de högst upp i sin zon.',

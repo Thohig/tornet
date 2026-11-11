@@ -1,9 +1,9 @@
 // HUD: topplist, hisspopup, flytande incidentruta och lådan med spårning, register, logg och resultat.
-import { ARR, K, esc, fl } from './util.js';
+import { ARR, esc, fl } from './util.js';
 import { CAP, CAR_H, EL, FIRE_HINT, FL, STRAT_HINT, TOP, ROLE_NAMES, activityRate, FULL_LOAD, floorY, shaftX } from './config.js';
 import { S, hour, log, phaseName } from './state.js';
 import { liftsAvailable } from './people.js';
-import { costBased, allowed, costLine, eta, isFull, pickTotal, pickersAt, loadKg, cabinKg, slotsFull } from './dispatch.js';
+import { costBased, costLine, eta, isFull, pickTotal, pickersAt, loadKg, cabinKg, slotsFull } from './dispatch.js';
 import { canRescue } from './incidents.js';
 import { plannedRoute, resetDay } from './sim.js';
 import { VIEW, cv, nightness, pctx, resize, stage } from './view.js';
@@ -234,7 +234,6 @@ export function incidentHtml() {
 // om när något annat ändras – annars uppdateras bara siffrorna, så att knapparna går att klicka på.
 const cd = sec => `<span class="lv">${Math.max(0, Math.ceil(sec))}</span>`;
 const num = n => `<span class="lv">${Math.round(n)}</span>`;
-const live = t => `<span class="lv">${esc(t)}</span>`;
 const LV = /<span class="lv">([^<]*)<\/span>/g;
 export function updateIncidents() {
   const html = incidentHtml();

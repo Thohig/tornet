@@ -18,6 +18,7 @@ npm test            # hela sviten i Node (~15 s)
 npm run typecheck   # tsc på JSDoc-typer (jsconfig.json)
 npm run check       # båda
 npm run golden      # skriv om tests/golden.json efter AVSIKTLIGA beteendeändringar
+npm run bench       # simuleringens fart (steg/s per styrlogik)
 ```
 
 Samma testsvit körs i webbläsaren på `/tests.html`.
@@ -40,8 +41,11 @@ Samma testsvit körs i webbläsaren på `/tests.html`.
 | `service.js` | drift: slitage, hissfel, hisstekniker, nattservice (`S.maint`) och energi (effekt efter last mot motvikt, återmatning) |
 | `cast.js` | stamgästerna (data i `CAST` i config): återkommande karaktärer med egenheter och repliker (`say`) |
 | `life.js` | garage/bilar, leveransbil, boendes dygnsrutiner, VIP-helikopter |
+| `replay.js` | spelarens åtgärder via `act()` (spelas in med `S.steps`), `changeStrategy`, länkformatet `?replay=` (`encodeReplay/decodeReplay`); uppspelningen startas med `startReplay` i `sim.js` |
 
 **Gränssnitt:** `render.js` (grafikens ingång + `landPos`/`personHead`: var folk syns), `pixel.js` (hela bilden i pixelgrafik), `pixart.js` (rutnätsfigurer med automatisk kontur, bitmapstypsnitt 3×5, färghjälp), `pixpeople.js` (människor ur `p.look`: sido-/framvy, gångsteg, humör, bagage), `pixpal.js` (paletten `PAL`), `view.js` (canvas, kamera, översikt, `VIEW.follow/carPop`), `hud.js` (topplist, hisspopup, flytande incidentruta, låda med flikar), `describe.js` (texter om personer för HUD och spårlapp), `input.js`, `main.js`.
+
+Det statiska (stadssiluetten, tegel, fasadfönster, schakt, rampen) ritas i lager via `layer()` i `pixel.js` och ritas bara om när nyckeln ändras (natten i 32 steg, strömmen, bredden). Något som rör sig eller beror på personer får aldrig ritas i ett lager.
 
 Bilden börjar vid `LAND_X0` och varje våning ritas som en hall framför schakten med en korridor (`DOOR_X`) in mot rummen. Folk i rummen ritas inte; `landPos` räknar ut var de syns i hallen (kön pressas ihop mot korridoren, gång in/ut syns bara sista/första biten) – ren grafik, simuleringens `p.x` ändras aldrig. Allt ritas på ett rutnät i låg upplösning (1 pixel = `PX` = 2 världsenheter) som skalas upp utan utjämning; skärmkoordinater räknas om med `VIEW.x0` (se `toWorld`, `placeCarPop`).
 
@@ -55,6 +59,7 @@ HUD:en är medvetet liten: allt om en hiss visas på hissen eller i popupen när
 - **Fast tidssteg:** `DT = 1/30`. Logik som beror på tid använder `dt`/`S.t`, aldrig bildrutor.
 - **Ett dygn = 6 minuter** (`timeScale` i config: dag 4 min, kväll 30 s, natt 90 s). Hissar och gång sker i verklig tid, så en resa genom huset tar ungefär en speltimme – planera efter det (öppettider, hemgång på natten). Vistelser i rummen (`p.timer` i läget `office`) räknas i speltid via `activityRate(h)`. Gränssnittet visar ingen klocka, bara ☀️/🌙.
 - **Simuleringsmoduler importerar aldrig** `render/view/hud/input/scenery`.
+- **Allt spelaren gör som påverkar simuleringen går via `act()`** (replay.js) – annars blir replay-länkarna fel. Platsbeläggningen ligger i `S.occ`, aldrig i config-datan.
 - **Huset är data.** Lägg till/ändra våningar och hissar i `BUILDING`; använd härledda värden (`LOBBY`, `SKY`, `ROOF`, `DOCK`, `HOME_FLOORS`, `idx('7')`, `floorWith('bank')`) – hårdkoda aldrig våningsindex. Index ≠ etikett: index 0 är `P2`, `fl(i)` ger etiketten.
 - En hiss stannar bara på `e.serves`, stannar aldrig utanför `minF..maxF`, kör aldrig över `e.ratedKg`, och åker aldrig förbi en passagerares mål.
 
@@ -72,6 +77,6 @@ HUD:en är medvetet liten: allt om en hiss visas på hissen eller i popupen när
 ## Arbetssätt
 
 - Kör `npm run check` efter ändringar i simuleringen. Ändras beteendet avsiktligt larmar facit-testet – kontrollera skillnaden och kör sedan `npm run golden`.
-- Nya simuleringsfunktioner får ett test i `tests/suite.js`; regler som alltid ska gälla läggs i `watcher()` (kontrolleras varje steg över 40 slumpade dygn).
+- Nya simuleringsfunktioner får ett test i `tests/suite.js`; regler som alltid ska gälla läggs i `watcher()` (kontrolleras varje steg över 40 slumpade dygn och över 24 dygn med slumpade spelaråtgärder). Ny spelaråtgärd = post i `ACTIONS` (replay.js) och i `PLAYER_ACTIONS` (suite.js).
 - Kontrollera grafik i webbläsaren. För att spola fram tiden i konsolen: `const st = await import('/src/state.js'), sim = await import('/src/sim.js'); while (st.hour() < 21) sim.step(sim.DT);`
 - Höj `?v=` på `style.css` i `index.html` när CSS ändras.

@@ -2,19 +2,20 @@
 // (tests.html via browser.js) och i terminalen (npm test via run.mjs).
 // Varje test seedar slumpen, så resultaten är exakt reproducerbara.
 import { S, hooks, hour } from '../src/state.js';
-import { floorOpen, FLOOR_HOURS, idx, floorWith, EL, LOBBY, SKY, HOME_FLOORS } from '../src/config.js';
-import { DT, step, advance, newSim, resetDay } from '../src/sim.js';
+import { floorOpen, FLOOR_HOURS, idx, floorWith, EL, LOBBY, SKY, HOME_FLOORS, OFFICE_FLOORS } from '../src/config.js';
+import { DT, step, advance, newSim, resetDay, startReplay } from '../src/sim.js';
 import {
   startFire, setFireMode, startOutage, startGenerator, toggleAutoRescue,
-  toggleOff, endFire,
+  toggleOff, endFire, canRescue,
 } from '../src/incidents.js';
 import { liftsAvailable, spawnBus } from '../src/people.js';
-import { loadKg, allowed, safeFloor } from '../src/dispatch.js';
+import { loadKg, allowed, safeFloor, operational, canTake, stopFloors, isFull, costBased } from '../src/dispatch.js';
 import { RATED_KG, FULL_LOAD, VMAX } from '../src/config.js';
 import { needsFreight, mayUseFreight, legDest } from '../src/people.js';
 import { fl } from '../src/util.js';
 import { assignCalls, antiNuisance } from '../src/buttons.js';
-import { powerKw, triggerFault, breakDown, SERVICE_AT, tech } from '../src/service.js';
+import { act, recording, encodeReplay, decodeReplay } from '../src/replay.js';
+import { powerKw, triggerFault, breakDown, tech } from '../src/service.js';
 import { trafficMode } from '../src/dispatch.js';
 
 // ---------- Ramverk ----------
@@ -32,7 +33,8 @@ function sim(seed, opts = {}) {
 // Vakt som kontrollerar invarianter efter varje steg
 function watcher() {
   const w = { passes: 0, maxRide: 0, maxWait: 0, n: 0, overweight: 0, maxKg: 0, bypassBroken: 0, prev: [],
-    outOfRange: 0, wrongDoor: 0, badLeg: 0, badFreight: 0, vipMixed: 0, vipSet: [], selfDest: 0, brokenUse: 0, holdBoard: 0, prevN: [] };
+    outOfRange: 0, wrongDoor: 0, badLeg: 0, badFreight: 0, vipMixed: 0, vipSet: [], selfDest: 0, brokenUse: 0, holdBoard: 0, prevN: [],
+    jumps: 0, orphanService: 0, badReserved: 0, idleWait: new Map(), idleWaitMax: 0 };
   w.before = () => S.elevators.map(e => e.pos);
   w.check = before => {
     S.elevators.forEach((e, i) => {
@@ -63,6 +65,12 @@ function watcher() {
       if (!e.vipLock) w.vipSet[i] = null;
       else if (!w.vipSet[i]) w.vipSet[i] = new Set(S.people.filter(p => p.car === e && (p.state === 'ride' || p.state === 'boarding')));
       const a = before[i], b = e.pos;
+      // en hiss hoppar aldrig: den flyttar sig högst VMAX·DT per steg
+      if (Math.abs(b - a) > VMAX * DT + 1e-6) w.jumps++;
+      // en hiss på service har alltid en tekniker som jobbar med den
+      if (e.mode === 'service') { const t = tech(); if (!t || t.job !== e.id) w.orphanService++; }
+      // reserverade platser = de som är på väg in genom dörren
+      if (e.reserved !== S.people.filter(p => p.state === 'boarding' && p.car === e).length) w.badReserved++;
       for (const p of e.passengers) {
         // en hiss i normal drift får aldrig köra förbi en passagerares mål
         if (e.mode === 'normal' && p.state === 'ride' && ((a < p.dest && b > p.dest) || (a > p.dest && b < p.dest))) w.passes++;
@@ -73,6 +81,16 @@ function watcher() {
       for (const p of S.people) if (p.state === 'wait') w.maxWait = Math.max(w.maxWait, S.t - p.waitStart);
       // ingen ska stå i kön för att åka till våningen hen redan står på
       for (const p of S.people) if (p.state === 'wait' && p.dest === p.floor) w.selfDest++;
+      // ingen står länge utan tilldelad hiss medan en ledig hiss som kan ta hen står tom och stilla (kostnadsstyrningen)
+      if (costBased()) {
+        const idle = S.elevators.filter(e => operational(e) && e.state === 'idle' && !e.passengers.length && !stopFloors(e).length && !isFull(e) && !e.vipLock);
+        for (const p of S.people) {
+          if (p.state !== 'wait' || p.vip || p.assigned !== null || p.retypeAt > S.t || !idle.some(e => canTake(e, p))) { w.idleWait.delete(p); continue; }
+          const since = w.idleWait.get(p) ?? S.t;
+          w.idleWait.set(p, since);
+          w.idleWaitMax = Math.max(w.idleWaitMax, S.t - since);
+        }
+      }
     }
   };
   return w;
@@ -665,6 +683,15 @@ test('Regression: samma frön ger samma dygn som facit', () => {
 });
 
 // ---------- Invarianter över många frön ----------
+/** de nyare invarianterna (hopp, service utan tekniker, reserverade platser, väntan bredvid ledig hiss) */
+function newInvariantFails(w, tag) {
+  const f = [];
+  if (w.jumps) f.push(`${tag}: en hiss hoppade ${w.jumps} gånger (mer än VMAX·DT på ett steg)`);
+  if (w.orphanService) f.push(`${tag}: hiss på service utan tekniker i ${w.orphanService} steg`);
+  if (w.badReserved) f.push(`${tag}: e.reserved stämde inte med de som kliver på (${w.badReserved} steg)`);
+  if (w.idleWaitMax > 15) f.push(`${tag}: någon stod ${w.idleWaitMax.toFixed(0)} s utan tilldelad hiss medan en ledig hiss som kunde ta hen stod still`);
+  return f;
+}
 // Sällsynta fel visar sig bara med vissa frön – därför körs många hela dygn med slumpade incidenter.
 const MANY_SEEDS = Array.from({ length: 40 }, (_, i) => 1000 + i);
 test(`Invarianter över ${MANY_SEEDS.length} slumpade dygn (alla strategier, med incidenter)`, () => {
@@ -690,9 +717,101 @@ test(`Invarianter över ${MANY_SEEDS.length} slumpade dygn (alla strategier, med
     if (w.holdBoard) fails.push(`${tag}: hiss på väg till service tog nya passagerare ${w.holdBoard} gånger`);
     if (S.elevators.some(e => e.mode === 'broken' && S.t - e.fault.t0 > 400)) fails.push(`${tag}: en hiss stod trasig i över 400 s`);
     if (w.selfDest) fails.push(`${tag}: någon väntade på hiss till sin egen våning (${w.selfDest} steg)`);
+    fails.push(...newInvariantFails(w, tag));
     trips += S.stats.served; incidents += S.stats.incidents;
     worstWait = Math.max(worstWait, w.maxWait); heaviest = Math.max(heaviest, w.maxKg);
   }
   assert(fails.length === 0, `${fails.length} fel:\n  ${fails.slice(0, 10).join('\n  ')}`);
   return `${trips} resor och ${incidents} incidenter utan fel · längsta väntan ${worstWait.toFixed(0)} s · tyngsta avgång ${Math.round(heaviest)} kg`;
+});
+
+// ---------- Spelarens åtgärder i slumpad ordning ----------
+// Spelaren kan göra saker som de automatiska incidenterna aldrig gör: byta brandläge mitt i en brand,
+// starta brand på natten, stänga av hissar, nödsänka … Åtgärderna slumpas med en egen generator
+// (simuleringens slump rörs inte), och samma invarianter kontrolleras varje steg.
+function mulberry(seed) {
+  let a = seed >>> 0;
+  return () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), a | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+// Allt går via act() som gränssnittet, så åtgärderna spelas in och kan spelas upp (replay-testet nedan).
+export const PLAYER_ACTIONS = {
+  fire: () => act('trigger', 'fire'),
+  fireMode: r => act('fireMode', ['recall', 'zone', 'none'][Math.floor(r() * 3)]),
+  outage: () => act('trigger', 'power'),
+  generator: () => act('generator'),
+  autoRescue: () => act('autoRescue'),
+  rescue: () => { const e = S.elevators.find(canRescue); if (e) act('rescue', e.id); },
+  off: r => act('carOff', Math.floor(r() * S.elevators.length)),
+  fault: () => act('trigger', 'fault'),
+  bus: () => act('bus'),
+  visitor: r => act('visitor', OFFICE_FLOORS[Math.floor(r() * OFFICE_FLOORS.length)], 200 + r() * 200),
+  strategy: r => act('strategy', ['smart', 'peak', 'eco', 'nearest', 'random', 'buttons'][Math.floor(r() * 6)]),
+  setting: r => (r() < 0.5 ? act('setting', 'mistakes', ['av', 'lite', 'mycket'][Math.floor(r() * 3)]) : act('setting', 'maint', r() < 0.5 ? 'natt' : 'fel')),
+};
+const FUZZ_SEEDS = Array.from({ length: 24 }, (_, i) => 5000 + i);
+test(`Spelaråtgärder: invarianter över ${FUZZ_SEEDS.length} dygn med slumpade åtgärder (även på natten)`, () => {
+  const strategies = ['smart', 'buttons', 'peak', 'eco', 'nearest', 'random'];
+  const names = Object.keys(PLAYER_ACTIONS), fails = [];
+  let actions = 0;
+  for (const [i, seed] of FUZZ_SEEDS.entries()) {
+    const strategy = strategies[i % strategies.length], tag = `frö ${seed} (${strategy})`;
+    sim(seed, { strategy, autoInc: i % 2 === 0, maint: 'natt' });
+    const r = mulberry(seed * 7919), w = watcher();
+    let next = 5 + r() * 20, guard = 0, did = [];
+    try {
+      while (!S.summaryShown) {
+        if (S.t >= next) {
+          // under en brand byts läget ofta (även mitt i en återkallning), annars en slumpad åtgärd
+          const a = S.fire && r() < 0.6 ? 'fireMode' : names[Math.floor(r() * names.length)];
+          PLAYER_ACTIONS[a](r); did.push(a); actions++;
+          next = S.t + 2 + r() * (S.fire || S.outage ? 6 : 25);
+        }
+        const b = w.before(); step(DT); w.check(b);
+        if (++guard > 200000) throw new Fail('dagen tog aldrig slut');
+      }
+    } catch (e) { fails.push(`${tag}: kraschade – ${e.message} (efter ${did.slice(-5).join(', ')})`); continue; }
+    if (w.passes) fails.push(`${tag}: ${w.passes} förbiåkningar`);
+    if (w.overweight) fails.push(`${tag}: körde överlastad ${w.overweight} gånger`);
+    if (w.outOfRange || w.wrongDoor) fails.push(`${tag}: hiss utanför zon ${w.outOfRange} / dörr där det saknas ${w.wrongDoor}`);
+    if (w.badLeg) fails.push(`${tag}: ${w.badLeg} åkte fel hiss för sitt delmål`);
+    if (w.badFreight) fails.push(`${tag}: ${w.badFreight} fel last i fel hiss`);
+    if (w.brokenUse) fails.push(`${tag}: trasig hiss/service användes ${w.brokenUse} steg`);
+    if (w.selfDest) fails.push(`${tag}: någon väntade på hiss till sin egen våning (${w.selfDest} steg)`);
+    // (en brand eller ett strömavbrott som fortfarande pågår när dygnet slutar låser hissarna med rätta)
+    const stuckMode = e => e.mode === 'service' || (!S.fire && (e.mode === 'recall' || e.mode === 'locked')) || (!S.outage && (e.mode === 'rescue' || e.mode === 'dead'));
+    if (S.elevators.some(stuckMode))
+      fails.push(`${tag}: hiss kvar i läge ${S.elevators.filter(stuckMode).map(e => `${e.name}:${e.mode}`).join(' ')} när dygnet tog slut`);
+    fails.push(...newInvariantFails(w, tag));
+  }
+  assert(fails.length === 0, `${fails.length} fel:\n  ${fails.slice(0, 12).join('\n  ')}`);
+  return `${actions} spelaråtgärder över ${FUZZ_SEEDS.length} dygn utan fel`;
+});
+
+// ---------- Replay ----------
+/** allt som beskriver hur dygnet blev (loggens längd räknas inte – uppspelningen loggar en rad till) */
+function replayPrint() {
+  const st = S.stats;
+  return JSON.stringify([st, S.nextId, S.people.length, S.elevators.map(e => [e.pos, e.trips, e.distance, e.wear, e.mode, e.kwh])]);
+}
+test('Replay: ett dygn med slumpade spelaråtgärder spelas upp exakt likadant (även dag 2 och via länken)', () => {
+  const r = mulberry(4242);
+  sim(77, { autoInc: true });
+  runDay(); S.day++; resetDay(); // dag 2: slitaget från dag 1 måste följa med i inspelningen
+  const names = Object.keys(PLAYER_ACTIONS);
+  let next = 3;
+  while (!S.summaryShown) {
+    if (S.t >= next) { PLAYER_ACTIONS[names[Math.floor(r() * names.length)]](r); next = S.t + 2 + r() * 12; }
+    step(DT);
+  }
+  const rec = recording(), want = replayPrint();
+  assert(rec.actions.length > 30, `bara ${rec.actions.length} åtgärder spelades in`);
+  const link = encodeReplay(rec), back = decodeReplay(link);
+  assert(back && JSON.stringify(back) === JSON.stringify(rec), 'länken gick inte att läsa tillbaka');
+  assert(decodeReplay('inte-en-replay') === null && decodeReplay(encodeReplay({ ...rec, actions: [{ n: 1, a: 'hacka', args: [] }] })) === null, 'trasiga länkar godtogs');
+  startReplay(back);
+  assert(act('bus') === null && S.actions.length === rec.actions.length, 'spelaren kunde ändra dygnet under uppspelningen');
+  while (!S.summaryShown) step(DT);
+  const got = replayPrint();
+  assert(got === want, `uppspelningen blev ett annat dygn:\n${want.slice(0, 300)}\n${got.slice(0, 300)}`);
+  return `${rec.actions.length} åtgärder på dag ${rec.day} · länk ${link.length} tecken · identiskt dygn`;
 });

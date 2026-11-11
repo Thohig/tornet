@@ -19,13 +19,39 @@ import { PAL } from './pixpal.js';
 const INK = PAL.ink;
 
 // ---------- Ritytan i låg upplösning ----------
-const lo = document.createElement('canvas');
-const g = /** @type {CanvasRenderingContext2D} */ (lo.getContext('2d'));
+const LO = document.createElement('canvas');
+const G = /** @type {CanvasRenderingContext2D} */ (LO.getContext('2d'));
+// lo/g är ritytan som ritfunktionerna skriver till just nu: bilden, eller ett statiskt lager (se layer)
+let lo = LO, g = G;
 let X0 = 0, CY = 0;
 /** världens x/y → pixel i ritytan */
 const X = x => Math.round((x - X0) / PX);
 const Y = y => Math.round(y / PX) - CY;
 const R = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(x, y, w, h); };
+// ---------- Statiska lager ----------
+// Det som nästan aldrig ändras (stadssiluetten, tegel, fasadfönster, schakt, garagerampen) ritas en gång
+// i ett eget lager som täcker hela världens höjd, och kopieras sedan in varje bildruta. Lagret ritas om
+// bara när nyckeln ändras (natten i 32 steg, strömmen, bredden). Ritfunktionerna är desamma: medan
+// lagret ritas pekar lo/g på lagret och CY är 0, så Y() ger världens y i lagret.
+/** @type {Map<string, { c: HTMLCanvasElement, g: CanvasRenderingContext2D, key: string }>} */
+const layers = new Map();
+function layer(name, key, draw) {
+  let L = layers.get(name);
+  const full = `${key}|${LO.width}|${X0}`;
+  if (!L || L.key !== full) {
+    if (!L) { const c = document.createElement('canvas'); L = { c, g: /** @type {CanvasRenderingContext2D} */ (c.getContext('2d')), key: '' }; layers.set(name, L); }
+    L.c.width = LO.width; L.c.height = Math.ceil(H / PX) + 4; // (att sätta storleken tömmer lagret)
+    L.key = full;
+    const kLo = lo, kG = g, kCY = CY;
+    lo = L.c; g = L.g; CY = 0; g.imageSmoothingEnabled = false;
+    try { draw(); } finally { lo = kLo; g = kG; CY = kCY; }
+  }
+  // bara den synliga biten kopieras
+  const sy = clamp(CY, 0, L.c.height), sh = Math.min(LO.height, L.c.height - sy);
+  if (sh > 0) G.drawImage(L.c, 0, sy, L.c.width, sh, 0, sy - CY, L.c.width, sh);
+}
+/** nattfaktorn i 32 steg (för lagrens nycklar – skillnaden syns inte i pixelgrafiken) */
+const nightStep = h => Math.round(nightness(h) * 32) / 32;
 /** ruta med kontur */
 function box(x, y, w, h, fill, outline = INK) { R(x, y, w, h, outline); R(x + 1, y + 1, w - 2, h - 2, fill); }
 /** ruta med kontur och "fasade" hörn (pixelkonstens rundade hörn) */
@@ -184,7 +210,12 @@ function drawSkyAll(h) {
     for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4 + k * Math.PI / 8; R(X(sx) + Math.round(Math.cos(a) * 11), Y(sy) + Math.round(Math.sin(a) * 11), 2, 2, '#ffb627'); }
     const s = SUN(); g.drawImage(s, X(sx) - 8, Y(sy) - 8);
   } else { const m = MOON(); g.drawImage(m, X(870) - 10, Y(60) - 10); }
-  // stadssiluetten
+  // stadssiluetten (statiskt lager)
+  const ns = nightStep(h);
+  layer('skyline', `${ns}|${S.power}`, () => drawSkylinePx(ns));
+  for (const c of clouds) { const s = cloudSprite(c.s); g.drawImage(s, X(c.x) - Math.round(20 * c.s / PX), Y(c.y) - Math.round(30 * c.s / PX)); }
+}
+function drawSkylinePx(n) {
   const lit = n > 0.3 && S.power;
   for (const b of skyline) {
     const x = X(b.x), y = Y(GROUND_Y - b.h), w = Math.round(b.w / PX), bot = Y(GROUND_Y);
@@ -194,7 +225,6 @@ function drawSkyAll(h) {
     for (let wy = y + 4; wy < bot - 4; wy += 6) for (let wx = x + 3; wx < x + w - 4; wx += 5)
       if ((((wx + X0 / PX) * 7 + (wy + CY) * 13) % 10) / 10 < b.win) R(wx, wy, 2, 3, lit ? '#ffe14d' : 'rgba(255,255,255,.3)');
   }
-  for (const c of clouds) { const s = cloudSprite(c.s); g.drawImage(s, X(c.x) - Math.round(20 * c.s / PX), Y(c.y) - Math.round(30 * c.s / PX)); }
 }
 function drawGroundPx() {
   const gy = Y(GROUND_Y);
@@ -231,6 +261,11 @@ function brickWall(x0, y0, x1, y1) {
   }
 }
 function drawShell(h) {
+  const ns = nightStep(h);
+  layer('shell', `${ns}|${S.power}`, () => drawShellStatic(ns));
+  drawRampCarsPx();
+}
+function drawShellStatic(nn) {
   // huset: rumsdelen (under hallarna) och schakttornet i två block; kontur runt
   const x0 = X(LAND_X0 - 20), xs = X(SHAFT_X0 - 8), x1 = X(BX1 + 7), xu = X(UX1 + 7);
   const yd = Y(DECK_Y - 4), yr = Y(ROOF_Y - 4), ys = Y(SEAM_Y) - 2, yb = Y(BASE_Y);
@@ -240,7 +275,6 @@ function drawShell(h) {
   // tegel runt schakten
   const wx0 = X(SHAFT_X0 - 5), wy0 = Y(ROOF_Y + 4), wy1 = Y(BASE_Y - 6);
   brickWall(wx0, wy0, X(UX1 - 4), ys + 4); brickWall(wx0, ys + 4, X(BX1 - 4), wy1);
-  const nn = nightness(h);
   // fasad med fönster där inget schakt går (men bara där huset finns på den våningen)
   for (const c of COLS) {
     const x = X(c.x);
@@ -288,15 +322,19 @@ function drawShell(h) {
   }
 }
 /** garagerampen under expresshissarna: in från gatan och i två svängar ner till P1 och P2 */
+/** rampens mått i ritytan */
+function rampGeom() {
+  return { rx0: X(RAMP_COLS[0].x - 2), rx1: X(BX1 - 4), top: Y(GROUND_Y + 8), bot: Y(BASE_Y - 6),
+    yE: Y(GROUND_Y) + 2, y1: Y(surf(LOBBY - 1)), y0: Y(surf(LOBBY - 2)) };
+}
 function drawRampPx() {
   if (!RAMP_COLS.length) return;
-  const rx0 = X(RAMP_COLS[0].x - 2), rx1 = X(BX1 - 4), top = Y(GROUND_Y + 8), bot = Y(BASE_Y - 6);
+  const { rx0, rx1, top, bot, yE, y1, y0 } = rampGeom();
   if (top > lo.height || bot < 0) return;
   R(rx0, top, rx1 - rx0, bot - top, PAL.basement);
   // bakväggens betongpelare
   for (let x = rx0 + 6; x < rx1 - 4; x += 28) R(x, top, 4, bot - top, dark(PAL.basement, 0.12));
   // ramperna: gatan → P1 (åt vänster) och P1 → P2 (åt höger)
-  const yE = Y(GROUND_Y) + 2, y1 = Y(surf(LOBBY - 1)), y0 = Y(surf(LOBBY - 2));
   const band = (xa, ya, xb, yb) => {
     const n = Math.abs(xb - xa);
     for (let i = 0; i <= n; i++) {
@@ -310,9 +348,14 @@ function drawRampPx() {
   // öppningen i fasaden mot gatan, med skylt
   R(rx1, yE - 1, X(BX1 + 7) - rx1 + 1, Y(GROUND_Y + 40) - yE, '#2b2f36');
   pill(rx1 - 34, top + 2, 30, 9, PAL.sign); text(g, 'GARAGE', rx1 - 19, top + 3, '#ffffff', 'center');
-  // bilar som är på väg in eller ut åker på rampen (bara grafik)
+}
+/** bilar som är på väg in eller ut åker på rampen (bara grafik – ritas varje bildruta ovanpå lagret) */
+function drawRampCarsPx() {
+  if (!RAMP_COLS.length) return;
+  const { rx0, rx1, top, bot, yE, y1, y0 } = rampGeom();
+  if (top > lo.height || bot < 0) return;
   const moving = (S.autos || []).filter(a => a.state === 'in' || a.state === 'out');
-  moving.slice(0, 2).forEach((a, i) => {
+  moving.slice(0, 2).forEach(a => {
     // t = 0 vid gatan, 1 längst ner – följer bilens färd i simuleringen (in: −140 → plats, ut: plats → −170)
     const t = a.state === 'in' ? clamp((a.x + 140) / (a.slot + 140), 0, 1) : 1 - clamp((a.slot - a.x) / (a.slot + 170), 0, 1);
     const onFirst = t < 0.5 || LOBBY < 2, u = onFirst ? t * 2 : (t - 0.5) * 2;

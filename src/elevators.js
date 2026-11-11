@@ -1,11 +1,10 @@
 // Hissarna: rörelse, dörrar, av-/påstigning och incidentlägen.
-import { pick, rand } from './rng.js';
+import { rand } from './rng.js';
 import { ARR, fl } from './util.js';
-import { ACC, DOOR_T, DWELL, EL, TOP, VMAX, shaftCX, RATED_KG, CAR_H, floorY } from './config.js';
+import { ACC, DOOR_T, DWELL, EL, VMAX, shaftCX, CAR_H, floorY } from './config.js';
 import { S, log } from './state.js';
 import { arriveOnFloor, liftsAvailable, pev, pn, setTrip, toStairs, queueSpot } from './people.js';
 import { safeFloor, aheadOf, allowed, assignedTo, isFull, maybePark, rebuildPicks, stopFloors, loadKg, personKg, slotsFull } from './dispatch.js';
-import { step } from './sim.js';
 import { answerCalls, buttonsMode, clearCall } from './buttons.js';
 import { maybeBreak } from './service.js';
 import { doorHold } from './cast.js';
@@ -271,6 +270,9 @@ export function bounceBoarders(e) {
 export function restoreElevator(e) {
   const d = e.dir;
   e.mode = 'normal'; e.rs = null; e.target = null; e.targetKind = null; e.dir = 0;
+  // den som var ombord ska fortfarande av: om återkallningen kom precis när hissen stannade på målet
+  // (stoppet var redan struket men dörrarna hann aldrig öppna) läggs stoppet tillbaka
+  for (const p of e.passengers) e.carCalls.add(p.dest);
   if (e.door > 0) { e.state = 'doors'; e.doorPhase = 'closing'; }
   // mellan två våningar (avbruten återkallning/nödsänkning): bromsa in till en våning i stället för att hoppa dit
   else if (Math.abs(e.pos - Math.round(e.pos)) > 1e-6) { e.dir = d || -1; e.state = 'moving'; }
@@ -327,6 +329,7 @@ export function kickOff(e, p) {
   if (!e.passengers.some(q => q.dest === p.dest)) e.carCalls.delete(p.dest);
   // väntetiden räknas om när personen väl kommer med en hiss
   S.stats.waitSum -= p.lastWait || 0; S.stats.waitN--; p.totalWait -= p.lastWait || 0;
+  if (p.mood >= 2) S.stats.angry--; // räknas igen när hen väl kommer med
   S.stats.overloads++;
   p.kicked = `${e.id}:${e.trips}`; p.avoid = e.id;
   p.car = null; p.assigned = null; p.keepWait = true;

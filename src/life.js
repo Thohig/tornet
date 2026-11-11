@@ -2,7 +2,7 @@
 import { pick, rand, rng } from './rng.js';
 import { fl } from './util.js';
 import { DOCK, FL, GARAGE_FLOORS, HOME_FLOORS, LOBBY, OFFICE_FLOORS, ROOF, SPOTS, floorOpen, floorWith } from './config.js';
-import { S, clockStr, hour, log } from './state.js';
+import { S, clockStr, hour, log, occOf, setOcc } from './state.js';
 import { makePerson, openFloors, pev, pn, setTrip } from './people.js';
 import { castResident } from './cast.js';
 
@@ -131,7 +131,7 @@ function makeResidents() {
       if (bil) { p.hasCar = true; arriveByCar(p, true); }           // bilen står redan i garaget på morgonen
       p.floor = f;
       const s = homeSpot(p);
-      p.spot = s; s.occ = p.id; p.x = s.x; p.state = 'office'; p.timer = rand(1, 5); p.face = s.face || 1;
+      p.spot = s; setOcc(s, p.id); p.x = s.x; p.state = 'office'; p.timer = rand(1, 5); p.face = s.face || 1;
       S.people.push(p);
     }));
   });
@@ -139,7 +139,7 @@ function makeResidents() {
 /** En plats i den egna lägenheten: sängen när man sover, annars soffa/kök/dator */
 export function homeSpot(p) {
   const mine = SPOTS[p.home].filter(s => s.apt === p.apt);
-  const want = mine.filter(s => !!s.bed === !!p.sleeping && (!s.occ || s.occ === p.id));
+  const want = mine.filter(s => !!s.bed === !!p.sleeping && (occOf(s) === null || occOf(s) === p.id));
   return pick(want.length ? want : mine);
 }
 /** Nästa beslut för en boende (anropas när tiden på platsen är slut) */
@@ -161,11 +161,11 @@ export function resNext(p, h) {
     pev(p, shouldSleep ? 'Lägger sig och somnar 💤' : 'Vaknar och gäspar ☀️');
   }
   const s = homeSpot(p);
-  if (s !== p.spot) { if (p.spot && p.spot.occ === p.id) p.spot.occ = null; p.spot = s; s.occ = p.id; p.x = s.x; p.face = s.face || 1; }
+  if (s !== p.spot) { if (p.spot && occOf(p.spot) === p.id) setOcc(p.spot, null); p.spot = s; setOcc(s, p.id); p.x = s.x; p.face = s.face || 1; }
   return null;
 }
 function awayTick(p) {
-  if (hour() < p.returnAt) return;
+  if (hour() < p.returnAt || S.fire) return; // vid brand släpps ingen in
   const ev = p.sched.find(e => !e.done && e.go === 'home');
   if (ev) ev.done = true;
   p.floor = LOBBY; p.exitFloor = LOBBY; p.x = -30 - rand(0, 20);

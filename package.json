@@ -7,6 +7,7 @@
     "start": "python3 serve.py",
     "test": "node tests/run.mjs",
     "golden": "node tests/run.mjs --update-golden",
+    "bench": "node tests/bench.mjs",
     "typecheck": "tsc -p jsconfig.json",
     "check": "npm run typecheck && npm test"
   },

@@ -1,15 +1,20 @@
 // Start och huvudloop.
 import { S, hooks } from './state.js';
-import { advance, newSim } from './sim.js';
+import { advance, newSim, startReplay } from './sim.js';
+import { decodeReplay } from './replay.js';
 import { VIEW, camMax, drawOverview, resize, scrollToFloor, updateCamera } from './view.js';
 import { render } from './render.js';
 import { $, applyTab, buildHud, placeCarPop, showIntro, showSummary, updateHud, updateRoster, updateTracker } from './hud.js';
-import { setSpeed } from './input.js';
+import { setSpeed, syncControls } from './input.js';
 
 // ---------- Start ----------
 // Fröet kan väljas med ?seed=123 i adressen för att spela om exakt samma dag.
-const urlSeed = parseInt(new URLSearchParams(location.search).get('seed'), 10);
-newSim(Number.isFinite(urlSeed) ? urlSeed : Math.floor(Math.random() * 1e6));
+// ?replay=… spelar upp ett inspelat dygn (frö + spelarens åtgärder), se replay.js.
+const params = new URLSearchParams(location.search);
+const urlSeed = parseInt(params.get('seed'), 10);
+const rec = params.get('replay') ? decodeReplay(params.get('replay')) : null;
+if (rec) startReplay(rec);
+else newSim(Number.isFinite(urlSeed) ? urlSeed : Math.floor(Math.random() * 1e6));
 hooks.incident = floor => {
   if (S.speed > 2) setSpeed(1);
   if (floor !== null) scrollToFloor(floor);
@@ -33,7 +38,7 @@ function frame(now) {
   drawOverview();
   placeCarPop();
   hudT -= dt; rosterT -= dt;
-  if (hudT <= 0) { hudT = 0.15; updateHud(); updateTracker(); }
+  if (hudT <= 0) { hudT = 0.15; updateHud(); updateTracker(); syncControls(); }
   if (rosterT <= 0) { rosterT = 0.4; updateRoster(); }
   requestAnimationFrame(frame);
 }
