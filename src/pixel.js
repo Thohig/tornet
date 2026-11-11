@@ -3,7 +3,7 @@
 // avrundade till rutor om PX världsenheter – så klick, kamera och spårning fungerar som vanligt.
 // Bara grafik: läser simuleringens tillstånd men ändrar det aldrig (utom S.fx-listan, som den
 // tecknade grafiken också räknar ner).
-import { clamp, fl } from './util.js';
+import { ARR, clamp, fl } from './util.js';
 import { BX1, CAR_H, CAR_W, EL, FL, FLOORS, FLOOR_H, FLOOR_HOURS, FULL_LOAD, GROUND_Y, H, INNER_X1, LAND_X0, DOOR_X, LOBBY, ROOF_Y, SHAFT_W, SHAFT_X0, SKY, TOP, TOWER_X1, W, floorOpen, floorY, shaftCX, shaftX, surf } from './config.js';
 import { S, hour } from './state.js';
 import { allowed, cabinKg } from './dispatch.js';
@@ -11,7 +11,8 @@ import { noteDetail, stateInfo } from './describe.js';
 import { VIEW, clouds, ctx, cv, nightness, skyAt, skyline, stars } from './view.js';
 import { carSlotX, landPos, peopleBehindDoor, personHead } from './render.js';
 import { vpick, vrand } from './rng.js';
-import { PX, blend, dark, light, ellipseSprite, fromCells, sprite, text, textW, plain, rgbOf } from './pixart.js';
+import { PX, blend, dark, light, ellipseSprite, fromCells, sprite, text, textW, plain, rgbOf, led } from './pixart.js';
+import { buttonsMode, hallLit } from './buttons.js';
 import { PERSON_H, PERSON_W, cargoSprite, personSprite } from './pixpeople.js';
 import { PAL } from './pixpal.js';
 
@@ -376,23 +377,25 @@ function drawSlabsPx() {
   }
   for (const e of S.elevators) for (const f of e.serves) lantern(e, f);
 }
-/** våningsdisplay ovanför hissdörren: korgens våning, riktning och anropslampor */
+/** våningsdisplay ovanför hissdörren: riktning, korgens våning (LED-siffror) och hallknapparna ▲/▼ */
 function lantern(e, f) {
-  const cx = X(shaftCX(e.id)), y = Y(floorY(f) - 106);
-  if (y < -10 || y > lo.height) return;
-  box(cx - 12, y, 25, 9, PAL.lantern);
+  const x = X(shaftCX(e.id)) - 15, y = Y(floorY(f) - 108), w = 31;
+  if (y < -14 || y > lo.height) return;
+  box(x, y, w, 11, PAL.lantern);
   if (!(S.power || (S.outage && S.outage.gen))) return;
   const here = Math.abs(e.pos - f) < 0.05 && e.state === 'doors';
-  const led = here ? '#7dff9a' : PAL.led;
-  text(g, fl(Math.round(e.pos)), cx + 3, y + 1, led, 'center');
-  if (e.dir && (e.state === 'moving' || here)) text(g, e.dir > 0 ? '▲' : '▼', cx - 9, y + 1, led);
+  const col = here ? '#7dff9a' : PAL.led;
+  led(g, fl(Math.round(e.pos)), x + 14, y + 2, col, 'center');
+  if (e.dir && (e.state === 'moving' || here)) led(g, e.dir > 0 ? '▲' : '▼', x + 2, y + 2, col);
+  // hallknapparna: i KNAPPAR-läget lyser gruppens gemensamma knapp, annars hissens egna hämtningar
+  const buttons = buttonsMode();
   for (const d of [1, -1]) {
     if (d === 1 && f >= e.maxF || d === -1 && f <= e.minF) continue;
-    const lit = e.pick[f + (d > 0 ? 'u' : 'd')] > 0;
-    const lx = cx + 15, ly = y + (d > 0 ? 0 : 4);
+    const lit = buttons ? hallLit(e.group, f, d) : e.pick[f + (d > 0 ? 'u' : 'd')] > 0;
+    const lx = x + w - 6, ly = y + (d > 0 ? 2 : 6);
     const c = lit ? '#ffe14d' : PAL.dim;
-    if (d > 0) { R(lx + 1, ly, 1, 1, c); R(lx, ly + 1, 3, 1, c); R(lx - 1, ly + 2, 5, 1, c); }
-    else { R(lx - 1, ly + 1, 5, 1, c); R(lx, ly + 2, 3, 1, c); R(lx + 1, ly + 3, 1, 1, c); }
+    if (d > 0) { R(lx + 2, ly, 1, 1, c); R(lx + 1, ly + 1, 3, 1, c); R(lx, ly + 2, 5, 1, c); }
+    else { R(lx, ly, 5, 1, c); R(lx + 1, ly + 1, 3, 1, c); R(lx + 2, ly + 2, 1, 1, c); }
   }
 }
 
@@ -504,7 +507,7 @@ function drawCarPx(e) {
   if (e.facade) { R(x + 2, yt, cw - 4, 2, INK); R(x + 1, yt + 1, cw - 2, 1, INK); }
   R(x + 1, yt + 1, cw - 2, chh - 2, body);
   R(x + 1, yt + 1, cw - 2, 1, light(body, 0.4)); R(x + 1, yb - 2, cw - 2, 1, dark(body, 0.3));
-  const ix = x + 2, iy = yt + 7, iw = cw - 4, ih = chh - 9;
+  const ix = x + 2, iy = yt + 9, iw = cw - 4, ih = chh - 11; // överkanten (9 px) har namn och våg
   R(ix - 1, iy - 1, iw + 2, ih + 2, INK);
   const inner = e.facade ? PAL.cabinGlass : e.freight ? PAL.cabinFreight : PAL.cabin;
   R(ix, iy, iw, ih, inner);
@@ -518,7 +521,7 @@ function drawCarPx(e) {
   const order = ps.map((p, i) => ({ p, i })).sort((a, b) => Number(a.i >= 4) - Number(b.i >= 4));
   for (const { p, i } of order) {
     // bakre raden står högre upp och lite i skugga, så att huvudena syns ovanför främre raden
-    const back = i < 4, px = x + Math.round(carSlotX(i) / PX) - PERSON_W / 2 + (back ? 0 : 2), py = yb - (back ? 9 : 1) - PERSON_H;
+    const back = i < 4, px = x + Math.round(carSlotX(i) / PX) - PERSON_W / 2 + (back ? 0 : 2), py = yb - (back ? 7 : 1) - PERSON_H;
     if (back) g.filter = 'brightness(0.82)';
     g.drawImage(personSprite(p, 'front', 0, 1, { blink: blinkOf(p), hot: hotOf(p) }), px, py);
     g.filter = 'none';
@@ -535,12 +538,15 @@ function drawCarPx(e) {
     R(side ? px : px + open - 1, iy, 1, ih, PAL.doorEdge);
     if (open > 4) R(side ? px + 2 : px + open - 3, iy + 3, 1, Math.min(10, ih - 12), 'rgba(255,255,255,.6)');
   }
-  // namn, riktning, last
-  // överkant: namn och färdriktning till vänster, lasten till höger
-  const nw = text(g, e.name, x + 1, yt, '#ffffff', 'left', 1, INK);
-  if (e.dir && e.state === 'moving') text(g, e.dir > 0 ? '▲' : '▼', x + nw + 2, yt + 1, '#ffffff');
-  const kg = cabinKg(e);
-  text(g, `${Math.round(kg)}KG`, x + cw - 2, yt + 1, kg >= e.ratedKg * FULL_LOAD ? '#ffffff' : dark(body, 0.65), 'right');
+  // överkanten: hissens namn och färdriktning i stora LED-tecken, vågen som en liten display till höger
+  const sh = dark(body, 0.65);
+  const nw = led(g, e.name, x + 2, yt + 1, '#ffffff', 'left', sh);
+  if (e.dir && e.state === 'moving') led(g, e.dir > 0 ? '▲' : '▼', x + 3 + nw, yt + 1, '#ffffff', 'left', sh);
+  const kg = cabinKg(e), ks = String(Math.round(kg)), kw = textW(ks) + textW('KG') + 6;
+  const hot = kg > e.ratedKg ? '#ff5d52' : kg >= e.ratedKg * FULL_LOAD ? '#ff9f1c' : '#ffd23f';
+  box(x + cw - kw - 1, yt + 1, kw, 8, '#101418');
+  text(g, ks, x + cw - kw + 2, yt + 1, hot);
+  text(g, 'KG', x + cw - 3, yt + 1, '#8a8f99', 'right');
   const fr = Math.min(1, kg / e.ratedKg);
   R(ix, yb - 3, iw, 2, 'rgba(27,16,51,.6)');
   R(ix, yb - 3, Math.round(iw * fr), 2, kg > e.ratedKg ? '#ff2d55' : kg >= e.ratedKg * FULL_LOAD ? '#ff8c42' : '#7cf06b');
@@ -594,8 +600,10 @@ function drawHallPeople() {
 }
 /** tankebubblan: mål och tilldelad hiss */
 function thought(p, x, y) {
-  const e = p.assigned !== null ? S.elevators[p.assigned] : null;
-  const txt = plain((S.tags ? p.name + ' ' : '') + '→' + fl(p.dest));
+  // KNAPPAR: personen vet bara vilken knapp hen tryckt – ingen hiss är "hens"
+  const buttons = buttonsMode() && !p.vip;
+  const e = !buttons && p.assigned !== null ? S.elevators[p.assigned] : null;
+  const txt = plain((S.tags ? p.name + ' ' : '') + (buttons ? (p.fixAt ? '?! ' : ARR(p.dir) + ' ') : '') + '→' + fl(p.dest));
   const tw = textW(txt), chip = e ? textW(e.name) + 4 : 0;
   const w = tw + 6 + (e ? chip + 2 : 0), h = 9, bx = x - Math.round(w / 2), by = y - h;
   R(x - 1, y + 2, 2, 2, INK); R(x + 1, y, 2, 2, INK); R(x + 1, y, 1, 1, '#ffffff');

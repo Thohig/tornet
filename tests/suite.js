@@ -13,6 +13,7 @@ import { loadKg, allowed, safeFloor } from '../src/dispatch.js';
 import { RATED_KG, FULL_LOAD } from '../src/config.js';
 import { needsFreight, mayUseFreight, legDest } from '../src/people.js';
 import { fl } from '../src/util.js';
+import { assignCalls, antiNuisance } from '../src/buttons.js';
 
 // ---------- Ramverk ----------
 export const tests = [];
@@ -22,7 +23,7 @@ function assert(cond, msg) { if (!cond) throw new Fail(msg); }
 
 // ---------- Hjälp ----------
 function sim(seed, opts = {}) {
-  newSim(seed, { strategy: 'smart', autoInc: false, ...opts });
+  newSim(seed, { strategy: 'smart', autoInc: false, mistakes: 'lite', ...opts });
   S.started = true; S.paused = false;
   hooks.incident = () => {}; hooks.dayEnd = () => {};
 }
@@ -47,7 +48,7 @@ function watcher() {
       if (e.state === 'moving') w.maxKg = Math.max(w.maxKg, kg);
       // full last: över 80 % stannar hissen bara för avstigning, inte för nya hämtningar
       if (e.state === 'doors' && w.prev[i] === 'moving' && e.mode === 'normal' && kg >= e.ratedKg * FULL_LOAD
-        && !e.passengers.some(p => p.dest === e.floor)) w.bypassBroken++;
+        && !e.passengers.some(p => p.dest === e.floor) && !e.carCallStop) w.bypassBroken++;
       w.prev[i] = e.state;
       // de som redan var ombord eller på väg in när VIP-läget slogs på får åka med
       if (!e.vipLock) w.vipSet[i] = null;
@@ -113,7 +114,7 @@ test('Bildfrekvensen påverkar inte simuleringen', () => {
 
 // ---------- Hela dagar ----------
 // gränser: snittväntan och längsta väntan per strategi (lunchrusningen är kapacitetsbegränsad med 4 hissar)
-for (const [strategy, maxAvg, maxLongest] of /** @type {[string, number, number][]} */ ([['smart', 18, 200], ['nearest', 35, 400], ['random', 45, 400]])) {
+for (const [strategy, maxAvg, maxLongest] of /** @type {[string, number, number][]} */ ([['smart', 18, 200], ['nearest', 35, 400], ['random', 45, 400], ['buttons', 25, 300]])) {
   test(`Hel dag med strategin ${strategy}: alla kommer fram`, () => {
     sim(2024, { strategy });
     const w = watcher();
@@ -376,6 +377,40 @@ test('VIP-helikoptern: gruppen åker ensam i sin hiss och flyger hem igen', () =
   return `2 helikopterbesök · panoramahissen ${P.trips} stopp`;
 });
 
+// ---------- KNAPPAR och felknappar ----------
+test('Knappar: styrsystemet läser aldrig vart folk ska (bara anrop, korgar och våg)', () => {
+  sim(71, { strategy: 'buttons' });
+  runUntil(8.8);
+  assert(Object.keys(S.calls).length > 0, 'inga hallanrop att fördela');
+  for (const c of Object.values(S.calls)) c.car = null;
+  const real = S.people;
+  S.people = new Proxy([], { get() { throw new Fail('styrningen läste S.people'); } });
+  try { assignCalls(true); } finally { S.people = real; }
+  assert(Object.values(S.calls).some(c => c.car !== null), 'inga anrop fick någon hiss');
+  return `${Object.keys(S.calls).length} anrop fördelade utan att titta på personerna`;
+});
+test('Felknappar: fel knapp ger spökstopp, och utan fel blir det nästan inga', () => {
+  const day = mistakes => { sim(72, { strategy: 'buttons', mistakes }); const w = watcher(); runDay(w); assert(w.passes === 0, `förbiåkningar med felknappar=${mistakes}`); return { ...S.stats }; };
+  const off = day('av'), many = day('mycket');
+  assert(off.wrongPress === 0 && off.kidPresses === 0, `felknappar trots av: ${off.wrongPress}`);
+  assert(off.ghostStops < 10, `${off.ghostStops} spökstopp utan felknappar`);
+  assert(many.wrongPress > 100, `bara ${many.wrongPress} felknappar på "mycket"`);
+  assert(many.ghostStops > off.ghostStops + 50, `spökstopp: av ${off.ghostStops} · mycket ${many.ghostStops}`);
+  return `av: ${off.ghostStops} spökstopp · mycket: ${many.wrongPress} felknappar, ${many.kidPresses} barn, ${many.ghostStops} spökstopp`;
+});
+test('Antinuisance: för många våningsknappar för få passagerare rensas', () => {
+  sim(73, { strategy: 'buttons' });
+  runUntil(8.5);
+  const e = S.elevators.find(x => x.passengers.length === 1 && x.serves.size > 5);
+  assert(e, 'ingen hiss med exakt en passagerare');
+  for (const f of e.serves) e.carCalls.add(f);
+  antiNuisance(e);
+  const dest = e.passengers[0].dest;
+  assert(e.carCalls.size === 1 && e.carCalls.has(dest), `knappar kvar: ${[...e.carCalls].map(fl).join(',')}`);
+  assert(S.stats.nuisance === 1, 'rensningen räknades inte');
+  return `${e.name}: alla knappar rensade, passageraren tryckte ${fl(dest)} igen`;
+});
+
 // ---------- Regression: fingeravtryck mot facit ----------
 // Varje fall kör ett helt dygn och sammanfattar det. Facit ligger i tests/golden.json.
 // Ändras beteendet oavsiktligt (t.ex. vid en omstrukturering) larmar testet och visar exakt vad som skilde.
@@ -416,7 +451,7 @@ test('Regression: samma frön ger samma dygn som facit', () => {
 // Sällsynta fel visar sig bara med vissa frön – därför körs många hela dygn med slumpade incidenter.
 const MANY_SEEDS = Array.from({ length: 40 }, (_, i) => 1000 + i);
 test(`Invarianter över ${MANY_SEEDS.length} slumpade dygn (alla strategier, med incidenter)`, () => {
-  const strategies = ['smart', 'smart', 'nearest', 'random'];
+  const strategies = ['smart', 'smart', 'nearest', 'random', 'buttons'];
   const fails = [];
   let trips = 0, incidents = 0, worstWait = 0, heaviest = 0;
   for (const [i, seed] of MANY_SEEDS.entries()) {

@@ -141,7 +141,7 @@ export function updateHud() {
   if (S.logDirty && isOpen('log')) {
     S.logDirty = false;
     const f = S.logFilter, sid = S.sel ? S.sel.id : -1;
-    const rows = S.log.filter(l => f === 'all' || (f === 'person' ? l.kind === 'person' : f === 'lift' ? l.kind !== 'person' : l.pid === sid)).slice(0, 80);
+    const rows = S.log.filter(l => f === 'all' || (f === 'person' ? l.kind === 'person' : f === 'button' ? l.kind === 'button' : f === 'lift' ? l.kind !== 'person' && l.kind !== 'button' : l.pid === sid)).slice(0, 80);
     $('log').innerHTML = rows.map(l =>
       `<div class="le k-${l.kind}${l.pid != null && l.pid === sid ? ' sel' : ''}"${l.pid != null ? ` data-pid="${l.pid}"` : ''}><span class="lt">${l.time}</span>${l.color ? `<span class="ld" style="background:${l.color}"></span>` : ''}<span>${esc(l.text)}</span></div>`).join('')
       || '<div class="le">–</div>';
@@ -168,6 +168,10 @@ export function updateHud() {
     <div class="stat">Bilar in i garaget <b>${st.carsIn}</b></div>
     <div class="stat">Paketleveranser <b>${st.deliveries}</b></div>
     <div class="stat">VIP-besök 🚁 <b>${st.vips}</b></div>
+    <div class="stat">Felknappar 🙈 <b>${st.wrongPress}</b></div>
+    <div class="stat">Barn på alla knappar <b>${st.kidPresses}</b></div>
+    <div class="stat">Spökstopp 👻 <b>${st.ghostStops}</b></div>
+    <div class="stat">Bus rensat (antinuisance) <b>${st.nuisance}</b></div>
     <div class="grade">Service: ${st.waitN ? g.letter : '–'} <span class="stars">${st.waitN ? '★'.repeat(g.stars) + '☆'.repeat(5 - g.stars) : ''}</span> · Säkerhet: ${sg}</div>`;
   updateIncidents();
 }
@@ -261,7 +265,12 @@ export function updateTracker() {
     case 'toQueue': now = `Går mot hissarna på ${fl(p.floor)}`; logic = 'Får en hiss tilldelad när hen kommer fram'; break;
     case 'wait': {
       now = `Väntar på ${fl(p.floor)} (${ARR(p.dir)} mot ${fl(p.dest)}) i ${Math.round(S.t - p.waitStart)}s`;
-      if (p.assigned !== null) {
+      if (S.strategy === 'buttons' && !p.vip) {
+        const lit = p.bank && S.calls[`${p.bank}|${p.floor}|${p.dir}`];
+        const e = p.assigned !== null ? S.elevators[p.assigned] : null;
+        now += p.fixAt ? ' · tryckte fel knapp' : lit ? ` · knappen ${ARR(p.dir)} lyser` : '';
+        logic = `Styrsystemet ser bara ${ARR(p.dir)} på ${fl(p.floor)} – inte vart hen ska.${e ? ` ${e.name} tar anropet (~${Math.round(eta(e, p.floor, p.dir))}s)` : ''}`;
+      } else if (p.assigned !== null) {
         const e = S.elevators[p.assigned];
         now += ` · ${e.name} är här om ~${Math.round(eta(e, p.floor, p.dir))}s`;
         logic = S.strategy === 'smart' ? `Kostnad hämtning+resa: ${costLine(p, e.id)}`
@@ -364,7 +373,7 @@ export function showIntro() {
 export function showSummary() {
   S.summaryShown = true; S.paused = true;
   const st = S.stats, avg = st.waitN ? st.waitSum / st.waitN : 0, g = grade(avg);
-  const names = { smart: 'Smart', nearest: 'Närmast', random: 'Kaos' };
+  const names = { smart: 'Smart', nearest: 'Närmast', random: 'Kaos', buttons: 'Knappar' };
   showOverlay(`<div class="card"><h1>DYGNET ÄR SLUT!</h1>
     <div class="bigGrade">${st.waitN ? g.letter : '–'} <span style="font-size:48px">· säkerhet ${safetyGrade()}</span></div>
     <p><b>${g.msg}</b></p>
@@ -376,6 +385,7 @@ export function showSummary() {
       <div>Instängd-sekunder: <b>${Math.round(st.trappedSec)}</b></div><div>Trapp-resor: <b>${st.stairs}</b></div>
       <div>Överlaster: <b>${st.overloads}</b></div><div>Hissbyten: <b>${st.transfers}</b></div>
       <div>Bilar i garaget: <b>${st.carsIn}</b></div><div>Leveranser: <b>${st.deliveries}</b></div>
+      <div>Felknappar: <b>${st.wrongPress}</b> (barn: ${st.kidPresses})</div><div>Spökstopp: <b>${st.ghostStops}</b></div>
     </div>
     <button class="btn" id="next">NÄSTA DAG ▶</button></div>`);
   $('next').onclick = () => { hideOverlay(); newDay(); };

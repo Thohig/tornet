@@ -6,6 +6,7 @@ import { S, clockStr, hour, log } from './state.js';
 import { inFireZone, requestRide, loadKg, personKg } from './dispatch.js';
 import { kickOff } from './elevators.js';
 import { arriveByCar, leaveBuilding, resNext, homeSpot } from './life.js';
+import { buttonsMode, carButtonMistakes } from './buttons.js';
 
 // ---------- Människor ----------
 export const SKIN = ['#ffdbb8', '#f6c48f', '#d9a066', '#a8693f', '#7a4a2a', '#ffe4c8'];
@@ -93,7 +94,7 @@ export function legDest(from, goal, p) {
 export function setTrip(p, goal, why) {
   p.goal = goal; p.dest = legDest(p.floor, goal, p); p.dir = Math.sign(p.dest - p.floor);
   p.leaving = goal === p.exitFloor; p.why = why; p.assigned = null;
-  p.state = 'toQueue'; p.tx = queueSpot(p.floor); p.mood = 0;
+  p.state = 'toQueue'; p.tx = queueSpot(p.floor); p.mood = 0; p.bank = null; p.fixAt = 0;
 }
 export function releaseSpot(p) {
   const s = p.spot;
@@ -226,7 +227,7 @@ export function arriveOnFloor(p) {
     // framme vid ett delmål (sky lobbyn) – byt hiss och fortsätt
     S.stats.transfers++;
     p.dest = legDest(p.floor, p.goal, p); p.dir = Math.sign(p.dest - p.floor);
-    p.state = 'toQueue'; p.tx = queueSpot(p.floor); p.assigned = null;
+    p.state = 'toQueue'; p.tx = queueSpot(p.floor); p.assigned = null; p.bank = null; p.fixAt = 0;
     pev(p, `Byter hiss på ${fl(p.floor)} – vidare mot ${fl(p.goal)}`);
     log(`↹ ${pn(p)} byter hiss på ${fl(p.floor)} (mot ${fl(p.goal)})`, 'person', null, p.id);
     return;
@@ -246,6 +247,8 @@ export function boardDone(p) {
     pev(p, `Inne i hiss ${e.name} – ${fl(p.dest)} läggs på hissens stopplista`);
     log(`${e.name}: ${pn(p)} ska till ${fl(p.dest)} – nytt stopp`, 'car', e.color, p.id);
   } else pev(p, `Inne i hiss ${e.name} – den ska redan till ${fl(p.dest)}`);
+  // KNAPPAR: knappanelen i korgen – ibland trycker man fel, och barn trycker gärna på allt
+  if (buttonsMode() && !p.vip) carButtonMistakes(p, e);
 }
 export function exitDone(p) {
   if (p.leaving && p.floor === p.exitFloor && (p.tx < 0 || p.auto)) { leaveBuilding(p); return; }

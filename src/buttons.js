@@ -1,0 +1,176 @@
+// Styrlogiken KNAPPAR: vanliga hissknappar som i ett äldre hus. Styrsystemet vet INTE vart folk ska –
+// det ser bara anrop i hallen (våning + riktning per hissgrupp) och knapparna inne i korgen.
+// Här finns också felknappar: folk som trycker på båda knapparna, åt fel håll, på fel våning, och
+// barn som trycker på alla knappar. Felen slumpas med simuleringens rng() (deterministiskt).
+import { rand, rng } from './rng.js';
+import { ARR, fl } from './util.js';
+import { CAR_H, EL, floorY, shaftCX } from './config.js';
+import { S, log } from './state.js';
+import { elevatorAllows, pev, pn, toStairs } from './people.js';
+import { allowed, eta, isFull, operational, rebuildPicks } from './dispatch.js';
+
+export const buttonsMode = () => S.strategy === 'buttons';
+/** Hur ofta folk trycker fel: av / lite / mycket (gäller alla styrlogiker – i de andra slår man in fel våning) */
+export const MISTAKE_LEVELS = { av: 0, lite: 1, mycket: 3 };
+export const mistakeRate = base => base * (MISTAKE_LEVELS[S.mistakes] ?? 1);
+export const GROUP_NAMES = { låg: 'låga zonen', hög: 'höga zonen', express: 'expressen', varu: 'varuhissen', panorama: 'panoramahissen' };
+
+/**
+ * @typedef {{ k: string, g: string, f: number, d: number, t: number, car: number|null }} HallCall
+ * Ett anrop i hallen: hissgrupp g, våning f, riktning d, när det trycktes och vilken korg som fått det.
+ */
+export const callKey = (g, f, d) => `${g}|${f}|${d}`;
+
+/** Hissgruppen personen ställer sig vid: första gruppen där en hiss tar hen hela delresan. */
+export function bankFor(p) {
+  const d = EL.find(x => elevatorAllows(x, p) && x.serves.includes(p.floor) && x.serves.includes(p.dest));
+  return d ? d.group : null;
+}
+/** Finns det en knapp åt det hållet på våningen (går gruppen vidare åt det hållet)? */
+function hasButton(g, f, d) {
+  return EL.some(x => x.group === g && x.serves.includes(f) && x.serves.some(h => (h - f) * d > 0));
+}
+function press(g, f, d) {
+  const k = callKey(g, f, d);
+  if (S.calls[k]) return false;
+  S.calls[k] = { k, g, f, d, t: S.t, car: null };
+  return true;
+}
+
+// ---------- Personerna: trycker på knappen i hallen ----------
+/** Personen kommer fram till hissarna och trycker (ibland fel). */
+export function pressHallButton(p) {
+  const g = bankFor(p);
+  p.bank = g; p.assigned = null; p.fixAt = 0;
+  if (g === null) return;
+  const name = GROUP_NAMES[g] || g;
+  if (!allowed(p.floor) || !allowed(p.dest)) return; // brand: sköts i buttonWaitTick
+  // står en hiss i gruppen redan öppen här åt rätt håll kliver man bara in – ingen knapp behövs
+  if (S.elevators.some(e => e.group === g && e.state === 'doors' && e.floor === p.floor && e.doorPhase !== 'closing' && (e.dir === p.dir || e.dir === 0))) {
+    pev(p, `Hiss åt rätt håll står redan öppen vid ${name} – kliver in`);
+    return;
+  }
+  if (rng() < mistakeRate(0.03) && hasButton(g, p.floor, -p.dir)) {
+    press(g, p.floor, -p.dir);
+    p.fixAt = S.t + rand(2, 6);
+    S.stats.wrongPress++;
+    pev(p, `Trycker ${ARR(-p.dir)} vid ${name}… oj, fel knapp!`);
+    log(`🙈 ${pn(p)} tryckte ${ARR(-p.dir)} i stället för ${ARR(p.dir)} på ${fl(p.floor)}`, 'button', null, p.id);
+    return;
+  }
+  const fresh = press(g, p.floor, p.dir);
+  pev(p, fresh ? `Trycker på ${ARR(p.dir)} vid ${name}` : `Knappen ${ARR(p.dir)} vid ${name} lyser redan – väntar`);
+  if (fresh) log(`${ARR(p.dir)} ${pn(p)} trycker på ${fl(p.floor)} (${name})`, 'button', null, p.id);
+  if (rng() < mistakeRate(0.06) && hasButton(g, p.floor, -p.dir) && press(g, p.floor, -p.dir)) {
+    S.stats.wrongPress++;
+    pev(p, 'Trycker på båda knapparna – för säkerhets skull');
+    log(`🙈 ${pn(p)} trycker på båda knapparna på ${fl(p.floor)}`, 'button', null, p.id);
+  }
+}
+/** Varje steg för den som väntar i KNAPPAR-läget (ersätter tilldelningen i de andra lägena). */
+export function buttonWaitTick(p, dt) {
+  if (!allowed(p.floor) || !allowed(p.dest)) {
+    toStairs(p, S.fire && S.fire.mode === 'recall' ? 'Brandåterkallning – alla hissar avstängda, tar trapporna' : 'Hissarna kör inte hit pga branden – tar trapporna');
+    return;
+  }
+  if (p.bank === undefined || p.bank === null) { pressHallButton(p); return; }
+  if (p.fixAt && S.t >= p.fixAt) {
+    p.fixAt = 0;
+    press(p.bank, p.floor, p.dir);
+    pev(p, `Trycker på rätt knapp: ${ARR(p.dir)}`);
+  }
+  const call = S.calls[callKey(p.bank, p.floor, p.dir)];
+  if (!call && !p.fixAt) {
+    // anropet besvarades men jag kom inte med (full hiss, fel håll) – tryck igen när hissen har gått
+    const here = S.elevators.some(e => e.group === p.bank && e.state === 'doors' && e.floor === p.floor);
+    if (!here) { press(p.bank, p.floor, p.dir); pev(p, `Trycker på ${ARR(p.dir)} igen`); }
+  }
+  // bara för bilden och spårlappen – styrsystemet läser aldrig personerna
+  const c = S.calls[callKey(p.bank, p.floor, p.dir)];
+  p.assigned = c ? c.car : null;
+  // otålig: trycker om och om igen (det hjälper inte)
+  if (p.waited > 25 && rng() < mistakeRate(0.06) * dt) {
+    pev(p, `Trycker på ${ARR(p.dir)} igen… och igen… (det hjälper inte)`);
+    S.fx.push({ x: p.x, y: floorY(p.floor) - 70, text: 'TRYCK!', color: '#ffe14d', life: 0.9, size: 14 });
+  }
+}
+
+// ---------- Personerna: knapparna inne i korgen ----------
+/** Efter påstigning: rätt knapp trycks alltid (så ingen åker förbi sitt mål) – ibland också fel. */
+export function carButtonMistakes(p, e) {
+  const ahead = f => e.serves.has(f) && f !== e.floor && (e.dir === 0 || (f - e.floor) * e.dir > 0);
+  if (p.child && rng() < mistakeRate(0.15)) {
+    const all = [...e.serves].filter(ahead);
+    for (const f of all) e.carCalls.add(f);
+    S.stats.kidPresses++;
+    pev(p, 'Trycker på ALLA knappar! Hihi!');
+    log(`🧒 ${pn(p)} trycker på alla knappar i ${e.name}`, 'button', e.color, p.id);
+    S.fx.push({ x: shaftCX(e.id), y: floorY(e.pos) - CAR_H - 24, text: 'PIP PIP PIP!', color: '#ffe14d', life: 1.4, size: 16 });
+    for (const q of e.passengers) if (q !== p && !q.child) q.mood = Math.max(q.mood, 1);
+  } else if (rng() < mistakeRate(0.04)) {
+    const near = [p.dest + 1, p.dest - 1].filter(f => ahead(f) && f !== p.dest);
+    if (near.length) {
+      const f = near[0];
+      e.carCalls.add(f);
+      S.stats.wrongPress++;
+      pev(p, `Kom åt ${fl(f)} också – oj`);
+      log(`🙈 ${pn(p)} kom åt fel knapp i ${e.name} (${fl(f)})`, 'button', e.color, p.id);
+    }
+  }
+  antiNuisance(e);
+}
+/**
+ * Skydd mot bus ("antinuisance", som i riktiga hissar): fler våningsknappar än rimligt för så få
+ * passagerare ⇒ alla knappar rensas, och passagerarna trycker sitt mål igen.
+ */
+export function antiNuisance(e) {
+  if (e.carCalls.size < e.passengers.length + 3) return;
+  const n = e.carCalls.size;
+  e.carCalls.clear();
+  for (const q of e.passengers) e.carCalls.add(q.dest);
+  S.stats.nuisance++;
+  log(`🧹 ${e.name}: ${n} knappar men bara ${e.passengers.length} ombord – rensar och låter alla trycka igen`, 'button', e.color);
+}
+
+// ---------- Styrsystemet: fördelar hallanropen ----------
+// OBS: assignCalls läser ALDRIG S.people – bara anropen, korgarnas läge, våningsknappar och våg.
+// (Ett test kontrollerar det.)
+/** kostnad för att korg e tar anropet c: tid till våningen + lite för last och fullt */
+const callCost = (e, c) => eta(e, c.f, c.d) + e.passengers.length * 0.3 + (isFull(e) ? 60 : 0);
+export function assignCalls(reopt = false) {
+  let changed = false;
+  for (const c of Object.values(S.calls)) {
+    if (!allowed(c.f)) { if (c.car !== null) { c.car = null; changed = true; } continue; }
+    const cars = S.elevators.filter(e => e.group === c.g && operational(e) && e.serves.has(c.f) && !e.vipLock);
+    const cur = c.car !== null ? S.elevators[c.car] : null;
+    if (!cars.length) { if (c.car !== null) { c.car = null; changed = true; } continue; }
+    if (cur && cars.includes(cur) && !reopt) continue;
+    let best = cars[0], bc = Infinity;
+    for (const e of cars) { const x = callCost(e, c); if (x < bc) { bc = x; best = e; } }
+    if (cur && cars.includes(cur)) {
+      const cc = callCost(cur, c);
+      if (!(bc < cc * 0.6 && cc - bc > 6)) continue;
+      log(`↻ Anropet ${ARR(c.d)} på ${fl(c.f)} flyttas ${cur.name}→${best.name}`, 'reopt', best.color);
+    } else log(`${best.name} tar anropet ${ARR(c.d)} på ${fl(c.f)} (≈${Math.round(bc)}s)`, 'assign', best.color);
+    c.car = best.id; best.parkTarget = null; changed = true;
+  }
+  return changed;
+}
+export function dispatchCalls(reopt = false) {
+  if (assignCalls(reopt)) rebuildPicks();
+}
+/** Hissen öppnar på våning f: den besvarar anropet åt sitt håll (eller ett av dem om den är ledig). */
+export function answerCalls(e, f) {
+  let d = e.dir;
+  if (d === 0) d = S.calls[callKey(e.group, f, 1)] ? 1 : S.calls[callKey(e.group, f, -1)] ? -1 : 0;
+  if (!d) return;
+  const k = callKey(e.group, f, d);
+  if (!S.calls[k]) return;
+  delete S.calls[k];
+  e.dir = d;
+  rebuildPicks();
+}
+/** Släck en knapp i hallen (en hiss står här åt det hållet). */
+export function clearCall(g, f, d) { delete S.calls[callKey(g, f, d)]; }
+/** Lyser knappen i hallen för gruppen (för bilden)? */
+export const hallLit = (g, f, d) => !!S.calls[callKey(g, f, d)];

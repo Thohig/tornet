@@ -176,3 +176,52 @@ export function text(g, str, x, y, color = INK, align = 'left', scale = 1, outli
 }
 /** emoji och tecken som saknas i typsnittet tas bort, dubbla mellanslag slås ihop */
 export const plain = str => [...str].filter(ch => glyph(ch)).join('').replace(/\s+/g, ' ').trim();
+
+// ---------- LED-siffror (4×7) för våningsdisplayer och hissnamn ----------
+// Större och tydligare än brödtexten (3×5): siffror, våningsbokstäverna P/E/T, hissarnas bokstäver och pilar.
+const LED = {
+  0: ['.##.', '#..#', '#..#', '#..#', '#..#', '#..#', '.##.'], 1: ['..#.', '.##.', '..#.', '..#.', '..#.', '..#.', '.###'],
+  2: ['.##.', '#..#', '...#', '..#.', '.#..', '#...', '####'], 3: ['###.', '...#', '...#', '.##.', '...#', '...#', '###.'],
+  4: ['#..#', '#..#', '#..#', '####', '...#', '...#', '...#'], 5: ['####', '#...', '###.', '...#', '...#', '#..#', '.##.'],
+  6: ['.##.', '#...', '#...', '###.', '#..#', '#..#', '.##.'], 7: ['####', '...#', '..#.', '..#.', '.#..', '.#..', '.#..'],
+  8: ['.##.', '#..#', '#..#', '.##.', '#..#', '#..#', '.##.'], 9: ['.##.', '#..#', '#..#', '.###', '...#', '...#', '.##.'],
+  P: ['###.', '#..#', '#..#', '###.', '#...', '#...', '#...'], E: ['####', '#...', '#...', '###.', '#...', '#...', '####'],
+  T: ['####', '.##.', '.##.', '.##.', '.##.', '.##.', '.##.'], L: ['#...', '#...', '#...', '#...', '#...', '#...', '####'],
+  H: ['#..#', '#..#', '#..#', '####', '#..#', '#..#', '#..#'], X: ['#..#', '#..#', '.##.', '.##.', '.##.', '#..#', '#..#'],
+  V: ['#..#', '#..#', '#..#', '#..#', '#..#', '.##.', '.##.'], K: ['#..#', '#.#.', '##..', '#...', '##..', '#.#.', '#..#'],
+  G: ['.###', '#...', '#...', '#.##', '#..#', '#..#', '.###'], ' ': ['..', '..', '..', '..', '..', '..', '..'],
+  '▲': ['..#..', '.###.', '#####', '.###.', '.###.', '.###.', '.....'], '▼': ['.....', '.###.', '.###.', '.###.', '#####', '.###.', '..#..'],
+};
+export const LED_H = 7;
+/** bredd i pixlar för LED-text (tecken som saknas hoppas över) */
+export function ledW(str) {
+  let w = 0, n = 0;
+  for (const ch of str) { const r = LED[ch.toUpperCase()]; if (!r) continue; w += r[0].length + 1; n++; }
+  return Math.max(0, w - (n ? 1 : 0));
+}
+const LED_CACHE = new Map();
+/** rita LED-text; y = överkant; shadow = färg för en pixels skugga nedåt-höger (ökar kontrasten) */
+export function led(g, str, x, y, color, align = 'left', shadow = null) {
+  const key = `${str}|${color}|${shadow}`;
+  let c = LED_CACHE.get(key);
+  if (!c) {
+    const w = ledW(str) + (shadow ? 1 : 0), h = LED_H + (shadow ? 1 : 0);
+    const cells = Array.from({ length: h }, () => new Array(Math.max(1, w)).fill(null));
+    const put = (dx, dy, col) => {
+      let cx = 0;
+      for (const ch of str) {
+        const r = LED[ch.toUpperCase()]; if (!r) continue;
+        r.forEach((row, yy) => [...row].forEach((b, i) => { if (b === '#' && cells[yy + dy]) cells[yy + dy][cx + i + dx] = col; }));
+        cx += r[0].length + 1;
+      }
+    };
+    if (shadow) put(1, 1, shadow);
+    put(0, 0, color);
+    c = fromCells(cells, Math.max(1, w), h, 0, null);
+    if (LED_CACHE.size > 400) LED_CACHE.clear();
+    LED_CACHE.set(key, c);
+  }
+  const dx = align === 'center' ? Math.round(c.width / 2) : align === 'right' ? c.width : 0;
+  g.drawImage(c, Math.round(x - dx), Math.round(y));
+  return c.width;
+}

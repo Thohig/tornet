@@ -10,14 +10,17 @@ export const S = {
   sel: null, hover: null, hoverDoor: null, carCycle: 0,
   rosterFilter: 'all', logFilter: 'all',
   // incidenter
-  autoInc: true, nextInc: 0, power: true, fire: null, outage: null, 
+  autoInc: true, nextInc: 0, power: true, fire: null, outage: null,
+  // KNAPPAR-läget: hallanrop { 'grupp|våning|riktning': anrop } och hur ofta folk trycker fel (av/lite/mycket)
+  calls: /** @type {Record<string, import('./buttons.js').HallCall>} */ ({}), mistakes: 'lite',
 };
 // Krokar som gränssnittet kopplar in sig på. Simuleringen rör aldrig DOM själv.
 /** @type {{ incident: (floor: number|null) => void, dayEnd: () => void }} */
 export const hooks = { incident() {}, dayEnd() {} };
 export function newStats() {
   return { served: 0, waitSum: 0, waitN: 0, waitMax: 0, rideSum: 0, rideN: 0, angry: 0,
-    smoked: 0, trappedSec: 0, stairs: 0, evacuated: 0, incidents: 0, overloads: 0, transfers: 0, carsIn: 0, deliveries: 0, vips: 0 };
+    smoked: 0, trappedSec: 0, stairs: 0, evacuated: 0, incidents: 0, overloads: 0, transfers: 0, carsIn: 0, deliveries: 0, vips: 0,
+    wrongPress: 0, kidPresses: 0, nuisance: 0, ghostStops: 0 };
 }
 // S.clock = spelsekunder sedan 06:00. hour() går från 6 till 30 (06:00 nästa morgon).
 export const hour = () => START_H + S.clock / 3600;

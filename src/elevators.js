@@ -6,6 +6,7 @@ import { S, log } from './state.js';
 import { arriveOnFloor, liftsAvailable, pev, pn, setTrip, toStairs, queueSpot } from './people.js';
 import { safeFloor, aheadOf, allowed, assignedTo, isFull, maybePark, rebuildPicks, stopFloors, loadKg, personKg, slotsFull } from './dispatch.js';
 import { step } from './sim.js';
+import { answerCalls, buttonsMode, clearCall } from './buttons.js';
 
 // ---------- Hissar ----------
 export function makeElevator(i) {
@@ -141,6 +142,7 @@ export function moveTo(e, target, vmax, dt) {
   return false;
 }
 export function arrive(e, f) {
+  e.carCallStop = e.carCalls.has(f); // stannade för en knapp i korgen (kan vara en felknapp)
   e.pos = f; e.v = 0; e.floor = f; e.carCalls.delete(f);
   let d = e.dir;
   const up = assignedTo(e, f, 1), dn = assignedTo(e, f, -1);
@@ -149,6 +151,7 @@ export function arrive(e, f) {
     d = (assignedTo(e, f, -d) || aheadOf(e, f, -d)) ? -d : 0;
   }
   e.dir = d;
+  if (buttonsMode()) answerCalls(e, f);
   e.state = 'doors'; e.doorPhase = 'opening'; e.dwell = 0; e.dwellNeed = DWELL;
   e.lastOff = 0; e.lastOn = 0; e.trips++; e.target = null;
   for (const p of e.passengers) if (p.dest !== f) pev(p, `Hiss ${e.name} stannar på ${fl(f)} (inte mitt mål)`);
@@ -163,7 +166,14 @@ export function updateDoors(e, dt) {
   if (e.doorPhase === 'open') {
     e.dwell += dt;
     if (e.dwell > 0.25 && !e.off) load(e, f);
-    if (e.dwell >= e.dwellNeed && e.reserved === 0) e.doorPhase = 'closing';
+    if (e.dwell >= e.dwellNeed && e.reserved === 0) {
+      e.doorPhase = 'closing';
+      // spökstopp: dörrarna öppnade men ingen klev av eller på (felknapp, bus eller tomt anrop)
+      if (!e.lastOff && !e.lastOn) {
+        S.stats.ghostStops++;
+        log(`👻 ${e.name} stannade på ${fl(f)} – ingen klev av eller på`, 'move', e.color);
+      }
+    }
     return;
   }
   e.door = Math.max(0, e.door - dt / DOOR_T);
@@ -209,8 +219,12 @@ export function load(e, f) {
   // när två hissar står öppna samtidigt på samma våning)
   const seen = p => { p.seenBy = p.seenBy || {}; if (p.seenBy[e.id] === e.trips) return true; p.seenBy[e.id] = e.trips; return false; };
   let boarded = false;
+  const buttons = buttonsMode();
   for (const p of waiting) {
-    if (p.assigned !== e.id) {
+    // KNAPPAR: man kliver på vilken hiss som helst i sin grupp som öppnar åt rätt håll
+    const mine = buttons && !p.vip ? p.bank === e.group && e.serves.has(p.dest) && allowed(p.dest) && !e.vipLock : p.assigned === e.id;
+    if (!mine) {
+      if (buttons && !p.vip) continue;
       if (p.assigned !== null && !seen(p)) { pev(p, `Hiss ${e.name} öppnar – men jag ska ta ${EL[p.assigned].name}`); }
       continue;
     }
@@ -233,6 +247,8 @@ export function load(e, f) {
     pev(p, `Kliver på hiss ${e.name} efter ${Math.round(w)}s väntan`);
     log(`${pn(p)} kliver på ${e.name} (väntat ${Math.round(w)}s)`, 'person', null, p.id);
   }
+  // KNAPPAR: hissen som står här åt det hållet släcker knappen i hallen
+  if (boarded && buttons) for (const d of [1, -1]) if (d === e.dir) clearCall(e.group, f, d);
   if (boarded) rebuildPicks();
 }
 export function bounceBoarders(e) {

@@ -1,16 +1,20 @@
 // Destinationsstyrning: kostnadsfunktion, tilldelning, omfördelning, parkering.
-import { pick } from './rng.js';
+import { pick, rand, rng } from './rng.js';
 import { ARR, K, fl } from './util.js';
 import { ACC, CAP, DOOR_T, STOP_COST, TOP, VMAX, RATED_KG, FULL_LOAD, LOBBY, EL, idx } from './config.js';
 import { S, hour, log } from './state.js';
 import { liftsAvailable, pev, pn, toStairs, elevatorAllows } from './people.js';
+import { buttonsMode, mistakeRate, pressHallButton } from './buttons.js';
 
 // ---------- Destinationsstyrning ----------
 // Varje hiss har e.pick: { '3u': antal } = personer den ska hämta på våning 3 som ska uppåt.
 export function rebuildPicks() {
   for (const e of S.elevators) { e.pick = {}; e.pickKg = 0; }
+  // KNAPPAR: hissen vet bara om anropen i hallen (ett per våning och riktning), inte hur många som väntar
+  const buttons = buttonsMode();
+  if (buttons) for (const c of Object.values(S.calls)) if (c.car !== null) S.elevators[c.car].pick[c.f + K(c.d)] = 1;
   for (const p of S.people) {
-    if (p.state !== 'wait' || p.assigned === null) continue;
+    if (p.state !== 'wait' || p.assigned === null || (buttons && !p.vip)) continue;
     const e = S.elevators[p.assigned], k = p.floor + K(p.dir);
     e.pick[k] = (e.pick[k] || 0) + 1;
     e.pickKg += EST_KG; // styrningen vet inte vad väntande väger – bara vågen i korgen mäter på riktigt
@@ -64,6 +68,15 @@ export const inFireZone = f => !!S.fire && f > LOBBY && f >= S.fire.floor - 1;
 
 export function requestRide(p) {
   pev(p, `Tänker: jag ska till ${fl(p.dest)} ${ARR(p.dir)}`);
+  if (buttonsMode() && !p.vip) { pressHallButton(p); return; }
+  // ibland slår man in fel våning på terminalen och får börja om
+  if (!p.vip && rng() < mistakeRate(0.04)) {
+    p.retypeAt = S.t + rand(2, 4);
+    S.stats.wrongPress++;
+    pev(p, 'Slog in fel våning på terminalen – slår in igen');
+    log(`🙈 ${pn(p)} slog in fel våning på ${fl(p.floor)} och börjar om`, 'button', null, p.id);
+    return;
+  }
   const open = S.elevators.find(e => operational(e) && canTake(e, p) && (p.vip || !e.vipLock) && e.id !== p.avoid && e.state === 'doors' && e.floor === p.floor && e.doorPhase !== 'closing' && (e.dir === p.dir || e.dir === 0) && !isFull(e));
   if (open && allowed(p.dest)) {
     p.assigned = open.id;

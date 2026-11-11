@@ -18,17 +18,19 @@ export function setSpeed(v) {
   S.speed = v;
   /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll('#speeds .btn')).forEach(b => b.classList.toggle('on', +b.dataset.s === v));
 }
-const STRATS = ['smart', 'nearest', 'random'], STRAT_NAMES = { smart: 'SMART', nearest: 'NÄRMAST', random: 'KAOS' };
+const STRATS = ['smart', 'nearest', 'random', 'buttons'], STRAT_NAMES = { smart: 'SMART', nearest: 'NÄRMAST', random: 'KAOS', buttons: 'KNAPPAR' };
 export function cycleStrategy() { setStrategy(STRATS[(STRATS.indexOf(S.strategy) + 1) % STRATS.length]); }
 export function setStrategy(k) {
   if (S.strategy === k) return;
   S.strategy = k;
   $('btnStrat').textContent = STRAT_NAMES[k];
   $('stratHint').innerHTML = STRAT_HINT[k];
-  for (const p of S.people) if (p.state === 'wait') { p.assigned = null; pev(p, 'Styrlogiken byttes – får en ny hiss'); }
+  // hallknapparna nollställs; i KNAPPAR-läget trycker de väntande på nytt
+  S.calls = {};
+  for (const p of S.people) if (p.state === 'wait') { p.assigned = null; p.bank = null; p.fixAt = 0; pev(p, 'Styrlogiken byttes – får en ny hiss'); }
   for (const e of S.elevators) e.parkTarget = null;
   rebuildPicks();
-  log(`Styrlogik bytt till ${k === 'smart' ? 'SMART' : k === 'nearest' ? 'NÄRMAST' : 'KAOS'} – alla väntande fördelas om`, 'sys');
+  log(`Styrlogik bytt till ${STRAT_NAMES[k]} – alla väntande fördelas om`, 'sys');
 }
 export function toggleTags() { S.tags = !S.tags; $('btnTags').classList.toggle('on', S.tags); }
 export function toggleZoom() {
@@ -80,6 +82,7 @@ $('autoInc').onchange = ev => { S.autoInc = /** @type {HTMLInputElement} */ (ev.
 $('btnStrat').onclick = cycleStrategy;
 chipGroup('rosterChips', 'rosterFilter', updateRoster);
 chipGroup('logChips', 'logFilter', () => { S.logDirty = true; updateHud(); });
+chipGroup('mistakeChips', 'mistakes', () => log(`Felknappar: ${S.mistakes}`, 'sys'));
 $('tkClose').onclick = () => select(null);
 // pointerdown i stället för click: incidentpanelen ritas om varje sekund (nedräkningar)
 document.addEventListener('pointerdown', ev => {

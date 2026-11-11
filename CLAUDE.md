@@ -34,6 +34,7 @@ Samma testsvit körs i webbläsaren på `/tests.html`.
 | `sim.js` | `step(DT)`, `advance`, schemaläggning, ankomster, nattläge, VIP-lås, `resetDay`, `newSim` |
 | `people.js` | personer: tillståndsmaskin, delresor/hissbyten (`legDest`, `setTrip`), lastregler |
 | `dispatch.js` | destinationsstyrning: kostnadsfunktion, tilldelning, omfördelning, parkering, brandzon |
+| `buttons.js` | styrlogiken KNAPPAR (hallknappar ▲/▼ + våningsknappar, styrningen ser aldrig `p.dest`), felknappar, barn, antinuisance |
 | `elevators.js` | hissens rörelse (SCAN med "committed" stopp), dörrar, lastning, överlast |
 | `incidents.js` | brand och strömavbrott + spelarens åtgärder |
 | `life.js` | garage/bilar, leveransbil, boendes dygnsrutiner, VIP-helikopter |

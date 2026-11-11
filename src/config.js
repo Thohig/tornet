@@ -232,6 +232,7 @@ export const STRAT_HINT = {
   smart: '<b>Smart:</b> varje person får den hiss som snabbast kan hämta hen <i>och</i> köra till målet (resväg, stopp, last – rabatt om hissen redan ska dit). Omfördelar och parkerar lediga hissar smart.',
   nearest: '<b>Närmast:</b> varje person får den hiss som är närmast just nu – oavsett riktning, mål eller last.',
   random: '<b>Kaos:</b> varje person får en slumpad hiss. Hur illa kan det gå?',
+  buttons: '<b>Knappar:</b> vanliga hissknappar som i ett äldre hus. Styrsystemet ser bara ▲/▼ i hallen och våningsknapparna i korgen – inte vart folk ska. Alla kliver på första hissen åt rätt håll.',
 };
 export const FIRE_HINT = {
   none: 'Hissarna kör som vanligt – folk åker rakt genom röken i schakten. Farligt!',

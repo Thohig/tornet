@@ -6,6 +6,7 @@ import { S, hooks, hour, log, newStats } from './state.js';
 import { spawnEmployee, spawnStaff, spawnVisitor, updatePerson, spawnPizza, pev } from './people.js';
 import { dispatchPerson, rebuildPicks, reoptimize, stopFloors } from './dispatch.js';
 import { makeElevator, updateElevator } from './elevators.js';
+import { buttonsMode, buttonWaitTick, dispatchCalls } from './buttons.js';
 import { incidentTick } from './incidents.js';
 import { lifeTick, lifeReset } from './life.js';
 
@@ -104,8 +105,11 @@ export function step(dt) {
   for (const p of S.people) {
     if (p.state !== 'wait') continue;
     wl[p.floor][K(p.dir)].push(p);
-    if (p.assigned === null) dispatchPerson(p);
+    // KNAPPAR: folk trycker på knappar; VIP-gruppen har nyckel och styrs som vanligt
+    if (buttonsMode() && !p.vip) { buttonWaitTick(p, dt); continue; }
+    if (p.assigned === null && !(p.retypeAt > S.t)) dispatchPerson(p);
   }
+  if (buttonsMode()) dispatchCalls();
   S.wl = wl;
   // VIP-läge: hissen som tar VIP-gruppen tar inga andra under tiden
   for (const e of S.elevators) {
@@ -121,9 +125,9 @@ export function step(dt) {
     e.vipLock = lock;
   }
   for (const e of S.elevators) updateElevator(e, dt);
-  if (S.strategy === 'smart' && S.power) {
+  if ((S.strategy === 'smart' || buttonsMode()) && S.power) {
     S.reoptT -= dt;
-    if (S.reoptT <= 0) { S.reoptT = 1.5; reoptimize(); }
+    if (S.reoptT <= 0) { S.reoptT = 1.5; if (buttonsMode()) dispatchCalls(true); else reoptimize(); }
   }
   if (hour() >= END_H && !S.summaryShown) { S.summaryShown = true; hooks.dayEnd(); }
 }
@@ -141,7 +145,7 @@ export const daySeed = () => (Math.imul(S.seed >>> 0, 1000003) + S.day) >>> 0;
 export function resetDay() {
   setSeed(daySeed());
   S.t = 0; S.clock = 0; S.sched = makeSchedule(); S.acc = 0; S.summaryShown = false; S.nextId = 1; S.sel = null; S.wl = null; S.reoptT = 0;
-  S.people = []; S.stats = newStats();
+  S.people = []; S.stats = newStats(); S.calls = {};
   S.fire = null; S.power = true; S.outage = null;
   S.nextInc = rand(150, 260);
   for (const list of SPOTS) for (const s of list) s.occ = null;
@@ -152,5 +156,6 @@ export function newSim(seed, opts = {}) {
   S.seed = seed >>> 0; S.day = opts.day || 1; S.log = []; S.fx = [];
   if (opts.strategy) S.strategy = opts.strategy;
   if (opts.autoInc !== undefined) S.autoInc = opts.autoInc;
+  if (opts.mistakes !== undefined) S.mistakes = opts.mistakes;
   resetDay();
 }
