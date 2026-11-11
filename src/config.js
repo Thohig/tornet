@@ -235,6 +235,18 @@ export function timeScale(h) { return h >= 22 ? 320 : h >= 20 ? 240 : 210; }
 // rumstimrarna (p.timer i läget office) tickar activityRate(h) gånger fortare än simuleringen.
 const ROOM_SCALE = h => (h >= 22 ? 120 : h >= 20 ? 60 : 30);
 export const activityRate = h => timeScale(h) / ROOM_SCALE(h);
+/** hur mycket en rumstimer hinner ticka ner mellan klockslagen h0 och h1 (tar hänsyn till att takten byts kl 20 och 22) */
+export function roomUnits(h0, h1) {
+  let u = 0, h = h0;
+  for (const b of [20, 22, Infinity]) {
+    if (h >= h1) break;
+    if (h >= b) continue;
+    const e = Math.min(h1, b);
+    u += (e - h) * 3600 / ROOM_SCALE(h);
+    h = e;
+  }
+  return u;
+}
 export const ROLE_NAMES = { 'väktare': 'Väktare', 'städare': 'Städare', 'vaktmästare': 'Vaktmästare', 'nattdj': 'Natt-DJ på Kanal 97', 'nattekniker': 'Nattekniker på Modemkungen', 'bud': 'Bud', 'hisstekniker': 'Hisstekniker' };
 
 // ---------- Stamgästerna ----------
@@ -278,7 +290,7 @@ export const STRAT_HINT = {
 };
 export const FIRE_HINT = {
   none: 'Hissarna kör som vanligt – folk åker rakt genom röken i schakten. Farligt!',
-  recall: 'Alla hissar kör direkt ner till E, släpper ut alla och stängs av. Alla tar trapporna. Säkrast – men ingen hisstrafik alls.',
+  recall: 'Alla hissar kör direkt till sin hemvåning (oftast E), släpper ut alla och stängs av. Alla tar trapporna. Säkrast – men ingen hisstrafik alls.',
   zone: 'Hissarna kör bara under brandzonen. Den som ska högre upp tar trapporna. Hissar ovanför kör ner först.',
 };
 export const NAMES = ['Lisa', 'Omar', 'Kim', 'Sara', 'Johan', 'Fatima', 'Erik', 'Maja', 'Ali', 'Elsa', 'Nils', 'Amira', 'Oskar', 'Linnea', 'Ahmed', 'Ida', 'Viktor', 'Leila', 'Hugo', 'Tove', 'Mehmet', 'Agnes', 'Gustav', 'Noor', 'Emil', 'Saga', 'Pelle', 'Yasmin', 'Kalle', 'Frida', 'Anton', 'Zainab', 'Lars', 'Moa', 'Jonas', 'Hanna', 'Dani', 'Sven', 'Ebba', 'Ivan', 'Märta', 'Robin', 'Klara', 'Bosse', 'Wilma', 'Sami', 'Greta', 'Ludvig', 'Selma', 'Arvid', 'Nadia', 'Olle', 'Vera', 'Theo', 'Alva', 'Kent', 'Jenny', 'Tobbe', 'Sanna', 'Micke'];

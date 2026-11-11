@@ -1,7 +1,7 @@
 // Människor: utseende, resor, beslut, trapphus och platser.
 import { pick, rand, randi, rng, shuffle } from './rng.js';
 import { fl } from './util.js';
-import { activityRate, FL, NAMES, ROLE_NAMES, floorOpen, OFFICE_FLOORS, SPOTS, STAIR_X, TOP, VISIT_WHY, WAIT_X1, WALK, RATED_KG, LOBBY, CAFE, floorWith, EL, SKY } from './config.js';
+import { activityRate, roomUnits, FLOOR_HOURS, FL, NAMES, ROLE_NAMES, floorOpen, OFFICE_FLOORS, SPOTS, STAIR_X, TOP, VISIT_WHY, WAIT_X1, WALK, RATED_KG, LOBBY, CAFE, floorWith, EL, SKY } from './config.js';
 import { S, clockStr, hour, log } from './state.js';
 import { inFireZone, requestRide, loadKg, personKg, operational, canTake, eta } from './dispatch.js';
 import { techNext } from './service.js';
@@ -331,6 +331,38 @@ export function exitDone(p) {
   else if (p.kind === 'vis') p.timer = rand(20, 50);
   else if (p.floor === p.home) p.timer = rand(40, 110);
   else p.timer = rand(30, 70);
+  capTimer(p);
+}
+// ---------- Nästa kända händelse ----------
+// Rumstimern slumpas, men den som har en tid att passa (lunch, hemgång, att våningen stänger, de
+// boendes schema) ska inte sitta kvar förbi den: timern kapas så att nästa beslut kommer strax efter.
+/** klockslaget (6–30) för personens nästa kända händelse efter h, eller Infinity */
+export function nextEventH(p, h) {
+  if (p.role) return Infinity; // personalens rundor styrs av egna timrar
+  const ts = [];
+  if (p.kind === 'res') {
+    for (const ev of p.sched || []) if (!ev.done) ts.push(ev.at);
+    if (p.sleepAt !== undefined) ts.push(p.sleepAt);
+    if (p.wake !== undefined) ts.push(p.wake, p.wake + 24);
+  } else {
+    ts.push(27.5); // natten är slut – alla går hem
+    if (p.kind === 'emp') {
+      ts.push(p.leaveAt);
+      if (!p.lunched && p.floor !== CAFE) ts.push(p.lunchAt);
+    }
+    const oh = FLOOR_HOURS[p.floor];
+    if (oh && p.floor !== p.home) ts.push(oh[1]);
+  }
+  let m = Infinity;
+  for (const t of ts) if (t > h && t < m) m = t;
+  return m;
+}
+/** kapa rumstimern (räknas i speltid via activityRate) så att den löper ut strax efter nästa händelse */
+export function capTimer(p) {
+  const h = hour(), t = nextEventH(p, h);
+  if (t === Infinity) return;
+  const units = roomUnits(h, t + 0.005);
+  if (units < p.timer) p.timer = units;
 }
 export function decideNext(p) {
   const h = hour();
@@ -355,7 +387,7 @@ export function decideNext(p) {
 }
 export function officeDone(p) {
   const r = decideNext(p);
-  if (!r || r[0] === p.floor) { p.timer = rand(40, 110); return; }
+  if (!r || r[0] === p.floor) { p.timer = rand(40, 110); capTimer(p); return; }
   p.x = p.spot ? p.spot.x : p.x;
   releaseSpot(p);
   setTrip(p, r[0], r[1], r[2]);

@@ -111,8 +111,8 @@ export function whyText(e) {
   if (e.mode === 'service') return `Nattservice på ${fl(e.home)} – slitaget nollställs`;
   if (e.hold) return `Ska på nattservice – tar inga nya resenärer och kör hem till ${fl(e.home)}`;
   if (e.sleep) return `Sover på ${fl(Math.round(e.pos))} för att spara energi – vaknar om det bildas kö`;
-  if (e.mode === 'recall') return 'Brandåterkallning: kör direkt till E utan stopp och släpper ut alla';
-  if (e.mode === 'locked') return 'Avstängd i E med öppna dörrar tills branden är släckt';
+  if (e.mode === 'recall') return `Brandåterkallning: kör direkt till ${fl(e.home)} utan stopp och släpper ut alla`;
+  if (e.mode === 'locked') return `Avstängd i ${fl(e.home)} med öppna dörrar tills branden är släckt`;
   if (e.mode === 'rescue') return `Krypkör på reservkraft till ${fl(e.rescueTarget)} för att släppa ut ${e.passengers.length} instängda`;
   if (e.mode === 'dead') return 'Utrymd – väntar på att strömmen ska komma tillbaka';
   if (!S.power) return e.passengers.length ? `Står still ${Math.abs(e.pos - Math.round(e.pos)) > 0.05 ? 'mellan våningar' : `på ${fl(Math.round(e.pos))}`} – ${e.passengers.length} instängda!` : 'Står still utan ström';

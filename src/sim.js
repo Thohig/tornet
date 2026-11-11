@@ -14,7 +14,7 @@ import { lifeTick, lifeReset } from './life.js';
 
 // ---------- Planerad rutt (för HUD) ----------
 export function plannedRoute(e) {
-  if (e.mode === 'recall') return [0];
+  if (e.mode === 'recall') return [e.home];
   if (e.mode === 'rescue') return [e.rescueTarget];
   const items = [];
   for (const f of e.carCalls) items.push({ f, k: 'car' });

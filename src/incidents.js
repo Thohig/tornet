@@ -50,7 +50,7 @@ export function setFireMode(m) {
       e.mode = 'recall'; e.rs = e.door > 0 ? 'close' : 'move'; e.parkTarget = null;
     }
     for (const p of S.people) if (p.state === 'wait') p.assigned = null;
-    log('🚒 BRANDÅTERKALLNING: alla hissar kör direkt till E och stängs av', 'alert');
+    log('🚒 BRANDÅTERKALLNING: alla hissar kör direkt till sin hemvåning (oftast E) och stängs av', 'alert');
   } else if (m === 'zone') {
     const zmax = Math.max(0, F.floor - 2);
     for (const p of S.people) if (p.state === 'wait' && (!allowed(p.floor) || !allowed(p.dest))) toStairs(p, `Hissarna kör bara upp till ${fl(zmax)} – tar trapporna`);

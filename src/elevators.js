@@ -275,7 +275,7 @@ export function restoreElevator(e) {
 
 // ---------- Hisslägen vid incidenter ----------
 export function recallStep(e, dt) {
-  // Brandåterkallning: stäng dörrarna, kör direkt till E utan stopp, släpp ut alla, stäng av
+  // Brandåterkallning: stäng dörrarna, kör direkt till hemvåningen (E, eller närmaste i zonen) utan stopp, släpp ut alla, stäng av
   if (e.rs === 'close') {
     e.state = 'doors'; e.doorPhase = 'closing';
     e.door = Math.max(0, e.door - dt / DOOR_T);
@@ -293,7 +293,7 @@ export function recallStep(e, dt) {
       e.doorPhase = 'open';
       if (e.passengers.length) exitAll(e, e.home, `Brandåterkallning – alla ut på ${fl(e.home)}`);
       e.mode = 'locked'; e.rs = null;
-      log(`🚒 ${e.name} står avstängd i E med öppna dörrar`, 'alert', e.color);
+      log(`🚒 ${e.name} står avstängd i ${fl(e.home)} med öppna dörrar`, 'alert', e.color);
     }
   }
 }

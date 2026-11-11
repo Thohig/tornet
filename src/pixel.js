@@ -571,7 +571,7 @@ function drawCarPx(e) {
   }
   if (e.zoneLock) label('SPÄRRAD', x + cw / 2, yt - 11, '#ff2d55', '#ffffff');
   if (e.mode === 'locked') label('AVSTÄNGD', x + cw / 2, yt - 11, '#ff2d55', '#ffffff');
-  if (e.mode === 'recall') label('→ TILL E', x + cw / 2, yt - 11, '#ff8c42');
+  if (e.mode === 'recall') label(`→ TILL ${fl(e.home)}`, x + cw / 2, yt - 11, '#ff8c42');
   if (e.mode === 'rescue') label('NÖDSÄNK', x + cw / 2, yt - 11, '#7dff9a');
   if (e.mode === 'broken') { if (Math.sin(S.anim * 6) > -0.4) label('FEL!', x + cw / 2, yt - 11, '#ff2d55', '#ffffff'); }
   if (e.mode === 'service') label('SERVICE', x + cw / 2, yt - 11, '#ffd23f');

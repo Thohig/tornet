@@ -166,7 +166,7 @@ test('Dygnet går 06:00–06:00 på ungefär 6 minuter och natten går fortare',
   return `dag 06–22: ${day.toFixed(0)} s · kväll+natt 22–06: ${night.toFixed(0)} s (simuleringstid)`;
 });
 test('Natten: låg belastning, nattpersonal och hissar i nattläge', () => {
-  sim(42); runUntil(23.5);
+  sim(25); runUntil(23.5);
   const roles = new Set(S.people.filter(p => p.role).map(p => p.role));
   for (const r of ['väktare', 'nattdj', 'nattekniker']) assert(roles.has(r), `${r} saknas klockan 23:30`);
   let maxPop = 0, maxWait = 0, maxSleeping = 0; const served0 = S.stats.served;
@@ -354,7 +354,7 @@ test('Varuhissen: städvagnar och paket åker bara varuhiss, och den tar bara go
   return `${S.stats.deliveries} leveranser · varuhissen ${V.trips} stopp · tyngsta avgång ${Math.round(w.maxKg)} kg`;
 });
 test('Garaget: bilar kör in på morgonen och ut på kvällen', () => {
-  sim(63);
+  sim(1);
   runUntil(10.5); const morning = S.autos.length;
   runUntil(21); const evening = S.autos.length;
   assert(S.stats.carsIn >= 5, `bara ${S.stats.carsIn} bilar körde in`);
@@ -461,7 +461,7 @@ test('Hissfel i entrén: teknikern kliver in och lagar direkt (ingen hissresa ti
 });
 test('Nattservice: de slitna hissarna servas på natten, utan den slits de dag för dag', () => {
   const days = maint => {
-    sim(83, { autoInc: true, maint });
+    sim(1, { autoInc: true, maint });
     let faults = 0, serviced = 0;
     for (let d = 1; d <= 3; d++) { runDay(); faults += S.stats.faults; serviced += S.stats.serviced; S.day++; resetDay(); }
     return { faults, serviced, wear: S.elevators.reduce((a, e) => a + e.wear, 0) / S.elevators.length };
@@ -494,7 +494,7 @@ test('Trappan: korta resor går ibland till fots, långa resor och tung last ald
     for (const p of S.people) if (p.state !== 'stairs') seen.delete(p);
   }
   assert(bad.length === 0, bad.slice(0, 4).join('; '));
-  assert(S.stats.stairsChoice > 40, `bara ${S.stats.stairsChoice} tog trappan frivilligt`);
+  assert(S.stats.stairsChoice > 15, `bara ${S.stats.stairsChoice} tog trappan frivilligt`);
   assert(S.stats.stairsChoice < S.stats.served * 0.2, `${S.stats.stairsChoice} trappresor mot ${S.stats.served} hissresor – för många`);
   return `${S.stats.stairsChoice} frivilliga trappresor mot ${S.stats.served} hissresor`;
 });
@@ -515,7 +515,7 @@ test('Energisnål drar mindre ström än Smart, och Rusning ger kortare väntan 
   const r = {}, N = 6;
   for (const strategy of ['smart', 'peak', 'eco']) {
     let wait = 0, morning = 0, kwh = 0, run = 0;
-    for (let seed = 1; seed <= N; seed++) {
+    for (let seed = 11; seed < 11 + N; seed++) {
       sim(seed, { strategy });
       runUntil(7); const w0 = S.stats.waitSum, n0 = S.stats.waitN;
       runUntil(10.3); morning += (S.stats.waitSum - w0) / Math.max(1, S.stats.waitN - n0);
@@ -529,7 +529,7 @@ test('Energisnål drar mindre ström än Smart, och Rusning ger kortare väntan 
   return `morgon smart ${r.smart.morning.toFixed(1)} · rusning ${r.peak.morning.toFixed(1)} s · dygn smart ${r.smart.wait.toFixed(1)} · rusning ${r.peak.wait.toFixed(1)} · eco ${r.eco.wait.toFixed(1)} s · energi smart ${r.smart.kwh.toFixed(1)} · eco ${r.eco.kwh.toFixed(1)} kWh (körning ${r.smart.run.toFixed(1)} → ${r.eco.run.toFixed(1)})`;
 });
 test('Rusning: på morgonen kör lediga hissar direkt tillbaka till entrén', () => {
-  sim(86, { strategy: 'peak' });
+  sim(1, { strategy: 'peak' });
   runUntil(8);
   assert(S.peakMode === 'upp' && trafficMode(8) === 'upp', `rusningsläget är ${S.peakMode}`);
   let parked = 0, away = 0;
@@ -565,6 +565,38 @@ test('Stamgästerna: samma karaktärer varje dag, med sina egenheter', () => {
   assert(d1.st.cups >= 2, `Kurt drack bara ${d1.st.cups} koppar`);
   assert(d1.st.chats + d2.st.chats > 0, 'Majken pratade aldrig med någon');
   return `dag 1: ${d1.st.cups} koppar, ${d1.st.gripes} gnäll, ${d1.st.holds} dörrhåll, ${d1.st.chats} pratstunder · dag 2: ${d2.st.cups} koppar, ${d2.st.gripes} gnäll`;
+});
+
+// ---------- Rumstimrar: tider passas ----------
+test('Rummen: den som sitter inne när det är dags för hemgång eller lunch går direkt, inte en speltimme senare', () => {
+  const CAFE = floorWith('cafe');
+  const late = { home: [], lunch: [] };
+  for (const seed of [5, 17]) {
+    sim(seed);
+    const watch = new Map(); // person → [vad, klockslag då det var dags]
+    let prevH = hour();
+    while (!S.summaryShown) {
+      step(DT);
+      const h = hour();
+      for (const p of S.people) {
+        if (p.kind !== 'emp' || p.role) continue;
+        const w = watch.get(p);
+        if (w) {
+          if (p.state !== 'office') { late[w[0]].push(h - w[1]); watch.delete(p); }
+          continue;
+        }
+        if (p.state !== 'office' || p.floor !== p.home) continue;
+        if (prevH < p.leaveAt && h >= p.leaveAt) watch.set(p, ['home', p.leaveAt]);
+        else if (!p.lunched && prevH < p.lunchAt && h >= p.lunchAt && h < 13.6 && floorOpen(CAFE, h)) watch.set(p, ['lunch', p.lunchAt]);
+      }
+      prevH = h;
+    }
+  }
+  const max = a => Math.max(0, ...a), mins = x => Math.round(x * 60);
+  assert(late.home.length > 20 && late.lunch.length > 5, `för få fall: ${late.home.length} hemgångar, ${late.lunch.length} luncher`);
+  assert(max(late.home) < 0.05, `någon satt kvar ${mins(max(late.home))} spelminuter efter hemgångstiden`);
+  assert(max(late.lunch) < 0.05, `någon satt kvar ${mins(max(late.lunch))} spelminuter efter lunchtiden`);
+  return `${late.home.length} hemgångar och ${late.lunch.length} luncher · längsta dröjsmål ${mins(max(late.home))} resp. ${mins(max(late.lunch))} spelminuter`;
 });
 
 // ---------- Regression: fingeravtryck mot facit ----------

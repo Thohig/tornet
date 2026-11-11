@@ -2,7 +2,7 @@
   "name": "hiss-o-matic-3000",
   "private": true,
   "type": "module",
-  "description": "Tecknad hissimulering – fyra hissar i en skyskrapa",
+  "description": "Hissimulering i pixelgrafik – åtta hissar i en skyskrapa",
   "scripts": {
     "start": "python3 serve.py",
     "test": "node tests/run.mjs",
