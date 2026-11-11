@@ -1,0 +1,16 @@
+{
+  "name": "hiss-o-matic-3000",
+  "private": true,
+  "type": "module",
+  "description": "Tecknad hissimulering – fyra hissar i en skyskrapa",
+  "scripts": {
+    "start": "python3 serve.py",
+    "test": "node tests/run.mjs",
+    "golden": "node tests/run.mjs --update-golden",
+    "typecheck": "tsc -p jsconfig.json",
+    "check": "npm run typecheck && npm test"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}

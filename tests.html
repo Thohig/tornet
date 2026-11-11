@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hisstester</title>
+<style>
+  :root{--ink:#1b1033;--ok:#16a34a;--bad:#dc2626;--muted:#6b6890}
+  body{font-family:system-ui,sans-serif;background:#fff8e7;color:var(--ink);margin:0;padding:24px;max-width:900px}
+  h1{font-size:24px;margin:0 0 4px}
+  p{margin:4px 0 16px;color:var(--muted)}
+  #summary{font-weight:700;font-size:18px;margin:12px 0}
+  .t{display:grid;grid-template-columns:24px 1fr auto;gap:8px;padding:8px 10px;border-bottom:1px solid #e8dfcf;align-items:start}
+  .t .ic{font-weight:700}
+  .t.ok .ic{color:var(--ok)} .t.bad .ic{color:var(--bad)} .t.run .ic{color:var(--muted)}
+  .t .ms{color:var(--muted);font-variant-numeric:tabular-nums}
+  .t .d{grid-column:2/-1;font-size:13px;color:var(--muted);white-space:pre-wrap}
+  .t.bad .d{color:var(--bad)}
+  button{font:inherit;padding:6px 14px;border:2px solid var(--ink);border-radius:8px;background:#ffe14d;cursor:pointer}
+</style>
+</head>
+<body>
+<h1>Hiss-O-Matic 3000 – tester</h1>
+<p>Kör simuleringen utan grafik: hela dagar, alla strategier och alla incidenter. Fröet gör varje körning exakt reproducerbar.</p>
+<button id="rerun">Kör igen</button>
+<div id="summary">Kör…</div>
+<div id="list"></div>
+<script type="module" src="tests/browser.js"></script>
+</body>
+</html>

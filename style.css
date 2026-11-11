@@ -1,0 +1,225 @@
+/* Hiss-O-Matic 3000 – gränssnittet i paletten "Kontor 95": blågrönt skrivbord, grå fönster med
+   upphöjda/nedsänkta kanter, marinblå titelrader och svarta DOS-skärmar för logg och register.
+   Samma färger som pixelgrafiken (src/pixpal.js). */
+:root{
+  --ink:#1a1a1a; --face:#c0c0c0; --hi:#ffffff; --lite:#dfdfdf; --shade:#808080; --dark:#0a0a0a;
+  --desk:#008080; --navy:#000080; --title2:#1084d0; --note:#ffffe1;
+  --dos:#000000; --dos-txt:#c0c0c0; --vga-y:#ffff55; --vga-c:#55ffff; --vga-g:#55ff55; --vga-m:#ff55ff; --vga-r:#ff5555;
+  --raised:inset -1px -1px var(--dark),inset 1px 1px var(--hi),inset -2px -2px var(--shade),inset 2px 2px var(--lite);
+  --sunken:inset -1px -1px var(--hi),inset 1px 1px var(--shade),inset -2px -2px var(--lite),inset 2px 2px var(--dark);
+  --ui:Tahoma,Verdana,'Segoe UI',system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--desk);font-family:var(--ui);font-size:12px;color:var(--ink);overflow:hidden}
+#game{display:block;border:2px solid;border-color:var(--shade) var(--hi) var(--hi) var(--shade);background:#000;cursor:crosshair;image-rendering:pixelated}
+
+/* ---------- Layout: topplist + spelyta (+ låda) ---------- */
+#app{display:flex;flex-direction:column;height:100vh;gap:8px;padding:8px}
+#main{flex:1;min-height:0;display:flex;gap:8px}
+#stage{flex:1;min-width:0;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center}
+#stage.wide{align-items:flex-start;justify-content:flex-start;padding-right:104px}
+#overview{
+  display:none;position:absolute;right:6px;top:50%;transform:translateY(-50%);width:84px;
+  border:2px solid;border-color:var(--shade) var(--hi) var(--hi) var(--shade);background:#000;cursor:pointer;image-rendering:pixelated;
+}
+#stage.wide #overview{display:block}
+
+/* ---------- Topplist (ett fönster med titelrad) ---------- */
+#topbar{
+  flex:none;display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  background:var(--face);box-shadow:var(--raised);padding:4px 8px 4px 4px;position:relative;z-index:5;
+}
+.logo{
+  font-weight:700;font-size:14px;letter-spacing:.5px;white-space:nowrap;line-height:1;
+  color:#fff;padding:5px 10px;background:linear-gradient(90deg,var(--navy),var(--title2));
+}
+.logo span{color:var(--vga-y)}
+.tb-clock{display:flex;align-items:center;gap:6px}
+.clock{font-family:'VT323',monospace;font-size:26px;line-height:1;background:var(--dos);color:var(--vga-g);padding:1px 6px;box-shadow:var(--sunken)}
+.tb-sub{line-height:1.15}
+.phase{font-weight:700;font-size:12px;white-space:nowrap}
+.day{font-size:11px;white-space:nowrap;color:#404040}
+.tb-group{display:flex;gap:3px;align-items:center;position:relative}
+.speeds{display:flex;gap:3px}
+#btnStrat{min-width:76px}
+.tb-stats{font-family:'VT323',monospace;font-size:17px;background:var(--dos);color:var(--vga-g);box-shadow:var(--sunken);padding:1px 8px;white-space:nowrap;margin-left:auto}
+.tabs{display:flex;gap:3px}
+.qbtn{font-family:var(--ui);font-weight:700;font-size:12px;width:20px;height:20px;border:0;background:var(--face);box-shadow:var(--raised);cursor:pointer;line-height:1;padding:0}
+.qbtn:active{box-shadow:var(--sunken)}
+
+/* popupfönster under topplisten */
+.pop{
+  display:none;position:absolute;top:calc(100% + 6px);left:0;width:300px;z-index:20;
+  background:var(--face);box-shadow:var(--raised),3px 3px 0 rgba(0,0,0,.35);
+  padding:3px 8px 8px;font-size:12px;line-height:1.4;
+}
+.menu .pop{left:auto;right:0}
+.pop.show{display:block}
+.pop-h{font-weight:700;font-size:12px;color:#fff;background:linear-gradient(90deg,var(--navy),var(--title2));margin:0 -5px 6px;padding:3px 6px}
+.auto{display:flex;gap:5px;align-items:center;font-size:12px}
+
+/* knappar: upphöjda, nedtryckta när de är på */
+.btn{
+  font-family:var(--ui);font-size:12px;font-weight:700;color:var(--ink);
+  background:var(--face);border:0;box-shadow:var(--raised);padding:4px 9px;cursor:pointer;min-height:23px;
+}
+.btn:hover{background:#cacaca}
+.btn:active,.btn.on{box-shadow:var(--sunken);padding:5px 8px 3px 10px}
+.btn.on{background:repeating-conic-gradient(var(--face) 0 25%,var(--hi) 0 50%) 0 0/2px 2px}
+.btn.hot{background:#d4a017}
+.btn.hot:hover{background:#e0b030}
+.btn.sm{font-size:12px;padding:3px 8px}
+.btn.xs{font-size:11px;padding:2px 6px;min-height:19px}
+.btn:disabled{color:var(--shade);text-shadow:1px 1px 0 var(--hi);cursor:not-allowed}
+.panel{background:var(--face);box-shadow:var(--raised);padding:3px 8px 8px}
+.label{font-weight:700;font-size:12px;color:#fff;background:linear-gradient(90deg,var(--navy),var(--title2));margin:0 -5px 6px;padding:3px 6px}
+
+/* ---------- Flytande rutor över spelytan ---------- */
+.float{position:absolute;z-index:4}
+.float[hidden]{display:none}
+.incidents{
+  left:12px;bottom:12px;width:min(360px,calc(100% - 24px));max-height:calc(100% - 24px);overflow-y:auto;
+  background:var(--face);box-shadow:var(--raised),4px 4px 0 rgba(0,0,0,.35);padding:4px;
+  animation:pulse 1s infinite alternate;scrollbar-width:thin;
+}
+@keyframes pulse{from{outline:2px solid transparent}to{outline:2px solid #c0392b}}
+.inc{box-shadow:var(--sunken);padding:0 6px 6px;margin-bottom:4px;background:#fff}
+.inc:last-child{margin-bottom:0}
+.inc-h{font-weight:700;font-size:12px;color:#fff;margin:0 -6px 5px;padding:3px 6px;background:linear-gradient(90deg,var(--navy),var(--title2))}
+.inc.fire .inc-h{background:linear-gradient(90deg,#800000,#c0392b)}
+.inc.power .inc-h{background:linear-gradient(90deg,var(--navy),var(--title2))}
+.inc-s{font-size:12px;line-height:1.35}
+.inc-q{font-weight:700;font-size:12px;margin-top:5px}
+.inc-acts{display:flex;gap:4px;flex-wrap:wrap;margin:4px 0}
+.inc-hint{font-size:11px;color:#404040;line-height:1.3}
+.inc-trig{margin-top:8px;font-size:12px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.btn.hot2{background:#c0392b;color:#fff}
+
+/* hisspopupen: titelraden i hissens färg */
+#carPop{
+  left:0;top:0;width:280px;background:var(--face);box-shadow:var(--raised),4px 4px 0 rgba(0,0,0,.35);
+  padding:3px 8px 8px;font-size:12px;line-height:1.35;
+}
+.car-head{display:flex;align-items:center;gap:6px;background:var(--c);color:var(--ct,#fff);margin:0 -5px 4px;padding:2px 4px}
+.car-head .nm{font-weight:700;font-size:14px;line-height:1;background:rgba(0,0,0,.18);padding:2px 6px}
+.car-head .st{font-weight:700;font-size:12px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.car-head .fl{font-family:'VT323',monospace;font-size:19px;background:var(--dos);color:var(--vga-g);padding:0 5px}
+.car-head .tk-x{background:var(--face);color:var(--ink);box-shadow:var(--raised);border:0;align-self:center}
+.car .zone{font-size:11px;font-weight:700;color:#404040;margin-top:2px}
+.load{position:relative;height:14px;background:#fff;box-shadow:var(--sunken);margin:5px 0 4px;overflow:hidden}
+.load i{position:absolute;inset:2px auto 2px 2px;background:repeating-linear-gradient(90deg,var(--c) 0 8px,transparent 8px 10px);transition:width .2s}
+.load.heavy i{background:repeating-linear-gradient(90deg,#c0392b 0 8px,transparent 8px 10px)}
+.load span{position:absolute;inset:0;text-align:center;font-size:10px;font-weight:700;line-height:14px;white-space:nowrap;overflow:hidden}
+.plan{font-weight:700}
+.why{color:#404040}
+.car .who{color:#404040;margin-top:2px}
+.car .who span{color:var(--navy);font-weight:700;text-decoration:underline;cursor:pointer}
+.car .acts{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px}
+.meta{color:var(--shade);font-size:11px;margin-top:3px}
+
+/* ---------- Lådan (spårad, register, logg, resultat) ---------- */
+#drawer{width:340px;flex:none;display:flex;flex-direction:column;gap:8px;min-height:0;overflow-y:auto;scrollbar-width:thin}
+#drawer[hidden]{display:none}
+.pane{flex:1;min-height:0;display:flex;flex-direction:column}
+.pane[hidden]{display:none}
+.pane-t{font-family:var(--ui);font-weight:700;font-size:12px;color:#fff;background:linear-gradient(90deg,var(--navy),var(--title2));margin:-3px -5px 4px;padding:3px 6px;position:relative;z-index:1}
+.pane-t span{color:var(--vga-y);font-weight:400}
+.pane .log,.pane .roster{flex:1;height:auto;min-height:120px}
+
+/* ---------- Skärmar: ett DOS-fönster i en grå ram ---------- */
+.screen{background:var(--face);box-shadow:var(--raised);padding:3px 5px 5px;position:relative;overflow:hidden}
+.log,.roster,.track{background:var(--dos);box-shadow:var(--sunken);padding:4px 6px}
+
+.log{position:relative;z-index:1;
+  height:170px;overflow-y:auto;font-family:'VT323',monospace;font-size:16px;line-height:1.15;color:var(--dos-txt);
+  scrollbar-width:thin;scrollbar-color:var(--shade) var(--dos);
+}
+.le{display:flex;gap:6px;align-items:baseline;padding:1px 0}
+.le .lt{color:var(--shade);flex:none}
+.le .ld{flex:none;width:8px;height:8px;display:inline-block;transform:translateY(-1px)}
+.le.k-call{color:var(--vga-y)}
+.le.k-reopt{color:var(--vga-m)}
+.le.k-steal{color:var(--vga-g)}
+.le.k-park,.le.k-car,.le.k-move{color:#aaaaaa}
+.le.k-sys{color:#fff}
+
+/* ---------- Statistik ---------- */
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;background:#fff;box-shadow:var(--sunken);padding:6px 8px}
+.stats .label{grid-column:1/-1;margin:0 0 2px}
+.stat{display:flex;justify-content:space-between;font-size:12px;border-bottom:1px dotted var(--shade)}
+.stat b{font-family:'VT323',monospace;font-size:19px;line-height:1}
+.grade{grid-column:1/-1;text-align:center;font-weight:700;font-size:16px;margin-top:4px}
+.grade .stars{color:#d4a017}
+
+/* ---------- Overlay: en dialogruta mitt på skrivbordet ---------- */
+.overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,40,40,.45);z-index:10;padding:16px}
+.overlay.show{display:flex}
+.card{
+  background:var(--face);box-shadow:var(--raised),6px 6px 0 rgba(0,0,0,.4);
+  max-width:560px;width:100%;padding:3px 18px 16px;text-align:center;max-height:calc(100vh - 32px);overflow-y:auto;
+}
+.card h1{
+  font-size:16px;font-weight:700;margin:0 -15px 10px;padding:5px 8px;text-align:left;letter-spacing:.5px;
+  color:#fff;background:linear-gradient(90deg,var(--navy),var(--title2));
+}
+.card p{font-size:13px;line-height:1.45;margin:10px 0}
+.card ul{text-align:left;font-size:12.5px;line-height:1.5;padding:8px 10px 8px 26px;background:#fff;box-shadow:var(--sunken)}
+.card kbd{font-family:'VT323',monospace;font-size:16px;background:var(--dos);color:var(--vga-g);padding:0 5px}
+.card .btn{font-size:14px;padding:6px 30px;margin-top:8px;outline:1px dotted var(--ink);outline-offset:-5px}
+.bigGrade{font-family:'VT323',monospace;font-size:80px;line-height:1;color:var(--navy)}
+.sumgrid{display:grid;grid-template-columns:1fr 1fr;gap:4px 18px;text-align:left;margin:10px 0;background:#fff;box-shadow:var(--sunken);padding:8px 10px}
+
+/* ---------- Chips (filter) ---------- */
+.chips{display:flex;gap:3px;margin:0 0 4px;position:relative;z-index:1}
+.chip{font-family:var(--ui);font-size:11px;font-weight:700;line-height:1;background:var(--face);color:var(--ink);border:0;box-shadow:var(--raised);padding:4px 8px;cursor:pointer}
+.chip.on{box-shadow:var(--sunken);background:repeating-conic-gradient(var(--face) 0 25%,var(--hi) 0 50%) 0 0/2px 2px}
+
+/* ---------- Klickbara personer ---------- */
+[data-pid]{cursor:pointer}
+.le[data-pid]:hover{background:rgba(0,0,128,.6)}
+.le.k-person{color:var(--vga-c)}
+.le.sel{background:var(--navy);color:#fff}
+.pn{color:var(--vga-y);text-decoration:underline dotted;cursor:pointer}
+
+/* ---------- Register ---------- */
+.roster{
+  height:150px;overflow-y:auto;font-family:'VT323',monospace;font-size:16px;line-height:1.15;color:var(--dos-txt);
+  scrollbar-width:thin;scrollbar-color:var(--shade) var(--dos);position:relative;z-index:1;
+}
+.rr{display:grid;grid-template-columns:10px 1fr 64px 44px;gap:6px;align-items:center;padding:1px 4px}
+.rr:hover{background:rgba(0,0,128,.6)}
+.rr.sel{background:var(--navy);color:#fff}
+.rr i{width:9px;height:9px;display:block}
+.rr .rt{text-align:right;color:var(--vga-y)}
+.rr .rd{color:var(--shade)}
+
+/* ---------- Spårning ---------- */
+.track{position:relative;z-index:1}
+.track .tk-empty{font-family:'VT323',monospace;font-size:17px;color:var(--shade);line-height:1.2;padding:2px 0 4px}
+#trackBody{font-family:'VT323',monospace;color:var(--dos-txt);font-size:16px;line-height:1.2}
+.tk-top{display:flex;gap:10px;align-items:center;margin-bottom:6px}
+#portrait{width:64px;height:76px;background:#1a1a1a;box-shadow:var(--sunken);flex:none;image-rendering:pixelated}
+.tk-id{flex:1;min-width:0}
+.tk-name{font-family:'VT323',monospace;font-size:26px;color:#fff;line-height:1}
+.tk-name span{color:var(--shade);font-size:18px}
+.tk-role{color:#aaaaaa}
+.tk-state{display:inline-block;margin-top:3px;padding:0 6px;background:var(--c,#55ff55);color:var(--ct,#1a1a1a)}
+.tk-x{align-self:flex-start;background:var(--face);border:0;box-shadow:var(--raised);color:var(--ink);cursor:pointer;font-size:12px;font-weight:700;width:18px;height:16px;padding:0;line-height:1}
+.tk-x:active{box-shadow:var(--sunken)}
+.tk-line{display:grid;grid-template-columns:52px 1fr;gap:6px;padding:1px 0}
+.tk-line b{color:var(--vga-g);font-weight:normal}
+.tk-line u{text-decoration:none;color:var(--vga-y)}
+.tk-hist{margin-top:6px;border-top:1px dashed var(--shade);padding-top:4px;max-height:130px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--shade) var(--dos)}
+.tk-hist div{display:flex;gap:6px;color:var(--dos-txt)}
+.tk-hist div span{color:var(--shade);flex:none}
+
+.le.k-alert{color:var(--vga-r)}
+
+@media (max-width: 800px){
+  #app{height:auto;min-height:100vh}
+  body{overflow:auto}
+  #main{flex-direction:column}
+  #drawer{width:auto}
+  .tb-stats{margin-left:0}
+}

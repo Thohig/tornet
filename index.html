@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hiss-O-Matic 3000</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=19">
+</head>
+<body>
+<div id="app">
+  <header id="topbar">
+    <div class="logo">HISS-O-MATIC <span>3000</span></div>
+    <div class="tb-clock">
+      <div class="clock" id="clock">07:00</div>
+      <div class="tb-sub"><div class="phase" id="phase">Morgonrusning</div><div class="day" id="day">Dag 1</div></div>
+    </div>
+    <div class="tb-group">
+      <button id="btnPause" class="btn" title="Paus (mellanslag)">❚❚</button>
+      <div class="speeds" id="speeds">
+        <button data-s="1" class="btn on">1×</button>
+        <button data-s="2" class="btn">2×</button>
+        <button data-s="4" class="btn">4×</button>
+        <button data-s="8" class="btn">8×</button>
+      </div>
+    </div>
+    <div class="tb-group">
+      <button id="btnTags" class="btn" title="Visa namnbrickor (T)">ID</button>
+      <button id="btnZoom" class="btn" title="Växla vy: stor vy med översikt / hela huset i liten skala (Z)">⤢</button>
+    </div>
+    <div class="tb-group strat">
+      <button id="btnStrat" class="btn" title="Styrlogik – klicka för att byta (S)">SMART</button>
+      <button class="qbtn" data-act="hint" title="Förklara styrlogiken">?</button>
+      <div class="pop" id="stratHint"></div>
+    </div>
+    <button id="btnBus" class="btn hot" title="Släpp in en busslast turister">BUSS!</button>
+    <div class="tb-stats" id="tbStats"></div>
+    <nav class="tabs" id="tabs">
+      <button class="btn tab" data-act="tab:track" title="Spårad person">👤</button>
+      <button class="btn tab" data-act="tab:roster" title="Personregister">📋</button>
+      <button class="btn tab" data-act="tab:log" title="Beslutslogg">📜</button>
+      <button class="btn tab" data-act="tab:stats" title="Dagens resultat">🏆</button>
+    </nav>
+    <div class="tb-group menu">
+      <button class="btn" data-act="menu" title="Incidenter och inställningar">⋯</button>
+      <div class="pop" id="menu">
+        <div class="pop-h">Incidenter</div>
+        <label class="auto"><input type="checkbox" id="autoInc" checked> slumpas fram under dagen</label>
+        <div class="inc-trig">Utlös nu:
+          <button class="btn xs" data-act="trig:fire">🔥 Brand</button>
+          <button class="btn xs" data-act="trig:power">⚡ Ström</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div id="main">
+    <main id="stage">
+      <canvas id="game"></canvas>
+      <canvas id="overview" title="Översikt över hela huset – klicka eller dra för att hoppa"></canvas>
+      <section class="float incidents" id="incPanel" hidden><div id="incBody"></div></section>
+      <section class="float car" id="carPop" hidden></section>
+    </main>
+
+    <aside id="drawer" hidden>
+      <section class="screen pane" data-pane="track">
+        <div class="pane-t">SPÅRAD PERSON</div>
+        <div class="track">
+          <div id="trackEmpty" class="tk-empty">Klicka på en person i huset, i registret eller i loggen för att följa hen genom hisslogiken.</div>
+          <div id="trackBody" hidden>
+            <div class="tk-top">
+              <canvas id="portrait"></canvas>
+              <div class="tk-id">
+                <div class="tk-name" id="tkName"></div>
+                <div class="tk-role" id="tkRole"></div>
+                <div class="tk-state" id="tkState"></div>
+              </div>
+              <button class="tk-x" id="tkClose" title="Sluta spåra">✕</button>
+            </div>
+            <div class="tk-line"><b>SYFTE</b><span id="tkWhy"></span></div>
+            <div class="tk-line"><b>LÄGE</b><span id="tkNow"></span></div>
+            <div class="tk-line"><b>LOGIK</b><span id="tkLogic"></span></div>
+            <div class="tk-line"><b>IDAG</b><span id="tkDay"></span></div>
+            <div class="tk-hist" id="tkHist"></div>
+          </div>
+        </div>
+      </section>
+      <section class="screen pane" data-pane="roster">
+        <div class="pane-t">PERSONREGISTER <span id="sum-roster"></span></div>
+        <div class="chips" id="rosterChips">
+          <button data-f="all" class="chip on">Alla</button>
+          <button data-f="wait" class="chip">Väntar</button>
+          <button data-f="ride" class="chip">Åker</button>
+          <button data-f="in" class="chip">Inne</button>
+        </div>
+        <div class="roster" id="roster"></div>
+      </section>
+      <section class="screen pane" data-pane="log">
+        <div class="pane-t">BESLUTSLOGG</div>
+        <div class="chips" id="logChips">
+          <button data-f="all" class="chip on">Allt</button>
+          <button data-f="lift" class="chip">Hissar</button>
+          <button data-f="person" class="chip">Personer</button>
+          <button data-f="sel" class="chip">Spårad</button>
+        </div>
+        <div id="log" class="log"></div>
+      </section>
+      <section class="panel pane statspane" data-pane="stats">
+        <div class="label">DAGENS RESULTAT</div>
+        <div class="stats" id="stats"></div>
+      </section>
+    </aside>
+  </div>
+</div>
+
+<div id="overlay" class="overlay"></div>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
