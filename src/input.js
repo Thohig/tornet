@@ -18,7 +18,7 @@ export function setSpeed(v) {
   S.speed = v;
   /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll('#speeds .btn')).forEach(b => b.classList.toggle('on', +b.dataset.s === v));
 }
-const STRATS = ['smart', 'nearest', 'random', 'buttons'], STRAT_NAMES = { smart: 'SMART', nearest: 'NÄRMAST', random: 'KAOS', buttons: 'KNAPPAR' };
+const STRATS = ['smart', 'peak', 'eco', 'nearest', 'random', 'buttons'], STRAT_NAMES = { smart: 'SMART', peak: 'RUSNING', eco: 'ENERGISNÅL', nearest: 'NÄRMAST', random: 'KAOS', buttons: 'KNAPPAR' };
 export function cycleStrategy() { setStrategy(STRATS[(STRATS.indexOf(S.strategy) + 1) % STRATS.length]); }
 export function setStrategy(k) {
   if (S.strategy === k) return;
@@ -28,7 +28,8 @@ export function setStrategy(k) {
   // hallknapparna nollställs; i KNAPPAR-läget trycker de väntande på nytt
   S.calls = {};
   for (const p of S.people) if (p.state === 'wait') { p.assigned = null; p.bank = null; p.fixAt = 0; pev(p, 'Styrlogiken byttes – får en ny hiss'); }
-  for (const e of S.elevators) e.parkTarget = null;
+  for (const e of S.elevators) { e.parkTarget = null; e.sleep = false; }
+  S.peakMode = null;
   rebuildPicks();
   log(`Styrlogik bytt till ${STRAT_NAMES[k]} – alla väntande fördelas om`, 'sys');
 }
@@ -83,6 +84,7 @@ $('btnStrat').onclick = cycleStrategy;
 chipGroup('rosterChips', 'rosterFilter', updateRoster);
 chipGroup('logChips', 'logFilter', () => { S.logDirty = true; updateHud(); });
 chipGroup('mistakeChips', 'mistakes', () => log(`Felknappar: ${S.mistakes}`, 'sys'));
+chipGroup('maintChips', 'maint', () => log(S.maint === 'natt' ? '🔧 Underhåll: nattservice av slitna hissar' : '🔧 Underhåll: bara när något går sönder', 'sys'));
 $('tkClose').onclick = () => select(null);
 // pointerdown i stället för click: incidentpanelen ritas om varje sekund (nedräkningar)
 document.addEventListener('pointerdown', ev => {

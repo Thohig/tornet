@@ -4,6 +4,7 @@ import { fl } from './util.js';
 import { DOCK, FL, GARAGE_FLOORS, HOME_FLOORS, LOBBY, OFFICE_FLOORS, ROOF, SPOTS, floorOpen, floorWith } from './config.js';
 import { S, hour, log } from './state.js';
 import { makePerson, openFloors, pev, pn, setTrip } from './people.js';
+import { castResident } from './cast.js';
 
 // ---------- Garaget ----------
 // Parkeringsplatser per garagevåning (P1 har lastkaj till vänster och färre platser)
@@ -123,6 +124,7 @@ function makeResidents() {
       const [type, bil] = m.split(':');
       const p = makePerson('res', f, 0);
       Object.assign(p, { home: f, apt, rtype: type, child: type === 'child', goal: f, dest: f });
+      castResident(p); // Majken och Lill-Olle
       const r = routine(type);
       p.wake = r.wake; p.sleepAt = r.sleep; p.sched = r.ev.sort((a, b) => a.at - b.at);
       p.why = 'Hemma';

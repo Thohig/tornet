@@ -122,7 +122,7 @@ export function drawOverview() {
   for (const e of S.elevators) {
     const N = S.elevators.length, lw = Math.min(8, (w - 50) / N);
     const x = w - 2 - (N - e.id) * lw, y = 4 + (TOP - e.pos) * rowH + 1;
-    g.fillStyle = e.mode !== 'normal' || e.off || e.sleep || e.zoneLock || !S.power ? '#808080' : e.color;
+    g.fillStyle = e.mode !== 'normal' || e.off || e.sleep || e.zoneLock || e.hold || !S.power ? '#808080' : e.color;
     g.fillRect(x, y, lw - 1.5, rowH - 3);
   }
   // spårad person

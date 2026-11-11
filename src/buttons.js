@@ -8,6 +8,7 @@ import { CAR_H, EL, floorY, shaftCX } from './config.js';
 import { S, log } from './state.js';
 import { elevatorAllows, pev, pn, toStairs } from './people.js';
 import { allowed, eta, isFull, operational, rebuildPicks } from './dispatch.js';
+import { kidPressed, kidRate } from './cast.js';
 
 export const buttonsMode = () => S.strategy === 'buttons';
 /** Hur ofta folk trycker fel: av / lite / mycket (gäller alla styrlogiker – i de andra slår man in fel våning) */
@@ -46,7 +47,7 @@ export function pressHallButton(p) {
   const name = GROUP_NAMES[g] || g;
   if (!allowed(p.floor) || !allowed(p.dest)) return; // brand: sköts i buttonWaitTick
   // står en hiss i gruppen redan öppen här åt rätt håll kliver man bara in – ingen knapp behövs
-  if (S.elevators.some(e => e.group === g && e.state === 'doors' && e.floor === p.floor && e.doorPhase !== 'closing' && (e.dir === p.dir || e.dir === 0))) {
+  if (S.elevators.some(e => e.group === g && operational(e) && e.state === 'doors' && e.floor === p.floor && e.doorPhase !== 'closing' && (e.dir === p.dir || e.dir === 0))) {
     pev(p, `Hiss åt rätt håll står redan öppen vid ${name} – kliver in`);
     return;
   }
@@ -82,7 +83,8 @@ export function buttonWaitTick(p, dt) {
   const call = S.calls[callKey(p.bank, p.floor, p.dir)];
   if (!call && !p.fixAt) {
     // anropet besvarades men jag kom inte med (full hiss, fel håll) – tryck igen när hissen har gått
-    const here = S.elevators.some(e => e.group === p.bank && e.state === 'doors' && e.floor === p.floor);
+    // (en trasig hiss som står med öppna dörrar räknas inte)
+    const here = S.elevators.some(e => e.group === p.bank && operational(e) && e.state === 'doors' && e.floor === p.floor);
     if (!here) { press(p.bank, p.floor, p.dir); pev(p, `Trycker på ${ARR(p.dir)} igen`); }
   }
   // bara för bilden och spårlappen – styrsystemet läser aldrig personerna
@@ -99,7 +101,8 @@ export function buttonWaitTick(p, dt) {
 /** Efter påstigning: rätt knapp trycks alltid (så ingen åker förbi sitt mål) – ibland också fel. */
 export function carButtonMistakes(p, e) {
   const ahead = f => e.serves.has(f) && f !== e.floor && (e.dir === 0 || (f - e.floor) * e.dir > 0);
-  if (p.child && rng() < mistakeRate(0.15)) {
+  if (p.child && rng() < mistakeRate(kidRate(p))) {
+    kidPressed(p);
     const all = [...e.serves].filter(ahead);
     for (const f of all) e.carCalls.add(f);
     S.stats.kidPresses++;

@@ -6,11 +6,13 @@ import { S, hooks, hour, log } from './state.js';
 import { arriveOnFloor, pev, pn, setTrip, toStairs } from './people.js';
 import { allowed, inFireZone, rebuildPicks, loadKg, safeFloor } from './dispatch.js';
 import { bounceBoarders, exitAll, restoreElevator } from './elevators.js';
+import { triggerFault } from './service.js';
 
 // ---------- Incidenter ----------
 export function trigger(type) {
   if (type === 'fire') startFire();
   if (type === 'power') startOutage();
+  if (type === 'fault') triggerFault();
 }
 export function incidentStarted(floor) {
   S.stats.incidents++;
@@ -162,6 +164,8 @@ export function incidentTick(dt) {
   const opts = [];
   if (!S.fire) opts.push('fire');
   if (S.power) opts.push('power');
+  // hissfel: en slumpad hiss går sönder vid nästa stopp (slitna hissar går dessutom sönder av sig själva)
+  if (S.elevators.some(e => e.mode === 'normal' && !e.hold && !e.breakNext)) opts.push('fault');
   if (opts.length) trigger(pick(opts));
 }
 

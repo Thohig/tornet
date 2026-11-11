@@ -5,6 +5,7 @@ import { ACC, CAP, DOOR_T, STOP_COST, TOP, VMAX, RATED_KG, FULL_LOAD, LOBBY, EL,
 import { S, hour, log } from './state.js';
 import { liftsAvailable, pev, pn, toStairs, elevatorAllows } from './people.js';
 import { buttonsMode, mistakeRate, pressHallButton } from './buttons.js';
+import { moveKwh } from './service.js';
 
 // ---------- Destinationsstyrning ----------
 // Varje hiss har e.pick: { '3u': antal } = personer den ska hämta på våning 3 som ska uppåt.
@@ -49,7 +50,41 @@ export const slotsFull = e => e.passengers.length + e.reserved >= CAP;
 export const isFull = e => slotsFull(e) || loadKg(e) >= e.ratedKg * FULL_LOAD;
 /** Går hissen både till personens våning och till målet (för den här delresan)? */
 export const canTake = (e, p) => e.serves.has(p.floor) && e.serves.has(p.dest) && elevatorAllows(e, p);
-export const operational = e => S.power && e.mode === 'normal' && !e.off && !e.sleep && !e.zoneLock;
+export const operational = e => S.power && e.mode === 'normal' && !e.off && !e.sleep && !e.zoneLock && !e.hold;
+/** strategier som använder kostnadsfunktionen (Smart och dess varianter) */
+export const costBased = (k = S.strategy) => k === 'smart' || k === 'peak' || k === 'eco';
+
+// ---------- Rusningsläge (strategin Rusning) ----------
+/** trafikmönstret: 'upp' (morgonrusning in i huset), 'ned' (hemgång), 'lunch' eller null */
+export function trafficMode(h) {
+  if (h >= 7 && h < 10.3) return 'upp';
+  if (h >= 11.2 && h < 13.4) return 'lunch';
+  if (h >= 15.8 && h < 18.6) return 'ned';
+  return null;
+}
+export const PEAK_HOLD = 3.2;
+/** UPP-läge: en hiss som öppnar i sin hemvåning (entrén/sky lobbyn) väntar lite längre så att fler hinner med */
+export function peakHold(e, f) {
+  if (S.strategy !== 'peak' || S.peakMode !== 'upp' || f !== e.home || e.dir < 0 || e.freight) return 0;
+  return e.passengers.length + e.reserved < CAP / 2 ? PEAK_HOLD : 0;
+}
+
+// ---------- Energisparläget ----------
+// Energin räknas i kWh och vägs mot väntetid: 1 kWh ≈ ECO_S_PER_KWH sekunders väntan.
+export const ECO_S_PER_KWH = 400, ECO_START_S = 8;
+/** Extra energi för att hiss e ska hämta p: tomkörning till p (med hissens last), om den inte redan är på väg förbi */
+export function fetchKwh(e, p) {
+  const stops = stopFloors(e);
+  const d = Math.sign(p.floor - e.pos);
+  if (!d) return 0;
+  if (e.dir === d && stops.some(g => (g - p.floor) * d >= 0)) return 0; // åker ändå dit
+  return moveKwh(loadKg(e), e.ratedKg, p.floor - e.pos);
+}
+/** energikostnaden i sekunder (bara för energisparläget) */
+export function ecoCost(e, p) {
+  const idle = !stopFloors(e).length && !e.passengers.length;
+  return ECO_S_PER_KWH * fetchKwh(e, p) + (idle ? ECO_START_S : 0);
+}
 export const pickersAt = (e, f, d) => S.people.filter(p => p.state === 'wait' && p.assigned === e.id && p.floor === f && p.dir === d);
 // Får hissarna köra till våning f? (påverkas av brandläget)
 export function allowed(f) {
@@ -126,6 +161,7 @@ export function personCost(e, p) {
   const over = Math.max(committed + 1 - CAP, (kg - e.ratedKg * FULL_LOAD) / 80, 0);
   const extraTrip = (2 * TOP / VMAX + 4 * STOP_COST) / CAP;
   c += committed * 0.4 + over * extraTrip + (isFull(e) ? 120 : 0);
+  if (S.strategy === 'eco') c += ecoCost(e, p);
   return c;
 }
 export function costLine(p, chosenId) {
@@ -198,6 +234,11 @@ export function reoptimize() {
 export function parkFloor(e, h) {
   const p = /** @type {{ day?: string, lunch?: string, evening?: string }} */ (EL[e.id].park || {});
   const at = label => (label !== undefined ? idx(label) : e.home);
+  if (S.strategy === 'peak') {
+    const m = trafficMode(h);
+    if (m === 'upp') return [e.home, 'UPP-läge – tillbaka till entrén direkt'];
+    if (m === 'ned' && !e.freight) return [e.maxF, 'NED-läge – väntar högst upp i zonen'];
+  }
   if (h >= 20 || h < 6.5) return [e.home, 'kväll/natt – vila hemma'];
   if (h < 10.3) return [e.home, 'morgonrusning – vänta vid entrén'];
   if (h >= 11.2 && h < 13.4) return [at(p.lunch), 'lunchrusning'];
@@ -205,7 +246,8 @@ export function parkFloor(e, h) {
   return [at(p.day), 'jämn fördelning över huset'];
 }
 export function maybePark(e) {
-  if (S.strategy !== 'smart' || e.idleTime < 3 || e.off || e.zoneLock) return;
+  if ((S.strategy !== 'smart' && S.strategy !== 'peak') || e.off || e.zoneLock || e.hold) return;
+  if (e.idleTime < (S.strategy === 'peak' && S.peakMode === 'upp' ? 0.5 : 3)) return;
   const [z, why] = parkFloor(e, hour());
   const f = Math.round(e.pos);
   const target = allowed(z) && e.serves.has(z) ? z : e.home;

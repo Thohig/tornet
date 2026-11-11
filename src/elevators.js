@@ -7,6 +7,9 @@ import { arriveOnFloor, liftsAvailable, pev, pn, setTrip, toStairs, queueSpot } 
 import { safeFloor, aheadOf, allowed, assignedTo, isFull, maybePark, rebuildPicks, stopFloors, loadKg, personKg, slotsFull } from './dispatch.js';
 import { step } from './sim.js';
 import { answerCalls, buttonsMode, clearCall } from './buttons.js';
+import { maybeBreak } from './service.js';
+import { doorHold } from './cast.js';
+import { peakHold } from './dispatch.js';
 
 // ---------- Hissar ----------
 export function makeElevator(i) {
@@ -19,6 +22,9 @@ export function makeElevator(i) {
     passengers: [], reserved: 0, carCalls: new Set(), parkTarget: null, idleTime: 0,
     distance: 0, trips: 0, lastOff: 0, lastOn: 0, target: null, targetKind: null, fullFlash: 0,
     mode: 'normal', off: false, rs: null, rescueTarget: 0,
+    // drift: slitage 0–1+, fel, hållen för service, tekniker, energi (kW just nu, kWh i dag)
+    wear: 0, wearTrips: 0, wearDist: 0, fault: /** @type {{ what: string, t0: number, need: number }|null} */ (null),
+    hold: false, homeT: 0, techId: /** @type {number|null} */ (null), breakNext: false, serviceNeed: 0, kw: 0, kwh: 0,
   };
 }
 export function shouldStop(e, g, d) {
@@ -51,6 +57,7 @@ export function updateElevator(e, dt) {
   // En full hiss behåller sina hämtningar (folk kliver av längre fram) men stannar inte för dem
   // förrän det finns plats. Omfördelningen flyttar dem om en annan hiss blir klart bättre.
   if (e.off) releaseCalls(e, 'är ur drift');
+  if (e.hold) releaseCalls(e, 'ska på service');
   if (e.state === 'doors') { updateDoors(e, dt); return; }
   if (e.state === 'idle') { idleEval(e, dt); if (e.state !== 'moving') return; }
   moveStep(e, dt);
@@ -160,12 +167,17 @@ export function updateDoors(e, dt) {
   const f = e.floor;
   if (e.doorPhase === 'opening') {
     e.door = Math.min(1, e.door + dt / DOOR_T);
-    if (e.door >= 1) { e.doorPhase = 'open'; e.dwell = 0; unload(e, f); }
+    if (e.door >= 1) {
+      e.doorPhase = 'open'; e.dwell = 0; unload(e, f);
+      if (maybeBreak(e)) return;
+      e.dwellNeed = Math.max(e.dwellNeed, peakHold(e, f));
+    }
     return;
   }
   if (e.doorPhase === 'open') {
     e.dwell += dt;
-    if (e.dwell > 0.25 && !e.off) load(e, f);
+    if (e.dwell > 0.3) e.dwellNeed += doorHold(e, f); // Doris håller upp dörren
+    if (e.dwell > 0.25 && !e.off && !e.hold) load(e, f);
     if (e.dwell >= e.dwellNeed && e.reserved === 0) {
       e.doorPhase = 'closing';
       // spökstopp: dörrarna öppnade men ingen klev av eller på (felknapp, bus eller tomt anrop)

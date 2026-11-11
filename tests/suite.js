@@ -3,7 +3,7 @@
 // Varje test seedar slumpen, så resultaten är exakt reproducerbara.
 import { S, hooks, hour } from '../src/state.js';
 import { floorOpen, FLOOR_HOURS, idx, floorWith, EL, LOBBY, SKY, HOME_FLOORS } from '../src/config.js';
-import { DT, step, advance, newSim } from '../src/sim.js';
+import { DT, step, advance, newSim, resetDay } from '../src/sim.js';
 import {
   startFire, setFireMode, startOutage, startGenerator, toggleAutoRescue,
   toggleOff,
@@ -14,6 +14,8 @@ import { RATED_KG, FULL_LOAD } from '../src/config.js';
 import { needsFreight, mayUseFreight, legDest } from '../src/people.js';
 import { fl } from '../src/util.js';
 import { assignCalls, antiNuisance } from '../src/buttons.js';
+import { powerKw, triggerFault, breakDown, SERVICE_AT, tech } from '../src/service.js';
+import { trafficMode } from '../src/dispatch.js';
 
 // ---------- Ramverk ----------
 export const tests = [];
@@ -23,14 +25,14 @@ function assert(cond, msg) { if (!cond) throw new Fail(msg); }
 
 // ---------- Hjälp ----------
 function sim(seed, opts = {}) {
-  newSim(seed, { strategy: 'smart', autoInc: false, mistakes: 'lite', ...opts });
+  newSim(seed, { strategy: 'smart', autoInc: false, mistakes: 'lite', maint: 'natt', ...opts });
   S.started = true; S.paused = false;
   hooks.incident = () => {}; hooks.dayEnd = () => {};
 }
 // Vakt som kontrollerar invarianter efter varje steg
 function watcher() {
   const w = { passes: 0, maxRide: 0, maxWait: 0, n: 0, overweight: 0, maxKg: 0, bypassBroken: 0, prev: [],
-    outOfRange: 0, wrongDoor: 0, badLeg: 0, badFreight: 0, vipMixed: 0, vipSet: [], selfDest: 0 };
+    outOfRange: 0, wrongDoor: 0, badLeg: 0, badFreight: 0, vipMixed: 0, vipSet: [], selfDest: 0, brokenUse: 0, holdBoard: 0, prevN: [] };
   w.before = () => S.elevators.map(e => e.pos);
   w.check = before => {
     S.elevators.forEach((e, i) => {
@@ -46,6 +48,13 @@ function watcher() {
         if (e.vipLock && !p.vip && w.vipSet[i] && !w.vipSet[i].has(p)) w.vipMixed++;
       }
       if (e.state === 'moving') w.maxKg = Math.max(w.maxKg, kg);
+      // en trasig hiss eller en hiss på service rör sig aldrig och har ingen ombord;
+      // en hiss som väntar på service tar aldrig nya passagerare
+      if ((e.mode === 'broken' || e.mode === 'service') && (e.passengers.length || e.reserved || Math.abs(e.pos - before[i]) > 1e-9)) w.brokenUse++;
+      // (de som redan var på väg in genom dörren när hissen kallades till service får åka med)
+      const aboard = e.passengers.length + e.reserved;
+      if (e.hold && aboard > (w.prevN[i] ?? 0)) w.holdBoard++;
+      w.prevN[i] = aboard;
       // full last: över 80 % stannar hissen bara för avstigning, inte för nya hämtningar
       if (e.state === 'doors' && w.prev[i] === 'moving' && e.mode === 'normal' && kg >= e.ratedKg * FULL_LOAD
         && !e.passengers.some(p => p.dest === e.floor) && !e.carCallStop) w.bypassBroken++;
@@ -114,7 +123,7 @@ test('Bildfrekvensen påverkar inte simuleringen', () => {
 
 // ---------- Hela dagar ----------
 // gränser: snittväntan och längsta väntan per strategi (lunchrusningen är kapacitetsbegränsad med 4 hissar)
-for (const [strategy, maxAvg, maxLongest] of /** @type {[string, number, number][]} */ ([['smart', 18, 200], ['nearest', 35, 400], ['random', 45, 400], ['buttons', 25, 300]])) {
+for (const [strategy, maxAvg, maxLongest] of /** @type {[string, number, number][]} */ ([['smart', 18, 200], ['peak', 18, 200], ['eco', 22, 250], ['nearest', 35, 400], ['random', 45, 400], ['buttons', 25, 300]])) {
   test(`Hel dag med strategin ${strategy}: alla kommer fram`, () => {
     sim(2024, { strategy });
     const w = watcher();
@@ -380,7 +389,8 @@ test('VIP-helikoptern: gruppen åker ensam i sin hiss och flyger hem igen', () =
 // ---------- KNAPPAR och felknappar ----------
 test('Knappar: styrsystemet läser aldrig vart folk ska (bara anrop, korgar och våg)', () => {
   sim(71, { strategy: 'buttons' });
-  runUntil(8.8);
+  runUntil(8.5);
+  for (let g = 0; !Object.keys(S.calls).length && g < 60 / DT; g++) step(DT);
   assert(Object.keys(S.calls).length > 0, 'inga hallanrop att fördela');
   for (const c of Object.values(S.calls)) c.car = null;
   const real = S.people;
@@ -401,14 +411,155 @@ test('Felknappar: fel knapp ger spökstopp, och utan fel blir det nästan inga',
 test('Antinuisance: för många våningsknappar för få passagerare rensas', () => {
   sim(73, { strategy: 'buttons' });
   runUntil(8.5);
-  const e = S.elevators.find(x => x.passengers.length === 1 && x.serves.size > 5);
+  const one = () => S.elevators.find(x => x.passengers.length === 1 && x.serves.size > 5);
+  for (let g = 0; !one() && g < 120 / DT; g++) step(DT);
+  const e = one();
   assert(e, 'ingen hiss med exakt en passagerare');
   for (const f of e.serves) e.carCalls.add(f);
+  const n0 = S.stats.nuisance;
   antiNuisance(e);
   const dest = e.passengers[0].dest;
   assert(e.carCalls.size === 1 && e.carCalls.has(dest), `knappar kvar: ${[...e.carCalls].map(fl).join(',')}`);
-  assert(S.stats.nuisance === 1, 'rensningen räknades inte');
+  assert(S.stats.nuisance === n0 + 1, 'rensningen räknades inte');
   return `${e.name}: alla knappar rensade, passageraren tryckte ${fl(dest)} igen`;
+});
+
+// ---------- Drift: hissfel, tekniker, nattservice ----------
+test('Hissfel: hissen går sönder vid nästa stopp, alla kliver ut och teknikern lagar den', () => {
+  sim(81);
+  runUntil(9);
+  const w = watcher();
+  triggerFault();
+  const e = S.elevators.find(x => x.breakNext || x.mode === 'broken');
+  assert(e, 'ingen hiss fick ett fel');
+  run(60, w);
+  assert(e.mode === 'broken' || S.stats.repairs === 1, `${e.name} gick aldrig sönder (läge ${e.mode})`);
+  assert(S.stats.faults === 1, `${S.stats.faults} fel räknades`);
+  let g = 0;
+  while (e.mode === 'broken' && ++g < 400 / DT) { const b = w.before(); step(DT); w.check(b); }
+  assert(e.mode === 'normal', `${e.name} lagades aldrig (läge ${e.mode})`);
+  assert(S.stats.repairs === 1, 'lagningen räknades inte');
+  assert(w.brokenUse === 0, `den trasiga hissen användes ${w.brokenUse} steg`);
+  assert(w.passes === 0 && w.overweight === 0, 'regelbrott medan hissen var trasig');
+  return `${e.name} trasig i ${Math.round(S.stats.downSec)} s, lagad av hissteknikern`;
+});
+test('Hissfel i entrén: teknikern kliver in och lagar direkt (ingen hissresa till samma våning)', () => {
+  sim(82);
+  runUntil(8);
+  const open = () => S.elevators.find(x => !x.freight && x.mode === 'normal' && x.state === 'doors' && x.floor === LOBBY && x.door >= 1);
+  let g0 = 0;
+  while (!open() && ++g0 < 120 / DT) step(DT);
+  const e = open();
+  assert(e, 'ingen hiss stod öppen i entrén');
+  breakDown(e, 'testfel');
+  const w = watcher();
+  let g = 0;
+  while (e.mode === 'broken' && ++g < 400 / DT) { const b = w.before(); step(DT); w.check(b); }
+  assert(e.mode === 'normal', `${e.name} lagades aldrig`);
+  assert(w.selfDest === 0, 'teknikern köade till sin egen våning');
+  return `${e.name} lagad på ${fl(e.floor)}`;
+});
+test('Nattservice: de slitna hissarna servas på natten, utan den slits de dag för dag', () => {
+  const days = maint => {
+    sim(83, { autoInc: true, maint });
+    let faults = 0, serviced = 0;
+    for (let d = 1; d <= 3; d++) { runDay(); faults += S.stats.faults; serviced += S.stats.serviced; S.day++; resetDay(); }
+    return { faults, serviced, wear: S.elevators.reduce((a, e) => a + e.wear, 0) / S.elevators.length };
+  };
+  const night = days('natt'), none = days('fel');
+  assert(night.serviced >= 6, `bara ${night.serviced} hissar servades på tre nätter`);
+  assert(none.serviced === 0, 'service trots "bara vid fel"');
+  assert(night.wear < SERVICE_AT && none.wear > 0.4, `snittslitage: nattservice ${night.wear.toFixed(2)} · bara vid fel ${none.wear.toFixed(2)}`);
+  assert(night.faults < none.faults, `fel: nattservice ${night.faults} · bara vid fel ${none.faults}`);
+  return `3 dygn · nattservice: ${night.serviced} servade, ${night.faults} fel, slitage ${Math.round(night.wear * 100)} % · bara vid fel: ${none.faults} fel, slitage ${Math.round(none.wear * 100)} %`;
+});
+
+// ---------- Trappan ----------
+test('Trappan: korta resor går ibland till fots, långa resor och tung last aldrig', () => {
+  sim(84);
+  const bad = [];
+  const seen = new Set();
+  while (!S.summaryShown) {
+    step(DT);
+    for (const p of S.people) {
+      if (p.state !== 'stairs' || seen.has(p)) continue;
+      seen.add(p);
+      // bara frivilliga trappresor (inte utrymning, strömavbrott, trasig hiss eller Fia som alltid går)
+      if (!p.stairsByChoice || p.quirk === 'trappa') continue;
+      const n = Math.abs(p.dest - p.floor);
+      if (n > 4) bad.push(`${p.name} gick ${n} våningar`);
+      if (p.vip || (p.cargo && p.cargo.kg >= 15)) bad.push(`${p.name} (${p.cargo ? p.cargo.name : 'VIP'}) tog trappan`);
+    }
+    if (S.summaryShown) break;
+    for (const p of S.people) if (p.state !== 'stairs') seen.delete(p);
+  }
+  assert(bad.length === 0, bad.slice(0, 4).join('; '));
+  assert(S.stats.stairsChoice > 40, `bara ${S.stats.stairsChoice} tog trappan frivilligt`);
+  assert(S.stats.stairsChoice < S.stats.served * 0.2, `${S.stats.stairsChoice} trappresor mot ${S.stats.served} hissresor – för många`);
+  return `${S.stats.stairsChoice} frivilliga trappresor mot ${S.stats.served} hissresor`;
+});
+
+// ---------- Energi och strategierna Rusning/Energisnål ----------
+test('Energi: strömmen beror på lasten mot motvikten', () => {
+  const v = 2.6;
+  const heavyUp = powerKw(700, RATED_KG, v, 1), emptyUp = powerKw(0, RATED_KG, v, 1);
+  const heavyDown = powerKw(700, RATED_KG, v, -1), emptyDown = powerKw(0, RATED_KG, v, -1), balanced = powerKw(RATED_KG * 0.45, RATED_KG, v, 1);
+  assert(heavyUp > 40, `full hiss uppåt drar bara ${heavyUp.toFixed(1)} kW`);
+  assert(emptyUp < 0 && heavyDown < 0, `tom upp ${emptyUp.toFixed(1)} kW / full ner ${heavyDown.toFixed(1)} kW borde återmata`);
+  assert(emptyDown > balanced && heavyUp > balanced && balanced > 0, 'fel ordning mellan lastfallen');
+  sim(85); runUntil(9);
+  assert(S.stats.energyRun > 0 && S.stats.regen > 0, 'ingen energi räknades');
+  return `full upp ${heavyUp.toFixed(0)} kW · tom ner ${emptyDown.toFixed(0)} kW · balanserad ${balanced.toFixed(0)} kW · tom upp ${emptyUp.toFixed(0)} kW · full ner ${heavyDown.toFixed(0)} kW`;
+});
+test('Energisnål drar mindre ström än Smart, och Rusning ger kortare väntan (snitt över tre dygn)', () => {
+  const r = {};
+  for (const strategy of ['smart', 'peak', 'eco']) {
+    let wait = 0, kwh = 0, run = 0;
+    for (const seed of [1, 2, 3]) { sim(seed, { strategy }); runDay(); wait += avgWait(); kwh += S.stats.energy; run += S.stats.energyRun; }
+    r[strategy] = { wait: wait / 3, kwh: kwh / 3, run: run / 3 };
+  }
+  assert(r.eco.kwh < r.smart.kwh * 0.98 && r.eco.run < r.smart.run * 0.9, `energi: smart ${r.smart.kwh.toFixed(1)} (körning ${r.smart.run.toFixed(1)}) · eco ${r.eco.kwh.toFixed(1)} (${r.eco.run.toFixed(1)}) kWh`);
+  assert(r.eco.wait < r.smart.wait * 1.3, `eco väntar för länge: ${r.eco.wait.toFixed(1)}s mot ${r.smart.wait.toFixed(1)}s`);
+  assert(r.peak.wait < r.smart.wait, `rusning ${r.peak.wait.toFixed(2)}s · smart ${r.smart.wait.toFixed(2)}s`);
+  return `väntan smart ${r.smart.wait.toFixed(1)} · rusning ${r.peak.wait.toFixed(1)} · eco ${r.eco.wait.toFixed(1)} s · energi smart ${r.smart.kwh.toFixed(1)} · eco ${r.eco.kwh.toFixed(1)} kWh (körning ${r.smart.run.toFixed(1)} → ${r.eco.run.toFixed(1)})`;
+});
+test('Rusning: på morgonen kör lediga hissar direkt tillbaka till entrén', () => {
+  sim(86, { strategy: 'peak' });
+  runUntil(8);
+  assert(S.peakMode === 'upp' && trafficMode(8) === 'upp', `rusningsläget är ${S.peakMode}`);
+  let parked = 0, away = 0;
+  while (hour() < 9.5) {
+    step(DT);
+    for (const e of S.elevators) if (e.state === 'moving' && e.targetKind === 'park') { if (e.parkTarget === e.home) parked++; else away++; }
+  }
+  assert(parked > 0 && away === 0, `parkeringar hem ${parked}, någon annanstans ${away}`);
+  return `${parked} steg med lediga hissar på väg hem i UPP-läget`;
+});
+
+// ---------- Stamgästerna ----------
+test('Stamgästerna: samma karaktärer varje dag, med sina egenheter', () => {
+  const day = () => {
+    const seen = new Set(), fiaRode = [];
+    while (!S.summaryShown) {
+      step(DT);
+      for (const p of S.people) {
+        if (!p.cast) continue;
+        seen.add(`${p.cast}:${p.name}`);
+        if (p.quirk === 'trappa' && (p.state === 'boarding' || p.state === 'ride') && liftsAvailable()) fiaRode.push(hour().toFixed(2));
+      }
+    }
+    return { seen, fiaRode, st: { ...S.stats } };
+  };
+  sim(91);
+  const d1 = day();
+  S.day++; resetDay();
+  const d2 = day();
+  const want = ['gunnar:Gunnar', 'doris:Doris', 'kurt:Kurt', 'fia:Fia', 'majken:Majken', 'olle:Lill-Olle', 'pelle:Pizza-Pelle'];
+  for (const d of [d1, d2]) for (const k of want) assert(d.seen.has(k), `${k} dök inte upp dag ${d === d1 ? 1 : 2}`);
+  assert(d1.fiaRode.length === 0 && d2.fiaRode.length === 0, `Fia åkte hiss kl ${d1.fiaRode.concat(d2.fiaRode).slice(0, 3).join(', ')}`);
+  assert(d1.st.cups >= 2, `Kurt drack bara ${d1.st.cups} koppar`);
+  assert(d1.st.chats + d2.st.chats > 0, 'Majken pratade aldrig med någon');
+  return `dag 1: ${d1.st.cups} koppar, ${d1.st.gripes} gnäll, ${d1.st.holds} dörrhåll, ${d1.st.chats} pratstunder · dag 2: ${d2.st.cups} koppar, ${d2.st.gripes} gnäll`;
 });
 
 // ---------- Regression: fingeravtryck mot facit ----------
@@ -419,6 +570,7 @@ export const GOLDEN_CASES = [
   ...[101, 102, 103, 104, 105, 106, 107, 108].map(seed => ({ seed, strategy: 'smart' })),
   { seed: 201, strategy: 'nearest' }, { seed: 202, strategy: 'nearest' },
   { seed: 301, strategy: 'random' }, { seed: 302, strategy: 'random' },
+  { seed: 401, strategy: 'peak' }, { seed: 501, strategy: 'eco' }, { seed: 601, strategy: 'buttons' },
 ];
 export const caseKey = c => `${c.strategy}-${c.seed}`;
 export function dayFingerprint(c) {
@@ -429,6 +581,7 @@ export function dayFingerprint(c) {
     resor: st.served, väntSumma: +st.waitSum.toFixed(3), längstaVäntan: +st.waitMax.toFixed(3), arga: st.angry,
     incidenter: st.incidents, rök: st.smoked, instängdSek: +st.trappedSec.toFixed(2),
     överlaster: st.overloads, trappresor: st.stairs, utrymda: st.evacuated,
+    hissfel: st.faults, servade: st.serviced, energi: +st.energy.toFixed(4),
     loggrader: S.log.length, personer: S.nextId - 1, kvar: S.people.length,
     hissar: S.elevators.map(e => `${e.name}@${e.pos.toFixed(4)}:${e.trips}stopp:${e.distance.toFixed(2)}vån`).join(' '),
   };
@@ -451,7 +604,7 @@ test('Regression: samma frön ger samma dygn som facit', () => {
 // Sällsynta fel visar sig bara med vissa frön – därför körs många hela dygn med slumpade incidenter.
 const MANY_SEEDS = Array.from({ length: 40 }, (_, i) => 1000 + i);
 test(`Invarianter över ${MANY_SEEDS.length} slumpade dygn (alla strategier, med incidenter)`, () => {
-  const strategies = ['smart', 'smart', 'nearest', 'random', 'buttons'];
+  const strategies = ['smart', 'peak', 'eco', 'nearest', 'random', 'buttons', 'smart', 'buttons'];
   const fails = [];
   let trips = 0, incidents = 0, worstWait = 0, heaviest = 0;
   for (const [i, seed] of MANY_SEEDS.entries()) {
@@ -469,6 +622,9 @@ test(`Invarianter över ${MANY_SEEDS.length} slumpade dygn (alla strategier, med
     if (w.badLeg) fails.push(`${tag}: ${w.badLeg} åkte fel hiss för sitt delmål`);
     if (w.badFreight) fails.push(`${tag}: ${w.badFreight} fel last i fel hiss`);
     if (w.vipMixed) fails.push(`${tag}: ${w.vipMixed} klev på VIP-hissen`);
+    if (w.brokenUse) fails.push(`${tag}: trasig hiss/service användes ${w.brokenUse} steg`);
+    if (w.holdBoard) fails.push(`${tag}: hiss på väg till service tog nya passagerare ${w.holdBoard} gånger`);
+    if (S.elevators.some(e => e.mode === 'broken' && S.t - e.fault.t0 > 400)) fails.push(`${tag}: en hiss stod trasig i över 400 s`);
     if (w.selfDest) fails.push(`${tag}: någon väntade på hiss till sin egen våning (${w.selfDest} steg)`);
     trips += S.stats.served; incidents += S.stats.incidents;
     worstWait = Math.max(worstWait, w.maxWait); heaviest = Math.max(heaviest, w.maxKg);

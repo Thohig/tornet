@@ -500,7 +500,7 @@ function drawCarPx(e) {
     for (const dx of [-6, -2, 2, 6]) R(x + cw / 2 + dx, st, 1, yt - st, INK);
     R(x + cw / 2 - 9, yt - 4, 19, 1, INK); R(x + cw / 2 - 9, yt - 4, 1, 4, INK); R(x + cw / 2 + 9, yt - 4, 1, 4, INK);
   }
-  const off = e.off || e.mode === 'locked' || e.sleep || e.zoneLock;
+  const off = e.off || e.mode === 'locked' || e.sleep || e.zoneLock || e.mode === 'broken' || e.mode === 'service' || e.hold;
   const body = off ? PAL.carOff : e.color;
   // korgen
   R(x, yt + (e.facade ? 2 : 0), cw, chh - (e.facade ? 2 : 0), INK);
@@ -525,6 +525,14 @@ function drawCarPx(e) {
     if (back) g.filter = 'brightness(0.82)';
     g.drawImage(personSprite(p, 'front', 0, 1, { blink: blinkOf(p), hot: hotOf(p) }), px, py);
     g.filter = 'none';
+  }
+  // hissteknikern står i den öppna korgen och skruvar
+  const fixer = (e.mode === 'broken' || e.mode === 'service') && e.techId !== null ? S.people.find(p => p.id === e.techId && p.state === 'office' && p.floor === e.floor) : null;
+  if (fixer) {
+    const px = x + Math.round(cw / 2) - PERSON_W / 2 + (Math.sin(S.anim * 3) > 0 ? 1 : 0), py = yb - 1 - PERSON_H;
+    g.drawImage(personSprite(fixer, 'front', 0, 1, { blink: blinkOf(fixer) }), px, py);
+    // gnistor från verktyget
+    if (Math.sin(S.anim * 11 + e.id) > 0.3) for (let k = 0; k < 3; k++) R(px + PERSON_W + 1 + Math.round(vrand(0, 4)), py + 10 + Math.round(vrand(0, 6)), 1, 1, vpick(['#ffd23f', '#ffffff', '#ff9f1c']));
   }
   g.restore();
   // dörrarna
@@ -565,6 +573,12 @@ function drawCarPx(e) {
   if (e.mode === 'locked') label('AVSTÄNGD', x + cw / 2, yt - 11, '#ff2d55', '#ffffff');
   if (e.mode === 'recall') label('→ TILL E', x + cw / 2, yt - 11, '#ff8c42');
   if (e.mode === 'rescue') label('NÖDSÄNK', x + cw / 2, yt - 11, '#7dff9a');
+  if (e.mode === 'broken') { if (Math.sin(S.anim * 6) > -0.4) label('FEL!', x + cw / 2, yt - 11, '#ff2d55', '#ffffff'); }
+  if (e.mode === 'service') label('SERVICE', x + cw / 2, yt - 11, '#ffd23f');
+  if (e.hold && e.mode === 'normal') label('→ SERVICE', x + cw / 2, yt - 11, '#ffd23f');
+  // en stamgäst i korgen som pratar
+  const talker = e.passengers.find(talking);
+  if (talker) speech(talker, x + cw / 2, yt - 23);
 }
 const blinkOf = p => Math.sin(S.anim * 0.9 + p.id * 1.7) > 0.985;
 const hotOf = p => (p.mood || 0) === 2 && Math.sin(S.anim * 8 + p.id) > 0;
@@ -596,7 +610,21 @@ function drawHallPeople() {
     g.globalAlpha = 1;
   }
   for (const { p, lp } of list) if (p.state === 'wait') thought(p, X(lp.x) + 3, Y(surf(p.floor) + p.depth * 0.6) - 30);
-  if (S.tags) for (const { p, lp } of list) if (p.state !== 'wait' && lp.a > 0.5) label(p.name, X(lp.x), Y(surf(p.floor) + p.depth * 0.6) - 36);
+  // namnbrickor: alla med ID-knappen, stamgästerna alltid (med en stjärna)
+  for (const { p, lp } of list) if ((S.tags || p.cast) && p.state !== 'wait' && lp.a > 0.5 && !talking(p)) label((p.cast ? '* ' : '') + p.name, X(lp.x), Y(surf(p.floor) + p.depth * 0.6) - 36, p.cast ? '#ffe14d' : '#ffffff');
+  // pratbubblor från stamgästerna
+  for (const { p, lp } of list) if (talking(p) && lp.a > 0.5) speech(p, X(lp.x), Y(surf(p.floor) + p.depth * 0.6) - 38 - (p.state === 'wait' ? 12 : 0));
+}
+const talking = p => !!(p.say && S.t < p.say.until);
+/** pratbubbla med namn och replik, med en liten pil ner mot personen */
+function speech(p, cx, y) {
+  const s = plain(`${p.name}: "${p.say.text}"`);
+  const w = Math.min(textW(s) + 6, 260), x = Math.round(cx - w / 2);
+  pill(x, y, w, 9, '#ffffff');
+  g.save(); g.beginPath(); g.rect(x + 1, y, w - 2, 9); g.clip();
+  text(g, s, x + 3, y + 1, INK);
+  g.restore();
+  R(cx - 1, y + 9, 3, 1, INK); R(cx, y + 10, 1, 1, INK);
 }
 /** tankebubblan: mål och tilldelad hiss */
 function thought(p, x, y) {

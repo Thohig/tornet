@@ -222,14 +222,49 @@ export const shaftCX = i => shaftX(i) + SHAFT_W / 2;
 // och passerar nya hämtningar – den stannar bara för att släppa av.
 export const CAP = 8, VMAX = 2.6, ACC = 1.9, DOOR_T = 0.55, DWELL = 1.3, WALK = 150;
 export const STOP_COST = 2 * DOOR_T + DWELL + VMAX / ACC;
+// Energi: motvikten väger korgen + BALANCE × märklasten, och en våning är FLOOR_M meter hög (se service.js)
+export const BALANCE = 0.45, FLOOR_M = 3.5;
 export const MAXP = 240;
 // Ett dygn går från 06:00 till 06:00 (timmarna räknas 6…30). Tiden går fortare på kvällen och natten.
 export const START_H = 6, END_H = 30;
 export function timeScale(h) { return h >= 22 ? 120 : h >= 20 ? 60 : 30; } // spelsekunder per simuleringssekund
-export const ROLE_NAMES = { 'väktare': 'Väktare', 'städare': 'Städare', 'vaktmästare': 'Vaktmästare', 'nattdj': 'Natt-DJ på Kanal 97', 'nattekniker': 'Nattekniker på Modemkungen', 'bud': 'Bud' };
+export const ROLE_NAMES = { 'väktare': 'Väktare', 'städare': 'Städare', 'vaktmästare': 'Vaktmästare', 'nattdj': 'Natt-DJ på Kanal 97', 'nattekniker': 'Nattekniker på Modemkungen', 'bud': 'Bud', 'hisstekniker': 'Hisstekniker' };
+
+// ---------- Stamgästerna ----------
+// Återkommande karaktärer: samma namn, utseende och egenheter varje dag (logiken finns i cast.js).
+// at = när de kommer (anställda), resident = vilken boende som blir karaktären, quirk = egenheten.
+/** @typedef {{ id: string, name: string, title: string, quirk: string, kind: string, home?: string, at?: number, leaveAt?: number,
+ *   lunchAt?: number, resident?: string, speed?: number, look: object, lines: Record<string, string[]> }} CastDef */
+/** @type {CastDef[]} */
+export const CAST = [
+  { id: 'gunnar', name: 'Gunnar', title: 'Delägare på Kvarnström Advokater – hatar att vänta', quirk: 'gnäll', kind: 'emp', home: 'law', at: 7.95, leaveAt: 17.55, lunchAt: 12,
+    look: { skin: '#ffdbb8', shirt: '#ffffff', pants: '#3a3a3a', hair: 2, hairC: '#e8e8e8', tie: true, tieC: '#ff5d73', stripe: false, acc: 1 },
+    lines: { wait: ['Femton sekunder! Jag debiterar 3 000 kr i timmen!', 'Det här ska jag skriva ett brev om.', 'I mitt förra hus gick hissarna på räls av guld!', 'Har någon ringt hissbolaget?!'],
+      board: ['Äntligen.', 'Det var på tiden.', 'Mitt kaffe hann kallna.'] } },
+  { id: 'doris', name: 'Doris', title: 'AD på Rymdkakan Reklambyrå – håller alltid upp dörren', quirk: 'dörr', kind: 'emp', home: '3', at: 8.15, leaveAt: 17.2, lunchAt: 11.6,
+    look: { skin: '#a8693f', shirt: '#ff6fb5', pants: '#5a2a6e', hair: 4, hairC: '#ff4fa3', tie: false, tieC: '#ffd23f', stripe: true, acc: 0 },
+    lines: { hold: ['Vänta, det kommer en till!', 'Spring, jag håller dörren!', 'Ingen fara, vi väntar!'] } },
+  { id: 'kurt', name: 'Kurt', title: 'Nätverkstekniker på Modemkungen – lever på kaffe', quirk: 'kaffe', kind: 'emp', home: 'server', at: 7.6, leaveAt: 18.1, lunchAt: 99,
+    look: { skin: '#f6c48f', shirt: '#4dd2ff', pants: '#1f6f8b', hair: 0, hairC: '#5a3412', tie: false, tieC: '#4dd2ff', stripe: false, acc: 0 },
+    lines: { coffee: ['Kopp nummer {n}. Bara en till.', 'Kaffe nummer {n} – servrarna klarar sig en stund.', 'Kopp {n}! Koffein är också bandbredd.'] } },
+  { id: 'fia', name: 'Fia', title: 'Instruktör på Svettis Aerobic – tar ALLTID trappan', quirk: 'trappa', kind: 'emp', home: 'aerobic', at: 7.25, leaveAt: 20.8, lunchAt: 12.4,
+    look: { skin: '#d9a066', shirt: '#7cf06b', pants: '#ff5d73', hair: 3, hairC: '#d9a441', tie: false, tieC: '#7cf06b', stripe: true, acc: 0 },
+    lines: { stairs: ['Trappan är gratis gym!', 'Hissar är för fusk! Hopp hopp!', 'Knälyft hela vägen upp!'] } },
+  { id: 'majken', name: 'Majken', title: '87 år, bor på 13 – pratar med alla i hissen', quirk: 'pratig', kind: 'res', resident: 'pensioner', speed: 0.6,
+    look: { skin: '#ffe4c8', shirt: '#b388ff', pants: '#6b4f2a', hair: 5, hairC: '#e8e8e8', tie: false, tieC: '#b388ff', stripe: false, acc: 0 },
+    lines: { chat: ['Vad du har vuxit, {who}!', 'Visste du att jag var med när huset byggdes?', 'Det blir regn i morgon, det känner jag i knät.', 'Har du ätit ordentligt, {who}?', 'På min tid fanns det hissförare med mössa!'] } },
+  { id: 'olle', name: 'Lill-Olle', title: '8 år, bor på 12 – älskar hissknappar', quirk: 'bus', kind: 'res', resident: 'child',
+    look: { skin: '#ffdbb8', shirt: '#ffd23f', pants: '#2b2d6e', hair: 1, hairC: '#b8461f', tie: false, tieC: '#ffd23f', stripe: true, acc: 5 },
+    lines: { buttons: ['Hihi! ALLA knappar!', 'Pip pip pip!', 'Jag är hisskapten!'], ride: ['Snabbare!', 'Vi är en raket!', 'Wiii!'] } },
+  { id: 'pelle', name: 'Pizza-Pelle', title: 'Pizzabud – levererar till nattsändningen varje natt', quirk: 'pizza', kind: 'vis',
+    look: { skin: '#7a4a2a', shirt: '#ff8c42', pants: '#3a3a3a', hair: 0, hairC: '#2a1a10', tie: false, tieC: '#ff8c42', stripe: true, acc: 0 },
+    lines: { arrive: ['Pizza! Varm och god!', 'Kanal 97 – din kalzone är här!'] } },
+];
 
 export const STRAT_HINT = {
   smart: '<b>Smart:</b> varje person får den hiss som snabbast kan hämta hen <i>och</i> köra till målet (resväg, stopp, last – rabatt om hissen redan ska dit). Omfördelar och parkerar lediga hissar smart.',
+  peak: '<b>Rusning:</b> som Smart, men känner av trafikmönstret. På morgonen (UPP) kör lediga hissar direkt tillbaka till entrén och väntar en stund i dörren så att fler hinner med. Vid hemgång (NED) väntar de högst upp i sin zon.',
+  eco: '<b>Energisnål:</b> som Smart, men räknar också ström. Varje hämtning kostar kWh efter lasten mot motvikten – en tom hiss som kör ner drar ström, en tom hiss som kör upp återmatar. Väljer helst hissar som redan är på väg, parkerar aldrig och låter lediga hissar sova även på dagen. Lite längre väntan, mindre el.',
   nearest: '<b>Närmast:</b> varje person får den hiss som är närmast just nu – oavsett riktning, mål eller last.',
   random: '<b>Kaos:</b> varje person får en slumpad hiss. Hur illa kan det gå?',
   buttons: '<b>Knappar:</b> vanliga hissknappar som i ett äldre hus. Styrsystemet ser bara ▲/▼ i hallen och våningsknapparna i korgen – inte vart folk ska. Alla kliver på första hissen åt rätt håll.',

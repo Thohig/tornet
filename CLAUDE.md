@@ -33,10 +33,12 @@ Samma testsvit körs i webbläsaren på `/tests.html`.
 | `rng.js` | seedad slump (`rng/rand/randi/pick/shuffle`) + visuell slump (`vrand/vpick`) |
 | `sim.js` | `step(DT)`, `advance`, schemaläggning, ankomster, nattläge, VIP-lås, `resetDay`, `newSim` |
 | `people.js` | personer: tillståndsmaskin, delresor/hissbyten (`legDest`, `setTrip`), lastregler |
-| `dispatch.js` | destinationsstyrning: kostnadsfunktion, tilldelning, omfördelning, parkering, brandzon |
+| `dispatch.js` | destinationsstyrning: kostnadsfunktion, tilldelning, omfördelning, parkering, brandzon, Rusning (`trafficMode`, `peakHold`) och Energisnål (`ecoCost`) |
 | `buttons.js` | styrlogiken KNAPPAR (hallknappar ▲/▼ + våningsknappar, styrningen ser aldrig `p.dest`), felknappar, barn, antinuisance |
 | `elevators.js` | hissens rörelse (SCAN med "committed" stopp), dörrar, lastning, överlast |
-| `incidents.js` | brand och strömavbrott + spelarens åtgärder |
+| `incidents.js` | brand, strömavbrott och slumpade hissfel + spelarens åtgärder |
+| `service.js` | drift: slitage, hissfel, hisstekniker, nattservice (`S.maint`) och energi (effekt efter last mot motvikt, återmatning) |
+| `cast.js` | stamgästerna (data i `CAST` i config): återkommande karaktärer med egenheter och repliker (`say`) |
 | `life.js` | garage/bilar, leveransbil, boendes dygnsrutiner, VIP-helikopter |
 
 **Gränssnitt:** `render.js` (grafikens ingång + `landPos`/`personHead`: var folk syns), `pixel.js` (hela bilden i pixelgrafik), `pixart.js` (rutnätsfigurer med automatisk kontur, bitmapstypsnitt 3×5, färghjälp), `pixpeople.js` (människor ur `p.look`: sido-/framvy, gångsteg, humör, bagage), `pixpal.js` (paletten `PAL`), `view.js` (canvas, kamera, översikt, `VIEW.follow/carPop`), `hud.js` (topplist, hisspopup, flytande incidentruta, låda med flikar), `describe.js` (texter om personer för HUD och spårlapp), `input.js`, `main.js`.
@@ -60,6 +62,9 @@ HUD:en är medvetet liten: allt om en hiss visas på hissen eller i popupen när
 - `p.goal` = slutmål, `p.dest` = nuvarande delresa (kan vara `SKY` för hissbyte). `p.exitFloor` = var personen lämnar huset (E, garage eller lastkaj).
 - Personer: `kind` = `emp` / `vis` / `staff` / `res` (boende, stannar över natten), `role` för nattpersonal/bud, `vip`.
 - Last ≥ 22 kg → bara varuhissen; varuhissen tar bara last och personal (`elevatorAllows`).
+- Styrlogiker (`S.strategy`): `smart`, `peak` (Rusning), `eco` (Energisnål), `nearest`, `random`, `buttons`. `costBased()` = de tre som använder kostnadsfunktionen.
+- Hisslägen (`e.mode`): `normal`, `recall`, `locked`, `rescue`, `dead`, `broken` (trasig, väntar på tekniker), `service`. `e.hold` = på väg till nattservice (tar inga nya). `e.wear` följer med till nästa dygn.
+- Trappan: `stairsChoice` (korta resor/otåliga, `p.fit`), `p.stairsByChoice` skiljer frivilliga trappresor från utrymning m.m.
 - Brandlägen: `recall` / `zone` / `none`; i zonläge spärras hissar som inte når någon säker våning (`e.zoneLock`).
 - Nytt våningstema = post i `THEME_INFO` (config) med namn, `acc` i Kontor 95-tappning och platser – hallen ritas automatiskt.
 

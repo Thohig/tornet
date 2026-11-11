@@ -3,7 +3,7 @@ import { ARR, K, esc, fl } from './util.js';
 import { CAP, CAR_H, EL, FIRE_HINT, FL, STRAT_HINT, TOP, ROLE_NAMES, timeScale, FULL_LOAD, floorY, shaftX } from './config.js';
 import { S, clockStr, hour, log, phaseName } from './state.js';
 import { liftsAvailable } from './people.js';
-import { allowed, costLine, eta, isFull, pickTotal, pickersAt, loadKg, cabinKg, slotsFull } from './dispatch.js';
+import { costBased, allowed, costLine, eta, isFull, pickTotal, pickersAt, loadKg, cabinKg, slotsFull } from './dispatch.js';
 import { canRescue } from './incidents.js';
 import { plannedRoute, resetDay } from './sim.js';
 import { VIEW, cv, pctx, resize, stage } from './view.js';
@@ -55,7 +55,8 @@ function updateCarPop() {
   }
   const acts = carActs(e);
   if (acts !== c.actKey) { c.actKey = acts; c.acts.innerHTML = acts; }
-  c.meta.textContent = `${Math.round(e.distance)} vån åkta · ${e.trips} stopp`;
+  const kw = e.kw > 0.05 ? `⚡ drar ${e.kw.toFixed(0)} kW` : e.kw < -0.05 ? `♻ återmatar ${(-e.kw).toFixed(0)} kW` : e.state === 'moving' ? '⚡ 0 kW' : '⚡ vila';
+  c.meta.textContent = `${Math.round(e.distance)} vån · ${e.trips} stopp · slitage ${Math.round(e.wear * 100)} % · ${kw} · ${e.kwh.toFixed(1)} kWh i dag`;
 }
 /** Placerar popupen bredvid hissen (anropas varje bildruta så att den följer med korgen) */
 export function placeCarPop() {
@@ -76,6 +77,9 @@ export function zoneText(d) {
   return `${fl(d.minF)}–${fl(d.maxF)} · ${d.group} zon`;
 }
 export function stateLabel(e) {
+  if (e.mode === 'broken') return 'TRASIG 🔧';
+  if (e.mode === 'service') return 'SERVICE 🔧';
+  if (e.hold) return 'TILL SERVICE';
   if (e.zoneLock) return 'SPÄRRAD 🚧';
   if (e.sleep) return 'NATTLÄGE 🌙';
   if (e.mode === 'recall') return 'BRANDÅTERKALLAD';
@@ -100,7 +104,13 @@ export function reasonAt(e, f, d) {
 }
 export function whyText(e) {
   if (e.zoneLock) return `Når ingen våning utanför brandzonen – står spärrad på ${fl(e.minF)} tills branden är släckt`;
-  if (e.sleep) return `Sover vid ${fl(e.home)} för att spara energi – vaknar om det bildas kö`;
+  if (e.mode === 'broken') {
+    const t = S.people.find(p => p.role === 'hisstekniker' && p.job === e.id);
+    return `Trasig på ${fl(e.floor)}: ${e.fault.what} · ${t ? (t.state === 'office' && t.floor === e.floor ? `${t.name} lagar den (${Math.round(100 * Math.min(1, t.workT / e.fault.need))} %)` : `${t.name} är på väg`) : 'väntar på hisstekniker'}`;
+  }
+  if (e.mode === 'service') return `Nattservice på ${fl(e.home)} – slitaget nollställs`;
+  if (e.hold) return `Ska på nattservice – tar inga nya resenärer och kör hem till ${fl(e.home)}`;
+  if (e.sleep) return `Sover på ${fl(Math.round(e.pos))} för att spara energi – vaknar om det bildas kö`;
   if (e.mode === 'recall') return 'Brandåterkallning: kör direkt till E utan stopp och släpper ut alla';
   if (e.mode === 'locked') return 'Avstängd i E med öppna dörrar tills branden är släckt';
   if (e.mode === 'rescue') return `Krypkör på reservkraft till ${fl(e.rescueTarget)} för att släppa ut ${e.passengers.length} instängda`;
@@ -164,6 +174,17 @@ export function updateHud() {
     <div class="stat">Rökexponerade <b>${st.smoked}</b></div>
     <div class="stat">Instängd-sek <b>${Math.round(st.trappedSec)}</b></div>
     <div class="stat">Trapp-resor <b>${st.stairs}</b></div>
+    <div class="stat">…varav frivilliga 🚶 <b>${st.stairsChoice}</b></div>
+    <div class="stat">★ Gunnar gnällde <b>${st.gripes}</b></div>
+    <div class="stat">★ Kurts kaffekoppar ☕ <b>${st.cups}</b></div>
+    <div class="stat">★ Doris höll dörren <b>${st.holds}</b></div>
+    <div class="stat">★ Majken pratade 💬 <b>${st.chats}</b></div>
+    <div class="stat">Hissfel 🔧 <b>${st.faults}</b></div>
+    <div class="stat">Lagade / servade <b>${st.repairs} / ${st.serviced}</b></div>
+    <div class="stat">Stillestånd <b>${Math.round(st.downSec)} s</b></div>
+    <div class="stat">Energi ⚡ <b>${st.energy.toFixed(1)} kWh</b></div>
+    <div class="stat">…varav körning <b>${st.energyRun.toFixed(1)} kWh</b></div>
+    <div class="stat">Återmatat ♻ <b>${st.regen.toFixed(1)} kWh</b></div>
     <div class="stat">Hissbyten <b>${st.transfers}</b></div>
     <div class="stat">Bilar in i garaget <b>${st.carsIn}</b></div>
     <div class="stat">Paketleveranser <b>${st.deliveries}</b></div>
@@ -243,7 +264,7 @@ export function updateRoster() {
     else if (p.state === 'stairs' || p.state === 'instairs') where = `trappa→${fl(p.dest)}`;
     else where = `${fl(p.floor)}→${fl(p.dest)}`;
     if (p.state === 'wait') t = Math.round(S.t - p.waitStart) + 's';
-    return `<div class="rr${p.id === sid ? ' sel' : ''}" data-pid="${p.id}"><i style="background:${col}"></i><span>${esc(p.name)} <span class="rd">${p.id}</span></span><span>${where}</span><span class="rt">${t}</span></div>`;
+    return `<div class="rr${p.id === sid ? ' sel' : ''}" data-pid="${p.id}"><i style="background:${col}"></i><span>${p.cast ? '★ ' : ''}${esc(p.name)} <span class="rd">${p.id}</span></span><span>${where}</span><span class="rt">${t}</span></div>`;
   }).join('') || '<div class="rr"><i></i><span>–</span></div>';
 }
 export function updateTracker() {
@@ -255,6 +276,7 @@ export function updateTracker() {
   $('tkName').innerHTML = `${esc(p.name)} <span>#${p.id}</span>`;
   $('tkRole').textContent = p.kind === 'emp' ? `Anställd · ${FL[p.home].name} (${fl(p.home)})${p.overtime ? ' · jobbar över' : ''}`
     : p.kind === 'res' ? residentDesc(p) : p.vip ? 'VIP-besök med helikopter 🚁' : p.role ? ROLE_NAMES[p.role] : 'Besökare';
+  if (p.cast) $('tkRole').textContent = `★ Stamgäst · ${p.title}`;
   if (p.auto) $('tkRole').textContent += ` · bil på ${fl(p.auto.floor)}`;
   $('tkRole').textContent += ` · ${p.kg} kg${p.cargo ? ` + ${p.cargo.name} ${p.cargo.kg} kg` : ''}`;
   const stEl = $('tkState'); stEl.textContent = label; stEl.style.setProperty('--c', col); stEl.style.setProperty('--ct', PAL.on(col));
@@ -273,7 +295,7 @@ export function updateTracker() {
       } else if (p.assigned !== null) {
         const e = S.elevators[p.assigned];
         now += ` · ${e.name} är här om ~${Math.round(eta(e, p.floor, p.dir))}s`;
-        logic = S.strategy === 'smart' ? `Kostnad hämtning+resa: ${costLine(p, e.id)}`
+        logic = costBased() ? `Kostnad hämtning+resa${S.strategy === 'eco' ? '+energi' : ''}: ${costLine(p, e.id)}`
           : S.strategy === 'nearest' ? `Närmaste hiss: ${e.name} (${Math.abs(Math.round(e.pos - p.floor))} vån bort)` : `Slumpen valde ${e.name}`;
       } else if (!liftsAvailable()) { now += ' · hissarna går inte'; logic = `Tar trapporna om ~${Math.max(0, Math.ceil(p.patience - (S.t - p.waitStart)))}s`; }
       else { now += ' · alla hissar fulla'; logic = 'Väntar på att en hiss får plats'; }
@@ -359,7 +381,7 @@ export function showIntro() {
       <li>Hissarna är <b>zonindelade</b>: L1–L2 går i låg zon (P2–5) och H1–H2 i hög zon (6–T) – <b>staplade i samma schakt</b>. Expresshissarna X1–X2 kör E ⇄ 6 utan stopp. Den som ska mellan zonerna <b>byter hiss</b> (↹) i entrén och i sky lobbyn. Varuhissen V tar städvagnar och paket, och panoramahissen P åker utanpå fasaden.</li>
       <li>Huset <b>lever</b>: bilar kör in i garaget, leveransbilen lastar av vid kajen, de boende sover, jobbar och går på taket, en fönsterputsare jobbar sig nedåt och ibland landar en VIP-helikopter på taket.</li>
       <li>Ett <b>dygn</b> går från 06:00 till 06:00. Trafiken följer klockan – rusning på morgonen, lunch, hemgång – och på natten är det bara väktare, städare och nattugglor. Vissa våningar stänger (caféet, banken …). Natten går fortare ⏩.</li>
-      <li><b>Incidenter</b> händer: brand och strömavbrott. Då dyker en ruta upp med dina val. Under <b>⋯</b> kan du utlösa dem själv.</li>
+      <li><b>Incidenter</b> händer: brand, strömavbrott och hissfel – då kommer en hisstekniker och lagar. Slitna hissar går oftare sönder, och utan nattservice följer slitaget med till nästa dygn. Då dyker en ruta upp med dina val. Under <b>⋯</b> kan du utlösa dem själv.</li>
       <li>Bilden visar <b>hallen framför hissarna</b> – rummen ligger bakom korridoren, och folk syns när de kommer ut för att vänta på hissen. Siffran vid korridoren är hur många som är inne.</li>
       <li><b>Klicka på en person</b> för att spåra hen – en lapp följer personen och 👤 visar allt, även när hen är inne i rummen. <b>Klicka på en korridor</b> för att spåra någon som är därinne. <b>Klicka på en hiss</b> för dess plan, last och knappen 📹 Följ.</li>
       <li>Klicka på en tom yta på en våning för att släppa in en besökare. <b>BUSS!</b> släpper in en busslast.</li>
@@ -373,7 +395,7 @@ export function showIntro() {
 export function showSummary() {
   S.summaryShown = true; S.paused = true;
   const st = S.stats, avg = st.waitN ? st.waitSum / st.waitN : 0, g = grade(avg);
-  const names = { smart: 'Smart', nearest: 'Närmast', random: 'Kaos', buttons: 'Knappar' };
+  const names = { smart: 'Smart', peak: 'Rusning', eco: 'Energisnål', nearest: 'Närmast', random: 'Kaos', buttons: 'Knappar' };
   showOverlay(`<div class="card"><h1>DYGNET ÄR SLUT!</h1>
     <div class="bigGrade">${st.waitN ? g.letter : '–'} <span style="font-size:48px">· säkerhet ${safetyGrade()}</span></div>
     <p><b>${g.msg}</b></p>
@@ -386,6 +408,11 @@ export function showSummary() {
       <div>Överlaster: <b>${st.overloads}</b></div><div>Hissbyten: <b>${st.transfers}</b></div>
       <div>Bilar i garaget: <b>${st.carsIn}</b></div><div>Leveranser: <b>${st.deliveries}</b></div>
       <div>Felknappar: <b>${st.wrongPress}</b> (barn: ${st.kidPresses})</div><div>Spökstopp: <b>${st.ghostStops}</b></div>
+      <div>Hissfel: <b>${st.faults}</b> (stillestånd ${Math.round(st.downSec)} s)</div><div>Nattservice: <b>${st.serviced}</b> hissar</div>
+      <div>Energi: <b>${st.energy.toFixed(1)} kWh</b> (körning ${st.energyRun.toFixed(1)})</div><div>Återmatat: <b>${st.regen.toFixed(1)} kWh</b></div>
+      <div>★ Gunnar gnällde: <b>${st.gripes}</b> gånger</div><div>★ Kurts kaffekoppar: <b>${st.cups}</b></div>
+      <div>★ Doris höll dörren: <b>${st.holds}</b> gånger</div><div>★ Majken pratade: <b>${st.chats}</b> gånger</div>
+      <div>Tog trappan frivilligt: <b>${st.stairsChoice}</b></div><div>Mest sliten: <b>${S.elevators.reduce((a, e) => (e.wear > a.wear ? e : a)).name} ${Math.round(Math.max(...S.elevators.map(e => e.wear)) * 100)} %</b></div>
     </div>
     <button class="btn" id="next">NÄSTA DAG ▶</button></div>`);
   $('next').onclick = () => { hideOverlay(); newDay(); };

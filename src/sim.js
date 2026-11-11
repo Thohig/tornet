@@ -1,10 +1,12 @@
 // Simuleringssteget, fast tidssteg och nollställning av dagar.
 import { rand, rng, setSeed } from './rng.js';
-import { K } from './util.js';
+import { K, fl } from './util.js';
 import { END_H, FLOORS, MAXP, SPOTS, TOP, timeScale, LOBBY, CAFE, floorWith, EL, ROOF } from './config.js';
 import { S, hooks, hour, log, newStats } from './state.js';
 import { spawnEmployee, spawnStaff, spawnVisitor, updatePerson, spawnPizza, pev } from './people.js';
-import { dispatchPerson, rebuildPicks, reoptimize, stopFloors } from './dispatch.js';
+import { canTake, costBased, dispatchPerson, rebuildPicks, reoptimize, stopFloors, trafficMode } from './dispatch.js';
+import { serviceTick } from './service.js';
+import { castSchedule } from './cast.js';
 import { makeElevator, updateElevator } from './elevators.js';
 import { buttonsMode, buttonWaitTick, dispatchCalls } from './buttons.js';
 import { incidentTick } from './incidents.js';
@@ -51,6 +53,7 @@ function makeSchedule() {
     { at: 22.2, run: () => spawnStaff('nattekniker') },
     { at: 24.5, run: () => spawnPizza() },
     { at: 26.8, run: () => spawnVisitor(LOBBY, -30, floorWith('server'), 'Akut serverlarm – ringde in från jouren') },
+    ...castSchedule(), // stamgästerna kommer på sina vanliga tider
   ];
 }
 export function spawnTick(dt) {
@@ -67,27 +70,31 @@ export function spawnTick(dt) {
   if (ROOF >= 0 && h >= 9.5 && h < 19 && rng() < 0.02 * dt) spawnVisitor(LOBBY, -30, ROOF, 'Utsikt från takterrassen');
   if (h >= 17 && h < 20.5 && rng() < 0.03 * dt) spawnVisitor(LOBBY, -30, floorWith('aerobic'), 'Kvällspass på Svettis');
 }
-// Nattläge (bara Smart): överflödiga hissar somnar i entrén för att spara energi och vaknar vid kö.
+// Nattläge (Smart, Rusning, Energisnål): överflödiga hissar somnar i entrén för att spara energi och vaknar vid kö.
+// Energisnål låter dessutom lediga hissar sova dygnet runt, där de står.
 function nightModeTick(dt) {
   const h = hour();
-  const night = S.strategy === 'smart' && S.power && h >= 22.5 && h < 29.5;
+  const eco = S.strategy === 'eco';
+  const night = costBased() && S.power && (eco || (h >= 22.5 && h < 29.5));
   const waiting = S.people.filter(p => p.state === 'wait');
   if (!night) {
     for (const e of S.elevators) if (e.sleep) { e.sleep = false; log(`☀️ ${e.name} vaknar ur nattläget`, 'park', e.color); }
     return;
   }
   if (waiting.length > 3 || waiting.some(p => S.t - p.waitStart > 25)) {
-    const z = S.elevators.find(e => e.sleep);
+    // väck en hiss som kan ta den som har väntat längst
+    const first = waiting.reduce((a, b) => (b.waitStart < a.waitStart ? b : a));
+    const z = S.elevators.find(e => e.sleep && canTake(e, first)) || S.elevators.find(e => e.sleep);
     if (z) { z.sleep = false; z.sleepT = 0; log(`⏰ ${z.name} väcks ur nattläget – det bildas kö`, 'park', z.color); }
     return;
   }
   for (const e of S.elevators) {
-    const idle = e.mode === 'normal' && !e.off && e.state === 'idle' && Math.round(e.pos) === e.home
+    const idle = e.mode === 'normal' && !e.off && !e.hold && e.state === 'idle' && (eco ? e.serves.has(Math.round(e.pos)) : Math.round(e.pos) === e.home)
       && !e.passengers.length && !stopFloors(e).length;
     e.sleepT = idle ? (e.sleepT || 0) + dt : 0;
     // en hiss per grupp är alltid vaken
     if (e !== S.elevators.find(x => x.group === e.group) && !e.sleep && e.sleepT > 20 && !waiting.length) {
-      e.sleep = true; log(`🌙 ${e.name} går i nattläge i entrén – sparar energi`, 'park', e.color);
+      e.sleep = true; log(`🌙 ${e.name} går i viloläge på ${fl(Math.round(e.pos))} – sparar energi`, 'park', e.color);
     }
   }
 }
@@ -125,7 +132,17 @@ export function step(dt) {
     e.vipLock = lock;
   }
   for (const e of S.elevators) updateElevator(e, dt);
-  if ((S.strategy === 'smart' || buttonsMode()) && S.power) {
+  serviceTick(dt);
+  if (S.strategy === 'peak') {
+    const m = trafficMode(hour());
+    if (m !== S.peakMode) {
+      S.peakMode = m;
+      log(m === 'upp' ? '🚦 Rusningsläge UPP: lediga hissar kör direkt till entrén och väntar på fler'
+        : m === 'ned' ? '🚦 Rusningsläge NED: lediga hissar väntar högst upp i sina zoner'
+          : m === 'lunch' ? '🚦 Rusningsläge LUNCH: hissarna sprids ut över huset' : '🚦 Rusningsläget av – jämn trafik', 'park');
+    }
+  } else S.peakMode = null;
+  if ((costBased() || buttonsMode()) && S.power) {
     S.reoptT -= dt;
     if (S.reoptT <= 0) { S.reoptT = 1.5; if (buttonsMode()) dispatchCalls(true); else reoptimize(); }
   }
@@ -146,16 +163,20 @@ export function resetDay() {
   setSeed(daySeed());
   S.t = 0; S.clock = 0; S.sched = makeSchedule(); S.acc = 0; S.summaryShown = false; S.nextId = 1; S.sel = null; S.wl = null; S.reoptT = 0;
   S.people = []; S.stats = newStats(); S.calls = {};
-  S.fire = null; S.power = true; S.outage = null;
+  S.fire = null; S.power = true; S.outage = null; S.techCallAt = null; S.peakMode = null;
   S.nextInc = rand(150, 260);
   for (const list of SPOTS) for (const s of list) s.occ = null;
+  // slitaget följer med från gårdagen (dag 1: slumpat – huset är inte nytt)
+  const carry = S.day > 1 && S.elevators.length === EL.length ? S.elevators.map(e => e.wear) : null;
   S.elevators = EL.map((_, i) => makeElevator(i));
+  for (const e of S.elevators) { const w0 = rand(0.1, 0.5); e.wear = carry ? carry[e.id] : w0; }
   lifeReset();
 }
 export function newSim(seed, opts = {}) {
-  S.seed = seed >>> 0; S.day = opts.day || 1; S.log = []; S.fx = [];
+  S.seed = seed >>> 0; S.day = opts.day || 1; S.log = []; S.fx = []; S.elevators = [];
   if (opts.strategy) S.strategy = opts.strategy;
   if (opts.autoInc !== undefined) S.autoInc = opts.autoInc;
   if (opts.mistakes !== undefined) S.mistakes = opts.mistakes;
+  if (opts.maint !== undefined) S.maint = opts.maint;
   resetDay();
 }
