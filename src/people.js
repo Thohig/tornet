@@ -1,7 +1,7 @@
 // Människor: utseende, resor, beslut, trapphus och platser.
 import { pick, rand, randi, rng, shuffle } from './rng.js';
 import { fl } from './util.js';
-import { activityRate, roomUnits, FLOOR_HOURS, FL, NAMES, ROLE_NAMES, floorOpen, OFFICE_FLOORS, SPOTS, STAIR_X, VISIT_WHY, WAIT_X1, WALK, LOBBY, CAFE, floorWith, EL, SKY } from './config.js';
+import { activityRate, roomUnits, FLOOR_HOURS, FL, NAMES, ROLE_NAMES, floorOpen, OFFICE_FLOORS, SPOTS, STAIR_X, VISIT_WHY, WAIT_X1, WALK, LOBBY, CAFE, floorWith, EL, SKY, CAST } from './config.js';
 import { S, clockStr, hour, log, occOf, setOcc } from './state.js';
 import { inFireZone, requestRide, loadKg, personKg, canTake, eta } from './dispatch.js';
 import { techNext } from './service.js';
@@ -25,6 +25,21 @@ export function makeLook() {
   };
 }
 export const pn = p => `${p.name} (${p.id})`;
+// Namnen är unika i huset: en ny person får ett namn som ingen annan i huset bär just nu, och aldrig
+// ett stamgästnamn (inte heller delar som "Pelle" i Pizza-Pelle). Exakt ett rng()-anrop, som förut.
+const CAST_WORDS = new Set(CAST.flatMap(c => c.name.split(/[- ]/)));
+const POOL = NAMES.filter(n => !CAST_WORDS.has(n));
+const SUFFIX = 'BCDEFGHJKLMNOPRST';
+export function freeName() {
+  const used = new Set(S.people.map(p => p.name));
+  const free = POOL.filter(n => !used.has(n));
+  const r = rng();
+  if (free.length) return free[Math.floor(r * free.length)];
+  // alla namn är upptagna: samma namn med en bokstav efter (Lisa B, Lisa C …)
+  const base = POOL[Math.floor(r * POOL.length)];
+  for (const s of SUFFIX) if (!used.has(`${base} ${s}`)) return `${base} ${s}`;
+  return `${base} ${S.nextId}`;
+}
 export function pev(p, text) {
   p.hist.unshift({ time: clockStr(), text });
   if (p.hist.length > 60) p.hist.pop();
@@ -32,7 +47,7 @@ export function pev(p, text) {
 }
 export function makePerson(kind, floor, x) {
   return {
-    id: S.nextId++, name: pick(NAMES), kind, floor, x, tx: x, dest: 0, dir: 0, state: 'toQueue',
+    id: S.nextId++, name: freeName(), kind, floor, x, tx: x, dest: 0, dir: 0, state: 'toQueue',
     waitStart: 0, waited: 0, mood: 0, face: 1, walkPhase: rng() * 6,
     speedMul: rand(0.85, 1.15), depth: rand(-7, 0), look: makeLook(),
     timer: 0, dead: false, car: null, assigned: null, leaving: false, rideStart: 0, spot: null,

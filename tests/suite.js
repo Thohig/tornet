@@ -34,7 +34,7 @@ function sim(seed, opts = {}) {
 function watcher() {
   const w = { passes: 0, maxRide: 0, maxWait: 0, n: 0, overweight: 0, maxKg: 0, bypassBroken: 0, prev: [],
     outOfRange: 0, wrongDoor: 0, badLeg: 0, badFreight: 0, vipMixed: 0, vipSet: [], selfDest: 0, brokenUse: 0, holdBoard: 0, prevN: [],
-    jumps: 0, orphanService: 0, badReserved: 0, idleWait: new Map(), idleWaitMax: 0 };
+    jumps: 0, orphanService: 0, badReserved: 0, dupNames: 0, dupEx: '', idleWait: new Map(), idleWaitMax: 0 };
   w.before = () => S.elevators.map(e => e.pos);
   w.check = before => {
     S.elevators.forEach((e, i) => {
@@ -81,6 +81,9 @@ function watcher() {
       for (const p of S.people) if (p.state === 'wait') w.maxWait = Math.max(w.maxWait, S.t - p.waitStart);
       // ingen ska stå i kön för att åka till våningen hen redan står på
       for (const p of S.people) if (p.state === 'wait' && p.dest === p.floor) w.selfDest++;
+      // namnen är unika i huset
+      const seen = new Set();
+      for (const p of S.people) { if (seen.has(p.name)) { w.dupNames++; w.dupEx = w.dupEx || p.name; } seen.add(p.name); }
       // ingen står länge utan tilldelad hiss medan en ledig hiss som kan ta hen står tom och stilla (kostnadsstyrningen)
       if (costBased()) {
         const idle = S.elevators.filter(e => operational(e) && e.state === 'idle' && !e.passengers.length && !stopFloors(e).length && !isFull(e) && !e.vipLock);
@@ -689,6 +692,7 @@ function newInvariantFails(w, tag) {
   if (w.jumps) f.push(`${tag}: en hiss hoppade ${w.jumps} gånger (mer än VMAX·DT på ett steg)`);
   if (w.orphanService) f.push(`${tag}: hiss på service utan tekniker i ${w.orphanService} steg`);
   if (w.badReserved) f.push(`${tag}: e.reserved stämde inte med de som kliver på (${w.badReserved} steg)`);
+  if (w.dupNames) f.push(`${tag}: två personer i huset hette samma sak (${w.dupNames} gånger, t.ex. ${w.dupEx})`);
   if (w.idleWaitMax > 15) f.push(`${tag}: någon stod ${w.idleWaitMax.toFixed(0)} s utan tilldelad hiss medan en ledig hiss som kunde ta hen stod still`);
   return f;
 }
