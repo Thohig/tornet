@@ -138,7 +138,15 @@ function techTick(dt) {
   // hissar vars tekniker försvann (t.ex. utrymde vid brand) släpps
   for (const e of S.elevators) {
     if (e.techId === null) continue;
-    if (!t || t.job !== e.id) { e.techId = null; if (e.hold && e.mode === 'normal') e.hold = false; }
+    if (!t || t.job !== e.id) {
+      e.techId = null;
+      if (e.hold && e.mode === 'normal') e.hold = false;
+      // påbörjad nattservice utan tekniker: hissen stängs och går i trafik igen (servas en annan natt)
+      else if (e.mode === 'service') {
+        e.hold = false; restoreElevator(e);
+        log(`🔧 ${e.name}: nattservicen avbröts – hissen går i trafik igen`, 'alert', e.color);
+      }
+    }
   }
   if (!t && S.techCallAt === null && !S.fire) {
     if (S.elevators.some(e => e.mode === 'broken')) callTech('Hissjouren larmas');

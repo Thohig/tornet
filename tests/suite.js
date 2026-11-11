@@ -6,11 +6,11 @@ import { floorOpen, FLOOR_HOURS, idx, floorWith, EL, LOBBY, SKY, HOME_FLOORS } f
 import { DT, step, advance, newSim, resetDay } from '../src/sim.js';
 import {
   startFire, setFireMode, startOutage, startGenerator, toggleAutoRescue,
-  toggleOff,
+  toggleOff, endFire,
 } from '../src/incidents.js';
 import { liftsAvailable, spawnBus } from '../src/people.js';
 import { loadKg, allowed, safeFloor } from '../src/dispatch.js';
-import { RATED_KG, FULL_LOAD } from '../src/config.js';
+import { RATED_KG, FULL_LOAD, VMAX } from '../src/config.js';
 import { needsFreight, mayUseFreight, legDest } from '../src/people.js';
 import { fl } from '../src/util.js';
 import { assignCalls, antiNuisance } from '../src/buttons.js';
@@ -242,6 +242,19 @@ test('Brand + brandåterkallning: alla hissar till E och avstängda, alla tar tr
   assert(S.stats.evacuated > 5, `bara ${S.stats.evacuated} utrymda`);
   return `${S.stats.evacuated} utrymda, ${S.stats.smoked} rökexponerade, hissarna i drift igen efter släckning`;
 });
+test('Branden släcks mitt i återkallningen: hissarna bromsar in till en våning, inget hopp', () => {
+  sim(3); runUntil(9);
+  startFire(idx('10')); setFireMode('recall');
+  let e = null, g = 0;
+  while (!e && ++g < 300) { step(DT); e = S.elevators.find(x => x.mode === 'recall' && x.rs === 'move' && Math.abs(x.pos - Math.round(x.pos)) > 0.2) || null; }
+  assert(e, 'ingen hiss stod mellan två våningar under återkallningen');
+  endFire();
+  let maxJump = 0;
+  for (let i = 0; i < 10 / DT; i++) { const p0 = e.pos; step(DT); maxJump = Math.max(maxJump, Math.abs(e.pos - p0)); }
+  assert(maxJump <= VMAX * DT + 1e-6, `${e.name} hoppade ${maxJump.toFixed(2)} våningar på ett steg`);
+  assert(Math.abs(e.pos - Math.round(e.pos)) < 1e-6 && e.state !== 'moving', `${e.name} stannade inte på en våning (${e.pos.toFixed(2)})`);
+  return `${e.name} bromsade in till ${fl(e.pos)} · största steg ${maxJump.toFixed(3)} våningar`;
+});
 test('Brand + spärrad zon: hissarna håller sig under brandzonen', () => {
   sim(8); runUntil(7.83);
   const fire = idx('7'); // zonen börjar på 6 – höghissarna (6–T) når ingen våning under den
@@ -472,6 +485,20 @@ test('Nattservice: de slitna hissarna servas på natten, utan den slits de dag f
   assert(night.wear < none.wear * 0.6 && none.wear > 0.4, `snittslitage: nattservice ${night.wear.toFixed(2)} · bara vid fel ${none.wear.toFixed(2)}`);
   assert(night.faults < none.faults, `fel: nattservice ${night.faults} · bara vid fel ${none.faults}`);
   return `3 dygn · nattservice: ${night.serviced} servade, ${night.faults} fel, slitage ${Math.round(night.wear * 100)} % · bara vid fel: ${none.faults} fel, slitage ${Math.round(none.wear * 100)} %`;
+});
+test('Nattservice som avbryts (teknikern utryms vid brand): hissen fastnar inte på service', () => {
+  sim(1);
+  let e = null;
+  while (!e && hour() < 28) { step(DT); e = S.elevators.find(x => x.mode === 'service' && x.home === SKY) || null; }
+  assert(e, 'ingen hiss med hemvåning i sky lobbyn kom på nattservice');
+  startFire(SKY + 1); // sky lobbyn hamnar i brandzonen – teknikern utryms
+  let g = 0;
+  while (S.fire && ++g < 120 / DT) step(DT);
+  assert(!S.fire, 'branden släcktes aldrig');
+  g = 0;
+  while ((e.mode === 'service' || e.hold) && ++g < 60 / DT) step(DT);
+  assert(e.mode === 'normal' && !e.hold, `${e.name} står kvar i läget ${e.mode} (hold ${e.hold}) utan tekniker`);
+  return `${e.name} i trafik igen ${Math.round(g * DT)} s efter branden`;
 });
 
 // ---------- Trappan ----------

@@ -2,7 +2,7 @@
 import { pick, rand, rng } from './rng.js';
 import { fl } from './util.js';
 import { DOCK, FL, GARAGE_FLOORS, HOME_FLOORS, LOBBY, OFFICE_FLOORS, ROOF, SPOTS, floorOpen, floorWith } from './config.js';
-import { S, hour, log } from './state.js';
+import { S, clockStr, hour, log } from './state.js';
 import { makePerson, openFloors, pev, pn, setTrip } from './people.js';
 import { castResident } from './cast.js';
 
@@ -36,7 +36,7 @@ export function leaveBuilding(p) {
   if (p.kind === 'res') {
     const ev = p.sched.find(e => !e.done && e.go === 'home');
     p.state = 'away'; p.returnAt = ev ? ev.at : 99; p.spot = null;
-    pev(p, `Går ut · ${p.why}${ev ? ` – tillbaka ca ${clock(ev.at)}` : ''}`);
+    pev(p, `Går ut · ${p.why}${ev ? ` – tillbaka ca ${clockStr(ev.at)}` : ''}`);
     log(`${pn(p)} går hemifrån · ${p.why}`, 'person', null, p.id);
     return;
   }
@@ -44,7 +44,6 @@ export function leaveBuilding(p) {
   pev(p, 'Lämnar huset – hejdå!');
   log(`${pn(p)} lämnar huset${p.exitFloor !== LOBBY ? ` (från ${fl(p.exitFloor)})` : ''}`, 'person', null, p.id);
 }
-const clock = h => `${String(Math.floor(h) % 24).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`;
 function autoTick(dt) {
   for (const a of S.autos) {
     if (a.state === 'in') {

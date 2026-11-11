@@ -269,8 +269,12 @@ export function bounceBoarders(e) {
   e.reserved = 0; e.resKg = 0;
 }
 export function restoreElevator(e) {
+  const d = e.dir;
   e.mode = 'normal'; e.rs = null; e.target = null; e.targetKind = null; e.dir = 0;
-  if (e.door > 0) { e.state = 'doors'; e.doorPhase = 'closing'; } else e.state = 'idle';
+  if (e.door > 0) { e.state = 'doors'; e.doorPhase = 'closing'; }
+  // mellan två våningar (avbruten återkallning/nödsänkning): bromsa in till en våning i stället för att hoppa dit
+  else if (Math.abs(e.pos - Math.round(e.pos)) > 1e-6) { e.dir = d || -1; e.state = 'moving'; }
+  else e.state = 'idle';
 }
 
 // ---------- Hisslägen vid incidenter ----------
