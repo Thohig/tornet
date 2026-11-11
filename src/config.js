@@ -227,7 +227,14 @@ export const BALANCE = 0.45, FLOOR_M = 3.5;
 export const MAXP = 240;
 // Ett dygn går från 06:00 till 06:00 (timmarna räknas 6…30). Tiden går fortare på kvällen och natten.
 export const START_H = 6, END_H = 30;
-export function timeScale(h) { return h >= 22 ? 120 : h >= 20 ? 60 : 30; } // spelsekunder per simuleringssekund
+// Ett dygn tar 6 minuter i 1×: dagen 06–20 = 4 min, kvällen 20–22 = 30 s och natten 22–06 = 90 s.
+// Hissarna rör sig i verklig takt – det är klockan som går fort (en hissresa tar en speltimme eller så).
+/** spelsekunder per simuleringssekund */
+export function timeScale(h) { return h >= 22 ? 320 : h >= 20 ? 240 : 210; }
+// Det folk gör i rummen (jobba, fika, sova) räknas i speltid, som när ett dygn tog en halvtimme:
+// rumstimrarna (p.timer i läget office) tickar activityRate(h) gånger fortare än simuleringen.
+const ROOM_SCALE = h => (h >= 22 ? 120 : h >= 20 ? 60 : 30);
+export const activityRate = h => timeScale(h) / ROOM_SCALE(h);
 export const ROLE_NAMES = { 'väktare': 'Väktare', 'städare': 'Städare', 'vaktmästare': 'Vaktmästare', 'nattdj': 'Natt-DJ på Kanal 97', 'nattekniker': 'Nattekniker på Modemkungen', 'bud': 'Bud', 'hisstekniker': 'Hisstekniker' };
 
 // ---------- Stamgästerna ----------

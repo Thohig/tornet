@@ -36,9 +36,11 @@ export function plannedRoute(e) {
 }
 
 // ---------- Simuleringssteg ----------
-// Trafikprofil över dygnet (personer per simuleringssekund). Avvägd för 12 våningar och 4 hissar –
-// testerna i tests.html larmar om det blir överbelastat.
-function arrivalRate(h) {
+// Trafikprofil över dygnet (personer per simuleringssekund). ARRIVAL_MUL höjer inflödet så att huset
+// fylls under den korta dagen (ett dygn = 6 minuter) – testerna larmar om hissarna blir överbelastade.
+const ARRIVAL_MUL = 1.6;
+function arrivalRate(h) { return ARRIVAL_MUL * baseRate(h); }
+function baseRate(h) {
   if (h < 6.5) return 0.02; if (h < 7) return 0.08; if (h < 7.3) return 0.21;
   if (h < 9.3) return 0.56; if (h < 10.2) return 0.18; if (h < 15) return 0.03;
   return 0;
@@ -65,6 +67,7 @@ export function spawnTick(dt) {
   const lunch = h >= 11.2 && h < 12.8;
   let v = h >= 9 && h < 17 ? 0.045 : 0;
   if (lunch) v += 0.07;
+  v *= ARRIVAL_MUL;
   if (rng() < v * dt) spawnVisitor(LOBBY, -30, lunch && rng() < 0.7 ? CAFE : null);
   // turister åker panoramahissen upp till takterrassen
   if (ROOF >= 0 && h >= 9.5 && h < 19 && rng() < 0.02 * dt) spawnVisitor(LOBBY, -30, ROOF, 'Utsikt från takterrassen');
@@ -81,7 +84,8 @@ function nightModeTick(dt) {
     for (const e of S.elevators) if (e.sleep) { e.sleep = false; log(`☀️ ${e.name} vaknar ur nattläget`, 'park', e.color); }
     return;
   }
-  if (waiting.length > 3 || waiting.some(p => S.t - p.waitStart > 25)) {
+  // (natten går fort: 8 s väntan är nästan en speltimme)
+  if (waiting.length > 3 || waiting.some(p => S.t - p.waitStart > 8)) {
     // väck en hiss som kan ta den som har väntat längst
     const first = waiting.reduce((a, b) => (b.waitStart < a.waitStart ? b : a));
     const z = S.elevators.find(e => e.sleep && canTake(e, first)) || S.elevators.find(e => e.sleep);
@@ -93,7 +97,7 @@ function nightModeTick(dt) {
       && !e.passengers.length && !stopFloors(e).length;
     e.sleepT = idle ? (e.sleepT || 0) + dt : 0;
     // en hiss per grupp är alltid vaken
-    if (e !== S.elevators.find(x => x.group === e.group) && !e.sleep && e.sleepT > 20 && !waiting.length) {
+    if (e !== S.elevators.find(x => x.group === e.group) && !e.sleep && e.sleepT > 8 && !waiting.some(p => canTake(e, p))) {
       e.sleep = true; log(`🌙 ${e.name} går i viloläge på ${fl(Math.round(e.pos))} – sparar energi`, 'park', e.color);
     }
   }
@@ -164,7 +168,7 @@ export function resetDay() {
   S.t = 0; S.clock = 0; S.sched = makeSchedule(); S.acc = 0; S.summaryShown = false; S.nextId = 1; S.sel = null; S.wl = null; S.reoptT = 0;
   S.people = []; S.stats = newStats(); S.calls = {};
   S.fire = null; S.power = true; S.outage = null; S.techCallAt = null; S.peakMode = null;
-  S.nextInc = rand(150, 260);
+  S.nextInc = rand(60, 120);
   for (const list of SPOTS) for (const s of list) s.occ = null;
   // slitaget följer med från gårdagen (dag 1: slumpat – huset är inte nytt)
   const carry = S.day > 1 && S.elevators.length === EL.length ? S.elevators.map(e => e.wear) : null;

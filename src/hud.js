@@ -1,12 +1,12 @@
 // HUD: topplist, hisspopup, flytande incidentruta och lådan med spårning, register, logg och resultat.
 import { ARR, K, esc, fl } from './util.js';
-import { CAP, CAR_H, EL, FIRE_HINT, FL, STRAT_HINT, TOP, ROLE_NAMES, timeScale, FULL_LOAD, floorY, shaftX } from './config.js';
-import { S, clockStr, hour, log, phaseName } from './state.js';
+import { CAP, CAR_H, EL, FIRE_HINT, FL, STRAT_HINT, TOP, ROLE_NAMES, activityRate, FULL_LOAD, floorY, shaftX } from './config.js';
+import { S, hour, log, phaseName } from './state.js';
 import { liftsAvailable } from './people.js';
 import { costBased, allowed, costLine, eta, isFull, pickTotal, pickersAt, loadKg, cabinKg, slotsFull } from './dispatch.js';
 import { canRescue } from './incidents.js';
 import { plannedRoute, resetDay } from './sim.js';
-import { VIEW, cv, pctx, resize, stage } from './view.js';
+import { VIEW, cv, nightness, pctx, resize, stage } from './view.js';
 import { personSprite } from './pixpeople.js';
 import { PAL } from './pixpal.js';
 import { stateInfo } from './describe.js';
@@ -144,8 +144,11 @@ export function carActs(e) {
 }
 export function updateHud() {
   const h = hour();
-  $('clock').textContent = clockStr(h);
-  $('phase').textContent = phaseName(h) + (timeScale(h) > 30 ? ' ⏩' : '');
+  // ingen klocka – bara sol på dagen och måne på natten (samma gräns som himlen i bilden)
+  const night = nightness(h) > 0.5;
+  setText('clock', night ? '🌙' : '☀️');
+  $('clock').title = night ? 'Natt' : 'Dag';
+  $('phase').textContent = phaseName(h);
   $('day').textContent = `Dag ${S.day} · ${S.people.length} pers · frö ${S.seed}`;
   updateCarPop();
   if (S.logDirty && isOpen('log')) {
@@ -312,8 +315,8 @@ export function updateTracker() {
     case 'exiting': now = `Kliver av på ${fl(p.floor)}`; logic = p.spot ? `På väg: ${p.spot.desc.toLowerCase()}` : 'På väg ut genom entrén'; break;
     case 'stairs': now = `Går mot trapphuset på ${fl(p.floor)}`; logic = `Ska gå ${Math.abs(p.dest - p.floor)} våningar till ${fl(p.dest)}`; break;
     case 'instairs': now = `I trapphuset på väg till ${fl(p.dest)}`; logic = `Framme om ~${Math.max(0, Math.ceil(p.timer))}s`; break;
-    case 'office': now = p.sleeping && p.spot.bed ? `Sover i sängen (${fl(p.floor)}) 💤` : `${p.spot.desc} (${FL[p.floor].short})`; logic = `Nästa beslut om ~${Math.max(0, Math.round(p.timer))}s`; break;
-    case 'away': now = 'Är inte i huset just nu'; logic = `Kommer tillbaka ca ${clockStr(p.returnAt)}`; break;
+    case 'office': now = p.sleeping && p.spot.bed ? `Sover i sängen (${fl(p.floor)}) 💤` : `${p.spot.desc} (${FL[p.floor].short})`; logic = `Nästa beslut om ~${Math.max(0, Math.round(p.timer / activityRate(hour())))}s`; break;
+    case 'away': now = 'Är inte i huset just nu'; logic = `Kommer tillbaka: ${phaseName(p.returnAt).toLowerCase()}`; break;
     case 'incar': now = `Kör in i garaget på ${fl(p.floor)}`; logic = 'Parkerar och går sedan till hissarna'; break;
   }
   $('tkNow').textContent = now;
@@ -380,7 +383,7 @@ export function showIntro() {
       <li>Det finns <b>inga knappar</b> på våningarna. Varje person har ett eget mål och får en egen hiss. Tankebubblan visar målet och hissen.</li>
       <li>Hissarna är <b>zonindelade</b>: L1–L2 går i låg zon (P2–5) och H1–H2 i hög zon (6–T) – <b>staplade i samma schakt</b>. Expresshissarna X1–X2 kör E ⇄ 6 utan stopp. Den som ska mellan zonerna <b>byter hiss</b> (↹) i entrén och i sky lobbyn. Varuhissen V tar städvagnar och paket, och panoramahissen P åker utanpå fasaden.</li>
       <li>Huset <b>lever</b>: bilar kör in i garaget, leveransbilen lastar av vid kajen, de boende sover, jobbar och går på taket, en fönsterputsare jobbar sig nedåt och ibland landar en VIP-helikopter på taket.</li>
-      <li>Ett <b>dygn</b> går från 06:00 till 06:00. Trafiken följer klockan – rusning på morgonen, lunch, hemgång – och på natten är det bara väktare, städare och nattugglor. Vissa våningar stänger (caféet, banken …). Natten går fortare ⏩.</li>
+      <li>Ett <b>dygn</b> tar ungefär 6 minuter – ☀️ dag och 🌙 natt syns uppe till vänster. Trafiken följer dygnet – rusning på morgonen, lunch, hemgång – och på natten är det bara väktare, städare och nattugglor. Vissa våningar stänger (caféet, banken …).</li>
       <li><b>Incidenter</b> händer: brand, strömavbrott och hissfel – då kommer en hisstekniker och lagar. Slitna hissar går oftare sönder, och utan nattservice följer slitaget med till nästa dygn. Då dyker en ruta upp med dina val. Under <b>⋯</b> kan du utlösa dem själv.</li>
       <li>Bilden visar <b>hallen framför hissarna</b> – rummen ligger bakom korridoren, och folk syns när de kommer ut för att vänta på hissen. Siffran vid korridoren är hur många som är inne.</li>
       <li><b>Klicka på en person</b> för att spåra hen – en lapp följer personen och 👤 visar allt, även när hen är inne i rummen. <b>Klicka på en korridor</b> för att spåra någon som är därinne. <b>Klicka på en hiss</b> för dess plan, last och knappen 📹 Följ.</li>

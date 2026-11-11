@@ -14,7 +14,7 @@ Node (Homebrew) behövs bara för tester/typkontroll. I ett skal utan profil må
 
 ```bash
 eval "$(/opt/homebrew/bin/brew shellenv)"
-npm test            # hela sviten i Node (~1 min)
+npm test            # hela sviten i Node (~15 s)
 npm run typecheck   # tsc på JSDoc-typer (jsconfig.json)
 npm run check       # båda
 npm run golden      # skriv om tests/golden.json efter AVSIKTLIGA beteendeändringar
@@ -53,6 +53,7 @@ HUD:en är medvetet liten: allt om en hiss visas på hissen eller i popupen när
 
 - **Determinism.** Simuleringen får bara använda `rng.js`-slumpen (`rng/rand/pick…`), aldrig `Math.random`/`vrand` eller väggklocka. Grafik får bara använda `vrand/vpick` och får aldrig ändra simuleringstillstånd. Samma frö (`?seed=`) ⇒ identiskt dygn; testet för bildfrekvens och facit vaktar detta.
 - **Fast tidssteg:** `DT = 1/30`. Logik som beror på tid använder `dt`/`S.t`, aldrig bildrutor.
+- **Ett dygn = 6 minuter** (`timeScale` i config: dag 4 min, kväll 30 s, natt 90 s). Hissar och gång sker i verklig tid, så en resa genom huset tar ungefär en speltimme – planera efter det (öppettider, hemgång på natten). Vistelser i rummen (`p.timer` i läget `office`) räknas i speltid via `activityRate(h)`. Gränssnittet visar ingen klocka, bara ☀️/🌙.
 - **Simuleringsmoduler importerar aldrig** `render/view/hud/input/scenery`.
 - **Huset är data.** Lägg till/ändra våningar och hissar i `BUILDING`; använd härledda värden (`LOBBY`, `SKY`, `ROOF`, `DOCK`, `HOME_FLOORS`, `idx('7')`, `floorWith('bank')`) – hårdkoda aldrig våningsindex. Index ≠ etikett: index 0 är `P2`, `fl(i)` ger etiketten.
 - En hiss stannar bara på `e.serves`, stannar aldrig utanför `minF..maxF`, kör aldrig över `e.ratedKg`, och åker aldrig förbi en passagerares mål.

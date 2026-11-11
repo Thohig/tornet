@@ -8,7 +8,7 @@ import { pick, rand, rng } from './rng.js';
 import { fl } from './util.js';
 import { BALANCE, DOOR_T, FLOOR_M, CAR_H, floorY, shaftCX, timeScale } from './config.js';
 import { S, hour, log } from './state.js';
-import { needsFreight, pev, pn, spawnStaff } from './people.js';
+import { needsFreight, pev, pn, rerouteStranded, spawnStaff } from './people.js';
 import { rebuildPicks, travel, cabinKg } from './dispatch.js';
 import { bounceBoarders, exitAll, restoreElevator } from './elevators.js';
 
@@ -43,7 +43,8 @@ function energyTick(e, dt) {
 }
 
 // ---------- Slitage och fel ----------
-export const WEAR_STOP = 0.0004, WEAR_FLOOR = 0.0001, FAULT_K = 0.006, SERVICE_AT = 0.2;
+// (kalibrerat för ett dygn på 6 minuter: ungefär 350 stopp per dygn i hela huset)
+export const WEAR_STOP = 0.0022, WEAR_FLOOR = 0.00055, FAULT_K = 0.034, SERVICE_AT = 0.2;
 export const FAULTS = ['dörrfel – dörrarna går inte att stänga', 'motorn överhettad', 'styrkortet hänger sig', 'nivåfel – korgen stannar ojämnt', 'bromsen kärvar', 'vajerlarm'];
 function wearTick(e) {
   const stops = e.trips - e.wearTrips, dist = e.distance - e.wearDist;
@@ -66,7 +67,7 @@ export function breakDown(e, what) {
   e.breakNext = false;
   e.mode = 'broken'; e.hold = false; e.parkTarget = null; e.dir = 0; e.v = 0;
   e.floor = Math.round(e.pos);
-  e.fault = { what, t0: S.t, need: rand(25, 40) };
+  e.fault = { what, t0: S.t, need: rand(12, 20) };
   e.state = 'doors'; e.doorPhase = 'open';
   bounceBoarders(e);
   const n = e.passengers.length;
@@ -76,6 +77,7 @@ export function breakDown(e, what) {
   for (const c of Object.values(S.calls)) if (c.car === e.id) c.car = null;
   S.stats.faults++;
   log(`🔧 ${e.name} gick sönder på ${fl(e.floor)}: ${what}${n ? ` – ${n} passagerare kliver ut` : ''}`, 'alert', e.color);
+  rerouteStranded();
   S.fx.push({ x: shaftCX(e.id), y: floorY(e.floor) - CAR_H - 30, text: 'KLONK!', color: '#ff9f1c', life: 1.6 });
   rebuildPicks();
 }
@@ -92,7 +94,7 @@ export function triggerFault() {
 
 // ---------- Hisstekniker ----------
 export const tech = () => S.people.find(p => p.role === 'hisstekniker' && !p.dead) || null;
-export const nightWindow = (h = hour()) => h >= 22.5 && h < 28.5;
+export const nightWindow = (h = hour()) => h >= 21 && h < 27;
 /** våningen teknikern ska till för hissen e */
 export const jobFloor = e => (e.mode === 'broken' ? e.floor : e.home);
 /** Nästa jobb: trasiga hissar först, sedan (på natten, med nattservice) den mest slitna. */
@@ -123,11 +125,12 @@ export function techNext(p) {
     if (twin) { twin.sleep = false; twin.sleepT = 0; log(`☀️ ${twin.name} vaknar – ${e.name} ska på service`, 'park', twin.color); }
     p.task = `Nattservice på hiss ${e.name} (slitage ${Math.round(e.wear * 100)} %)`;
     log(`🔧 ${e.name} tas ur trafik för nattservice – kör hem till ${fl(e.home)}`, 'alert', e.color);
+    rerouteStranded();
   }
   return [jobFloor(e), p.task, false]; // jobbet kan ligga i entrén – det är ingen hemgång
 }
 function callTech(why) {
-  S.techCallAt = S.t + rand(20, 35);
+  S.techCallAt = S.t + rand(8, 15);
   log(`📞 ${why} – hissteknikern är på väg`, 'alert');
 }
 function techTick(dt) {
@@ -149,7 +152,7 @@ function techTick(dt) {
     // nattservice: börjar när hissen står tom och stilla hemma
     if (e.homeT < 0.5 || e.passengers.length || e.reserved) return;
     e.mode = 'service'; e.sleep = false; e.floor = e.home; e.state = 'doors'; e.doorPhase = 'open'; e.dir = 0;
-    e.serviceNeed = rand(20, 30);
+    e.serviceNeed = rand(0.3, 0.5) * 3600 / timeScale(hour()); // en knapp halvtimme i speltid
     pev(t, `Öppnar hiss ${e.name} och börjar serva`);
     log(`🔧 ${pn(t)} servar ${e.name} på ${fl(e.home)}`, 'alert', e.color, t.id);
     return;

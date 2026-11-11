@@ -22,7 +22,7 @@ export function incidentStarted(floor) {
 // --- Brand ---
 export function startFire(f = pick(OFFICE_FLOORS.slice(1))) {
   if (S.fire) return;
-  S.fire = { floor: f, t0: S.t, mode: 'none', brigadeAt: S.t + rand(40, 55), brigade: false, outAt: null, smoked: 0, evac: 0 };
+  S.fire = { floor: f, t0: S.t, mode: 'none', brigadeAt: S.t + rand(22, 30), brigade: false, outAt: null, smoked: 0, evac: 0 };
   log(`🔥 BRAND på våning ${fl(f)}! Larmet går – våning ${fl(f - 1)} och uppåt utryms`, 'alert');
   for (const p of S.people) {
     if (!inFireZone(p.floor)) continue;
@@ -76,7 +76,7 @@ export function setFireMode(m) {
 export function fireTick(dt) {
   const F = S.fire;
   if (!F.brigade && S.t >= F.brigadeAt) {
-    F.brigade = true; F.outAt = S.t + 28;
+    F.brigade = true; F.outAt = S.t + 16;
     log('🚒 Brandkåren är på plats och börjar släcka', 'alert');
   }
   if (F.brigade && S.t >= F.outAt) { endFire(); return; }
@@ -109,7 +109,7 @@ export function endFire() {
 export function startOutage() {
   if (!S.power) return;
   S.power = false;
-  S.outage = { t0: S.t, backAt: S.t + rand(80, 110), genAt: null, gen: false, auto: false, busy: null };
+  S.outage = { t0: S.t, backAt: S.t + rand(40, 55), genAt: null, gen: false, auto: false, busy: null };
   for (const e of S.elevators) { e.v = 0; if (e.state === 'moving') e.stuck = true; }
   for (const p of S.people) if (p.state === 'wait') p.assigned = null;
   rebuildPicks();
@@ -160,7 +160,7 @@ export function incidentTick(dt) {
   if (!S.autoInc) return;
   const h = hour();
   if (S.t < S.nextInc || h < 8 || h > 18) return;
-  S.nextInc = S.t + rand(260, 460);
+  S.nextInc = S.t + rand(130, 220); // ungefär 1–2 incidenter per dygn
   const opts = [];
   if (!S.fire) opts.push('fire');
   if (S.power) opts.push('power');

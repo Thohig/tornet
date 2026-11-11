@@ -36,7 +36,7 @@ body{background:var(--desk);font-family:var(--ui);font-size:12px;color:var(--ink
 }
 .logo span{color:var(--vga-y)}
 .tb-clock{display:flex;align-items:center;gap:6px}
-.clock{font-family:'VT323',monospace;font-size:26px;line-height:1;background:var(--dos);color:var(--vga-g);padding:1px 6px;box-shadow:var(--sunken)}
+.clock{font-size:20px;line-height:26px;width:34px;height:26px;text-align:center;background:var(--dos);box-shadow:var(--sunken)}
 .tb-sub{line-height:1.15}
 .phase{font-weight:700;font-size:12px;white-space:nowrap}
 .day{font-size:11px;white-space:nowrap;color:#404040}

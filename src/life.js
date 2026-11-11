@@ -102,7 +102,7 @@ function routine(type) {
       { at: R(16, 16.8), go: 'roof', why: 'Leker på takterrassen' }, { at: R(17.5, 18), go: 'home', why: 'Middag!' }] };
     case 'student': return { wake: R(8.3, 9), sleep: R(25.5, 27.5), ev: [
       { at: R(9.3, 10.5), go: 'out', why: 'Till föreläsningen' }, { at: R(15.5, 17), go: 'home', why: 'Hem från skolan' },
-      { at: R(21, 22), go: 'out', why: 'Ut och festar' }, { at: R(25, 27), go: 'home', why: 'Hem från festen (tyst i hissen …)' }] };
+      { at: R(21, 22), go: 'out', why: 'Ut och festar' }, { at: R(24, 25.5), go: 'home', why: 'Hem från festen (tyst i hissen …)' }] };
     case 'pensioner': return { wake: R(6.5, 7.2), sleep: R(21, 22), ev: [
       { at: R(10, 10.8), go: 'out', why: 'Handlar på torget' }, { at: R(11.5, 12.2), go: 'home', why: 'Hem med matkassarna' },
       { at: R(14, 14.5), go: 'roof', why: 'Vattnar tomaterna på taket' }, { at: R(15, 15.6), go: 'home', why: 'Eftermiddagskaffe hemma' }] };
@@ -110,7 +110,7 @@ function routine(type) {
       { at: R(6.5, 7), go: 'out', why: 'Tidigt frukostmöte på stan' }, { at: R(20, 21), go: 'home', why: 'Hem efter en lång dag' }] };
     case 'artist': return { wake: R(10.5, 11.5), sleep: R(26.5, 28), ev: [
       { at: R(12.5, 13), go: 'roof', why: 'Skissar utsikten från taket' }, { at: R(14, 14.5), go: 'home', why: 'Tillbaka till ateljén' },
-      { at: R(21.5, 22.5), go: 'out', why: 'Vernissage på stan' }, { at: R(25.5, 27), go: 'home', why: 'Hem från vernissagen' }] };
+      { at: R(21.5, 22.5), go: 'out', why: 'Vernissage på stan' }, { at: R(24.5, 26), go: 'home', why: 'Hem från vernissagen' }] };
   }
   return { wake: 7, sleep: 23, ev: [] };
 }
