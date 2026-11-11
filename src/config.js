@@ -127,16 +127,19 @@ export const BUILDING = {
     { label: '14', theme: 'apartments', variant: 2, tags: ['home'] },
     { label: 'T', theme: 'roof', hours: [9, 20], open: true, tags: ['roof', 'helipad'] },
   ],
-  // Zonindelning som i riktiga skyskrapor: låg zon P2–6, hög zon 6–T, expresshissar E ⇄ 6 (sky lobbyn),
-  // en varuhiss till alla våningar (för vagnar och leveranser) och en panoramahiss i glas på fasaden.
+  // Zonindelning som i riktiga skyskrapor: låg zon P2–5 och hög zon 6–T är STAPLADE i samma schakt
+  // (col = vilken schaktkolumn hissen går i), expresshissar E ⇄ 6 (sky lobbyn), en varuhiss till alla
+  // våningar (för vagnar och leveranser) och en panoramahiss i glas på fasaden.
+  // Kolumnerna ligger så att tornet blir smalare ovanför sky lobbyn: expresshissarna ytterst, och
+  // ovanpå dem en takterrass. Den som ska från låga till höga zonen åker via entrén och expressen.
   elevators: [
-    { name: 'L1', color: '#c0392b', group: 'låg', start: 'E', serves: ['P2', 'P1', 'E', '1', '2', '3', '4', '5', '6'], park: { day: 'E', lunch: '6', evening: '4' } },
-    { name: 'L2', color: '#d35400', group: 'låg', start: 'P1', serves: ['P2', 'P1', 'E', '1', '2', '3', '4', '5', '6'], park: { day: '3', lunch: 'E', evening: 'E' } },
-    { name: 'X1', color: '#d4a017', group: 'express', start: 'E', serves: ['E', '6'], express: true },
-    { name: 'X2', color: '#b8860b', group: 'express', start: '6', serves: ['E', '6'], express: true },
-    { name: 'H1', color: '#008080', group: 'hög', start: '6', serves: ['6', '7', '8', '9', '10', '11', '12', '13', '14', 'T'], park: { day: '6', lunch: '6', evening: '11' } },
-    { name: 'H2', color: '#2a5db0', group: 'hög', start: '10', serves: ['6', '7', '8', '9', '10', '11', '12', '13', '14', 'T'], park: { day: '10', lunch: '6', evening: '13' } },
-    { name: 'V', color: '#808080', group: 'varu', start: 'P1', home: 'P1', freight: true, ratedKg: 1600 },
+    { name: 'L1', color: '#c0392b', group: 'låg', col: 0, start: 'E', serves: ['P2', 'P1', 'E', '1', '2', '3', '4', '5'], park: { day: 'E', lunch: '5', evening: '4' } },
+    { name: 'L2', color: '#d35400', group: 'låg', col: 1, start: 'P1', serves: ['P2', 'P1', 'E', '1', '2', '3', '4', '5'], park: { day: '3', lunch: 'E', evening: 'E' } },
+    { name: 'X1', color: '#d4a017', group: 'express', col: 3, start: 'E', serves: ['E', '6'], express: true },
+    { name: 'X2', color: '#b8860b', group: 'express', col: 4, start: '6', serves: ['E', '6'], express: true },
+    { name: 'H1', color: '#008080', group: 'hög', col: 0, start: '6', serves: ['6', '7', '8', '9', '10', '11', '12', '13', '14', 'T'], park: { day: '6', lunch: '6', evening: '11' } },
+    { name: 'H2', color: '#2a5db0', group: 'hög', col: 1, start: '10', serves: ['6', '7', '8', '9', '10', '11', '12', '13', '14', 'T'], park: { day: '10', lunch: '6', evening: '13' } },
+    { name: 'V', color: '#808080', group: 'varu', col: 2, start: 'P1', home: 'P1', freight: true, ratedKg: 1600 },
     { name: 'P', color: '#93379e', group: 'panorama', start: 'E', serves: ['E', '6', 'T'], facade: true },
   ],
 };
@@ -184,9 +187,22 @@ export const ROOF_Y = 140, GROUND_Y = ROOF_Y + (FLOORS - LOBBY) * FLOOR_H; // GR
 export const SHAFT_W = 104, SHAFT_GAP = 12;
 const INSIDE = EL.filter(e => !e.facade);
 const HAS_FACADE = EL.some(e => e.facade);
+// schaktkolumnen för varje hiss: col i BUILDING (hissar i olika zoner kan dela kolumn), annars i tur och ordning
+const COL = EL.map(e => (e.facade ? -1 : e.col ?? INSIDE.indexOf(e)));
+for (const a of INSIDE) for (const b of INSIDE) {
+  if (a !== b && COL[a.id] === COL[b.id] && a.minF <= b.maxF && b.minF <= a.maxF) throw new Error(`hissarna ${a.name} och ${b.name} krockar i samma schakt`);
+}
+export const NCOL = Math.max(...COL) + 1;
 // rummen är alltid lika breda (x 60–619); huset växer åt höger med antalet schakt
-export const SHAFT_X0 = 624;
-export const BX0 = 60, BX1 = SHAFT_X0 + 6 + INSIDE.length * SHAFT_W + (INSIDE.length - 1) * SHAFT_GAP;
+export const SHAFT_X0 = 624, BX0 = 60;
+const colX = c => SHAFT_X0 + c * (SHAFT_W + SHAFT_GAP);
+export const BX1 = colX(NCOL) + 6 - SHAFT_GAP;
+/** tornets högerkant på våning f: huset är bara så brett som schakten på den våningen behöver (indrag uppåt) */
+export const TOWER_X1 = Array.from({ length: FLOORS }, (_, f) => {
+  const cols = INSIDE.filter(e => f >= e.minF && f <= e.maxF).map(e => COL[e.id]);
+  // under sky lobbyn och i källaren behåller huset full bredd
+  return f <= SKY ? BX1 : colX(Math.max(0, ...cols) + 1) + 6 - SHAFT_GAP;
+});
 export const W = BX1 + (HAS_FACADE ? SHAFT_W + 52 : 60), H = GROUND_Y + LOBBY * FLOOR_H + 60;
 export const INNER_X1 = SHAFT_X0 - 5;
 export const WAIT_X1 = SHAFT_X0 - 34;
@@ -197,9 +213,8 @@ export const LAND_X0 = 370, DOOR_X = LAND_X0 + 32;
 export const CAR_W = SHAFT_W - 8, CAR_H = 84;
 export const floorY = f => GROUND_Y - (f - LOBBY) * FLOOR_H; // golvlinjen för våning f (f får vara ett decimaltal)
 export const surf = f => floorY(f) - 4;
-const COL = EL.map(e => INSIDE.indexOf(e));
 /** vänsterkant för hiss i:s schakt (panoramahissen sitter utanpå fasaden) */
-export const shaftX = i => (EL[i].facade ? BX1 + 22 : SHAFT_X0 + COL[i] * (SHAFT_W + SHAFT_GAP));
+export const shaftX = i => (EL[i].facade ? BX1 + 22 : colX(COL[i]));
 export const shaftCX = i => shaftX(i) + SHAFT_W / 2;
 
 // ---------- Regler ----------

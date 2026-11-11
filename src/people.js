@@ -56,10 +56,37 @@ export const needsFreight = p => !!(p.cargo && p.cargo.kg >= 22);
 export const mayUseFreight = p => needsFreight(p) || p.kind === 'staff';
 /** får personen åka den här hisstypen? */
 export const elevatorAllows = (d, p) => (d.freight ? mayUseFreight(p) : !needsFreight(p));
-/** Nästa delmål: direkt om någon hiss går hela vägen, annars till sky lobbyn för att byta hiss. */
+/**
+ * Nästa delmål på vägen mot goal: direkt om någon hiss går hela vägen, annars dit där man byter hiss
+ * (t.ex. låg zon → entrén → expressen → sky lobbyn → hög zon). Söker resvägen med minst antal byten
+ * och, bland dem, kortast sträcka. Bara hissar som personen får åka räknas.
+ */
 export function legDest(from, goal, p) {
   if (from === goal) return goal;
-  if (EL.some(d => elevatorAllows(d, p) && d.serves.includes(from) && d.serves.includes(goal))) return goal;
+  const lifts = EL.filter(d => elevatorAllows(d, p));
+  if (lifts.some(d => d.serves.includes(from) && d.serves.includes(goal))) return goal;
+  // bredden först: varje steg är en hissresa; best[f] = [antal resor, sträcka, första delmålet]
+  /** @type {Map<number, [number, number, number]>} */
+  const best = new Map([[from, [0, 0, -1]]]);
+  let frontier = [from];
+  for (let legs = 1; legs <= 4 && frontier.length; legs++) {
+    const next = [];
+    for (const f of frontier) {
+      const [, dist, first] = /** @type {[number, number, number]} */ (best.get(f));
+      for (const d of lifts) {
+        if (!d.serves.includes(f)) continue;
+        for (const g of d.serves) {
+          if (g === f) continue;
+          const cand = /** @type {[number, number, number]} */ ([legs, dist + Math.abs(g - f), first < 0 ? g : first]);
+          const old = best.get(g);
+          if (!old) { best.set(g, cand); next.push(g); } else if (old[0] === legs && cand[1] < old[1]) best.set(g, cand);
+        }
+      }
+    }
+    if (best.has(goal)) return best.get(goal)[2];
+    frontier = next;
+  }
+  // ingen hissväg alls (bör inte hända): gå till sky lobbyn som förut
   return from !== SKY ? SKY : goal;
 }
 /** Påbörja en resa mot slutmålet goal (kan bli flera delresor) */
@@ -247,7 +274,8 @@ export function decideNext(p) {
   if (!p.lunched && h >= p.lunchAt && h < 13.6 && p.floor !== CAFE && floorOpen(CAFE, h)) { p.lunched = true; return [CAFE, `Lunchsugen – till ${FL[CAFE].name}`]; }
   if (p.floor !== p.home) return [p.home, `Tillbaka till jobbet på ${FL[p.home].short}`];
   if (rng() < 0.14 && h < 16.5) {
-    const g = pick(OFFICE_FLOORS.filter(f => f !== p.home && floorOpen(f, h)).concat([null]));
+    // bara dit som har öppet en halvtimme till – resan över zonerna (via entrén och sky lobbyn) tar en stund
+    const g = pick(OFFICE_FLOORS.filter(f => f !== p.home && floorOpen(f, h) && floorOpen(f, h + 0.5)).concat([null]));
     if (g !== null && g !== undefined) return [g, `Möte på ${FL[g].short}`];
   }
   return null;

@@ -11,7 +11,8 @@ import {
 import { liftsAvailable, spawnBus } from '../src/people.js';
 import { loadKg, allowed, safeFloor } from '../src/dispatch.js';
 import { RATED_KG, FULL_LOAD } from '../src/config.js';
-import { needsFreight, mayUseFreight } from '../src/people.js';
+import { needsFreight, mayUseFreight, legDest } from '../src/people.js';
+import { fl } from '../src/util.js';
 
 // ---------- Ramverk ----------
 export const tests = [];
@@ -203,7 +204,8 @@ test('Överlast: turister med resväskor – vågen larmar och den sist påstign
   sim(51); runUntil(9.6);
   const w = watcher();
   const before = S.stats.overloads;
-  for (let i = 0; i < 4; i++) { spawnBus(); run(6, w); }
+  // stora bussar: med expresshissarna klarar huset en vanlig busslast (14) utan överlast
+  for (let i = 0; i < 4; i++) { spawnBus(24); run(6, w); }
   run(150, w);
   const overloads = S.stats.overloads - before;
   assert(overloads > 0, 'ingen överlast trots fyra busslaster med resväskor');
@@ -320,7 +322,17 @@ test('Sky lobbyn: långa resor byter hiss på 6:an, expressen stannar aldrig på
   const x = S.elevators.filter(e => e.express);
   assert(x.every(e => e.trips > 10), `expresshissarna gick nästan inte: ${x.map(e => e.trips).join(', ')}`);
   const low = S.elevators.filter(e => e.group === 'låg');
-  return `${tr} byten på 6:an · expressen ${x.map(e => e.trips).join('+')} stopp · låga zonen ${low.map(e => e.trips).join('+')} stopp`;
+  return `${tr} hissbyten · expressen ${x.map(e => e.trips).join('+')} stopp · låga zonen ${low.map(e => e.trips).join('+')} stopp`;
+});
+test('Staplade zoner: låg → hög zon går via entrén, expressen och sky lobbyn', () => {
+  const p = { cargo: null, kind: 'emp' };
+  const route = (from, goal) => { const r = [from]; let f = from; for (let i = 0; i < 6 && f !== goal; i++) { f = legDest(f, goal, p); r.push(f); } return r.map(fl).join('→'); };
+  const cases = [['3', '10', '3→E→6→10'], ['P2', 'T', 'P2→E→T'], ['12', '1', '12→6→E→1'], ['5', '6', '5→E→6'], ['E', '9', 'E→6→9']];
+  for (const [a, b, want] of cases) { const got = route(idx(a), idx(b)); assert(got === want, `${a}→${b}: ${got}, väntade ${want}`); }
+  // låga och höga zonens hissar delar schakt men når aldrig samma våning
+  for (const a of EL) for (const b of EL) if (a !== b && !a.facade && !b.facade && a.col === b.col && a.col !== undefined)
+    assert(a.maxF < b.minF || b.maxF < a.minF, `${a.name} och ${b.name} delar schakt men överlappar`);
+  return cases.map(c => c[2]).join(' · ');
 });
 test('Varuhissen: städvagnar och paket åker bara varuhiss, och den tar bara gods och personal', () => {
   sim(62);

@@ -164,7 +164,7 @@ export function updateHud() {
     <div class="stat">Rökexponerade <b>${st.smoked}</b></div>
     <div class="stat">Instängd-sek <b>${Math.round(st.trappedSec)}</b></div>
     <div class="stat">Trapp-resor <b>${st.stairs}</b></div>
-    <div class="stat">Hissbyten i sky lobbyn <b>${st.transfers}</b></div>
+    <div class="stat">Hissbyten <b>${st.transfers}</b></div>
     <div class="stat">Bilar in i garaget <b>${st.carsIn}</b></div>
     <div class="stat">Paketleveranser <b>${st.deliveries}</b></div>
     <div class="stat">VIP-besök 🚁 <b>${st.vips}</b></div>
@@ -347,7 +347,7 @@ export function showIntro() {
     <p>Välkommen till <b>Skyskrapan</b>! Garage och lastkaj i källaren, kontor från tandläkare till labb, en sky lobby på 6:an, bostäder högst upp och en takterrass med helikopterplatta – åtta hissar och en massa folk med bråttom.</p>
     <ul>
       <li>Det finns <b>inga knappar</b> på våningarna. Varje person har ett eget mål och får en egen hiss. Tankebubblan visar målet och hissen.</li>
-      <li>Hissarna är <b>zonindelade</b>: L1–L2 går i låg zon (P2–6), H1–H2 i hög zon (6–T) och expresshissarna X1–X2 kör E ⇄ 6 utan stopp. Den som ska långt <b>byter hiss i sky lobbyn</b> (↹). Varuhissen V tar städvagnar och paket, och panoramahissen P åker utanpå fasaden.</li>
+      <li>Hissarna är <b>zonindelade</b>: L1–L2 går i låg zon (P2–5) och H1–H2 i hög zon (6–T) – <b>staplade i samma schakt</b>. Expresshissarna X1–X2 kör E ⇄ 6 utan stopp. Den som ska mellan zonerna <b>byter hiss</b> (↹) i entrén och i sky lobbyn. Varuhissen V tar städvagnar och paket, och panoramahissen P åker utanpå fasaden.</li>
       <li>Huset <b>lever</b>: bilar kör in i garaget, leveransbilen lastar av vid kajen, de boende sover, jobbar och går på taket, en fönsterputsare jobbar sig nedåt och ibland landar en VIP-helikopter på taket.</li>
       <li>Ett <b>dygn</b> går från 06:00 till 06:00. Trafiken följer klockan – rusning på morgonen, lunch, hemgång – och på natten är det bara väktare, städare och nattugglor. Vissa våningar stänger (caféet, banken …). Natten går fortare ⏩.</li>
       <li><b>Incidenter</b> händer: brand och strömavbrott. Då dyker en ruta upp med dina val. Under <b>⋯</b> kan du utlösa dem själv.</li>
