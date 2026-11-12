@@ -710,7 +710,11 @@ function drawCableRescue(e, G) {
   R(hx, yt - 1, 8, 2, INK); R(hx + 1, yt - 4, 1, 3, '#8a8f99');
   // stegen från korgtaket upp till schaktdörren
   const lx = x + cw - 10;
-  if (top < yt - 2) { R(lx, top, 1, yt - top, '#c9a227'); R(lx + 4, top, 1, yt - top, '#c9a227'); for (let y = top + 2; y < yt; y += 3) R(lx, y, 5, 1, '#c9a227'); }
+  // (kraftiga sidostänger med kontur – en tunn linje syns inte när man scrollar snabbt)
+  if (top < yt - 2) {
+    for (const sx of [lx - 1, lx + 4]) { R(sx - 1, top, 4, yt - top, INK); R(sx, top, 2, yt - top, '#e0b83a'); }
+    for (let y = top + 2; y < yt - 1; y += 4) { R(lx + 1, y - 1, 3, 3, INK); R(lx + 1, y, 3, 1, '#e0b83a'); }
+  }
   // teknikern på korgtaket (med pannlampa); vid linbytet står hen och drar i de nya linorna
   if (here) {
     const px = x + Math.round(cw / 2) - PERSON_W / 2 + (evac ? 2 : (Math.sin(S.anim * 2) > 0 ? 1 : 0)), py = yt - 1 - PERSON_H;
