@@ -191,11 +191,11 @@ function camName(t, short = false) {
 }
 function updateCamBar() {
   const el = $('camBar'), t = camTarget(), last = VIEW.lastCam, lastName = !t && last ? camName(last) : null;
-  const cars = S.elevators.map(e => `<button class="btn xs car-b${VIEW.follow === e.id ? ' on' : ''}" data-act="follow:${e.id}" style="--c:${e.color};--ct:${PAL.on(e.color)}" title="${VIEW.follow === e.id ? 'Sluta följa' : 'Följ'} hiss ${esc(e.name)}">${esc(e.name)}</button>`).join('');
+  const cars = S.elevators.map(e => `<button class="btn xs car-b${VIEW.follow === e.id ? ' on' : ''}" data-act="follow:${e.id}" style="--c:${e.color};--ct:${PAL.on(e.color)}" data-hint="<b>Hiss ${esc(e.name)}:</b> ${VIEW.follow === e.id ? 'kameran följer hissen – klicka för att sluta' : 'klicka så följer kameran hissen'}.">${esc(e.name)}</button>`).join('');
   const cam = t
-    ? `<button class="btn cam-b on" data-act="cam:off" title="Kameran följer ${camName(t)} – klicka för att koppla loss (F)">📹 <span>${camName(t, true)}</span></button>`
-    : lastName ? `<button class="btn cam-b" data-act="cam:on" title="Fri kamera – klicka för att följa ${lastName} igen (F)">📹 <span>fri</span></button>`
-    : '<button class="btn cam-b" disabled title="Fri kamera – välj en hiss, en person eller en våning att följa">📹 <span>fri</span></button>';
+    ? `<button class="btn cam-b on" data-act="cam:off" data-hint="<b>Kamera:</b> följer ${camName(t)}. Klicka för att koppla loss (F) – att scrolla gör samma sak.">📹 <span>${camName(t, true)}</span></button>`
+    : lastName ? `<button class="btn cam-b" data-act="cam:on" data-hint="<b>Fri kamera:</b> du styr själv med scroll. Klicka för att följa ${lastName} igen (F).">📹 <span>fri</span></button>`
+    : '<button class="btn cam-b" disabled data-hint="<b>Fri kamera:</b> du styr själv med scroll. Välj en hiss, en person eller en våning så följer kameran den.">📹 <span>fri</span></button>';
   const html = !S.started ? '' : `${cam}<div class="cam-cars">${cars}</div>`;
   if (html === camKey) return;
   camKey = html; el.innerHTML = html; el.hidden = !html;
@@ -206,7 +206,6 @@ export function updateHud() {
   // ingen klocka – bara sol på dagen och måne på natten (samma gräns som himlen i bilden)
   const night = nightness(h) > 0.5;
   setText('clock', night ? '🌙' : '☀️');
-  $('clock').title = night ? 'Natt' : 'Dag';
   const wx = `${S.weather.cold > 0 ? '❄️' : S.weather.temp >= 20 ? '🌤️' : ''} ${S.weather.temp} °C${S.storm ? ' · 🌬️ storm' : ''}`;
   setText('phase', `${phaseName(h)} · ${wx.trim()}`);
   $('day').textContent = `Dag ${S.day} · ${S.people.length} pers · frö ${S.seed}`;

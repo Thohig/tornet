@@ -122,6 +122,25 @@ $('autoInc').onchange = ev => { act('setting', 'autoInc', /** @type {HTMLInputEl
     bar.appendChild(b);
   }
 }
+// förklaringar i topplisten: element med data-hint visar texten i en ruta under sig när musen vilar på dem
+{
+  const bar = $('topbar'), hint = $('tbHint');
+  let cur = /** @type {HTMLElement|null} */ (null);
+  const hide = () => { cur = null; hint.classList.remove('show'); };
+  bar.addEventListener('pointerover', ev => {
+    const t = /** @type {HTMLElement} */ (/** @type {HTMLElement} */ (ev.target).closest('[data-hint]'));
+    if (!t || !bar.contains(t)) { hide(); return; }
+    if (t === cur) return;
+    cur = t; hint.innerHTML = t.dataset.hint;
+    const r = t.getBoundingClientRect(), br = bar.getBoundingClientRect();
+    const w = hint.offsetWidth || 300;
+    hint.style.left = `${Math.max(0, Math.min(br.width - w, r.left - br.left + r.width / 2 - w / 2))}px`;
+    hint.style.top = `${r.bottom - br.top + 4}px`;
+    hint.classList.add('show');
+  });
+  bar.addEventListener('pointerleave', hide);
+  bar.addEventListener('pointerdown', hide);
+}
 chipGroup('rosterChips', 'rosterFilter', updateRoster);
 chipGroup('logChips', 'logFilter', () => { S.logDirty = true; updateHud(); });
 chipGroup('mistakeChips', 'mistakes', () => { log(`Felknappar: ${S.mistakes}`, 'sys'); syncControls(); }, true);

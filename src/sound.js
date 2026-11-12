@@ -7,8 +7,10 @@ import { VIEW } from './view.js';
 import { vrand } from './rng.js';
 
 const KEY = 'hiss.sound';
-const MAX_VOICES = 10;     // tak för samtidiga engångsljud (rusningen ska inte låta som en flipper)
-const MIN_GAP = 0.12;      // sekunder mellan två engångsljud från samma hiss
+const MAX_VOICES = 4;      // tak för samtidiga engångsljud (rusningen ska inte låta som en flipper)
+const MIN_GAP = 4;         // sekunder mellan två engångsljud från samma hiss
+const ALL_GAP = 0.8;       // sekunder mellan två engångsljud över huvud taget (alla hissar)
+const MIN_NEAR = 0.5;      // engångsljud bara från hissar i bild eller strax utanför
 
 /** @type {AudioContext|null} */
 let ac = null;
@@ -16,7 +18,7 @@ let ac = null;
 let master = null;
 /** @type {AudioBuffer|null} */
 let noise = null;
-let on = false, voices = 0;
+let on = false, voices = 0, lastAny = -1;
 /** Per hiss: motorbrum + vad vi såg förra bildrutan. */
 /** @type {{ osc: OscillatorNode, sub: OscillatorNode, gain: GainNode, pan: StereoPannerNode, phase: string|null, flash: number, last: number }[]} */
 let cars = [];
@@ -175,14 +177,16 @@ export function updateSound() {
     const ph = e.doorPhase, was = c.phase, fl = e.overloadFlash || 0;
     c.phase = ph;
     const flashUp = fl > c.flash + 0.5; c.flash = fl;
-    if (still || near < 0.04 || now - c.last < MIN_GAP) continue;
+    if (still || near < MIN_NEAR) continue;
+    // överlastsummern är en varning och får alltid låta; resten glesas ut
+    if (flashUp) { buzzer(near, pan); c.last = lastAny = now; continue; }
+    if (now - c.last < MIN_GAP || now - lastAny < ALL_GAP) continue;
     let played = true;
-    if (flashUp) buzzer(near, pan);
-    else if (ph === 'opening' && was !== 'opening') { ding(e, near * hush, pan); if (!fast) door(e, true, near, pan); }
+    if (ph === 'opening' && was !== 'opening') { ding(e, near * hush, pan); if (!fast) door(e, true, near, pan); }
     else if (fast) played = false;
     else if (ph === 'closing' && was !== 'closing') door(e, false, near, pan);
     else if (ph === null && was === 'closing') thud(e, near, pan);
     else played = false;
-    if (played) c.last = now;
+    if (played) c.last = lastAny = now;
   }
 }
