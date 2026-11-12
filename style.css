@@ -95,6 +95,7 @@ body{background:var(--desk);font-family:var(--ui);font-size:12px;color:var(--ink
 .inc.info.medic .inc-h{background:linear-gradient(90deg,#006060,#2ec4b6)}
 .inc.info.move .inc-h{background:linear-gradient(90deg,#7a4a00,#d4a017)}
 .inc.info.cold .inc-h{background:linear-gradient(90deg,#1f4e79,#7fb3d5)}
+.inc.info.drift .inc-h{background:linear-gradient(90deg,#808000,#c0a000)}
 .inc-x{margin-left:auto;background:var(--face);color:#000;border:0;box-shadow:var(--raised);font:inherit;font-size:10px;line-height:1;padding:1px 4px;cursor:pointer}
 .inc-x:active{box-shadow:var(--sunken)}
 .incidents.calm{animation:none}

@@ -14,7 +14,7 @@ import { RATED_KG, FULL_LOAD, VMAX } from '../src/config.js';
 import { needsFreight, mayUseFreight, legDest } from '../src/people.js';
 import { fl } from '../src/util.js';
 import { assignCalls, antiNuisance } from '../src/buttons.js';
-import { act, recording, encodeReplay, decodeReplay } from '../src/replay.js';
+import { act, recording, encodeReplay, decodeReplay, SIM_VERSION, CHECK_EVERY, stateHash } from '../src/replay.js';
 import { powerKw, triggerFault, breakDown, tech } from '../src/service.js';
 import { trafficMode, learnBin } from '../src/dispatch.js';
 import { windAt } from '../src/weather.js';
@@ -906,6 +906,7 @@ let golden = null;
 export function setGolden(g) { golden = g; }
 test('Regression: samma frön ger samma dygn som facit', () => {
   if (!golden) throw new Fail('facit saknas (tests/golden.json) – skapa det med:  npm run golden');
+  assert(golden._simVersion === SIM_VERSION, `facit gjordes för simuleringsversion ${golden._simVersion}, koden är version ${SIM_VERSION} – kör:  npm run golden`);
   const diffs = [];
   for (const c of GOLDEN_CASES) {
     const key = caseKey(c), want = golden[key], got = dayFingerprint(c);
@@ -1054,5 +1055,39 @@ test('Replay: ett dygn med slumpade spelaråtgärder spelas upp exakt likadant (
   while (!S.summaryShown) step(DT);
   const got = replayPrint();
   assert(got === want, `uppspelningen blev ett annat dygn:\n${want.slice(0, 300)}\n${got.slice(0, 300)}`);
-  return `${rec.actions.length} åtgärder på dag ${rec.day} · länk ${link.length} tecken · identiskt dygn`;
+  const R = S.replayCheck;
+  assert(R && R.drift === null && R.ok === rec.checks.length && rec.checks.length >= 10, `kontrollsummorna stämde inte: ${JSON.stringify(R && { ...R, checks: R.checks?.length })}`);
+  return `${rec.actions.length} åtgärder på dag ${rec.day} · länk ${link.length} tecken · identiskt dygn · ${R.ok} kontrollsummor stämde`;
+});
+
+test('Replay: kontrollsummorna upptäcker en avvikelse och gamla länkar (version 1) spelas fortfarande upp', () => {
+  sim(55, { autoInc: true });
+  for (let i = 0; i < CHECK_EVERY * 4; i++) step(DT);
+  const rec = recording();
+  assert(rec.v === 2 && rec.sv === SIM_VERSION && rec.checks.length === 4, `inspelningen saknar kontrollsummor: ${rec.checks?.length}`);
+  // samma tillstånd ⇒ samma summa; ändras ett enda tal en aning ändras summan
+  const h = stateHash(), e = S.elevators[0];
+  assert(stateHash() === h, 'summan är inte stabil');
+  const pos = e.pos; e.pos += 1e-12;
+  assert(stateHash() !== h, 'en liten avrundningsskillnad syntes inte');
+  e.pos = pos;
+  // en manipulerad summa ⇒ avvikelsen hittas vid rätt kontroll, och resten jämförs inte
+  const bad = { ...rec, checks: rec.checks.map((c, i) => (i === 2 ? 'x' + c : c)) };
+  startReplay(decodeReplay(encodeReplay(bad)));
+  for (let i = 0; i < CHECK_EVERY * 4; i++) step(DT);
+  const R = S.replayCheck;
+  assert(R.drift !== null && Math.abs(R.drift - CHECK_EVERY * 3 * DT) < 0.01 && R.ok === 2, `avvikelsen hittades inte rätt: ${JSON.stringify({ drift: R.drift, ok: R.ok })}`);
+  assert(S.log.some(l => /avviker/.test(l.text)), 'avvikelsen loggades inte');
+  // länk från en äldre version
+  startReplay(decodeReplay(encodeReplay({ ...rec, sv: SIM_VERSION + 1 })));
+  assert(S.replayCheck.sv === SIM_VERSION + 1, 'versionen följde inte med');
+  // version 1: utan kontrollsummor och simuleringsversion
+  const { sv, checks, ...v1 } = rec;
+  const back = decodeReplay(encodeReplay({ ...v1, v: 1 }));
+  assert(back && back.v === 1, 'en länk i version 1 godtogs inte');
+  startReplay(back);
+  for (let i = 0; i < CHECK_EVERY * 2; i++) step(DT);
+  assert(S.replayCheck.checks === null && S.replayCheck.drift === null, 'version 1 jämfördes mot summor som inte finns');
+  assert(decodeReplay(encodeReplay(/** @type {any} */ ({ ...rec, checks: [1, 2] }))) === null, 'trasiga kontrollsummor godtogs');
+  return `${rec.checks.length} summor · avvikelse hittad efter ${Math.round(R.drift)} s`;
 });

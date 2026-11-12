@@ -18,6 +18,8 @@ export const S = {
   // replay: antal steg i dygnet, spelarens åtgärder, kön som spelas upp och dygnets startläge (se replay.js)
   steps: 0, actions: /** @type {import('./replay.js').RecordedAction[]} */ ([]), replayQueue: /** @type {import('./replay.js').RecordedAction[]} */ ([]),
   replay: false, recStart: /** @type {any} */ (null),
+  // kontrollsummor var 30:e sekund (följer med i länken) och uppspelningens jämförelse mot inspelningens
+  checks: /** @type {string[]} */ ([]), replayCheck: /** @type {import('./replay.js').ReplayCheck|null} */ (null),
   // väder (temperatur, stormen som incident), flyttdag, ambulans och informationsrutor (se notice)
   weather: /** @type {{ temp: number, cold: number }} */ ({ temp: 15, cold: 0 }), storm: /** @type {any} */ (null),
   move: /** @type {any} */ (null), medic: /** @type {any} */ (null),

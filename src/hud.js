@@ -15,6 +15,7 @@ import { residentDesc } from './life.js';
 import { STORM_HINT, windMs } from './weather.js';
 import { FAN_KW, jobFloor, tech } from './service.js';
 import { updatePauseBtn } from './input.js';
+import { SIM_VERSION } from './replay.js';
 
 // ---------- HUD: DOM ----------
 export function $(id) { return document.getElementById(id); }
@@ -311,6 +312,19 @@ export function incidentHtml() {
     parts.push(`<div class="inc info ${cls}"><div class="inc-h">${title}<button class="inc-x" data-act="dismiss:${key}" title="Stäng">✕</button></div>
       <div class="inc-s">${body}</div>${acts ? `<div class="inc-acts">${acts}</div>` : ''}</div>`);
   };
+  // replay-länkens kontroll: avviker uppspelningen, eller är länken från en annan version?
+  const R = S.replay ? S.replayCheck : null;
+  if (R) {
+    const other = R.sv !== null && R.sv !== SIM_VERSION;
+    const ver = other ? `Länken gjordes med simuleringsversion ${R.sv}, den här är version ${SIM_VERSION}.` : '';
+    if (R.drift !== null) {
+      info(`drift-${S.day}`, 'drift', '⚠️ Replayen avviker',
+        `Uppspelningen stämmer inte längre med inspelningen (efter ${Math.round(R.drift)} s). `
+        + (other ? ver : 'Länken gjordes med samma version – troligen räknar den här webbläsaren en aning annorlunda än den som spelade in.')
+        + ' Resten av dygnet kan bli annorlunda än när det spelades in.');
+    } else if (other) info(`oldver-${S.day}`, 'drift', '🔁 Replay från en annan version', `${ver} Dygnet kan bli annorlunda än när det spelades in – det märks i så fall här.`);
+    else if (!R.checks) info(`nocheck-${S.day}`, 'drift', '🔁 Äldre replay-länk', 'Länken saknar kontrollsummor, så det går inte att se om uppspelningen blir exakt samma dygn.');
+  }
   const M = S.move;
   if (M && (M.state === 'on' || (M.state === 'done' && S.t - M.t1 < 20))) {
     info(`move-${S.day}`, 'move', `🚚 Flyttdag på ${fl(M.floor)}`,

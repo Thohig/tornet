@@ -11,7 +11,7 @@ import { makeElevator, updateElevator } from './elevators.js';
 import { buttonsMode, buttonWaitTick, dispatchCalls } from './buttons.js';
 import { incidentTick } from './incidents.js';
 import { lifeTick, lifeReset } from './life.js';
-import { recordStart, replayTick } from './replay.js';
+import { CHECK_EVERY, checkTick, recordStart, replayTick } from './replay.js';
 import { stormTick, weatherReset } from './weather.js';
 import { medicClear, visitsReset, visitsTick } from './visits.js';
 
@@ -174,6 +174,7 @@ export function step(dt) {
     S.reoptT -= dt;
     if (S.reoptT <= 0) { S.reoptT = 1.5; if (buttonsMode()) dispatchCalls(true); else reoptimize(); }
   }
+  if (S.steps % CHECK_EVERY === 0) checkTick(); // kontrollsumma för replay-länken
   if (hour() >= END_H && !S.summaryShown) { S.summaryShown = true; hooks.dayEnd(); }
 }
 // Fast tidssteg: verklig tid samlas på hög och simuleringen tar alltid exakt lika långa steg.
@@ -193,7 +194,7 @@ export function resetDay() {
   learnBlend(); S.learnToday = emptyLearn();
   S.t = 0; S.clock = 0; S.sched = makeSchedule(); S.acc = 0; S.summaryShown = false; S.nextId = 1; S.sel = null; S.wl = null; S.reoptT = 0;
   S.people = []; S.stats = newStats(); S.calls = {};
-  S.steps = 0; S.actions = []; S.replayQueue = []; S.replay = false;
+  S.steps = 0; S.actions = []; S.replayQueue = []; S.replay = false; S.checks = []; S.replayCheck = null;
   S.fire = null; S.power = true; S.outage = null; S.techCallAt = null; S.peakMode = null; S.wakeAt = 0;
   S.nextInc = rand(60, 120);
   S.occ = new Map();
@@ -228,5 +229,6 @@ export function startReplay(/** @type {import('./replay.js').Recording} */ rec) 
   S.actions = copy();
   S.replayQueue = copy().sort((a, b) => a.n - b.n);
   S.replay = true;
+  S.replayCheck = { sv: rec.sv ?? null, checks: rec.checks ? [...rec.checks] : null, drift: null, ok: 0 };
   log(`▶ Replay: frö ${rec.seed}, dag ${rec.day}, ${rec.actions.length} åtgärder`, 'sys');
 }
