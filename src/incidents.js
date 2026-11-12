@@ -1,7 +1,7 @@
 // Incidenter: brand och strömavbrott.
 import { pick, rand, rng } from './rng.js';
 import { fl } from './util.js';
-import { OFFICE_FLOORS } from './config.js';
+import { OFFICE_FLOORS, REF_SCALE } from './config.js';
 import { S, hooks, hour, log } from './state.js';
 import { arriveOnFloor, pev, pn, setTrip, toStairs } from './people.js';
 import { allowed, allowedDest, allowedPos, inFireZone, posOf, rebuildPicks, safeFloor } from './dispatch.js';
@@ -173,8 +173,8 @@ export function incidentTick(dt) {
   if (S.outage) outageTick(dt);
   if (!S.autoInc) return;
   const h = hour();
-  if (S.t < S.nextInc || h < 8 || h > 18) return;
-  S.nextInc = S.t + rand(130, 220); // ungefär 1–2 incidenter per dygn
+  if (S.clock < S.nextInc || h < 8 || h > 18) return;
+  S.nextInc = S.clock + rand(130, 220) * REF_SCALE; // ungefär 1–2 incidenter per dygn (i speltid)
   const opts = [];
   if (!S.fire) opts.push('fire');
   if (S.power) opts.push('power');

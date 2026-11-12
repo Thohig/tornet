@@ -1,10 +1,11 @@
 // Husets liv: bilar i garaget, leveranser vid lastkajen, de boendes dygnsrutiner och VIP-besök med helikopter.
 import { pick, rand, rng } from './rng.js';
 import { fl } from './util.js';
-import { DOCK, FL, GARAGE_FLOORS, HOME_FLOORS, LOBBY, OFFICE_FLOORS, ROOF, SPOTS, floorOpen, floorWith } from './config.js';
+import { DOCK, FL, GARAGE_FLOORS, HOME_FLOORS, LOBBY, OFFICE_FLOORS, ROOF, SPOTS, floorOpen, floorWith, pace } from './config.js';
 import { S, clockStr, hour, log, occOf, setOcc } from './state.js';
 import { makePerson, openFloors, pev, pn, setTrip } from './people.js';
 import { castResident } from './cast.js';
+import { movingResNext } from './visits.js';
 
 // ---------- Garaget ----------
 // Parkeringsplatser per garagevåning (P1 har lastkaj till vänster och färre platser)
@@ -33,7 +34,7 @@ export function arriveByCar(p, parked = false) {
 /** Personen lämnar huset: med bil (bilen kör ut), till fots – eller för de boende: är borta en stund */
 export function leaveBuilding(p) {
   if (p.auto) { p.auto.state = 'out'; p.auto = null; }
-  if (p.kind === 'res') {
+  if (p.kind === 'res' && !p.movedOut) {
     const ev = p.sched.find(e => !e.done && e.go === 'home');
     p.state = 'away'; p.returnAt = ev ? ev.at : 99; p.spot = null;
     pev(p, `Går ut · ${p.why}${ev ? ` – tillbaka ca ${clockStr(ev.at)}` : ''}`);
@@ -41,7 +42,7 @@ export function leaveBuilding(p) {
     return;
   }
   p.dead = true;
-  pev(p, 'Lämnar huset – hejdå!');
+  pev(p, p.movedOut ? 'Flyttar härifrån – hejdå huset!' : 'Lämnar huset – hejdå!');
   log(`${pn(p)} lämnar huset${p.exitFloor !== LOBBY ? ` (från ${fl(p.exitFloor)})` : ''}`, 'person', null, p.id);
 }
 function autoTick(dt) {
@@ -66,7 +67,7 @@ function truckTick(dt) {
   if (T.state === 'in') { T.x = Math.min(70, T.x + 150 * dt); if (T.x >= 70) T.state = 'parked'; }
   else if (T.state === 'parked') {
     const busy = S.people.filter(p => p.role === 'bud').length;
-    if (h < 11.5 && busy < 3 && rng() < 0.03 * dt) spawnCourier();
+    if (h < 11.5 && busy < 3 && rng() < 0.03 * pace(h) * dt) spawnCourier(); // (per speltimme)
     if (h >= 12 && busy === 0) { T.state = 'out'; log('🚚 Leveransbilen kör iväg', 'sys'); }
   } else if (T.state === 'out') { T.x -= 150 * dt; if (T.x < -300) S.truck = null; }
 }
@@ -144,6 +145,11 @@ export function homeSpot(p) {
 }
 /** Nästa beslut för en boende (anropas när tiden på platsen är slut) */
 export function resNext(p, h) {
+  // flyttdag: hushållet som flyttar packar hemma och går när lägenheten är tom (visits.js)
+  if (p.moving) {
+    const r = movingResNext(p);
+    if (r !== undefined) { for (const e of p.sched) if (e.at <= h) e.done = true; return r; }
+  }
   const ev = p.sched.find(e => !e.done && e.at <= h);
   if (ev) {
     ev.done = true;

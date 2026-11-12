@@ -7,7 +7,7 @@ import { ARR, fl } from './util.js';
 import { CAR_H, EL, floorY, shaftCX } from './config.js';
 import { S, log } from './state.js';
 import { elevatorAllows, pev, pn, toStairs } from './people.js';
-import { allowed, eta, isFull, operational, rebuildPicks, posOf } from './dispatch.js';
+import { allowed, eta, isFull, operational, outLong, rebuildPicks, posOf } from './dispatch.js';
 import { kidPressed, kidRate } from './cast.js';
 
 export const buttonsMode = () => S.strategy === 'buttons';
@@ -25,8 +25,14 @@ export const callKey = (g, f, d) => `${g}|${f}|${d}`;
 /** Hissgruppen personen ställer sig vid: en grupp där en hiss tar hen hela delresan. Går flera grupper dit
  *  (t.ex. expressen och stationsexpressen mellan entrén och sky lobbyn) väljer man den som redan står öppen
  *  åt rätt håll, annars på måfå. */
-export function bankFor(p) {
+/** grupperna som tar p från våningen till delmålet – helst de där någon hiss går (en skylt säger "ur funktion") */
+function banksFor(p) {
   const groups = [...new Set(EL.filter(x => elevatorAllows(x, p) && x.legs.some(l => l.includes(p.floor) && l.includes(p.dest))).map(x => x.group))];
+  const live = groups.filter(g => S.elevators.some(e => e.group === g && !outLong(e)));
+  return live.length ? live : groups;
+}
+export function bankFor(p) {
+  const groups = banksFor(p);
   if (groups.length <= 1) return groups[0] ?? null;
   const open = groups.find(g => S.elevators.some(e => e.group === g && operational(e) && e.state === 'doors' && e.floor === posOf(e, p.floor) && (e.dir === p.dir || e.dir === 0)));
   return open ?? groups[Math.floor(rng() * groups.length)];
@@ -79,6 +85,15 @@ export function buttonWaitTick(p, dt) {
     return;
   }
   if (p.bank === undefined || p.bank === null) { pressHallButton(p); return; }
+  // hela gruppen är ur drift (trasig, service, avstängd) men en annan grupp går dit: gå dit och tryck där
+  if (!S.elevators.some(e => e.group === p.bank && !outLong(e))) {
+    const alt = banksFor(p).filter(g => g !== p.bank);
+    if (alt.length && S.elevators.some(e => e.group === alt[0] && !outLong(e))) {
+      pev(p, `${GROUP_NAMES[p.bank] || p.bank} är ur funktion – går till ${GROUP_NAMES[alt[0]] || alt[0]} i stället`);
+      pressHallButton(p);
+      return;
+    }
+  }
   if (p.fixAt && S.t >= p.fixAt) {
     p.fixAt = 0;
     press(p.bank, p.floor, p.dir);

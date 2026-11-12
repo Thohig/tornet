@@ -2,7 +2,7 @@
 // sparas med stegnumret (S.steps) och kan spelas upp igen exakt – samma frö + samma åtgärder vid samma
 // steg ⇒ identiskt dygn. En inspelning är ett vanligt objekt som kan delas som länk (?replay=…).
 // Rör aldrig DOM – gränssnittet anropar act() och encodeReplay()/decodeReplay(); startReplay ligger i sim.js.
-import { STRAT_NAMES } from './config.js';
+import { STRAT_NAMES, TEMPOS } from './config.js';
 import { S, log } from './state.js';
 import { rngState } from './rng.js';
 import { pev, spawnBus, spawnVisitor } from './people.js';
@@ -44,7 +44,7 @@ export const ACTIONS = {
 
 /**
  * @typedef {{ n: number, a: string, args: any[] }} RecordedAction
- * @typedef {{ v: 1|2, sv?: number, seed: number, day: number, strategy: string, autoInc: boolean, mistakes: string, maint: string,
+ * @typedef {{ v: 1|2, sv?: number, seed: number, day: number, tempo?: string, strategy: string, autoInc: boolean, mistakes: string, maint: string,
  *   wear: number[], learn?: number[][]|null, actions: RecordedAction[], checks?: string[] }} Recording
  * @typedef {{ sv: number|null, checks: string[]|null, drift: number|null, ok: number }} ReplayCheck
  */
@@ -52,7 +52,7 @@ export const ACTIONS = {
 // ---------- Kontrollsummor ----------
 // Simuleringens version. Höj den när beteendet ändras avsiktligt – `npm run golden` vägrar skriva om facit
 // annars. En replay-länk från en annan version spelas fortfarande upp, men spelaren får veta att dygnet kan avvika.
-export const SIM_VERSION = 7;
+export const SIM_VERSION = 11;
 /** var 900:e steg (30 sekunder) räknas en kontrollsumma av simuleringens tillstånd */
 export const CHECK_EVERY = 900;
 
@@ -109,7 +109,7 @@ export function replayTick() {
 }
 /** Dygnets start (sparas av resetDay): det som inte går att räkna fram ur fröet. */
 export function recordStart() {
-  S.recStart = { seed: S.seed, day: S.day, strategy: S.strategy, autoInc: S.autoInc, mistakes: S.mistakes, maint: S.maint, wear: S.elevators.map(e => e.wear),
+  S.recStart = { seed: S.seed, day: S.day, tempo: S.tempo, strategy: S.strategy, autoInc: S.autoInc, mistakes: S.mistakes, maint: S.maint, wear: S.elevators.map(e => e.wear),
     learn: S.learnMem && S.learnMem.map(r => [...r]) };
 }
 /** Inspelningen av dygnet hittills. */
@@ -131,6 +131,7 @@ export function decodeReplay(str) {
     const rec = JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0))));
     if ((rec.v !== 1 && rec.v !== 2) || !Number.isFinite(rec.seed) || !Array.isArray(rec.actions) || !Array.isArray(rec.wear)) return null;
     if (rec.actions.some(x => !Number.isInteger(x.n) || !(x.a in ACTIONS) || !Array.isArray(x.args))) return null;
+    if (rec.tempo !== undefined && !(typeof rec.tempo === 'string' && rec.tempo in TEMPOS)) return null;
     if (rec.learn != null && !(Array.isArray(rec.learn) && rec.learn.every(r => Array.isArray(r) && r.every(Number.isFinite)))) return null;
     // version 2: simuleringsversion + kontrollsummor (version 1 saknar dem men spelas ändå upp)
     if (rec.v === 2 && !(Number.isInteger(rec.sv) && Array.isArray(rec.checks) && rec.checks.every(c => typeof c === 'string'))) return null;

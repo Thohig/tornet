@@ -6,7 +6,7 @@
 // motorn drar ström när den lyfter obalansen och återmatar el när obalansen drar den.
 import { pick, rand, rng } from './rng.js';
 import { fl } from './util.js';
-import { BALANCE, DOOR_T, FLOOR_M, FLOOR_H, CAR_H, VMAX, floorY, shaftCX, timeScale } from './config.js';
+import { BALANCE, DOOR_T, FLOOR_M, FLOOR_H, CAR_H, VMAX, floorY, shaftCX, timeScale, tempoWear } from './config.js';
 import { S, hour, log, notice } from './state.js';
 import { needsFreight, pev, pn, rerouteStranded, spawnStaff } from './people.js';
 import { rebuildPicks, travel, cabinKg, prio } from './dispatch.js';
@@ -46,14 +46,14 @@ function energyTick(e, dt) {
 }
 
 // ---------- Slitage och fel ----------
-// (kalibrerat för ett dygn på 6 minuter: ungefär 350 stopp per dygn i hela huset)
+// (kalibrerat för ett dygn på 6 minuter: ungefär 350 stopp per dygn i hela huset – tempoWear() skalar om för längre dygn)
 export const WEAR_STOP = 0.0022, WEAR_FLOOR = 0.00055, FAULT_K = 0.034, SERVICE_AT = 0.2;
 export const FAULTS = ['dörrfel – dörrarna går inte att stänga', 'motorn överhettad', 'styrkortet hänger sig', 'nivåfel – korgen stannar ojämnt', 'bromsen kärvar', 'vajerlarm'];
 function wearTick(e) {
   const stops = e.trips - e.wearTrips, dist = e.distance - e.wearDist;
   if (!stops && !dist) return;
   // tung last sliter mer på linor, broms och motor
-  e.wear += stops * WEAR_STOP + dist * WEAR_FLOOR * (1 + cabinKg(e) / e.ratedKg);
+  e.wear += (stops * WEAR_STOP + dist * WEAR_FLOOR * (1 + cabinKg(e) / e.ratedKg)) * tempoWear();
   e.wearTrips = e.trips; e.wearDist = e.distance;
 }
 /** Anropas när dörrarna har öppnat helt och folk klivit av: går hissen sönder här? */
@@ -61,7 +61,7 @@ export function maybeBreak(e) {
   if (e.mode !== 'normal' || e.hold) return false;
   if (!e.breakNext) {
     if (!S.autoInc || !S.power || S.fire) return false;
-    if (rng() >= FAULT_K * e.wear * e.wear) return false;
+    if (rng() >= FAULT_K * tempoWear() * e.wear * e.wear) return false;
   }
   breakDown(e, e.stormFault ? 'vajerlarm – linorna slog i schaktet i stormen' : pick(FAULTS));
   e.stormFault = false;
@@ -155,7 +155,17 @@ function techTick(dt) {
     pev(p, `Sitter själv fast i hiss ${p.car.name} – ringer hissjouren efter en kollega`);
   }
   const t = tech();
-  // hissar vars tekniker försvann (t.ex. utrymde vid brand) släpps
+  // instängda efter ett linbrott går före allt: teknikern lämnar det hen håller på med (arbetet sparas) och går dit
+  // (före släppet nedan, så att en påbörjad service avbryts i samma steg)
+  if (t && t.job !== null && t.job !== undefined && S.elevators[t.job].mode !== 'snapped'
+    && S.elevators.some(x => x.mode === 'snapped' && x.snap.ph !== 'fall' && x.passengers.length)) {
+    const cur = S.elevators[t.job];
+    if (cur.fault) cur.fault.done = t.workT;
+    pev(t, `Larm: folk sitter fast i en hiss med linbrott – lämnar ${cur.name} så länge`);
+    t.job = null; t.workT = 0;
+    if (t.state === 'office') t.timer = Math.min(t.timer, 0.5);
+  }
+  // hissar vars tekniker försvann (t.ex. utrymde vid brand) eller gick till ett annat jobb släpps
   for (const e of S.elevators) {
     if (e.techId === null) continue;
     if (!t || t.job !== e.id) {
@@ -167,15 +177,6 @@ function techTick(dt) {
         log(`🔧 ${e.name}: nattservicen avbröts – hissen går i trafik igen`, 'alert', e.color);
       }
     }
-  }
-  // instängda efter ett linbrott går före allt: teknikern lämnar det hen håller på med (arbetet sparas) och går dit
-  if (t && t.job !== null && t.job !== undefined && S.elevators[t.job].mode !== 'snapped'
-    && S.elevators.some(x => x.mode === 'snapped' && x.snap.ph !== 'fall' && x.passengers.length)) {
-    const cur = S.elevators[t.job];
-    if (cur.fault) cur.fault.done = t.workT;
-    pev(t, `Larm: folk sitter fast i en hiss med linbrott – lämnar ${cur.name} så länge`);
-    t.job = null; t.workT = 0;
-    if (t.state === 'office') t.timer = Math.min(t.timer, 0.5);
   }
   if (!t && S.techCallAt === null && !S.fire) {
     if (S.elevators.some(e => e.mode === 'snapped' && e.snap.ph !== 'fall')) callTech('Linbrott – hissjouren larmas');

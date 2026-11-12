@@ -53,15 +53,17 @@ export function loadKg(e) {
 export function cabinKg(e) {
   let kg = 0;
   for (const p of e.passengers) kg += personKg(p);
+  // (panoramahissen i lastläge: flyttlasset från terrassen väger också – vågen, energin och motorvärmen)
+  if (e.mode === 'lift' && S.hoist && S.hoist.liftItem !== null && S.move) kg += S.move.items[S.hoist.liftItem].kg;
   return kg;
 }
 export const slotsFull = e => e.passengers.length + e.reserved >= e.cap;
 // "Full" = alla platser tagna eller full last (≥ 80 % av märklasten): hissen tar inga nya hämtningar
 export const isFull = e => slotsFull(e) || loadKg(e) >= e.ratedKg * FULL_LOAD;
 /** Går hissen både till personens våning och till målet (för den här delresan)? */
-// (en hiss i oberoende drift, som varuhissen på flyttdagen, tar bara flyttgubbarna – och de bara den;
+// (en hiss i oberoende drift, som varuhissen på flyttdagen, tar bara flyttgubbarna – som annars får åka varuhissen som alla andra;
 // ambulansen har förtur även där)
-export const canTake = (e, p) => e.legs.some(l => l.includes(p.floor) && l.includes(p.dest)) && elevatorAllows(e, p) && (e.indep ? !!(p.mover || p.medic) : !p.mover);
+export const canTake = (e, p) => e.legs.some(l => l.includes(p.floor) && l.includes(p.dest)) && elevatorAllows(e, p) && (!e.indep || !!(p.mover || p.medic));
 /** Dubbeldäck: korgens läge när den tar folk på våning f (övre däcket står en våning högre). Annars f. */
 export const posOf = (e, f) => (e.deck2 && e.upper.has(f) ? f - 1 : f);
 /** vilket däck den som kliver på på våning f åker (0 = nedre, 1 = övre) */
@@ -85,6 +87,7 @@ export function outReason(e) {
   if (e.windLock) return 'wind';
   if (e.off) return 'off';
   if (e.hold) return 'hold';
+  if (e.liftWant) return 'liftwant';
   if (e.zoneLock) return 'zone';
   return '';
 }
@@ -92,7 +95,7 @@ export function outReason(e) {
 export const OUT_TEXT = /** @type {Record<string, string>} */ ({
   hot: 'har överhettad motor', wind: 'stängs för vinden', off: 'är ur drift', hold: 'ska på service', zone: 'spärras av branden',
   broken: 'gick sönder', service: 'är på service', recall: 'kallas ner av brandlarmet', locked: 'är låst (brand)',
-  rescue: 'nödsänks', dead: 'är strömlös', snapped: 'fick linbrott',
+  rescue: 'nödsänks', dead: 'är strömlös', snapped: 'fick linbrott', lift: 'kör ett flyttlass', liftwant: 'ska köra ett flyttlass',
 });
 export const operational = e => S.power && !outReason(e) && !e.sleep;
 /** kan p få hissen just nu (bortsett från strömmen och nattvilan)? */

@@ -1,7 +1,7 @@
 // Simuleringssteget, fast tidssteg och nollställning av dagar.
 import { rand, rng, setSeed } from './rng.js';
 import { K, fl } from './util.js';
-import { END_H, FLOORS, MAXP, timeScale, LOBBY, CAFE, floorWith, floorOpen, EL, ROOF, STATION } from './config.js';
+import { END_H, FLOORS, MAXP, timeScale, pace, setTempo, REF_SCALE, LOBBY, CAFE, floorWith, floorOpen, EL, ROOF, STATION } from './config.js';
 const SPA = floorWith('spa');
 import { S, hooks, hour, log, newStats } from './state.js';
 import { spawnEmployee, spawnStaff, spawnVisitor, updatePerson, spawnPizza, rerouteStranded, spawnDogOwner } from './people.js';
@@ -16,11 +16,13 @@ import { CHECK_EVERY, checkTick, recordStart, replayTick } from './replay.js';
 import { stormTick, weatherReset } from './weather.js';
 import { TRAIN_SHARE, trainReset, trainTick } from './train.js';
 import { medicClear, visitsReset, visitsTick } from './visits.js';
+import { hoistReset, hoistTick } from './hoist.js';
 
 // ---------- Planerad rutt (för HUD) ----------
 export function plannedRoute(e) {
   if (e.mode === 'recall') return [e.home];
   if (e.mode === 'rescue') return [e.rescueTarget];
+  if (e.mode === 'lift') return [e.target ?? e.terraceF];
   const items = [];
   for (const f of e.carCalls) items.push({ f, k: 'car' });
   for (const k in e.pick) items.push({ f: parseInt(k, 10), k: k.endsWith('u') ? 1 : -1 });
@@ -42,9 +44,14 @@ export function plannedRoute(e) {
 
 // ---------- Simuleringssteg ----------
 // Trafikprofil över dygnet (personer per simuleringssekund). ARRIVAL_MUL höjer inflödet så att huset
-// fylls under den korta dagen (ett dygn = 6 minuter) – testerna larmar om hissarna blir överbelastade.
+// fylls under den korta dagen (6-minutersdygnet, se EMP_K för det långa) – testerna larmar om hissarna blir överbelastade.
 const ARRIVAL_MUL = 1.6;
-function arrivalRate(h) { return ARRIVAL_MUL * baseRate(h); }
+// Anställda i ett längre dygn: rusningen varar längre i verklig tid. Med EMP_K = 0 är trycket per sekund
+// detsamma (många fler anställda), med 1 kommer lika många som i 6-minutersdygnet (glesa, lugna rusningar).
+// 0.3 ger ungefär samma väntetider över dygnet som det korta dygnet (p50 ≈ 9 s, p95 ≈ 38 s) med knappt
+// dubbelt så många anställda – mätt med sex frön, Smart.
+export const EMP_K = 0.3;
+function arrivalRate(h) { return ARRIVAL_MUL * baseRate(h) * pace(h) ** EMP_K; }
 function baseRate(h) {
   if (h < 6.5) return 0.02; if (h < 7) return 0.08; if (h < 7.3) return 0.21;
   if (h < 9.3) return 0.56; if (h < 10.2) return 0.18; if (h < 15) return 0.03;
@@ -73,15 +80,17 @@ export function spawnTick(dt) {
   const lunch = h >= 11.2 && h < 12.8;
   let v = h >= 9 && h < 17 ? 0.045 : 0;
   if (lunch) v += 0.07;
-  v *= ARRIVAL_MUL;
+  // besökarna räknas per speltimme (pace): ett längre dygn ger inte fler besökare, bara glesare
+  const pc = pace(h);
+  v *= ARRIVAL_MUL * pc;
   // (hundägarna till hundsalongen delar slumptalet med besökarna – ett extra rng() i varje steg skulle flytta
   // hela dygnets slumpföljd, och testerna har visat sig känsliga för hur många slumptal varje steg drar)
   const u = rng();
   if (u < v * dt) spawnVisitor(LOBBY, -30, lunch && rng() < 0.7 ? CAFE : null);
-  else if (SPA >= 0 && floorOpen(SPA, h) && floorOpen(SPA, h + 1.2) && u < (v + 0.02) * dt) spawnDogOwner();
+  else if (SPA >= 0 && floorOpen(SPA, h) && floorOpen(SPA, h + 1.2) && u < (v + 0.02 * pc) * dt) spawnDogOwner();
   // turister åker panoramahissen upp till takterrassen
-  if (ROOF >= 0 && h >= 9.5 && h < 19 && rng() < 0.02 * dt) spawnVisitor(LOBBY, -30, ROOF, 'Utsikt från takterrassen');
-  if (h >= 17 && h < 20.5 && rng() < 0.03 * dt) spawnVisitor(LOBBY, -30, floorWith('aerobic'), 'Kvällspass på Svettis');
+  if (ROOF >= 0 && h >= 9.5 && h < 19 && rng() < 0.02 * pc * dt) spawnVisitor(LOBBY, -30, ROOF, 'Utsikt från takterrassen');
+  if (h >= 17 && h < 20.5 && rng() < 0.03 * pc * dt) spawnVisitor(LOBBY, -30, floorWith('aerobic'), 'Kvällspass på Svettis');
 }
 // Nattläge (Smart, Rusning, Energisnål): överflödiga hissar somnar i entrén för att spara energi och vaknar vid kö.
 // Energisnål låter dessutom lediga hissar sova dygnet runt, där de står.
@@ -130,7 +139,8 @@ export function step(dt) {
   spawnTick(dt);
   lifeTick(dt);
   trainTick(dt, arrivalRate);
-  visitsTick();
+  visitsTick(dt);
+  hoistTick(dt);
   stormTick(dt);
   nightModeTick(dt);
   for (const p of S.people) updatePerson(p, dt);
@@ -208,7 +218,7 @@ export function resetDay() {
   S.steps = 0; S.actions = []; S.replayQueue = []; S.replay = false; S.checks = []; S.replayCheck = null;
   S.fire = null; S.power = true; S.outage = null; S.techCallAt = null; S.peakMode = null; S.wakeAt = 0;
   S.notices = []; // gårdagens informationsrutor visas inte igen (klockan S.t börjar om från 0)
-  S.nextInc = rand(60, 120);
+  S.nextInc = rand(60, 120) * REF_SCALE; // (i speltid, S.clock – lika många incidenter oavsett dygnets längd)
   S.occ = new Map();
   // slitaget följer med från gårdagen (dag 1: slumpat – huset är inte nytt)
   const carry = S.day > 1 && S.elevators.length === EL.length ? S.elevators.map(e => e.wear) : null;
@@ -218,6 +228,7 @@ export function resetDay() {
   trainReset();
   weatherReset();
   visitsReset();
+  hoistReset();
   recordStart();
 }
 export function newSim(seed, opts = {}) {
@@ -227,11 +238,13 @@ export function newSim(seed, opts = {}) {
   if (opts.autoInc !== undefined) S.autoInc = opts.autoInc;
   if (opts.mistakes !== undefined) S.mistakes = opts.mistakes;
   if (opts.maint !== undefined) S.maint = opts.maint;
+  S.tempo = setTempo(opts.tempo ?? S.tempo);
   resetDay();
 }
 /** Spela upp en inspelning (se replay.js) från dygnets början. */
 export function startReplay(/** @type {import('./replay.js').Recording} */ rec) {
-  newSim(rec.seed, { day: rec.day, strategy: rec.strategy, autoInc: rec.autoInc, mistakes: rec.mistakes, maint: rec.maint });
+  // (länkar från före tempotabellen spelades in med det korta dygnet)
+  newSim(rec.seed, { day: rec.day, strategy: rec.strategy, autoInc: rec.autoInc, mistakes: rec.mistakes, maint: rec.maint, tempo: rec.tempo || 'kort' });
   // slitaget kom från gårdagen – samma som i inspelningen
   rec.wear.forEach((w, i) => { if (S.elevators[i]) S.elevators[i].wear = w; });
   S.recStart.wear = [...rec.wear];

@@ -4,7 +4,7 @@ import { START_H } from './config.js';
 // ---------- Tillstånd ----------
 export const S = {
   started: false, paused: false, speed: 1, strategy: 'smart', tags: false,
-  t: 0, clock: 0, day: 1, anim: 0,
+  t: 0, clock: 0, day: 1, anim: 0, tempo: 'lang', // tempo: dygnets längd (TEMPOS i config)
   people: [], elevators: [], log: [], fx: [], wl: null,
   nextId: 1, reoptT: 0, summaryShown: false, stats: null, logDirty: true,
   sel: null, hover: null, hoverDoor: null, carCycle: 0,
@@ -23,6 +23,8 @@ export const S = {
   // väder (temperatur, stormen som incident), flyttdag, ambulans och informationsrutor (se notice)
   weather: /** @type {{ temp: number, cold: number }} */ ({ temp: 15, cold: 0 }), storm: /** @type {any} */ (null),
   move: /** @type {any} */ (null), medic: /** @type {any} */ (null),
+  // takskenan: fönsterputsarens gondol och hissbalken (hoist.js)
+  cleaner: /** @type {any} */ (null), hoist: /** @type {any} */ (null),
   notices: /** @type {Notice[]} */ ([]), noticeId: 1,
   // lärande parkering: dagens anrop per timme och våning, och minnet från tidigare dygn (följer med som slitaget)
   learnToday: /** @type {number[][]|null} */ (null), learnMem: /** @type {number[][]|null} */ (null),

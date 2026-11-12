@@ -14,9 +14,11 @@ import { updateDirector } from './director.js';
 // ?replay=… spelar upp ett inspelat dygn (frö + spelarens åtgärder), se replay.js.
 const params = new URLSearchParams(location.search);
 const urlSeed = parseInt(params.get('seed'), 10);
+// ?tempo=kort ger det ursprungliga 6-minutersdygnet (TEMPOS i config.js)
+const urlTempo = params.get('tempo');
 const rec = params.get('replay') ? decodeReplay(params.get('replay')) : null;
 if (rec) startReplay(rec);
-else newSim(Number.isFinite(urlSeed) ? urlSeed : Math.floor(Math.random() * 1e6));
+else newSim(Number.isFinite(urlSeed) ? urlSeed : Math.floor(Math.random() * 1e6), urlTempo ? { tempo: urlTempo } : {});
 hooks.incident = floor => {
   if (S.speed > 2) setSpeed(1);
   if (floor !== null) peekFloor(floor);

@@ -1,6 +1,6 @@
 // HUD: topplist, hisspopup, flytande incidentruta och lådan med spårning, register, logg och resultat.
 import { ARR, esc, fl } from './util.js';
-import { CAP, CAR_H, EL, FIRE_HINT, FL, LOBBY, TOP, ROLE_NAMES, activityRate, FULL_LOAD, floorY, shaftX, timeScale } from './config.js';
+import { CAP, CAR_H, EL, FIRE_HINT, FL, LOBBY, DOCK, TOP, ROLE_NAMES, activityRate, FULL_LOAD, floorY, shaftX, timeScale, dayLength } from './config.js';
 import { S, hour, log, phaseName } from './state.js';
 import { liftsAvailable } from './people.js';
 import { costBased, costLine, eta, isFull, pickTotal, pickersAt, loadKg, cabinKg, slotsFull } from './dispatch.js';
@@ -15,6 +15,7 @@ export { stateInfo };
 import { residentDesc } from './life.js';
 import { STORM_HINT, windMs } from './weather.js';
 import { FAN_KW, jobFloor, tech, cableStatus } from './service.js';
+import { hoistStatus } from './hoist.js';
 import { updatePauseBtn } from './input.js';
 import { SIM_VERSION } from './replay.js';
 
@@ -99,6 +100,8 @@ export function stateLabel(e) {
   if (e.mode === 'recall') return 'BRANDÅTERKALLAD';
   if (e.mode === 'locked') return 'AVSTÄNGD';
   if (e.mode === 'rescue') return 'NÖDSÄNKS';
+  if (e.mode === 'lift') return 'FLYTTLASS 🚚';
+  if (e.liftWant) return '→ FLYTTLASS';
   if (e.mode === 'dead') return 'UTRYMD';
   if (!S.power) return 'STRÖMLÖS';
   if (e.off && e.state !== 'moving' && !e.passengers.length) return 'UR DRIFT';
@@ -133,6 +136,8 @@ export function whyText(e) {
   if (e.medicHold) return `Står kvar på ${fl(S.medic ? S.medic.floor : Math.round(e.pos))} med ambulansens nyckel – väntar på personalen och båren`;
   if (e.mode === 'recall') return `Brandåterkallning: kör direkt till ${fl(e.home)} utan stopp och släpper ut alla`;
   if (e.mode === 'locked') return `Avstängd i ${fl(e.home)} med öppna dörrar tills branden är släckt`;
+  if (e.mode === 'lift') return 'Lastläge: kör flyttlasset från takterrassen ner till entrén – tar inga resenärer';
+  if (e.liftWant) return 'Kör klart sina resenärer och hämtar sedan ett flyttlass på takterrassen';
   if (e.mode === 'rescue') return `Krypkör på reservkraft till ${fl(e.rescueTarget)} för att släppa ut ${e.passengers.length} instängda`;
   if (e.mode === 'dead') return 'Utrymd – väntar på att strömmen ska komma tillbaka';
   if (!S.power) return e.passengers.length ? `Står still ${Math.abs(e.pos - Math.round(e.pos)) > 0.05 ? 'mellan våningar' : `på ${fl(Math.round(e.pos))}`} – ${e.passengers.length} instängda!` : 'Står still utan ström';
@@ -346,12 +351,20 @@ export function incidentHtml() {
   }
   const M = S.move;
   if (M && (M.state === 'on' || (M.state === 'done' && S.t - M.t1 < 20))) {
+    const out = M.items.filter(it => it.st === 'dock' || it.st === 'truck').length, flat = M.items.filter(it => it.st === 'home' || it.st === 'packing').length;
+    const bar = M.items.map(it => (it.st === 'truck' ? '▓' : it.st === 'dock' ? '▒' : it.st === 'carried' ? '░' : '·')).join('');
+    const lock = M.smart
+      ? `Varuhissen ${V ? esc(V.name) : ''} går i <b>oberoende drift</b> bara medan en stor möbel är på väg ner – kartongerna åker med som vanliga resenärer${V && V.indep ? ' (<b>låst nu</b>)' : ''}. Flytten bokades efter lunch, när förmiddagens leveranser var klara.`
+      : `Varuhissen ${V ? esc(V.name) : ''} går i <b>oberoende drift</b> hela flytten: nyckelstyrd, bara flyttgubbarna åker med. Flytten bokades på förmiddagen, mitt i leveranserna – paketbuden får vänta.`;
     info(`move-${S.day}`, 'move', `🚚 Flyttdag på ${fl(M.floor)}`,
       M.state === 'on'
-        ? `Flyttfirman Lyft & Bär bär ut från ${fl(M.floor)} – lass <b>${num(M.done)}</b> av ${M.loads}. Varuhissen ${V ? esc(V.name) : ''} går i <b>oberoende drift</b>: nyckelstyrd, svarar inte på några anrop, bara flyttgubbarna åker med. ${M.smart ? 'Flytten är bokad efter lunch, när förmiddagens leveranser är klara – paketbuden hade varuhissen för sig själva.' : 'Flytten bokades på förmiddagen, mitt i leveranserna – paketbuden får vänta på varuhissen.'}`
-        + (S.power ? '' : ' Strömavbrott: flyttgubbarna väntar ut det med möblerna vid hissen – den som har tomma händer tar trapporna.')
-        : `Flytten är klar (${M.done} lass) – varuhissen går i vanlig trafik igen.`,
-      `${V ? `<button class="btn xs" data-act="follow:${V.id}">📹 Följ varuhissen</button>` : ''}<button class="btn xs" data-act="show:${M.floor}">Visa våningen</button>`);
+        ? `<b>${esc(M.who)}</b> flyttar från ${fl(M.floor)} med Flyttfirman Lyft & Bär. Bohaget: <b>${num(M.loads)}</b> lass – ${num(flat)} kvar i lägenheten, ${num(out)} nere vid flyttbilen, ${num(M.truck)} inlastade.`
+          + `<div class="svc" title="▓ i flyttbilen · ▒ på lastkajen · ░ bärs · · i lägenheten">${bar}</div>${lock}`
+          + (hoistStatus(M) ? ` <b>Hissbalken:</b> ${esc(hoistStatus(M))}` : '')
+          + (M.pivots ? ` ${M.pivots === 1 ? 'En möbel' : `${num(M.pivots)} möbler`} har fått vändas i hissdörren.` : '')
+          + (S.power ? '' : ' Strömavbrott: flyttgubbarna väntar ut det med möblerna vid hissen – den som har tomma händer tar trapporna.')
+        : `Flytten är klar: ${num(M.loads)} lass på ${Math.round(M.t1 - M.t0)} s${M.hoisted ? ` (${num(M.hoisted)} med hissbalken och panoramahissen)` : ''}, varuhissen var låst i ${Math.round(M.indepSec)} s. Den går i vanlig trafik igen.`,
+      `${V ? `<button class="btn xs" data-act="follow:${V.id}">📹 Följ varuhissen</button>` : ''}<button class="btn xs" data-act="show:${M.floor}">Visa våningen</button><button class="btn xs" data-act="show:${DOCK}">Lastkajen</button>`);
   }
   const A = S.medic;
   if (A && (A.state !== 'done' || S.t - A.t1 < 20)) {
@@ -564,7 +577,7 @@ export function showIntro() {
       <li>Det finns <b>inga knappar</b> på våningarna. Varje person har ett eget mål och får en egen hiss. Tankebubblan visar målet och hissen.</li>
       <li>Hissarna är <b>zonindelade</b>: L1–L2 går i låg zon (TB–5) och H1–H2 i hög zon (6–T) – <b>staplade i samma schakt</b>. Expresshissarna X1–X2 kör E ⇄ 6 utan stopp, och X1 går ända ner till <b>tunnelbanan</b> (TB) – där kommer folk i klump varje gång ett tåg stannar. Den som ska mellan zonerna <b>byter hiss</b> (↹) i entrén och i sky lobbyn. Varuhissen V tar städvagnar och paket, och panoramahissen P åker utanpå fasaden.</li>
       <li>Huset <b>lever</b>: bilar kör in i garaget, leveransbilen lastar av vid kajen, de boende sover, jobbar och går på taket, en fönsterputsare jobbar sig nedåt utanför tornet, hundägare kommer med raggiga pudlar och går hem med nyklippta, och ibland landar en VIP-helikopter på taket.</li>
-      <li>Ett <b>dygn</b> tar ungefär 6 minuter – ☀️ dag och 🌙 natt syns uppe till vänster. Trafiken följer dygnet – rusning på morgonen, lunch, hemgång – och på natten är det bara väktare, städare och nattugglor. Vissa våningar stänger (caféet, banken …).</li>
+      <li>Ett <b>dygn</b> tar ungefär ${Math.round(dayLength() / 60)} minuter – ☀️ dag och 🌙 natt syns uppe till vänster. Trafiken följer dygnet – rusning på morgonen, lunch, hemgång (de får mest tid) – och på natten är det bara väktare, städare och nattugglor. Vissa våningar stänger (caféet, banken …).</li>
       <li><b>Incidenter</b> händer: brand, strömavbrott och hissfel – då kommer en hisstekniker och lagar. Slitna hissar går oftare sönder, och utan nattservice följer slitaget med till nästa dygn. Då dyker en ruta upp med dina val. Under <b>⋯</b> kan du utlösa dem själv.</li>
       <li>Bilden visar <b>hallen framför hissarna</b> – rummen ligger bakom korridoren, och folk syns när de kommer ut för att vänta på hissen. Siffran vid korridoren är hur många som är inne.</li>
       <li><b>Klicka på en person</b> för att spåra hen – en lapp följer personen och 👤 visar allt, även när hen är inne i rummen. <b>Klicka på en korridor</b> för att spåra någon som är därinne. <b>Klicka på en hiss</b> för dess plan, last och knappen 📹 Följ.</li>

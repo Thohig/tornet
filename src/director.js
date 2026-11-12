@@ -7,7 +7,7 @@ import { fl } from './util.js';
 import { vrand } from './rng.js';
 import { VIEW, camMax, camTarget } from './view.js';
 import { personHead } from './render.js';
-import { cleanerAt } from './pixel.js';
+import { cleanerAt } from './hoist.js';
 
 const HOLD = 10;     // sekunder (verklig tid) en vanlig tagning varar
 const MIN_HOLD = 6;  // så kort får en tagning bli innan något viktigare får klippa in
@@ -16,7 +16,7 @@ const MEMORY = 6;    // så många tidigare tagningar som får straff (inte samm
 const BORED = 1.5;   // poängavdrag per sekund som något redan har visats (helikoptern på taket blir tråkig)
 const FORGET = 120;  // sekunder tills det tråkiga är glömt (avtar exponentiellt)
 
-/** @typedef {{ key: string, score: number, kind: 'car'|'person'|'floor'|'cleaner', id: number, why: string }} Shot */
+/** @typedef {{ key: string, score: number, kind: 'car'|'person'|'floor'|'cleaner'|'hoist', id: number, why: string }} Shot */
 
 /** Slår på/av regissören. */
 export function toggleAuto() {
@@ -73,6 +73,13 @@ function shots() {
     const since = S.anim - cleanerShown;
     add('cleaner', Math.min(60, 20 + since / 3) + (S.storm ? 10 : 0), 'cleaner', 0, S.storm ? '🧽 Putsaren i blåsten' : '🧽 Fönsterputsaren');
   }
+  // hissbalken: möbeln som hänger utanför fasaden, och panoramahissen när den kör flyttlasset
+  const HB = S.hoist;
+  if (HB && S.move && (HB.phase === 'lower' || HB.phase === 'hook')) {
+    const it = HB.item !== null ? S.move.items[HB.item] : S.move.items.find(i => i.st === 'hatch');
+    add('hoist', 78, 'hoist', 0, `🏗️ ${it ? it.name.replace(/^(en|ett) /, '').replace('(!)', '') : 'Flyttlasset'} i hissbalken`);
+  }
+  for (const e of S.elevators) if (e.mode === 'lift' && HB && HB.liftItem !== null) add('liftload', 40, 'car', e.id, `🚚 Flyttlass i ${e.name}`);
   // ---------- folk ----------
   const queue = new Map();
   for (const p of S.people) {
@@ -106,6 +113,7 @@ function rate(s, current = false) {
 function shotY(s) {
   if (s.kind === 'floor') return floorY(s.id) - FLOOR_H / 2;
   if (s.kind === 'cleaner') { const G = cleanerAt(); return G && G.crew ? G.y - 30 : null; }
+  if (s.kind === 'hoist') return S.hoist && S.hoist.phase !== 'idle' ? S.hoist.y - 10 : null;
   if (s.kind === 'car') { const e = S.elevators[s.id]; return e ? floorY(e.pos) - FLOOR_H / 2 : null; }
   const p = S.people.find(q => q.id === s.id);
   if (!p || p.dead) return null;

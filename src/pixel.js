@@ -4,9 +4,10 @@
 // Bara grafik: läser simuleringens tillstånd men ändrar det aldrig (utom S.fx-listan, som den
 // tecknade grafiken också räknar ner).
 import { ARR, clamp, fl } from './util.js';
-import { BX1, CAR_H, CAR_W, EL, FL, FLOORS, FLOOR_H, FLOOR_HOURS, FULL_LOAD, GARAGE_FLOORS, GROUND_Y, H, INNER_X1, LAND_X0, DOOR_X, LOBBY, MEZZ, ROOF_Y, SEAM_F, SHAFT_W, SHAFT_X0, STATION, TOP, TOWER_X1, TRAIN_LEN, TRAIN_X0, TRAIN_X1, W, carPos, floorOpen, floorY, shaftCX, shaftX, surf } from './config.js';
+import { BX1, CAR_H, CAR_W, EL, FL, FLOORS, FLOOR_H, FLOOR_HOURS, FULL_LOAD, GARAGE_FLOORS, HATCH_FLOORS, GROUND_Y, H, INNER_X1, LAND_X0, DOOR_X, DOCK, LOBBY, MEZZ, ROOF_Y, SEAM_F, SHAFT_W, SHAFT_X0, STATION, TOP, TOWER_X1, TRAIN_LEN, TRAIN_X0, TRAIN_X1, W, carPos, floorOpen, floorY, shaftCX, shaftX, surf } from './config.js';
 import { exposure, windAt } from './weather.js';
 import { WARM_AT, nextOut, tech } from './service.js';
+import { HOIST_OK, PARK_Y, TERRACE_Y, cleanerAt } from './hoist.js';
 import { S, hour } from './state.js';
 import { allowed, cabinKg, keyed } from './dispatch.js';
 import { noteDetail, stateInfo } from './describe.js';
@@ -549,6 +550,83 @@ function drawHall(f, h) {
   stairSign(f, false);
   if (f === STATION) drawPlatformPx(top, bot, h);
 }
+// ---------- Flyttdagen ----------
+/** hissbalken: balken på taket med block och talja, kroken (med lasten) och lastluckorna i tornets fasad */
+function drawHoistPx() {
+  if (!HOIST_OK || !S.hoist) return;
+  const H = S.hoist, M = S.move, wall = X(UX1 + 7), wind = S.storm ? windAt() : 0;
+  // lastluckorna: en liten dörr i fasaden på varje bostadsvåning (öppen när kroken är där)
+  for (const f of HATCH_FLOORS) {
+    const yy = Y(floorY(f)) - 1;
+    if (yy < -40 || yy > lo.height + 40) continue;
+    const open = M && M.state === 'on' && M.floor === f && (H.phase === 'fetch' || H.phase === 'hook' || M.items.some(it => it.st === 'hatch'));
+    R(wall - 6, yy - 22, 7, 22, INK); R(wall - 5, yy - 21, 5, 21, open ? '#2b2f36' : '#8a5a2b');
+    if (!open) R(wall - 2, yy - 11, 1, 2, '#ffd23f');
+    // möbler som står och väntar i luckan
+    if (open && M) {
+      const wait = M.items.find(it => it.st === 'hatch');
+      const cg = wait ? cargoSprite(wait.sprite, -1) : null;
+      if (cg) g.drawImage(cg.c, wall - 8 - cg.c.width + 4, yy - cg.c.height + 1);
+    }
+  }
+  // terrassen: det som väntar på panoramahissen
+  if (M && M.state === 'on') {
+    const ty = Y(TERRACE_Y) - 2;
+    let x = X(BX1) - 30;
+    for (const it of M.items.filter(i => i.st === 'terrace')) {
+      const cg = cargoSprite(it.sprite, 1); if (!cg) continue;
+      g.drawImage(cg.c, x - cg.c.width, ty - cg.c.height + 1); x -= cg.c.width + 3;
+    }
+    if (M.items.some(i => i.st === 'terrace') || H.phase === 'lower') g.drawImage(personSprite(HOIST_CREW, 'side', 0, 1, {}), X(BX1) - 22, ty - PERSON_H + 1);
+  }
+  if (H.phase === 'idle') return;
+  // balken: en gul bom ut från taket med blocket längst ut
+  const ay = Y(ROOF_Y - 10), bx0 = wall - 6, bx1 = wall + 34;
+  const out = H.phase === 'rig' ? clamp(H.t / 4, 0, 1) : H.phase === 'unrig' && H.y <= PARK_Y + 1e-6 ? clamp(1 - H.t / 4, 0, 1) : 1;
+  const tip = Math.round(bx0 + (bx1 - bx0) * out);
+  R(bx0, ay - 13, tip - bx0 + 2, 4, INK); R(bx0 + 1, ay - 12, tip - bx0, 2, '#ffd23f');
+  for (let x = bx0 + 3; x < tip - 2; x += 6) R(x, ay - 12, 2, 2, INK);
+  R(tip - 2, ay - 10, 5, 5, INK); R(tip - 1, ay - 9, 3, 3, PAL.steel); // blocket
+  if (out < 1) return;
+  // linorna (talja: två parter) och kroken – svänger i blåsten
+  const sway = Math.round(Math.sin(S.anim * 2.1) * wind * 8);
+  const hy = Y(H.y), hx = tip + sway;
+  if (hy < -60 || ay > lo.height + 60) return;
+  line(tip - 1, ay - 7, hx - 1, hy - 8, '#3a3f4a'); line(tip + 1, ay - 7, hx + 1, hy - 8, '#3a3f4a');
+  R(hx - 2, hy - 9, 5, 4, INK); R(hx - 1, hy - 8, 3, 2, PAL.steel); // underblocket
+  R(hx, hy - 5, 1, 3, INK); R(hx - 1, hy - 3, 1, 1, INK); // kroken
+  const it = H.item !== null && M ? M.items[H.item] : null;
+  if (it) {
+    const cg = cargoSprite(it.sprite, 1);
+    if (cg) {
+      const lx = hx - Math.round(cg.c.width / 2), ly = hy + 2;
+      line(hx, hy - 2, lx + 1, ly, '#ff8c42'); line(hx, hy - 2, lx + cg.c.width - 2, ly, '#ff8c42'); // lyftstroppar
+      g.drawImage(cg.c, lx, ly);
+    }
+  }
+  if (H.halted && Math.sin(S.anim * 5) > -0.2) label(H.halted === 'blåst' ? 'VINDSTOPP' : 'STOPP', hx, hy - 24, '#ff5d52', '#ffffff');
+}
+
+/** det som står packat i trapphallen utanför lägenheten och det som väntar vid flyttbilen på lastkajen */
+function drawMovePilesPx() {
+  const M = S.move;
+  if (!M || M.state !== 'on') return;
+  movePile(DOCK, M.items.filter(it => it.st === 'dock'));
+  movePile(M.floor, M.items.filter(it => it.st === 'home'));
+}
+function movePile(f, items) {
+  if (!items.length) return;
+  const fy = Y(surf(f)), top = Y(floorY(f + 1) + 4);
+  if (fy < 0 || top > lo.height) return;
+  let x = X(DOOR_X) + 20;
+  const show = items.slice(0, 4);
+  for (const it of show) {
+    const cg = cargoSprite(it.sprite, 1); if (!cg) continue;
+    g.drawImage(cg.c, x, fy - cg.c.height + 1);
+    x += cg.c.width + 2;
+  }
+  if (items.length > show.length) text(g, `+${items.length - show.length}`, x + 2, fy - 8, '#ffffff', 'left', 1, INK);
+}
 // ---------- Tunnelbanan ----------
 // Spåret ligger längs perrongens bakvägg mellan två tunnelmynningar; tåget är längre än perrongens synliga
 // del, så bara mitten syns. Allt läses ur S.train (simuleringen) – här ritas bara.
@@ -757,6 +835,7 @@ function drawCarPx(e) {
   if (e.mode === 'locked') label('AVSTÄNGD', x + cw / 2, yt - 11, '#ff2d55', '#ffffff');
   if (e.mode === 'recall') label(`→ TILL ${fl(e.home)}`, x + cw / 2, yt - 11, '#ff8c42');
   if (e.mode === 'rescue') label('NÖDSÄNK', x + cw / 2, yt - 11, '#7dff9a');
+  if (e.mode === 'lift' || e.liftWant) label(e.mode === 'lift' ? 'FLYTTLASS' : '→ FLYTTLASS', x + cw / 2, yt - 11, '#ff8c42');
   if (e.mode === 'snapped') { if (Math.sin(S.anim * 7) > -0.3) label('LINBROTT!', x + cw / 2, yt + chh / 2 - 4, '#ff2d55', '#ffffff'); }
   if (e.mode === 'broken' && e.fault && e.fault.cable) label('LINBYTE', x + cw / 2, yt + chh / 2 - 4, '#ffd23f');
   else if (e.mode === 'broken') { if (Math.sin(S.anim * 6) > -0.4) label('FEL!', x + cw / 2, yt - 11, '#ff2d55', '#ffffff'); }
@@ -785,8 +864,8 @@ function cabinPx(e, k, x, yb, body, head) {
   const inner = e.facade ? PAL.cabinGlass : e.freight ? PAL.cabinFreight : PAL.cabin;
   R(ix, iy, iw, ih, inner);
   R(ix, iy + ih - 6, iw, 6, dark(inner, 0.12));
-  if (e.indep) {
-    // flyttdag: väggarna kläs med blå skyddsfiltar
+  if (e.indep || (e.freight && S.move && S.move.state === 'on')) {
+    // flyttdag: väggarna kläs med blå skyddsfiltar (hela flytten, även när hissen inte är låst)
     R(ix, iy, iw, ih - 6, '#3f5f9f');
     for (let yy = 0; yy < ih - 6; yy += 6) for (let xx = (yy / 6) % 2 ? 3 : 0; xx < iw; xx += 6) R(ix + xx, iy + yy, 3, 3, '#5577b8');
   } else if (e.freight) for (let n = 0; n < 4; n++) R(ix, iy + 5 + n * 8, iw, 1, 'rgba(27,16,51,.18)');
@@ -801,7 +880,13 @@ function cabinPx(e, k, x, yb, body, head) {
     // bakre raden står högre upp och lite i skugga, så att huvudena syns ovanför främre raden
     const back = s < 4, px = x + Math.round(carSlotX(s) / PX) - PERSON_W / 2 + (back ? 0 : 2), py = yb - (back ? 7 : 1) - PERSON_H;
     if (back) g.filter = 'brightness(0.82)';
+    // last (städvagn, paketkärra, flyttlåda, bår …) står bredvid ägaren – resväskan bakom, resten framför
+    // (lasten vänds in mot korgens mitt, annars klipps den av väggen)
+    const cx = px + PERSON_W / 2, cy = py + PERSON_H - 1; // (fötterna, som i hallen)
+    const cg = p.cargo && !DOGS[p.cargo.kind] ? cargoSprite(p.cargo.kind, cx > ix + iw / 2 ? -1 : 1) : null;
+    if (cg && p.cargo.kind === 'resväska') g.drawImage(cg.c, cx + cg.dx, cy - cg.c.height + 1 - cg.lift);
     g.drawImage(personSprite(p, 'front', 0, 1, { blink: blinkOf(p), hot: hotOf(p) }), px, py);
+    if (cg && p.cargo.kind !== 'resväska') g.drawImage(cg.c, cx + cg.dx, cy - cg.c.height + 1 - cg.lift);
     g.filter = 'none';
   }
   // pudlar i korgen sitter längst fram vid matte/husses fötter
@@ -811,6 +896,11 @@ function cabinPx(e, k, x, yb, body, head) {
     const px = x + Math.round(carSlotX(s) / PX) + 2, py = yb - 1 - d.c.height;
     g.drawImage(d.c, px, py);
     if (Math.sin(S.anim * 0.8 + p.id * 2.3) > 0.97) bark(px + 4, py);
+  }
+  // flyttlasset från terrassen (panoramahissen i lastläge)
+  if (k === 0 && e.mode === 'lift' && S.hoist && S.hoist.liftItem !== null && S.move) {
+    const cg = cargoSprite(S.move.items[S.hoist.liftItem].sprite, 1);
+    if (cg) g.drawImage(cg.c, x + Math.round((cw - cg.c.width) / 2), yb - 1 - cg.c.height);
   }
   // hissteknikern står i den öppna korgen och skruvar
   const fixer = k === 0 && (e.mode === 'broken' || e.mode === 'service') && e.techId !== null ? S.people.find(p => p.id === e.techId && p.state === 'office' && p.floor === e.floor) : null;
@@ -865,7 +955,8 @@ function drawHallPeople() {
     const fx = X(lp.x), fy = Y(surf(p.floor) + p.depth * 0.6);
     g.globalAlpha = lp.a;
     const dog = p.cargo ? DOGS[p.cargo.kind] : null;
-    const cg = dog ? cargoSprite(dog + (walking ? (frame % 2 ? '2' : '') : 'S'), dir) : walking && p.cargo ? cargoSprite(p.cargo.kind, dir) : null;
+    // (lasten syns även i kön – städvagnar och paketkärror vid varuhissen ska synas)
+    const cg = dog ? cargoSprite(dog + (walking ? (frame % 2 ? '2' : '') : 'S'), dir) : p.cargo ? cargoSprite(p.cargo.kind, dir) : null;
     if (cg && p.cargo.kind === 'resväska') g.drawImage(cg.c, fx + cg.dx, fy - cg.c.height + 1 - cg.lift);
     g.drawImage(personSprite(p, 'side', frame, dir, { blink: blinkOf(p), hot: hotOf(p) }), fx - PERSON_W / 2, fy - PERSON_H + 1);
     if (cg && p.cargo.kind !== 'resväska') g.drawImage(cg.c, fx + cg.dx, fy - cg.c.height + 1 - cg.lift);
@@ -1064,33 +1155,17 @@ function drawRoofPx() {
   if (blink) R(ax - 4, Y(20) - 4, 10, 10, `rgba(255,45,85,${0.35 + n * 0.3})`);
   box(ax - 2, Y(20) - 2, 6, 6, blink ? '#ff2d55' : '#7a2033');
 }
-// ---------- Fönsterputsaren ----------
-// En gondol hänger i en arm på taket utanför det smala tornet. Under dagen sänks den en våning i
-// taget och putsaren skrapar fasaden; på eftermiddagen hissas den upp igen och står parkerad över natten.
-// Bara grafik: läget räknas ut ur klockan, inget sparas i simuleringen.
+// ---------- Fönsterputsaren och hissbalken ----------
+// En gondol hänger i en arm på taket utanför det smala tornet; på flyttdagen tar hissbalken samma skena
+// (läget räknas i simuleringen – hoist.js – här ritas bara).
 const CLEANER = { id: 9001, mood: 0, child: false, smoked: false,
   look: { skin: '#f6c48f', shirt: '#2a5db0', pants: '#2a5db0', hair: 4, hairC: '#5a3a1a', tie: false, tieC: '#ffe14d', stripe: true, acc: 0 } };
-const GONDOLA_STOPS = (() => {
-  const st = [floorY(TOP) + 34]; // parkerad strax under taket
-  for (let f = TOP - 1; f >= SEAM_F; f--) st.push(floorY(f) - 18);
-  return st;
-})();
-const CLEAN_H0 = 8, CLEAN_H1 = 16, CLEAN_UP = 17.5;
-const lerp = (a, b, k) => a + (b - a) * k;
-/** gondolens golv (världens y), om putsaren skrapar just nu och om han är på jobbet */
-function gondolaAt(h) {
-  const P = GONDOLA_STOPS, n = P.length - 1, park = P[0];
-  if (h < CLEAN_H0 || h >= CLEAN_UP || UX1 >= BX1) return { y: park, scrub: false, crew: false };
-  if (h >= CLEAN_H1) return { y: lerp(P[n], park, smooth((h - CLEAN_H1) / (CLEAN_UP - CLEAN_H1))), scrub: false, crew: true };
-  const seg = ((h - CLEAN_H0) / (CLEAN_H1 - CLEAN_H0)) * n, i = Math.min(n - 1, Math.floor(seg)), k = seg - i;
-  return k < 0.25 ? { y: lerp(P[i], P[i + 1], smooth(k / 0.25)), scrub: false, crew: true } : { y: P[i + 1], scrub: true, crew: true };
-}
-const smooth = k => k * k * (3 - 2 * k);
-/** Var putsarens gondol är just nu (för regissören), eller null om huset saknar ett smalt torn. */
-export const cleanerAt = (h = hour()) => (UX1 >= BX1 ? null : gondolaAt(h));
-function drawCleanerPx(h) {
-  if (UX1 >= BX1) return; // huset har inget smalt torn att putsa
-  const G0 = gondolaAt(h), wind = S.storm ? windAt() : 0;
+const HOIST_CREW = { id: 9002, mood: 0, child: false, smoked: false,
+  look: { skin: '#d9a066', shirt: '#ff8c42', pants: '#3a3a3a', hair: 1, hairC: '#2a1d14', tie: false, tieC: '#ffe14d', stripe: false, acc: 0 } };
+function drawCleanerPx() {
+  const G0 = cleanerAt(); // (null: huset har inget smalt torn att putsa)
+  if (!G0) return;
+  const wind = S.storm ? windAt() : 0;
   const wall = X(UX1 + 7), ay = Y(ROOF_Y - 10), ax0 = wall - 4, ax1 = wall + 26;
   // armen på taket med två linor
   R(ax0, ay - 8, 2, 9, INK); R(ax0, ay - 1, ax1 - ax0 + 2, 3, INK); R(ax0 + 1, ay, ax1 - ax0, 1, PAL.steel);
@@ -1252,6 +1327,7 @@ export function renderPixel(dt) {
   for (const e of S.elevators) drawRopesPx(e);
   drawLanternsPx();
   for (const e of S.elevators) drawCarPx(e);
+  drawMovePilesPx();
   drawHallPeople();
   drawHeliPx();
   drawSnowPx(dt);
@@ -1259,7 +1335,8 @@ export function renderPixel(dt) {
   drawSmokePx();
   drawOutagePx();
   drawRoofPx();
-  drawCleanerPx(hr);
+  drawCleanerPx();
+  drawHoistPx();
   drawSelectionPx();
   drawHoverPx();
   drawGagsPx(dt);

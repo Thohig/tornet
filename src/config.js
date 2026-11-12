@@ -130,9 +130,9 @@ export const BUILDING = {
     { label: '9', theme: 'server', tags: ['office', 'server'] },
     { label: '10', theme: 'spa', hours: [8, 18], tags: ['office', 'spa'] },
     { label: '11', theme: 'lab', hours: [7, 19], tags: ['office'] },
-    { label: '12', theme: 'apartments', variant: 0, tags: ['home'] },
-    { label: '13', theme: 'apartments', variant: 1, tags: ['home'] },
-    { label: '14', theme: 'apartments', variant: 2, tags: ['home'] },
+    { label: '12', theme: 'apartments', variant: 0, tags: ['home', 'hatch'] },
+    { label: '13', theme: 'apartments', variant: 1, tags: ['home', 'hatch'] },
+    { label: '14', theme: 'apartments', variant: 2, tags: ['home', 'hatch'] },
     { label: 'T', theme: 'roof', hours: [9, 20], open: true, tags: ['roof', 'helipad'] },
   ],
   // Zonindelning som i riktiga skyskrapor: låg zon P2–5 och hög zon 6–T är STAPLADE i samma schakt
@@ -152,7 +152,8 @@ export const BUILDING = {
     { name: 'H1', color: '#008080', group: 'hög', col: 0, start: '6', serves: ['6', '7', '8', '9', '10', '11', '12', '13', '14', 'T'], park: { day: '6', lunch: '6', evening: '11' } },
     { name: 'H2', color: '#2a5db0', group: 'hög', col: 1, start: '10', serves: ['6', '7', '8', '9', '10', '11', '12', '13', '14', 'T'], park: { day: '10', lunch: '6', evening: '13' } },
     { name: 'V', color: '#808080', group: 'varu', col: 2, start: 'P1', home: 'P1', freight: true, ratedKg: 1600 },
-    { name: 'P', color: '#93379e', group: 'panorama', start: 'E', serves: ['E', '6', 'T'], facade: true },
+    // terrace: våningen där panoramahissen har en lastdörr mot takterrassen – bara för hissbalkens flyttlass (hoist.js)
+    { name: 'P', color: '#93379e', group: 'panorama', start: 'E', serves: ['E', '6', 'T'], facade: true, terrace: '8' },
   ],
 };
 
@@ -172,6 +173,8 @@ export const ROOF = floorWith('roof');
 export const DOCK = floorWith('dock');
 export const STATION = floorWith('station'); // tunnelbanan under huset (-1 om huset saknar station)
 export const HOME_FLOORS = floorsWith('home');
+/** bostäder med lastlucka mot fasaden (hissbalken på flyttdagen) */
+export const HATCH_FLOORS = floorsWith('hatch');
 export const GARAGE_FLOORS = floorsWith('garage');
 /** Våningarnas data: temats namn/färg + våningens egna fält (label, theme, hours, tags) */
 export const FL = FDEF.map(f => ({ ...THEME_INFO[f.theme], ...f }));
@@ -198,7 +201,7 @@ export const EL = BUILDING.elevators.map((e, i) => {
   // hem = där hissen vilar på natten och dit den kör vid brandåterkallning (entrén om den går dit)
   const home = e.home ? idx(e.home) : stops.includes(LOBBY) ? LOBBY : minF;
   return { ...e, id: i, serves, stops, upper, legs, deck2: upper.length > 0, minF, maxF, topF, startF: idx(e.start), home,
-    group: e.group || 'alla', ratedKg: e.ratedKg || RATED_KG * (upper.length ? 2 : 1) };
+    group: e.group || 'alla', ratedKg: e.ratedKg || RATED_KG * (upper.length ? 2 : 1), terraceF: e.terrace ? idx(e.terrace) : -1 };
 });
 /** korgens läge (nedre däckets våning) när den tar folk på våning f: en våning lägre för övre däcket */
 export const carPos = (id, f) => (EL[id].upper.includes(f) ? f - 1 : f);
@@ -256,10 +259,57 @@ export const BALANCE = 0.45, FLOOR_M = 3.5;
 export const MAXP = 240;
 // Ett dygn går från 06:00 till 06:00 (timmarna räknas 6…30). Tiden går fortare på kvällen och natten.
 export const START_H = 6, END_H = 30;
-// Ett dygn tar 6 minuter i 1×: dagen 06–20 = 4 min, kvällen 20–22 = 30 s och natten 22–06 = 90 s.
-// Hissarna rör sig i verklig takt – det är klockan som går fort (en hissresa tar en speltimme eller så).
+// ---------- Dygnets tempo ----------
+// Hissarna och folket rör sig i verklig takt – det är klockan som går olika fort under dygnet. Tabellen
+// säger hur många sekunder (i 1×) varje del av dygnet tar: [från klockslag, sekunder] – delen varar till
+// nästa rads klockslag (den sista till 06:00). Rusningarna får mest tid: det är då det händer mest.
+// Ändra längden här. Det korta dygnet (6 minuter) är det ursprungliga och väljs med ?tempo=kort.
+// wear: slitage per stopp – det långa dygnet har ungefär dubbelt så många resor, och hissarna ska inte slitas
+// (eller gå sönder) oftare per dygn för det.
+/** @type {Record<string, { name: string, wear: number, phases: [number, number][] }>} */
+export const TEMPOS = {
+  lang: { name: 'Långt dygn', wear: 0.5, phases: [
+    [6, 30],     // tidig morgon
+    [7, 160],    // morgonrusning
+    [9.5, 45],   // förmiddag
+    [11, 130],   // lunch
+    [13, 60],    // eftermiddag
+    [15.5, 160], // hemgång
+    [18.5, 45],  // tidig kväll
+    [20, 70],    // kväll
+    [22, 180],   // natt
+  ] },
+  kort: { name: 'Kort dygn', wear: 1, phases: [[6, 240], [20, 30], [22, 90]] },
+};
+export const DEFAULT_TEMPO = 'lang';
+/** klockans takt i det ursprungliga 6-minutersdygnet på dagen: flöden som bara ska följa speltiden räknas mot den */
+export const REF_SCALE = 210;
+let TEMPO = DEFAULT_TEMPO;
+/** @type {{ from: number, to: number, scale: number }[]} */
+let PHASES = [];
+/** Väljer dygnets tempo (anropas av newSim – tempot hör till dygnet, som fröet). */
+export function setTempo(name) {
+  TEMPO = name in TEMPOS ? name : DEFAULT_TEMPO;
+  const ph = TEMPOS[TEMPO].phases;
+  PHASES = ph.map(([from, sec], i) => {
+    const to = i + 1 < ph.length ? ph[i + 1][0] : END_H;
+    return { from, to, scale: (to - from) * 3600 / sec };
+  });
+  return TEMPO;
+}
+export const tempoName = () => TEMPO;
+/** slitage och slumpade fel per stopp med dygnets tempo */
+export const tempoWear = () => TEMPOS[TEMPO].wear;
+/** hur många sekunder (i 1×) ett dygn tar med tempot */
+export const dayLength = (name = TEMPO) => TEMPOS[name in TEMPOS ? name : DEFAULT_TEMPO].phases.reduce((a, [, sec]) => a + sec, 0);
+setTempo(DEFAULT_TEMPO);
 /** spelsekunder per simuleringssekund */
-export function timeScale(h) { return h >= 22 ? 320 : h >= 20 ? 240 : 210; }
+export function timeScale(h) {
+  for (let i = PHASES.length - 1; i >= 0; i--) if (h >= PHASES[i].from) return PHASES[i].scale;
+  return PHASES[0].scale;
+}
+/** hur fort klockan går jämfört med 6-minutersdygnets dag (under 1 = långsammare, t.ex. i rusningen) */
+export const pace = h => timeScale(h) / REF_SCALE;
 // Det folk gör i rummen (jobba, fika, sova) räknas i speltid, som när ett dygn tog en halvtimme:
 // rumstimrarna (p.timer i läget office) tickar activityRate(h) gånger fortare än simuleringen.
 const ROOM_SCALE = h => (h >= 22 ? 120 : h >= 20 ? 60 : 30);
@@ -276,6 +326,30 @@ export function roomUnits(h0, h1) {
   }
   return u;
 }
+// ---------- Flyttdagens bohag ----------
+// Storlek: S = kartonger och smått (en stapel per tur), M = mellanstora möbler, L = stora möbler,
+// XL = för tungt för trappor och dörrar – hissas ut genom lastluckan med hissbalken (hoist.js) där det finns en.
+// long = lång möbel som kan fastna i hissdörren och måste vändas ("PIVOT!"). sprite = figuren i pixpeople.js.
+/** @typedef {{ name: string, size: 'S'|'M'|'L'|'XL', kg: [number, number], sprite: string, long?: boolean }} BohagDef */
+/** @type {Record<string, BohagDef>} */
+export const BOHAG = {
+  kartonger: { name: 'flyttkartonger', size: 'S', kg: [30, 55], sprite: 'kartonger' },
+  lampor: { name: 'lampor och tavlor', size: 'S', kg: [10, 18], sprite: 'flyttlåda' },
+  tvbank: { name: 'en tv-bänk', size: 'M', kg: [25, 40], sprite: 'flyttlåda' },
+  skrivbord: { name: 'ett skrivbord', size: 'M', kg: [30, 45], sprite: 'flyttlåda' },
+  byra: { name: 'en byrå', size: 'M', kg: [35, 60], sprite: 'flyttlåda' },
+  kyl: { name: 'ett kylskåp', size: 'M', kg: [55, 75], sprite: 'kyl' },
+  soffa: { name: 'en soffa', size: 'L', kg: [50, 85], sprite: 'soffa', long: true },
+  hylla: { name: 'en bokhylla', size: 'L', kg: [30, 50], sprite: 'hylla', long: true },
+  sang: { name: 'en säng', size: 'L', kg: [40, 70], sprite: 'madrass', long: true },
+  piano: { name: 'ett piano(!)', size: 'XL', kg: [200, 260], sprite: 'piano' },
+  kassaskap: { name: 'ett kassaskåp', size: 'XL', kg: [180, 300], sprite: 'kassaskap' },
+};
+/** möblerna som följer med varje sorts boende (sängen per person, resten en gång per hushåll) */
+export const BOHAG_BY_TYPE = {
+  worker: ['sang', 'soffa', 'kyl', 'tvbank'], child: ['sang'], student: ['sang', 'skrivbord'],
+  pensioner: ['sang', 'soffa', 'byra', 'piano'], vd: ['sang', 'soffa', 'kassaskap', 'hylla'], artist: ['sang', 'hylla', 'piano'],
+};
 export const ROLE_NAMES = { 'väktare': 'Väktare', 'städare': 'Städare', 'vaktmästare': 'Vaktmästare', 'nattdj': 'Natt-DJ på Kanal 97', 'nattekniker': 'Nattekniker på Modemkungen', 'bud': 'Bud', 'hisstekniker': 'Hisstekniker', 'flyttgubbe': 'Flyttgubbe på Lyft & Bär', 'ambulans': 'Ambulanssjukvårdare' };
 
 // ---------- Stamgästerna ----------

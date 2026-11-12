@@ -10,14 +10,14 @@ import {
 } from '../src/incidents.js';
 import { liftsAvailable, spawnBus, pn } from '../src/people.js';
 import { loadKg, allowed, allowedPos, posOf, safeFloor, operational, canTake, stopFloors, isFull, costBased, benched } from '../src/dispatch.js';
-import { RATED_KG, FULL_LOAD, VMAX } from '../src/config.js';
+import { RATED_KG, FULL_LOAD, VMAX, DEFAULT_TEMPO, dayLength, tempoName } from '../src/config.js';
 import { needsFreight, mayUseFreight, legDest } from '../src/people.js';
 import { fl } from '../src/util.js';
 import { assignCalls, antiNuisance } from '../src/buttons.js';
 import { act, recording, encodeReplay, decodeReplay, SIM_VERSION, CHECK_EVERY, stateHash } from '../src/replay.js';
 import { powerKw, triggerFault, breakDown, tech, snapCable } from '../src/service.js';
 import { trafficMode, learnBin, peakHold, PEAK_HOLD } from '../src/dispatch.js';
-import { windAt } from '../src/weather.js';
+import { windAt, startStorm } from '../src/weather.js';
 import { canBrakeTo } from '../src/elevators.js';
 import { MEZZ, STATION, TRAIN_X0, TRAIN_X1 } from '../src/config.js';
 import { LAST_H } from '../src/train.js';
@@ -30,14 +30,14 @@ function assert(cond, msg) { if (!cond) throw new Fail(msg); }
 
 // ---------- Hjälp ----------
 function sim(seed, opts = {}) {
-  newSim(seed, { strategy: 'smart', autoInc: false, mistakes: 'lite', maint: 'natt', ...opts });
+  newSim(seed, { strategy: 'smart', autoInc: false, mistakes: 'lite', maint: 'natt', tempo: DEFAULT_TEMPO, ...opts });
   S.started = true; S.paused = false;
   hooks.incident = () => {}; hooks.dayEnd = () => {};
 }
 // Vakt som kontrollerar invarianter efter varje steg
 function watcher() {
   const w = { passes: 0, maxRide: 0, maxWait: 0, n: 0, overweight: 0, maxKg: 0, bypassBroken: 0, prev: [],
-    outOfRange: 0, wrongDoor: 0, badLeg: 0, badFreight: 0, vipMixed: 0, vipSet: [], selfDest: 0, brokenUse: 0, snapUse: 0, prevSnapN: [], holdBoard: 0, prevN: [], prevHold: [],
+    outOfRange: 0, wrongDoor: 0, liftPass: 0, railClash: 0, badLeg: 0, badFreight: 0, vipMixed: 0, vipSet: [], selfDest: 0, brokenUse: 0, snapUse: 0, prevSnapN: [], holdBoard: 0, prevN: [], prevHold: [],
     jumps: 0, orphanService: 0, badReserved: 0, dupNames: 0, dupEx: '', idleWait: new Map(), idleWaitMax: 0, badPlatform: 0,
     deadAssign: new Map(), deadAssignMax: 0, deadAssignEx: '', prevMode: [], late: [] };
   w.before = () => S.elevators.map(e => e.pos);
@@ -48,7 +48,9 @@ function watcher() {
       if (e.state === 'moving' && kg > e.ratedKg + 1e-6) w.overweight++;
       // zonerna: hissen håller sig inom sitt schakt och öppnar bara där den har dörrar
       if (e.pos < e.minF - 1e-6 || e.pos > e.maxF + 1e-6) w.outOfRange++;
-      if (e.state === 'doors' && !e.stops.has(e.floor)) w.wrongDoor++;
+      // (panoramahissen i lastläge öppnar sin lastdörr mot takterrassen – bara för flyttlasset)
+      if (e.state === 'doors' && !e.stops.has(e.floor) && !(e.mode === 'lift' && e.floor === e.terraceF)) w.wrongDoor++;
+      if (e.mode === 'lift' && (e.passengers.length || e.reserved)) w.liftPass++;
       for (const p of e.passengers) {
         if (p.state === 'ride' && !e.serves.has(p.dest)) w.badLeg++;
         if (p.state === 'ride' && (e.freight ? !mayUseFreight(p) : needsFreight(p))) w.badFreight++;
@@ -97,6 +99,8 @@ function watcher() {
         if (S.power && e.mode === 'normal') w.maxRide = Math.max(w.maxRide, S.t - p.rideStart);
       }
     });
+    // takskenan: ingen last hänger i hissbalken medan putsarens gondol är nere
+    if (S.hoist && S.hoist.item !== null && !S.cleaner.parked) w.railClash++;
     // ingen väntar på en hiss som inte kan komma: tilldelningen till en hiss som är ur drift, på väg till service,
     // sover, är spärrad, reserverad för någon annan eller inte går dit släpps inom ett par steg
     // (vid strömavbrott och brandåterkallning står alla hissar, och då väntar man ut det eller tar trappan)
@@ -225,12 +229,42 @@ test('Smart styrning är bättre än Närmast och Kaos (snitt över tre dygn)', 
 
 // ---------- Dygnet ----------
 function runUntil(h, w) { let g = 0; while (hour() < h && !S.summaryShown) { const b = w && w.before(); step(DT); if (w) w.check(b); if (++g > 200000) throw new Fail('kom aldrig fram'); } }
-test('Dygnet går 06:00–06:00 på ungefär 6 minuter och natten går fortare', () => {
-  sim(41); runUntil(22); const day = S.t; runDay();
-  const night = S.t - day;
-  assert(S.t > 330 && S.t < 390, `ett dygn tog ${S.t.toFixed(0)} simuleringssekunder (ska vara ≈ 6 minuter)`);
-  assert(night < day / 2, `natten (${night.toFixed(0)}s) går inte fortare än dagen (${day.toFixed(0)}s)`);
-  return `dag 06–22: ${day.toFixed(0)} s · kväll+natt 22–06: ${night.toFixed(0)} s (simuleringstid)`;
+test('Dygnets tempo: det långa dygnet tar ~15 minuter med långa rusningar, det korta 6 minuter', () => {
+  const out = [];
+  for (const tempo of ['lang', 'kort']) {
+    sim(41, { tempo });
+    const at = {};
+    for (const h of [7, 9.5, 11, 13, 22]) { runUntil(h); at[h] = S.t; }
+    runDay();
+    const want = dayLength(tempo);
+    assert(Math.abs(S.t - want) < want * 0.02, `${tempo}: ett dygn tog ${S.t.toFixed(0)} s (ska vara ${want} s)`);
+    out.push(`${tempo} ${(S.t / 60).toFixed(1)} min`);
+    if (tempo === 'lang') {
+      // per speltimme: morgonrusningen och lunchen får mer än dubbelt så mycket tid som förmiddagen
+      const rush = (at[9.5] - at[7]) / 2.5, lunch = (at[13] - at[11]) / 2, mid = (at[11] - at[9.5]) / 1.5;
+      assert(rush > 2 * mid && lunch > 2 * mid, `rusningen (${rush.toFixed(0)} s/h) och lunchen (${lunch.toFixed(0)} s/h) är inte långsammare än förmiddagen (${mid.toFixed(0)} s/h)`);
+      out.push(`morgonrusning ${(at[9.5] - at[7]).toFixed(0)} s, lunch ${(at[13] - at[11]).toFixed(0)} s`);
+    } else {
+      const night = S.t - at[22];
+      assert(night < at[22] / 2, `natten (${night.toFixed(0)}s) går inte fortare än dagen (${at[22].toFixed(0)}s)`);
+    }
+  }
+  S.tempo = DEFAULT_TEMPO;
+  return out.join(' · ');
+});
+test('Dygnets tempo följer med i replay-länken (gamla länkar spelas upp med det korta dygnet)', () => {
+  sim(17, { tempo: 'kort' }); runUntil(8);
+  const rec = decodeReplay(encodeReplay(recording()));
+  assert(rec && rec.tempo === 'kort', `länken sparade tempot ${rec && rec.tempo}`);
+  startReplay(rec);
+  assert(S.tempo === 'kort' && tempoName() === 'kort', `uppspelningen fick tempot ${S.tempo}`);
+  const old = { ...rec }; delete old.tempo;
+  startReplay(old);
+  assert(S.tempo === 'kort', 'en länk utan tempo (före tempotabellen) ska spelas med det korta dygnet');
+  assert(decodeReplay(encodeReplay({ ...rec, tempo: 'påhittat' })) === null, 'ett okänt tempo godtogs');
+  sim(17);
+  assert(S.tempo === DEFAULT_TEMPO, 'sim() återgick inte till standardtempot');
+  return 'tempot sparas i länken · gamla länkar → kort dygn';
 });
 test('Natten: låg belastning, nattpersonal och hissar i nattläge', () => {
   sim(25); runUntil(23.5);
@@ -512,7 +546,9 @@ test('De boende: åker till jobb och skola på morgonen och sover hemma på natt
   assert(n >= 8, `bara ${n} boende`);
   runUntil(11); const away = res().filter(p => p.state === 'away').length;
   runUntil(29.9); // (natten går fort – den som festat kommer hem på morgonkvisten)
-  const home = res().filter(p => p.floor === p.home && p.state === 'office').length;
+  // (ett hushåll som flyttade ut under flyttdagen bor inte här längre)
+  const moved = S.move && S.move.state === 'done' ? S.move.family.length : 0;
+  const home = res().filter(p => p.floor === p.home && p.state === 'office').length + moved;
   const asleep = res().filter(p => p.sleeping).length;
   assert(away >= 3, `bara ${away} boende var borta klockan 11`);
   assert(home === n, `${n - home} boende är inte hemma klockan 05:55`);
@@ -618,16 +654,20 @@ test('Linbrott: korgen faller, fångas mellan två våningar, alla tas ut genom 
   return `${e.name}: ${trapped.length} instängda ut via ${fl(exitF)}, linbyte ${(hour() - h0).toFixed(1)} h`;
 });
 test('Linbrott med hissteknikern ombord: en kollega larmas, räddar alla och byter linorna', () => {
-  sim(1, { autoInc: false });
+  let g = 0, e = null, t0 = null, w = null;
+  for (const seed of [1, 2, 3, 4, 5]) {
+  sim(seed, { autoInc: false });
   runUntil(10);
-  const w = watcher();
+  w = watcher();
   triggerFault();
-  let g = 0, e = null, t0 = null;
+  g = 0;
   // linorna går av just när teknikern åker hiss till jobbet
   while (!e && ++g < 400 / DT) {
     const b = w.before(); step(DT); w.check(b);
     const t = tech(), c = t && t.state === 'ride' ? t.car : null;
     if (c && c.mode === 'normal' && c.state === 'moving' && !c.facade && c.pos - Math.floor(c.pos) > 0.35 && c.pos - Math.floor(c.pos) < 0.75 && c.pos > c.minF + 0.6) { e = c; t0 = t; snapCable(e); }
+  }
+  if (e) break; // (teknikern tar ibland trappan till jobbet – då prövas nästa frö)
   }
   assert(e, 'teknikern åkte aldrig hiss');
   while (e.mode === 'snapped' && ++g < 600 / DT) { const b = w.before(); step(DT); w.check(b); }
@@ -980,29 +1020,78 @@ test('Hundsalongen: hundägare lämnar in raggiga pudlar och går ut med nyklipp
   assert(wrongFloor === 0, `${wrongFloor} hundar byttes någon annanstans än i hundsalongen`);
   return `tre dygn: ${dropped} raggiga pudlar inlämnade, ${picked} nyklippta hämtade`;
 });
-test('Flyttdag: varuhissen i oberoende drift tar bara flyttgubbarna, och Smart bokar flytten efter leveranserna', () => {
-  let ok = 0, smartLate = true, dumbEarly = true;
+test('Flyttdag: hushållets bohag bärs ut och lastas in, oberoende drift tar bara flyttgubbarna, Smart låser varuhissen kortare', () => {
+  let ok = 0, smartLate = true, dumbEarly = true, pivots = 0;
+  const lockShare = { smart: [], nearest: [] };
   for (let seed = 80; seed < 100 && ok < 3; seed++) {
     for (const strategy of ['smart', 'nearest']) {
       sim(seed, { strategy });
-      if (!S.move) continue;
-      if (strategy === 'smart') smartLate = smartLate && S.move.at >= 12; else dumbEarly = dumbEarly && S.move.at < 11;
-      const V = S.elevators.find(e => e.freight), w = watcher();
-      let bad = 0, sawIndep = false;
-      while (!S.summaryShown && S.move.state !== 'done') {
+      const M = S.move;
+      if (!M) continue;
+      if (strategy === 'smart') smartLate = smartLate && M.at >= 12; else dumbEarly = dumbEarly && M.at < 11;
+      const V = S.elevators.find(e => e.freight), w = watcher(), fam = S.people.filter(p => M.family.includes(p.id));
+      assert(fam.length && M.items.length >= 5, `frö ${seed}: inget hushåll eller för litet bohag (${M.items.length})`);
+      let bad = 0, sawIndep = false, leftEarly = 0;
+      const was = new Map();
+      while (!S.summaryShown && M.state !== 'done') {
         const b = w.before(); step(DT); w.check(b);
-        if (V.indep) { sawIndep = true; for (const p of V.passengers) if (!p.mover && !p.medic && p.rideStart > S.move.t0) bad++; }
+        if (V.indep) sawIndep = true;
+        for (const p of S.people) {
+          // ingen annan kliver på medan varuhissen är låst (de som redan var ombord åker klart)
+          if (p.state === 'boarding' && was.get(p.id) !== 'boarding' && p.car === V && V.indep && !p.mover && !p.medic) bad++;
+          was.set(p.id, p.state);
+          if (p.movedOut && M.items.some(it => it.st === 'home' || it.st === 'packing')) leftEarly++;
+        }
       }
       assert(sawIndep, `frö ${seed}: varuhissen gick aldrig i oberoende drift`);
-      assert(S.move.state === 'done' && S.move.done === S.move.loads, `frö ${seed}: flytten blev inte klar (${S.move.done}/${S.move.loads} lass)`);
-      assert(bad === 0, `frö ${seed}: ${bad} andra åkte med i oberoende drift`);
+      assert(M.state === 'done' && M.done === M.loads && M.truck === M.loads, `frö ${seed}: flytten blev inte klar (${M.done}/${M.truck}/${M.loads} lass)`);
+      assert(bad === 0, `frö ${seed}: ${bad} andra klev på under oberoende drift`);
+      assert(leftEarly === 0, `frö ${seed}: familjen gick innan lägenheten var tom`);
       assert(!V.indep, 'varuhissen blev kvar i oberoende drift');
+      // familjen flyttar: när flytten är klar är de på väg ut (eller redan borta)
+      run(120);
+      const still = fam.filter(p => !p.dead && S.people.includes(p) && !p.movedOut);
+      assert(!still.length, `frö ${seed}: ${still.map(p => p.name).join(', ')} flyttade aldrig`);
+      lockShare[strategy].push(M.indepSec / (M.t1 - M.t0));
+      pivots += M.pivots;
       if (strategy === 'smart') ok++;
     }
   }
   assert(ok >= 3, 'för få flyttdagar hittades');
   assert(smartLate && dumbEarly, 'bokningstiderna stämmer inte');
-  return `${ok} flyttdagar klara · smart bokar efter 12, närmast före 11`;
+  const avg = a => a.reduce((x, y) => x + y, 0) / a.length;
+  // (de enkla lägena låser varuhissen så länge bärarna jobbar – det sista kan gå med hissbalken)
+  assert(avg(lockShare.smart) < 0.5 && avg(lockShare.nearest) > 0.85, `varuhissen låst: smart ${Math.round(avg(lockShare.smart) * 100)} %, närmast ${Math.round(avg(lockShare.nearest) * 100)} % av flytten`);
+  assert(pivots > 0, 'ingen möbel fastnade någonsin i dörren');
+  return `${ok} flyttdagar · varuhissen låst ${Math.round(avg(lockShare.smart) * 100)} % av flytten (smart) mot ${Math.round(avg(lockShare.nearest) * 100)} % (närmast) · ${pivots} pivoteringar`;
+});
+test('Hissbalken: pianot och kassaskåpet går ut genom lastluckan och ner med panoramahissen, putsaren parkerar och balken stannar i blåst', () => {
+  let n = 0, hoisted = 0, windHeld = 0, cleanerWaited = 0;
+  for (let seed = 80; seed < 140 && n < 3; seed++) {
+    sim(seed);
+    const M = S.move;
+    if (!M || !M.hoist || !M.items.some(i => i.size === 'XL')) continue;
+    n++;
+    const V = S.elevators.find(e => e.freight), w = watcher();
+    let xlInV = 0, stormed = false, lastY = null;
+    while (!S.summaryShown && M.state !== 'done') {
+      const b = w.before(); step(DT); w.check(b);
+      for (const p of V.passengers) if (p.mover && p.item !== null && M.items[p.item].size === 'XL') xlInV++;
+      if (S.hoist.phase !== 'idle' && S.cleaner.crew) cleanerWaited += DT;
+      // en storm när lasten hänger ute: balken ska stå still
+      if (!stormed && n === 1 && S.hoist.phase === 'lower') { stormed = true; startStorm(); S.storm.t0 -= S.storm.len * 0.4; }
+      if (S.hoist.halted === 'blåst') { if (lastY !== null && S.hoist.y !== lastY) windHeld = -1e9; else windHeld++; lastY = S.hoist.y; } else lastY = null;
+    }
+    assert(M.state === 'done' && M.truck === M.loads, `frö ${seed}: flytten blev inte klar (${M.truck}/${M.loads})`);
+    const xl = M.items.filter(i => i.size === 'XL').length;
+    assert(M.hoisted === xl && xlInV === 0, `frö ${seed}: ${M.hoisted} av ${xl} XL-möbler gick med hissbalken (${xlInV} steg i varuhissen)`);
+    assert(w.railClash === 0 && w.liftPass === 0 && w.wrongDoor === 0, `frö ${seed}: regelbrott (skena ${w.railClash}, passagerare i lastläge ${w.liftPass}, dörr ${w.wrongDoor})`);
+    hoisted += M.hoisted;
+  }
+  assert(n >= 2, 'för få flyttdagar med piano eller kassaskåp');
+  assert(windHeld > 0, 'balken stannade aldrig i blåsten (eller rörde sig ändå)');
+  assert(cleanerWaited > 0, 'putsaren behövde aldrig vänta på balken');
+  return `${n} flyttdagar · ${hoisted} möbler med hissbalken · stod still i blåst ${Math.round(windHeld * DT)} s · putsaren väntade ${Math.round(cleanerWaited)} s`;
 });
 test('Ambulans: personalen får varuhissen med förtur och bär ut patienten på bår', () => {
   const resp = {};
@@ -1119,6 +1208,23 @@ test('Flyttdag vid strömavbrott: möblerna bärs inte i trapporna, tomhänta g�
   while (M.state !== 'done' && !S.summaryShown) { const b = w.before(); step(DT); w.check(b); }
   assert(M.state === 'done' && M.done === M.loads, `flytten blev inte klar (${M.done}/${M.loads})`);
   return `frö ${seed} · möbeln väntade ${Math.round(waitedDark)} s i mörkret · ${lightStairs ? 'tomhänt gick i trappan' : 'ingen tomhänt behövde trappan'}`;
+});
+test('Flyttdag vid brand: flyttgubbarna utryms, kommer tillbaka efter branden och gör klart flytten', () => {
+  let seed = 80;
+  while (seed < 120) { sim(seed); if (S.move) break; seed++; }
+  assert(S.move, 'ingen flyttdag hittades');
+  const M = S.move, w = watcher();
+  let g = 0;
+  while (M.done < 2 && g++ < 30 * 3600) { const b = w.before(); step(DT); w.check(b); }
+  assert(M.state === 'on' && M.done >= 2, 'flytten kom aldrig igång');
+  startFire(M.floor);
+  while (S.fire) { const b = w.before(); step(DT); w.check(b); }
+  const back = () => S.people.filter(p => p.mover && !p.loader).length;
+  g = 0;
+  while (M.state !== 'done' && !S.summaryShown && g++ < 30 * 3600) { const b = w.before(); step(DT); w.check(b); }
+  assert(M.state === 'done' && M.truck === M.loads, `flytten blev inte klar efter branden (${M.truck}/${M.loads} i bilen, ${back()} bärare)`);
+  assert(!S.elevators.find(e => e.freight).indep, 'varuhissen blev kvar i oberoende drift');
+  return `frö ${seed} · branden på ${fl(M.floor)} · ${M.loads} lass klara ${Math.round(M.t1 - M.t0)} s efter starten`;
 });
 test('Lärande parkering: minnet byggs upp, följer med till nästa dygn och spelas upp i replay', () => {
   sim(78);
@@ -1249,6 +1355,8 @@ function newInvariantFails(w, tag) {
   const f = [];
   if (w.jumps) f.push(`${tag}: en hiss hoppade ${w.jumps} gånger (mer än VMAX·DT på ett steg)`);
   if (w.orphanService) f.push(`${tag}: hiss på service utan tekniker i ${w.orphanService} steg`);
+  if (w.liftPass) f.push(`${tag}: panoramahissen tog passagerare i lastläge ${w.liftPass} steg`);
+  if (w.railClash) f.push(`${tag}: last i hissbalken medan putsaren var nere ${w.railClash} steg`);
   if (w.badReserved) f.push(`${tag}: e.reserved stämde inte med de som kliver på (${w.badReserved} steg)`);
   if (w.dupNames) f.push(`${tag}: två personer i huset hette samma sak (${w.dupNames} gånger, t.ex. ${w.dupEx})`);
   if (w.deadAssignMax > 0.5) f.push(`${tag}: någon väntade ${w.deadAssignMax.toFixed(1)} s på en hiss som inte kunde komma (${w.deadAssignEx})`);

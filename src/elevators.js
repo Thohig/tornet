@@ -8,6 +8,7 @@ import { safeFloor, aheadOf, allowed, allowedDest, allowedPos, assignedTo, isFul
 import { answerCalls, buttonsMode, clearCall } from './buttons.js';
 import { maybeBreak, heatOnStop, heatMul, levelStart, maybeStumble, snapStep, snapDue, snapCable } from './service.js';
 import { doorHold, politeHold } from './cast.js';
+import { liftStep } from './hoist.js';
 import { windMul } from './weather.js';
 import { peakHold } from './dispatch.js';
 
@@ -18,7 +19,7 @@ export function makeElevator(i) {
     id: i, name: d.name, color: d.color, pos, v: 0, dir: 0, pick: {},
     // serves = våningar där folk kliver på/av; stops = där korgen stannar (dubbeldäck: nedre däcket)
     serves: new Set(d.serves), stops: new Set(d.stops), upper: new Set(d.upper), legs: d.legs, deck2: d.deck2, minF: d.minF, maxF: d.maxF, home: d.home, group: d.group, ratedKg: d.ratedKg,
-    freight: !!d.freight, express: !!d.express, facade: !!d.facade,
+    freight: !!d.freight, express: !!d.express, facade: !!d.facade, terraceF: d.terraceF, liftWant: false,
     state: 'idle', doorPhase: null, door: 0, dwell: 0, dwellNeed: DWELL, floor: pos,
     passengers: [], reserved: 0, carCalls: new Set(), parkTarget: null, idleTime: 0,
     distance: 0, trips: 0, lastOff: 0, lastOn: 0, target: null, targetKind: null, fullFlash: 0,
@@ -83,6 +84,7 @@ export function updateElevator(e, dt) {
   if (!S.power && e.mode !== 'rescue') { if (e.state === 'moving') e.v = 0; return; } // strömlös – står helt still
   if (e.mode === 'recall') { recallStep(e, dt); return; }
   if (e.mode === 'rescue') { rescueStep(e, dt); return; }
+  if (e.mode === 'lift') { liftStep(e, dt); return; } // flyttlass från terrassen (hoist.js)
   if (e.mode !== 'normal') return; // låst (brand) eller utrymd (ström)
   // En full hiss behåller sina hämtningar (folk kliver av längre fram) men stannar inte för dem
   // förrän det finns plats. Omfördelningen flyttar dem om en annan hiss blir klart bättre.
