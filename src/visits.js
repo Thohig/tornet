@@ -102,7 +102,7 @@ function medicTick() {
   if (A.state === 'called' && S.t >= A.crewAt) {
     A.state = 'onway';
     for (let i = 0; i < 2; i++) spawnMedic(A, i);
-    log('🚑 Ambulansen är framme vid entrén – personalen tar varuhissen med prioritet', 'alert');
+    log(S.power ? '🚑 Ambulansen är framme vid entrén – personalen tar varuhissen med prioritet' : '🚑 Ambulansen är framme vid entrén – strömavbrott, personalen springer i trapporna', 'alert');
   }
   const crew = S.people.filter(p => p.medic);
   if ((A.state === 'onway' || A.state === 'transport') && !crew.length) {

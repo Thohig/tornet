@@ -268,16 +268,22 @@ export function incidentHtml() {
     info(`move-${S.day}`, 'move', `🚚 Flyttdag på ${fl(M.floor)}`,
       M.state === 'on'
         ? `Flyttfirman Lyft & Bär bär ut från ${fl(M.floor)} – lass <b>${num(M.done)}</b> av ${M.loads}. Varuhissen ${V ? esc(V.name) : ''} går i <b>oberoende drift</b>: nyckelstyrd, svarar inte på några anrop, bara flyttgubbarna åker med. ${M.smart ? 'Kostnadsstyrningen bokade flytten efter leveranstiden.' : 'Flytten bokades mitt i leveranstiden – paketbuden får vänta på varuhissen.'}`
+        + (S.power ? '' : ' Strömavbrott: flyttgubbarna väntar ut det med möblerna vid hissen – den som har tomma händer tar trapporna.')
         : `Flytten är klar (${M.done} lass) – varuhissen går i vanlig trafik igen.`,
       `${V ? `<button class="btn xs" data-act="follow:${V.id}">📹 Följ varuhissen</button>` : ''}<button class="btn xs" data-act="show:${M.floor}">Visa våningen</button>`);
   }
   const A = S.medic;
   if (A && (A.state !== 'done' || S.t - A.t1 < 20)) {
+    // strömavbrott: hissarna står still, så personalen bär båren i trapporna (eller sitter fast och räddas först)
+    const dark = !S.power && (A.state === 'onway' || A.state === 'transport');
+    const stuck = S.people.some(p => p.medic && p.state === 'ride');
     const what = { called: `${esc(A.pname)} har svimmat på ${esc(A.where)} (${fl(A.floor)}). Ambulansen är på väg.`,
-      onway: 'Ambulanspersonalen är i huset med bår. Båren får bara plats i varuhissen, som går med förtur – VIP-läge för ambulansen.',
+      onway: dark ? 'Ambulanspersonalen är i huset med bår.' : 'Ambulanspersonalen är i huset med bår. Båren får bara plats i varuhissen, som går med förtur – VIP-läge för ambulansen.',
       transport: `${esc(A.pname)} bärs ut på båren till ambulansen.`,
       done: `Ambulansen har kört${A.taken ? ` med ${esc(A.pname)}` : ''} – ${Math.round(A.t1 - A.t0)} s från larm till avfärd.` }[A.state];
-    const how = A.state === 'onway' || A.state === 'transport'
+    const how = dark
+      ? (stuck ? ' Strömavbrott: personalen sitter fast i hissen – reservkraftens auto-räddning tar den hissen först.' : ' Strömavbrott: hissarna står still, så personalen bär båren i trapporna.')
+      : A.state === 'onway' || A.state === 'transport'
       ? (S.strategy === 'smart' || S.strategy === 'peak' || S.strategy === 'eco' ? ' Kostnadsstyrningen låter dem i varuhissen som ändå ska åt samma håll åka klart.' : ' Alla andra i varuhissen får kliva av vid nästa stopp.') : '';
     info(`medic-${Math.round(A.t0)}`, 'medic', '🚑 Ambulans', what + how,
       `<button class="btn xs" data-act="show:${A.floor}">Visa våningen</button>${V ? `<button class="btn xs" data-act="follow:${V.id}">📹 Följ varuhissen</button>` : ''}`);

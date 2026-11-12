@@ -76,23 +76,23 @@
     "hissar": "L1@2.0000:44stopp:84.00vån L2@2.0000:60stopp:115.00vån X1@2.0502:17stopp:83.95vån X2@2.0000:35stopp:186.00vån H1@8.0000:65stopp:186.00vån H2@8.0000:57stopp:176.00vån V@14.0000:13stopp:51.00vån P@2.0000:27stopp:236.00vån"
   },
   "smart-105": {
-    "resor": 359,
-    "väntSumma": 3600.167,
-    "längstaVäntan": 87.067,
-    "arga": 3,
+    "resor": 345,
+    "väntSumma": 3336.267,
+    "längstaVäntan": 67.567,
+    "arga": 7,
     "incidenter": 1,
     "rök": 0,
     "instängdSek": 183.6,
     "överlaster": 0,
-    "trappresor": 95,
+    "trappresor": 85,
     "utrymda": 0,
     "hissfel": 1,
     "servade": 3,
-    "energi": 45.0705,
+    "energi": 45.1178,
     "loggrader": 300,
-    "personer": 98,
-    "kvar": 17,
-    "hissar": "L1@2.0000:54stopp:96.00vån L2@2.0000:37stopp:81.00vån X1@2.0000:28stopp:144.00vån X2@5.8357:31stopp:170.16vån H1@11.0000:58stopp:121.00vån H2@9.0000:43stopp:119.00vån V@12.0000:31stopp:101.00vån P@2.0000:23stopp:258.00vån"
+    "personer": 96,
+    "kvar": 16,
+    "hissar": "L1@2.0000:46stopp:106.00vån L2@2.0000:33stopp:67.00vån X1@8.0000:27stopp:126.00vån X2@2.0000:28stopp:148.00vån H1@8.3236:54stopp:139.68vån H2@8.0211:49stopp:122.02vån V@11.0000:36stopp:132.00vån P@3.1979:22stopp:256.80vån"
   },
   "smart-106": {
     "resor": 231,

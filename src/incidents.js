@@ -132,7 +132,7 @@ export function startRescue(e, how) {
   for (const f of e.stops) if (f <= e.pos + 1e-6 && f > below) below = f;
   e.mode = 'rescue'; e.rs = 'move'; e.rescueTarget = below; e.v = 0;
   S.outage.busy = e.id;
-  log(`🔋 ${how === 'auto' ? 'Auto-räddning' : 'Du'} nödsänker hiss ${e.name} till ${fl(e.rescueTarget)} (${e.passengers.length} instängda)`, 'alert', e.color);
+  log(`🔋 ${how === 'auto' ? 'Auto-räddning' : 'Du'} nödsänker hiss ${e.name} till ${fl(e.rescueTarget)} (${e.passengers.length} instängda${e.passengers.some(p => p.medic) ? ', ambulanspersonalen först' : ''})`, 'alert', e.color);
   for (const p of e.passengers) pev(p, `Hiss ${e.name} nödsänks på reservkraft – snart ute!`);
 }
 export function outageTick(dt) {
@@ -148,7 +148,9 @@ export function outageTick(dt) {
     }
   }
   if (O.gen && O.auto && O.busy === null) {
-    const c = S.elevators.filter(canRescue).sort((a, b) => b.passengers.length - a.passengers.length)[0];
+    // ambulanspersonalen först, sedan den fullaste hissen
+    const medics = e => e.passengers.some(p => p.medic) ? 1 : 0;
+    const c = S.elevators.filter(canRescue).sort((a, b) => medics(b) - medics(a) || b.passengers.length - a.passengers.length)[0];
     if (c) startRescue(c, 'auto');
   }
   if (S.t >= O.backAt) endOutage();
@@ -185,7 +187,7 @@ export function startGenerator() {
 }
 export function toggleAutoRescue(on = !(S.outage && S.outage.auto)) {
   if (!S.outage) return;
-  S.outage.auto = on; log(`Auto-räddning ${on ? 'PÅ – fullaste hissen först' : 'AV'}`, 'alert');
+  S.outage.auto = on; log(`Auto-räddning ${on ? 'PÅ – ambulansen först, sedan fullaste hissen' : 'AV'}`, 'alert');
 }
 export function toggleOff(e, off = !e.off) {
   e.off = off;

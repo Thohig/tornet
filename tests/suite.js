@@ -782,6 +782,66 @@ test('Ambulans: personalen får varuhissen med förtur och bär ut patienten på
   }
   return `larm till avfärd: smart ${resp.smart} s · närmast ${resp.nearest} s`;
 });
+test('Ambulans vid strömavbrott: personalen bär båren i trapporna och räddas först med reservkraft', () => {
+  // del 1: strömmen går när ambulansen är larmad – personalen väntar inte på hissar som står still
+  sim(77); runUntil(10.5);
+  assert(act('trigger', 'medical') !== null || S.medic, 'ingen svimmade');
+  const A = S.medic, w = watcher();
+  startOutage(); S.outage.backAt = S.t + 400;
+  let maxWait = 0, stairs = 0;
+  const seen = new Set();
+  while (A.state !== 'done' && !S.summaryShown && !S.power) {
+    const b = w.before(); step(DT); w.check(b);
+    for (const p of S.people) if (p.medic) {
+      if (p.state === 'wait') maxWait = Math.max(maxWait, S.t - p.waitStart);
+      if (p.state === 'instairs' && !seen.has(p)) { seen.add(p); stairs++; }
+      if (p.state !== 'instairs') seen.delete(p);
+    }
+  }
+  assert(!S.power, 'strömmen kom tillbaka – testet mäter fel sak');
+  assert(A.state === 'done' && A.taken, 'patienten bars aldrig ut under strömavbrottet');
+  assert(maxWait < 0.5, `personalen väntade ${maxWait.toFixed(1)} s på hissar utan ström`);
+  assert(stairs >= 4, `bara ${stairs} trappresor (två upp, två ner väntat)`);
+  const t1 = Math.round(A.t1 - A.t0);
+
+  // del 2: personalen sitter fast i varuhissen – auto-räddningen tar den hissen först
+  sim(77); runUntil(10.5);
+  act('trigger', 'medical');
+  const V = S.elevators.find(e => e.freight);
+  let guard = 0;
+  while (!(V.state === 'moving' && V.passengers.some(p => p.medic)) && guard++ < 30 * 300) step(DT);
+  assert(V.passengers.some(p => p.medic), 'personalen kom aldrig in i varuhissen');
+  // en annan hiss med fler instängda, så att "fullaste först" skulle ha valt den
+  startOutage(); S.outage.backAt = S.t + 400;
+  startGenerator(); run(6); toggleAutoRescue(true); step(DT);
+  assert(S.outage.busy === V.id, `auto-räddningen tog ${S.outage.busy === null ? 'ingen hiss' : S.elevators[S.outage.busy].name} före varuhissen`);
+  return `larm till avfärd i mörker: ${t1} s · ${stairs} trappresor · varuhissen räddades först`;
+});
+test('Flyttdag vid strömavbrott: möblerna bärs inte i trapporna, tomhänta går', () => {
+  let seed = 80;
+  while (seed < 120) { sim(seed); if (S.move) break; seed++; }
+  assert(S.move, 'ingen flyttdag hittades');
+  const M = S.move, w = watcher();
+  // vänta tills en flyttgubbe står med en möbel och väntar på hissen
+  let g = 0;
+  while (!S.people.some(p => p.mover && p.state === 'wait' && p.cargo.kg >= 22) && g++ < 30 * 3600) step(DT);
+  assert(M.state === 'on', 'flytten kom aldrig igång');
+  startOutage();
+  let heavyStairs = 0, lightStairs = 0, waitedDark = 0;
+  while (!S.power) {
+    const b = w.before(); step(DT); w.check(b);
+    for (const p of S.people) if (p.mover) {
+      if (p.state === 'stairs' && p.cargo.kg >= 15) heavyStairs++;
+      if (p.state === 'stairs' && p.cargo.kg < 15) lightStairs++;
+      if (p.state === 'wait' && p.cargo.kg >= 22) waitedDark = Math.max(waitedDark, S.t - p.waitStart);
+    }
+  }
+  assert(heavyStairs === 0, 'en flyttgubbe bar en möbel i trapporna');
+  assert(waitedDark > 20, `möbeln väntade bara ${waitedDark.toFixed(0)} s – avbrottet borde märkas`);
+  while (M.state !== 'done' && !S.summaryShown) { const b = w.before(); step(DT); w.check(b); }
+  assert(M.state === 'done' && M.done === M.loads, `flytten blev inte klar (${M.done}/${M.loads})`);
+  return `frö ${seed} · möbeln väntade ${Math.round(waitedDark)} s i mörkret · ${lightStairs ? 'tomhänt gick i trappan' : 'ingen tomhänt behövde trappan'}`;
+});
 test('Lärande parkering: minnet byggs upp, följer med till nästa dygn och spelas upp i replay', () => {
   sim(78);
   assert(S.learnMem === null, 'minne redan dag 1');

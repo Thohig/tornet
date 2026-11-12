@@ -247,6 +247,14 @@ export function updatePerson(p, dt) {
       p.waited = S.t - p.waitStart;
       p.mood = p.waited > 55 ? 2 : p.waited > 28 ? 1 : 0;
       if (p.mood === 2 && !p.angryNoted) { p.angryNoted = true; pev(p, 'Börjar bli riktigt sur… #@%!'); }
+      // ambulanspersonalen väntar inte ut ett strömavbrott: de bär båren i trapporna direkt
+      if (p.medic && !S.power) { toStairs(p, `Strömavbrott – bär ${p.cargo ? p.cargo.name : 'utrustningen'} i trapporna`); break; }
+      // tung last (möbler, tunga paket) bärs inte i trapporna: man väntar ut strömavbrottet vid hissen
+      if (!S.power && S.outage && p.cargo && p.cargo.kg >= 15) {
+        if (p.darkNoted !== S.outage.t0) { p.darkNoted = S.outage.t0; pev(p, `Strömavbrott – ${p.cargo.name} går inte att bära i trapporna, väntar ut det`); }
+        castWaitTick(p);
+        break;
+      }
       if (!liftsAvailable() && p.waited > p.patience) { toStairs(p, S.power ? 'Hissarna är avstängda – tar trapporna' : 'Hissarna står still (strömavbrott) – tar trapporna'); break; }
       // ingen hiss som går hit fungerar (trasig eller på service – sovande hissar vaknar ju): den som kan går
       if (p.waited > p.patience + 15 && S.power && stranded(p) && canWalk(p)) { toStairs(p, 'Ingen hiss går hit just nu (fel eller service) – tar trapporna'); break; }
@@ -264,7 +272,8 @@ export function updatePerson(p, dt) {
     case 'stairs':
       if (walk(p, dt, p.evac ? WALK * 1.3 : WALK)) {
         p.state = 'instairs';
-        p.timer = p.escalator ? 1.6 : 2 + Math.abs(p.dest - p.floor) * 1.8;
+        // tung last (båren, möbler) bärs långsammare i trapphuset
+        p.timer = p.escalator ? 1.6 : (2 + Math.abs(p.dest - p.floor) * 1.8) * (p.cargo && p.cargo.kg >= 15 ? 1.4 : 1);
         pev(p, p.escalator ? `Åker rulltrappa ${fl(p.floor)} → ${fl(p.dest)}` : `Går i trapphuset ${fl(p.floor)} → ${fl(p.dest)}`);
       }
       break;
