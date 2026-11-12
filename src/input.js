@@ -26,8 +26,7 @@ export function syncControls() {
   const key = `${S.strategy}|${S.autoInc}|${S.mistakes}|${S.maint}`;
   if (key === shown) return;
   shown = key;
-  $('btnStrat').textContent = STRAT_NAMES[S.strategy];
-  $('stratHint').innerHTML = STRAT_HINT[S.strategy];
+  $('strats').querySelectorAll('.btn').forEach(b => b.classList.toggle('on', /** @type {HTMLElement} */ (b).dataset.k === S.strategy));
   /** @type {HTMLInputElement} */ ($('autoInc')).checked = S.autoInc;
   for (const [id, key] of [['mistakeChips', 'mistakes'], ['maintChips', 'maint']]) {
     $(id).querySelectorAll('.chip').forEach(c => c.classList.toggle('on', /** @type {HTMLElement} */ (c).dataset.f === S[key]));
@@ -87,7 +86,6 @@ export function doAction(cmd) {
   else if (a === 'replay') { copyReplayLink(); return; }
   else if (a === 'show') scrollToFloor(+b);
   else if (a === 'tab') { setTab(b); return; }
-  else if (a === 'hint') { togglePop('stratHint'); return; }
   else if (a === 'menu') { togglePop('menu'); return; }
   else if (a === 'carpop') { openCarPop(null); return; }
   else if (a === 'follow') { if (VIEW.follow === +b) detachCam(); else followCar(+b); }
@@ -109,7 +107,22 @@ $('btnTags').onclick = toggleTags;
 $('btnZoom').onclick = toggleZoom;
 $('autoInc').onchange = ev => { act('setting', 'autoInc', /** @type {HTMLInputElement} */ (ev.target).checked); syncControls(); };
 /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll('#speeds .btn')).forEach(b => (b.onclick = () => setSpeed(+b.dataset.s)));
-$('btnStrat').onclick = cycleStrategy;
+// en knapp per styrlogik; förklaringen visas när musen vilar på knappen
+{
+  const bar = $('strats'), hint = $('stratHint');
+  for (const k of STRATS) {
+    const b = document.createElement('button');
+    b.className = 'btn sm'; b.dataset.k = k; b.textContent = STRAT_NAMES[k];
+    b.onclick = () => { setStrategy(k); b.onmouseenter(null); };
+    b.onmouseenter = () => {
+      hint.innerHTML = STRAT_HINT[k] + (k === S.strategy ? '<div class="hint-on">✓ Används nu</div>' : '<div class="hint-on">Klicka för att byta (S byter i tur och ordning)</div>');
+      hint.style.left = `${Math.max(0, b.offsetLeft + b.offsetWidth / 2 - 150)}px`;
+      hint.classList.add('show');
+    };
+    b.onmouseleave = () => hint.classList.remove('show');
+    bar.appendChild(b);
+  }
+}
 chipGroup('rosterChips', 'rosterFilter', updateRoster);
 chipGroup('logChips', 'logFilter', () => { S.logDirty = true; updateHud(); });
 chipGroup('mistakeChips', 'mistakes', () => { log(`Felknappar: ${S.mistakes}`, 'sys'); syncControls(); }, true);
@@ -119,7 +132,7 @@ $('tkClose').onclick = () => select(null);
 document.addEventListener('pointerdown', ev => {
   const t = /** @type {HTMLElement} */ (ev.target);
   // klick utanför en öppen popup stänger den
-  if (!t.closest('.pop') && !t.closest('[data-act="hint"],[data-act="menu"]')) document.querySelectorAll('.pop.show').forEach(p => p.classList.remove('show'));
+  if (!t.closest('.pop') && !t.closest('[data-act="menu"]')) document.querySelectorAll('.pop.show').forEach(p => p.classList.remove('show'));
   const a = /** @type {HTMLButtonElement} */ (t.closest('[data-act]'));
   if (a && !a.disabled) { ev.preventDefault(); doAction(a.dataset.act); }
 });

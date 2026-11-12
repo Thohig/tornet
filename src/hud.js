@@ -1,6 +1,6 @@
 // HUD: topplist, hisspopup, flytande incidentruta och lådan med spårning, register, logg och resultat.
 import { ARR, esc, fl } from './util.js';
-import { CAP, CAR_H, EL, FIRE_HINT, FL, LOBBY, STRAT_HINT, TOP, ROLE_NAMES, activityRate, FULL_LOAD, floorY, shaftX, timeScale } from './config.js';
+import { CAP, CAR_H, EL, FIRE_HINT, FL, LOBBY, TOP, ROLE_NAMES, activityRate, FULL_LOAD, floorY, shaftX, timeScale } from './config.js';
 import { S, hour, log, phaseName } from './state.js';
 import { liftsAvailable } from './people.js';
 import { costBased, costLine, eta, isFull, pickTotal, pickersAt, loadKg, cabinKg, slotsFull } from './dispatch.js';
@@ -31,7 +31,6 @@ export function buildHud() {
     bar: el.querySelector('.load i'), ld: el.querySelector('.load span'), plan: el.querySelector('.plan'), why: el.querySelector('.why'), svc: /** @type {HTMLElement} */ (el.querySelector('.svc')),
     who: el.querySelector('.who'), acts: el.querySelector('.acts'), meta: el.querySelector('.meta'), whoKey: '', actKey: '', id: -1,
   };
-  $('stratHint').innerHTML = STRAT_HINT[S.strategy];
 }
 export function openCarPop(e) {
   VIEW.carPop = e ? e.id : null;
