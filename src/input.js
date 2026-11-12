@@ -3,7 +3,7 @@ import { act, encodeReplay } from './replay.js';
 import { clamp } from './util.js';
 import { BX0, CAR_H, CAR_W, DOOR_X, FLOOR_H, GROUND_Y, H, INNER_X1, ROOF_Y, STRAT_HINT, STRAT_NAMES, TOP, WAIT_X1, floorY, shaftX, surf, LOBBY } from './config.js';
 import { S, log } from './state.js';
-import { VIEW, camTarget, cv, detachCam, followCar, lookAt, resize, scrollBy, scrollToFloor, setZoomWide } from './view.js';
+import { VIEW, camTarget, cv, detachCam, followCar, lookAt, scrollBy, scrollToFloor } from './view.js';
 import { personHead, peopleBehindDoor } from './render.js';
 import { $, openCarPop, select, setTab, updateHud, updateRoster } from './hud.js';
 
@@ -33,14 +33,6 @@ export function syncControls() {
   }
 }
 export function toggleTags() { S.tags = !S.tags; $('btnTags').classList.toggle('on', S.tags); }
-export function toggleZoom() {
-  S.zoom = S.zoom === 'fit' ? 'wide' : 'fit';
-  try { localStorage.setItem('hiss.zoom', S.zoom); } catch (e) { /* ingen lagring */ }
-  $('btnZoom').classList.toggle('on', S.zoom === 'fit');
-  resize();
-  if (S.zoom === 'wide') lookAt(S.sel ? (personHead(S.sel) || { y: GROUND_Y }).y : GROUND_Y - VIEW.viewH / 2, 0);
-}
-setZoomWide(() => { if (S.zoom !== 'wide') toggleZoom(); });
 /** koppla på kameran igen på det den senast följde (hiss, person eller våning) */
 export function reattachCam() {
   const t = VIEW.lastCam;
@@ -53,10 +45,10 @@ export function reattachCam() {
     followPerson(p);
   }
 }
-/** låt kameran följa en person (spårar personen och byter till den stora vyn) */
+/** låt kameran följa en person (spårar personen) */
 function followPerson(p) {
   if (S.sel !== p) select(p); else { VIEW.camSel = true; S.followHold = 0; }
-  if (S.zoom !== 'wide') toggleZoom(); else lookAt((personHead(p) || { y: GROUND_Y }).y, 0);
+  lookAt((personHead(p) || { y: GROUND_Y }).y, 0);
 }
 /** F: koppla loss kameran om den följer något, annars koppla på den igen */
 export function toggleCam() { if (camTarget()) detachCam(); else reattachCam(); }
@@ -104,7 +96,6 @@ export function doAction(cmd) {
 }
 $('btnPause').onclick = () => { if (!S.summaryShown) { S.paused = !S.paused; updatePauseBtn(); } };
 $('btnTags').onclick = toggleTags;
-$('btnZoom').onclick = toggleZoom;
 $('autoInc').onchange = ev => { act('setting', 'autoInc', /** @type {HTMLInputElement} */ (ev.target).checked); syncControls(); };
 /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll('#speeds .btn')).forEach(b => (b.onclick = () => setSpeed(+b.dataset.s)));
 // en knapp per styrlogik; förklaringen visas när musen vilar på knappen
@@ -154,10 +145,9 @@ $('btnBus').onclick = () => {
 window.addEventListener('keydown', ev => {
   if (ev.code === 'Space') { ev.preventDefault(); $('btnPause').click(); }
   if (ev.code === 'KeyT') toggleTags();
-  if (ev.code === 'KeyZ') toggleZoom();
   if (ev.code === 'KeyF') toggleCam();
   if (ev.code === 'KeyS') cycleStrategy();
-  if (S.zoom === 'wide' && ['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'].includes(ev.code)) {
+  if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'].includes(ev.code)) {
     ev.preventDefault();
     const step = { ArrowUp: -FLOOR_H, ArrowDown: FLOOR_H, PageUp: -VIEW.viewH * 0.8, PageDown: VIEW.viewH * 0.8, Home: -H, End: H }[ev.code];
     scrollBy(step);

@@ -3,7 +3,7 @@ import { START_H } from './config.js';
 
 // ---------- Tillstånd ----------
 export const S = {
-  started: false, paused: false, speed: 1, strategy: 'smart', tags: false, zoom: (() => { try { return localStorage.getItem('hiss.zoom') || 'wide'; } catch (e) { return 'wide'; } })(),
+  started: false, paused: false, speed: 1, strategy: 'smart', tags: false,
   t: 0, clock: 0, day: 1, anim: 0,
   people: [], elevators: [], log: [], fx: [], wl: null,
   nextId: 1, reoptT: 0, summaryShown: false, stats: null, logDirty: true,

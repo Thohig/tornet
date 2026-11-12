@@ -551,9 +551,9 @@ export function showIntro() {
       <li>Bilden visar <b>hallen framför hissarna</b> – rummen ligger bakom korridoren, och folk syns när de kommer ut för att vänta på hissen. Siffran vid korridoren är hur många som är inne.</li>
       <li><b>Klicka på en person</b> för att spåra hen – en lapp följer personen och 👤 visar allt, även när hen är inne i rummen. <b>Klicka på en korridor</b> för att spåra någon som är därinne. <b>Klicka på en hiss</b> för dess plan, last och knappen 📹 Följ.</li>
       <li>Klicka på en tom yta på en våning för att släppa in en besökare. <b>BUSS!</b> släpper in en busslast.</li>
-      <li><b>Scrolla</b> med mushjulet eller piltangenterna, eller klicka i översikten till höger. Kameran följer den du spårar.</li>
+      <li><b>Scrolla</b> med mushjulet eller piltangenterna. Kameran följer den du spårar.</li>
       <li>📋 register, 📜 logg och 🏆 resultat öppnas i en låda till höger.</li>
-      <li><kbd>Mellanslag</kbd> paus · <kbd>1</kbd>–<kbd>4</kbd> hastighet · <kbd>S</kbd> styrlogik · <kbd>Z</kbd> hela huset · <kbd>T</kbd> namnbrickor · <kbd>F</kbd> koppla loss/på kameran · <kbd>Esc</kbd> stäng/sluta spåra</li>
+      <li><kbd>Mellanslag</kbd> paus · <kbd>1</kbd>–<kbd>4</kbd> hastighet · <kbd>S</kbd> styrlogik · <kbd>T</kbd> namnbrickor · <kbd>F</kbd> koppla loss/på kameran · <kbd>Esc</kbd> stäng/sluta spåra</li>
     </ul>
     <button class="btn" id="go">KÖR!</button></div>`);
   $('go').onclick = () => { hideOverlay(); S.started = true; log('Dag 1 börjar – dörrarna öppnas!', 'sys'); };

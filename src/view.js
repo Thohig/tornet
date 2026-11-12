@@ -1,9 +1,8 @@
-// Canvas, skalning, kamera och översiktsremsa.
+// Canvas, skalning och kamera.
 import { vrand } from './rng.js';
-import { clamp, fl, mix } from './util.js';
-import { FL, FLOORS, FLOOR_H, H, LAND_X0, ROOF_Y, TOP, W, floorY, floorOpen } from './config.js';
-import { S, hour } from './state.js';
-import { allowed } from './dispatch.js';
+import { clamp, mix } from './util.js';
+import { FLOOR_H, H, LAND_X0, W, floorY } from './config.js';
+import { S } from './state.js';
 import { personHead } from './render.js';
 
 // ---------- Grafik: setup ----------
@@ -12,45 +11,27 @@ const canvas = id => /** @type {HTMLCanvasElement} */ (document.getElementById(i
 export const cv = canvas('game'), ctx = cv.getContext('2d');
 export const portrait = canvas('portrait'), pctx = portrait.getContext('2d');
 export const stage = document.getElementById('stage');
-// översiktsremsan skapas om sidan saknar den (t.ex. en gammal cachad index.html)
-export const overview = canvas('overview') || (() => {
-  const c = document.createElement('canvas'); c.id = 'overview'; stage.appendChild(c); return c;
-})();
-export const octx = overview.getContext('2d');
 // camY = världskoordinaten högst upp i bilden, viewH = hur mycket av huset som syns (i världsenheter)
 // x0 = världens x vid bildens vänsterkant: bilden börjar vid hallen, rummen till vänster syns inte
 // Kameran kan vara kopplad till en hiss (follow), till den spårade personen (camSel) eller stå på en våning
 // (camFloor). Manuell scrollning kopplar loss den; lastCam minns vad den senast följde så att den kan kopplas på igen.
 /** @typedef {{ kind: 'car'|'person'|'floor', id: number }} CamTarget */
-export const VIEW = { scale: 1, dpr: 1, camY: 0, viewH: H, x0: LAND_X0, ow: 84, oh: 400, follow: /** @type {number|null} */ (null), carPop: /** @type {number|null} */ (null),
+export const VIEW = { scale: 1, dpr: 1, camY: 0, viewH: H, x0: LAND_X0, follow: /** @type {number|null} */ (null), carPop: /** @type {number|null} */ (null),
   camSel: false, camFloor: /** @type {number|null} */ (null), lastCam: /** @type {CamTarget|null} */ (null) };
 export function resize() {
-  // Stor vy: huset fyller bredden och kameran visar en del i taget (översikten visar resten).
-  // Hela huset: allt syns, men i liten skala eftersom huset är så högt.
-  const wide = S.zoom === 'wide';
+  // huset fyller bredden och kameran visar en del i taget (scrolla eller låt kameran följa)
   const stacked = window.innerWidth <= 800;
   stage.style.height = stacked ? '80vh' : '';
-  stage.classList.toggle('wide', wide);
   const r = stage.getBoundingClientRect();
-  const innerW = r.width - (wide ? 104 : 0) - 20, innerH = r.height - 20;
+  const innerW = r.width - 20, innerH = r.height - 20;
   const VW = W - VIEW.x0; // synlig bredd i världsenheter
-  let s, cssW, cssH;
-  if (wide) {
-    s = Math.max(0.3, Math.min(innerW / VW, 1.4));
-    cssW = VW * s; cssH = Math.min(H * s, innerH);
-  } else {
-    s = Math.max(0.2, Math.min(innerW / VW, innerH / H));
-    cssW = VW * s; cssH = H * s;
-  }
+  const s = Math.max(0.3, Math.min(innerW / VW, 1.4));
+  const cssW = VW * s, cssH = Math.min(H * s, innerH);
   const dpr = window.devicePixelRatio || 1;
   cv.style.width = cssW + 'px'; cv.style.height = cssH + 'px';
   cv.width = Math.round(cssW * dpr); cv.height = Math.round(cssH * dpr);
   VIEW.scale = s; VIEW.dpr = dpr; VIEW.viewH = cssH / s;
   VIEW.camY = clamp(VIEW.camY, 0, H - VIEW.viewH);
-  // översiktsremsan: lika hög som spelytan, högst 640 px
-  VIEW.ow = 84; VIEW.oh = Math.round(Math.min(innerH, 640));
-  overview.style.height = VIEW.oh + 'px';
-  overview.width = VIEW.ow * dpr; overview.height = VIEW.oh * dpr;
   portrait.width = 64 * dpr; portrait.height = 76 * dpr;
   S.trackDirty = true;
 }
@@ -64,10 +45,10 @@ export function lookAt(worldY, hold = 4) {
 }
 export function scrollToFloor(f) {
   detachCam(); VIEW.camFloor = f;
-  if (S.zoom === 'wide') lookAt(floorY(f) - FLOOR_H / 2, 0);
+  lookAt(floorY(f) - FLOOR_H / 2, 0);
 }
 /** titta på en våning en stund utan att koppla loss kameran (t.ex. när en incident börjar) */
-export function peekFloor(f) { if (S.zoom === 'wide') lookAt(floorY(f) - FLOOR_H / 2, 5); }
+export function peekFloor(f) { lookAt(floorY(f) - FLOOR_H / 2, 5); }
 /** vad kameran följer just nu (null = fri kamera) */
 export function camTarget() {
   if (VIEW.follow !== null) return /** @type {CamTarget} */ ({ kind: 'car', id: VIEW.follow });
@@ -81,16 +62,11 @@ export function detachCam() {
   if (t) VIEW.lastCam = t;
   VIEW.follow = null; VIEW.camSel = false; VIEW.camFloor = null;
 }
-/** följ en hiss (byter till stora vyn om hela huset visas) */
+/** följ en hiss */
 export function followCar(id) {
   detachCam(); VIEW.follow = id; S.followHold = 0;
-  if (S.zoom !== 'wide') zoomWide();
 }
-let zoomWide = () => {};
-/** input.js lämnar över sin zoomväxling (view.js får inte importera input.js) */
-export function setZoomWide(fn) { zoomWide = fn; }
 export function updateCamera(dt) {
-  if (S.zoom !== 'wide') { VIEW.camY = 0; return; }
   const p = S.sel;
   if (VIEW.camSel && (!p || p.dead)) VIEW.camSel = false;
   if (VIEW.follow !== null && S.anim > (S.followHold || 0)) {
@@ -116,58 +92,9 @@ export function scrollBy(dy) {
   VIEW.camY = clamp(VIEW.camY + dy, 0, camMax());
 }
 cv.addEventListener('wheel', ev => {
-  if (S.zoom !== 'wide') return;
   ev.preventDefault();
   scrollBy(ev.deltaY / VIEW.scale);
 }, { passive: false });
-// översikten: klicka eller dra för att hoppa
-export const ovRowH = () => (VIEW.oh - 8) / FLOORS;
-export const ovY = worldY => 4 + ((worldY - ROOF_Y) / FLOOR_H) * ovRowH();
-export let ovDrag = false;
-export function ovJump(ev) {
-  const r = overview.getBoundingClientRect();
-  const worldY = ROOF_Y + ((ev.clientY - r.top - 4) / ovRowH()) * FLOOR_H;
-  detachCam(); S.camTarget = null;
-  VIEW.camY = clamp(worldY - VIEW.viewH / 2, 0, camMax());
-}
-overview.addEventListener('pointerdown', ev => { ovDrag = true; overview.setPointerCapture(ev.pointerId); ovJump(ev); });
-overview.addEventListener('pointermove', ev => { if (ovDrag) ovJump(ev); });
-overview.addEventListener('pointerup', () => { ovDrag = false; });
-export function drawOverview() {
-  if (S.zoom !== 'wide') return;
-  const g = octx, w = VIEW.ow, h = VIEW.oh, d = VIEW.dpr, rowH = ovRowH();
-  g.setTransform(d, 0, 0, d, 0, 0);
-  g.fillStyle = '#000000'; g.fillRect(0, 0, w, h);
-  const blink = Math.floor(S.anim * 3) % 2 === 0;
-  g.textBaseline = 'middle';
-  for (let f = 0; f < FLOORS; f++) {
-    const y = 4 + (TOP - f) * rowH;
-    g.fillStyle = FL[f].acc + (!S.power ? '2a' : floorOpen(f, hour()) ? '66' : '24'); g.fillRect(2, y, w - 4, rowH - 1);
-    if (S.fire && f === S.fire.floor) { g.fillStyle = blink ? 'rgba(255,75,31,.8)' : 'rgba(255,75,31,.45)'; g.fillRect(2, y, w - 4, rowH - 1); }
-    else if (S.fire && !allowed(f)) { g.fillStyle = 'rgba(255,45,85,.25)'; g.fillRect(2, y, w - 4, rowH - 1); }
-    g.fillStyle = '#fff'; g.font = `${Math.min(15, rowH * 0.8)}px VT323, monospace`; g.textAlign = 'left';
-    g.fillText(fl(f), 5, y + rowH / 2);
-    const n = S.wl ? S.wl[f].u.length + S.wl[f].d.length : 0;
-    if (n) { g.fillStyle = '#ffe14d'; g.fillRect(20, y + rowH * 0.3, Math.min(n * 2, 26), rowH * 0.4); }
-  }
-  // hissar som små färgade block, en fil per hiss
-  for (const e of S.elevators) {
-    const N = S.elevators.length, lw = Math.min(8, (w - 50) / N);
-    const x = w - 2 - (N - e.id) * lw, y = 4 + (TOP - e.pos) * rowH + 1;
-    g.fillStyle = e.mode !== 'normal' || e.off || e.sleep || e.zoneLock || e.hold || !S.power ? '#808080' : e.color;
-    g.fillRect(x, y, lw - 1.5, rowH - 3);
-  }
-  // spårad person
-  if (S.sel && !S.sel.dead) {
-    const hd = personHead(S.sel);
-    if (hd) { g.fillStyle = '#ffe14d'; g.font = '13px sans-serif'; g.textAlign = 'center'; g.fillText('★', w - 4 - Math.min(8, (w - 50) / S.elevators.length) * S.elevators.length - 6, ovY(hd.y + 50)); }
-  }
-  // det som syns i spelytan just nu
-  const y0 = clamp(ovY(VIEW.camY), 1, h - 1), y1 = clamp(ovY(VIEW.camY + VIEW.viewH), 1, h - 1);
-  g.strokeStyle = '#ffe14d'; g.lineWidth = 2; g.strokeRect(1, y0, w - 2, Math.max(6, y1 - y0));
-  g.fillStyle = 'rgba(255,225,77,.08)'; g.fillRect(1, y0, w - 2, Math.max(6, y1 - y0));
-}
-
 export const clouds = Array.from({ length: 6 }, (_, i) => ({ x: i * 190 + vrand(0, 80), y: vrand(16, 110), s: vrand(0.7, 1.2), v: vrand(4, 9) }));
 export const stars = Array.from({ length: 50 }, () => ({ x: vrand(0, W), y: vrand(0, 130), r: vrand(0.8, 2) }));
 export const skyline = [];

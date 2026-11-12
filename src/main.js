@@ -2,9 +2,9 @@
 import { S, hooks } from './state.js';
 import { advance, newSim, startReplay } from './sim.js';
 import { decodeReplay } from './replay.js';
-import { VIEW, camMax, drawOverview, peekFloor, resize, updateCamera } from './view.js';
+import { VIEW, camMax, peekFloor, resize, updateCamera } from './view.js';
 import { render } from './render.js';
-import { $, applyTab, buildHud, placeCarPop, showIntro, showSummary, updateHud, updateRoster, updateTracker } from './hud.js';
+import { applyTab, buildHud, placeCarPop, showIntro, showSummary, updateHud, updateRoster, updateTracker } from './hud.js';
 import { setSpeed, syncControls } from './input.js';
 
 // ---------- Start ----------
@@ -23,7 +23,6 @@ hooks.dayEnd = showSummary;
 buildHud();
 applyTab();
 resize();
-$('btnZoom').classList.toggle('on', S.zoom === 'fit');
 VIEW.camY = camMax(); // börja nere vid entrén
 showIntro();
 /** @type {any} */ (window).S = S; // för felsökning i konsolen
@@ -35,7 +34,6 @@ function frame(now) {
   S.anim += dt;
   updateCamera(dt);
   render(dt);
-  drawOverview();
   placeCarPop();
   hudT -= dt; rosterT -= dt;
   if (hudT <= 0) { hudT = 0.15; updateHud(); updateTracker(); syncControls(); }
