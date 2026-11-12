@@ -136,12 +136,13 @@ body{background:var(--desk);font-family:var(--ui);font-size:12px;color:var(--ink
 .meta{color:var(--shade);font-size:11px;margin-top:3px}
 .car .svc,.inc .svc{margin-top:4px;padding:2px 5px;background:var(--note);box-shadow:var(--sunken);font-weight:700;font-size:11px}
 
-/* kamerabrickan: vad kameran följer, med knapp för att koppla loss eller på igen */
-.camchip{left:12px;top:12px;display:flex;flex-direction:column;align-items:flex-start;gap:3px;max-width:calc(100% - 120px);
-  background:var(--face);box-shadow:var(--raised),3px 3px 0 rgba(0,0,0,.3);padding:3px 4px 3px 7px;font-size:12px;white-space:nowrap}
-.camchip span{overflow:hidden;text-overflow:ellipsis}
-.cam-row{display:flex;align-items:center;gap:6px;max-width:100%}
-.cam-cars{display:flex;flex-wrap:wrap;gap:2px}
+/* kamerareglaget i topplisten: 📹-knappen (vad kameran följer) och en knapp per hiss */
+.tb-group[hidden]{display:none}
+.btn.cam-b{display:flex;align-items:center;gap:4px;max-width:120px;white-space:nowrap;line-height:1;height:24px}
+.btn.cam-b span{overflow:hidden;text-overflow:ellipsis}
+.btn.cam-b:disabled{text-shadow:none}
+.cam-cars{display:flex;gap:2px}
+.cam-cars .btn.car-b{min-height:23px}
 .btn.car-b{background:var(--c);color:var(--ct);font-weight:700;min-width:26px;padding:1px 4px}
 .btn.car-b.on{box-shadow:var(--sunken);outline:2px solid #7dff9a;outline-offset:-2px}
 

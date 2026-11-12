@@ -181,28 +181,28 @@ export function carActs(e) {
     b.push(`<button class="btn xs hot2" data-act="pow:rescue:${e.id}" ${canRescue(e) ? '' : 'disabled'}>🔋 Nödsänk (${e.passengers.length})</button>`);
   return b.join('');
 }
-// ---------- Kamerabrickan: vad kameran följer, koppla loss (✕) eller på igen (↺) – även med F ----------
+// ---------- Kamerareglaget i topplisten: 📹-knappen visar vad kameran följer och kopplar loss/på (som F),
+// en knapp per hiss följer hissen (klick igen kopplar loss) ----------
 let camKey = '';
-function camName(t) {
-  if (t.kind === 'car') return `hiss <b>${esc(S.elevators[t.id].name)}</b>`;
-  if (t.kind === 'floor') return `våning <b>${fl(t.id)}</b>`;
+function camName(t, short = false) {
+  if (t.kind === 'car') return short ? esc(S.elevators[t.id].name) : `hiss ${esc(S.elevators[t.id].name)}`;
+  if (t.kind === 'floor') return short ? `vån ${fl(t.id)}` : `våning ${fl(t.id)}`;
   const p = S.people.find(q => q.id === t.id);
-  return p ? `<b>${esc(p.name)}</b>` : null;
+  return p ? esc(short ? p.name.split(' ')[0] : p.name) : null;
 }
-function updateCamChip() {
-  const el = $('camChip'), t = camTarget(), last = VIEW.lastCam, lastName = !t && last ? camName(last) : null;
-  // en knapp per hiss: klick följer hissen, klick igen kopplar loss
+function updateCamBar() {
+  const el = $('camBar'), t = camTarget(), last = VIEW.lastCam, lastName = !t && last ? camName(last) : null;
   const cars = S.elevators.map(e => `<button class="btn xs car-b${VIEW.follow === e.id ? ' on' : ''}" data-act="follow:${e.id}" style="--c:${e.color};--ct:${PAL.on(e.color)}" title="${VIEW.follow === e.id ? 'Sluta följa' : 'Följ'} hiss ${esc(e.name)}">${esc(e.name)}</button>`).join('');
-  const state = t
-    ? `<span>📹 Följer ${camName(t)}</span><button class="btn xs" data-act="cam:off" title="Koppla loss kameran (F)">✕ Koppla loss</button>`
-    : lastName ? `<span>📹 Fri kamera</span><button class="btn xs" data-act="cam:on" title="Koppla på kameran igen (F)">↺ Följ ${lastName}</button>`
-    : '<span>📹 Fri kamera</span>';
-  const html = !S.started ? '' : `<div class="cam-row">${state}</div><div class="cam-cars">${cars}</div>`;
+  const cam = t
+    ? `<button class="btn cam-b on" data-act="cam:off" title="Kameran följer ${camName(t)} – klicka för att koppla loss (F)">📹 <span>${camName(t, true)}</span></button>`
+    : lastName ? `<button class="btn cam-b" data-act="cam:on" title="Fri kamera – klicka för att följa ${lastName} igen (F)">📹 <span>fri</span></button>`
+    : '<button class="btn cam-b" disabled title="Fri kamera – välj en hiss, en person eller en våning att följa">📹 <span>fri</span></button>';
+  const html = !S.started ? '' : `${cam}<div class="cam-cars">${cars}</div>`;
   if (html === camKey) return;
   camKey = html; el.innerHTML = html; el.hidden = !html;
 }
 export function updateHud() {
-  updateCamChip();
+  updateCamBar();
   const h = hour();
   // ingen klocka – bara sol på dagen och måne på natten (samma gräns som himlen i bilden)
   const night = nightness(h) > 0.5;

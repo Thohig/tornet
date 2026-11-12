@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=24">
+<link rel="stylesheet" href="style.css?v=25">
 </head>
 <body>
 <div id="app">
@@ -30,6 +30,7 @@
       <button id="btnTags" class="btn" title="Visa namnbrickor (T)">ID</button>
       <button id="btnZoom" class="btn" title="Växla vy: stor vy med översikt / hela huset i liten skala (Z)">⤢</button>
     </div>
+    <div class="tb-group cam" id="camBar" hidden></div>
     <div class="tb-group strat">
       <button id="btnStrat" class="btn" title="Styrlogik – klicka för att byta (S)">SMART</button>
       <button class="qbtn" data-act="hint" title="Förklara styrlogiken">?</button>
@@ -78,7 +79,6 @@
       <canvas id="overview" title="Översikt över hela huset – klicka eller dra för att hoppa"></canvas>
       <section class="float incidents" id="incPanel" hidden><div id="incBody"></div></section>
       <section class="float car" id="carPop" hidden></section>
-      <div class="float camchip" id="camChip" hidden></div>
     </main>
 
     <aside id="drawer" hidden>
