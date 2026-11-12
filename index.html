@@ -45,7 +45,7 @@
       <button class="btn tab" data-act="tab:stats" data-hint="<b>Dagens resultat:</b> väntetider, betyg, energi, trappresor och säkerhet för dygnet så här långt.">🏆</button>
     </nav>
     <div class="tb-group menu">
-      <button class="btn" data-act="menu" data-hint="<b>Meny:</b> utlös incidenter (brand, ström, hissfel, storm, het motor), ställ in felknappar och underhåll, och kopiera en replay-länk till dygnet.">⋯</button>
+      <button class="btn" data-act="menu" data-hint="<b>Meny:</b> utlös incidenter (brand, ström, hissfel, storm, het motor, linbrott), ställ in felknappar och underhåll, och kopiera en replay-länk till dygnet.">⋯</button>
       <div class="pop" id="menu">
         <div class="pop-h">Incidenter</div>
         <label class="auto"><input type="checkbox" id="autoInc" checked> slumpas fram under dagen</label>
@@ -55,6 +55,7 @@
           <button class="btn xs" data-act="trig:fault">🔧 Hissfel</button>
           <button class="btn xs" data-act="trig:storm">🌬️ Storm</button>
           <button class="btn xs" data-act="trig:heat">🌡️ Het motor</button>
+          <button class="btn xs" data-act="trig:cable">🪢 Linbrott</button>
         </div>
         <div class="pop-h">Felknappar</div>
         <div class="chips" id="mistakeChips" title="Hur ofta folk trycker på fel knapp (och barn på alla)">

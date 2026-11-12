@@ -1,12 +1,12 @@
 // Incidenter: brand och strömavbrott.
-import { pick, rand } from './rng.js';
+import { pick, rand, rng } from './rng.js';
 import { fl } from './util.js';
 import { OFFICE_FLOORS } from './config.js';
 import { S, hooks, hour, log } from './state.js';
 import { arriveOnFloor, pev, pn, setTrip, toStairs } from './people.js';
 import { allowed, allowedDest, allowedPos, inFireZone, posOf, rebuildPicks, safeFloor } from './dispatch.js';
 import { bounceBoarders, canBrakeTo, deckFloor, exitAll, restoreElevator, setMode } from './elevators.js';
-import { triggerFault, triggerHeat } from './service.js';
+import { cableCandidate, triggerCable, triggerFault, triggerHeat } from './service.js';
 import { startStorm } from './weather.js';
 import { startMedical } from './visits.js';
 
@@ -17,6 +17,7 @@ export function trigger(type) {
   if (type === 'fault') triggerFault();
   if (type === 'storm' && startStorm()) incidentStarted(null);
   if (type === 'heat') triggerHeat();
+  if (type === 'cable') triggerCable();
   if (type === 'medical') startMedical(); // (ingen incident – bara en händelse som rutan berättar om)
 }
 export function incidentStarted(floor) {
@@ -182,6 +183,8 @@ export function incidentTick(dt) {
   if (S.elevators.some(e => e.mode === 'normal' && !e.hold && !e.breakNext)) opts.push('fault');
   if (!S.storm) opts.push('storm');
   if (S.elevators.some(e => e.mode === 'normal' && !e.hot)) opts.push('heat');
+  // linbrott är ovanligt: med bara en gång av tio
+  if (rng() < 0.1 && S.elevators.some(cableCandidate)) opts.push('cable');
   if (opts.length) trigger(pick(opts));
 }
 

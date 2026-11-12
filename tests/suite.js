@@ -15,7 +15,7 @@ import { needsFreight, mayUseFreight, legDest } from '../src/people.js';
 import { fl } from '../src/util.js';
 import { assignCalls, antiNuisance } from '../src/buttons.js';
 import { act, recording, encodeReplay, decodeReplay, SIM_VERSION, CHECK_EVERY, stateHash } from '../src/replay.js';
-import { powerKw, triggerFault, breakDown, tech } from '../src/service.js';
+import { powerKw, triggerFault, breakDown, tech, snapCable } from '../src/service.js';
 import { trafficMode, learnBin, peakHold, PEAK_HOLD } from '../src/dispatch.js';
 import { windAt } from '../src/weather.js';
 import { canBrakeTo } from '../src/elevators.js';
@@ -37,7 +37,7 @@ function sim(seed, opts = {}) {
 // Vakt som kontrollerar invarianter efter varje steg
 function watcher() {
   const w = { passes: 0, maxRide: 0, maxWait: 0, n: 0, overweight: 0, maxKg: 0, bypassBroken: 0, prev: [],
-    outOfRange: 0, wrongDoor: 0, badLeg: 0, badFreight: 0, vipMixed: 0, vipSet: [], selfDest: 0, brokenUse: 0, holdBoard: 0, prevN: [], prevHold: [],
+    outOfRange: 0, wrongDoor: 0, badLeg: 0, badFreight: 0, vipMixed: 0, vipSet: [], selfDest: 0, brokenUse: 0, snapUse: 0, prevSnapN: [], holdBoard: 0, prevN: [], prevHold: [],
     jumps: 0, orphanService: 0, badReserved: 0, dupNames: 0, dupEx: '', idleWait: new Map(), idleWaitMax: 0, badPlatform: 0,
     deadAssign: new Map(), deadAssignMax: 0, deadAssignEx: '', prevMode: [], late: [] };
   w.before = () => S.elevators.map(e => e.pos);
@@ -82,6 +82,12 @@ function watcher() {
       const pdOf = p => posOf(e, p.dest), crossed = pd => (a < pd && b > pd) || (a > pd && b < pd);
       if (e.mode !== 'normal' || e.state !== 'moving') w.late[i] = null;
       else if ((w.prevMode[i] ?? 'normal') !== 'normal') w.late[i] = new Set(e.passengers.map(pdOf).filter(pd => crossed(pd) || !canBrakeTo(e, pd)));
+      // linbrott: korgen faller bara nedåt, står sedan helt still, och ingen ny kliver på (de instängda tas bara ut)
+      if (e.mode === 'snapped' && w.prevMode[i] === 'snapped') {
+        const n = e.passengers.length;
+        if (e.reserved || n > (w.prevSnapN[i] ?? n) || b > a + 1e-9 || (e.snap.ph !== 'fall' && S.t > e.snap.caughtT && Math.abs(b - a) > 1e-9)) w.snapUse++;
+      }
+      w.prevSnapN[i] = e.passengers.length;
       w.prevMode[i] = e.mode;
       for (const p of e.passengers) {
         // en hiss i normal drift får aldrig köra förbi en passagerares mål
@@ -561,6 +567,59 @@ test('Hissfel: hissen går sönder vid nästa stopp, alla kliver ut och tekniker
   assert(w.brokenUse === 0, `den trasiga hissen användes ${w.brokenUse} steg`);
   assert(w.passes === 0 && w.overweight === 0, 'regelbrott medan hissen var trasig');
   return `${e.name} trasig i ${Math.round(S.stats.downSec)} s, lagad av hissteknikern`;
+});
+test('Linbrott: korgen faller, fångas mellan två våningar, alla tas ut genom takluckan och linorna byts i timmar', () => {
+  sim(83, { autoInc: false });
+  runUntil(10);
+  const w = watcher();
+  act('trigger', 'cable');
+  const e = S.elevators.find(x => x.mode === 'snapped' || x.snapNext);
+  assert(e, 'ingen hiss fick linbrott');
+  let g = 0;
+  while (e.mode !== 'snapped' && ++g < 120 / DT) { const b = w.before(); step(DT); w.check(b); }
+  assert(e.mode === 'snapped', `linorna i ${e.name} gick aldrig av`);
+  const p0 = e.pos, trapped = [...e.passengers];
+  while (e.snap.ph === 'fall' && ++g < 200 / DT) { const b = w.before(); step(DT); w.check(b); }
+  assert(e.pos < p0 && e.pos >= e.minF, `korgen föll inte rätt (${p0.toFixed(2)} → ${e.pos.toFixed(2)})`);
+  const fr = e.pos - Math.floor(e.pos);
+  assert(fr > 0.05 && fr < 0.95, `korgen stannade vid en våning (${e.pos.toFixed(2)}), inte mellan två`);
+  const exitF = e.snap.exitF;
+  assert(exitF > e.pos + 0.7 && e.serves.has(exitF), `utrymningsvåningen ${fl(exitF)} ligger inte ovanför korgtaket`);
+  while (e.mode === 'snapped' && ++g < 600 / DT) { const b = w.before(); step(DT); w.check(b); }
+  assert(e.mode === 'broken' && e.fault && e.fault.cable, `${e.name} gick inte över till linbyte (läge ${e.mode})`);
+  assert(!e.passengers.length, 'någon är kvar i korgen');
+  assert(trapped.every(p => p.car !== e), 'en instängd sitter fortfarande i hissen');
+  const h0 = hour();
+  while (e.mode === 'broken' && ++g < 1500 / DT) { const b = w.before(); step(DT); w.check(b); }
+  assert(e.mode === 'normal', `${e.name} lagades aldrig (läge ${e.mode})`);
+  assert(hour() - h0 >= 3, `linbytet tog bara ${(hour() - h0).toFixed(1)} speltimmar`);
+  assert(S.stats.cables === 1 && S.stats.repairs === 1, 'linbrottet eller lagningen räknades inte');
+  assert(w.snapUse === 0 && w.brokenUse === 0, `hissen rörde sig eller tog folk (${w.snapUse}/${w.brokenUse} steg)`);
+  assert(w.outOfRange === 0 && w.jumps === 0 && w.passes === 0, 'regelbrott under linbrottet');
+  return `${e.name}: ${trapped.length} instängda ut via ${fl(exitF)}, linbyte ${(hour() - h0).toFixed(1)} h`;
+});
+test('Två linbrott: de instängda i den andra hissen väntar inte på linbytet i den första', () => {
+  sim(84, { autoInc: false });
+  runUntil(10);
+  const w = watcher();
+  const pickCar = () => S.elevators.find(x => !x.facade && x.mode === 'normal' && x.state === 'moving' && x.passengers.length && x.pos > x.minF + 1.5);
+  let g = 0, a = null, b = null;
+  while (!a && ++g < 300 / DT) { step(DT); a = pickCar(); }
+  assert(a, 'ingen första hiss i fart');
+  snapCable(a);
+  while (!b && ++g < 600 / DT) { const x = w.before(); step(DT); w.check(x); b = pickCar(); }
+  assert(b, 'ingen andra hiss i fart');
+  snapCable(b);
+  const h0 = hour();
+  while ((a.mode === 'snapped' || b.mode === 'snapped') && ++g < 2000 / DT) { const x = w.before(); step(DT); w.check(x); }
+  assert(a.mode !== 'snapped' && b.mode !== 'snapped', 'någon sitter fortfarande fast');
+  const took = hour() - h0;
+  // båda är utrymda innan något linbyte är klart (teknikern lämnar linbytet för de instängda)
+  assert(a.mode === 'broken' && b.mode === 'broken', `ett linbyte blev klart innan alla var ute (${a.mode}/${b.mode})`);
+  while ((a.mode !== 'normal' || b.mode !== 'normal') && ++g < 4000 / DT) { const x = w.before(); step(DT); w.check(x); }
+  assert(a.mode === 'normal' && b.mode === 'normal', `linbytena blev aldrig klara (${a.mode}/${b.mode})`);
+  assert(w.snapUse === 0 && w.brokenUse === 0 && w.orphanService === 0, 'regelbrott under linbrotten');
+  return `${a.name} och ${b.name}: alla ute på ${took.toFixed(1)} h, båda lagade`;
 });
 test('Hissfel i entrén: teknikern kliver in och lagar direkt (ingen hissresa till samma våning)', () => {
   sim(82);
@@ -1148,6 +1207,7 @@ test(`Invarianter över ${MANY_SEEDS.length} slumpade dygn (alla strategier, med
     if (w.badFreight) fails.push(`${tag}: ${w.badFreight} fel last i fel hiss`);
     if (w.vipMixed) fails.push(`${tag}: ${w.vipMixed} klev på VIP-hissen`);
     if (w.brokenUse) fails.push(`${tag}: trasig hiss/service användes ${w.brokenUse} steg`);
+    if (w.snapUse) fails.push(`${tag}: hiss med linbrott rörde sig eller tog folk ${w.snapUse} steg`);
     if (w.holdBoard) fails.push(`${tag}: hiss på väg till service tog nya passagerare ${w.holdBoard} gånger`);
     if (S.elevators.some(e => e.mode === 'broken' && S.t - e.fault.t0 > 400)) fails.push(`${tag}: en hiss stod trasig i över 400 s`);
     if (w.selfDest) fails.push(`${tag}: någon väntade på hiss till sin egen våning (${w.selfDest} steg)`);
@@ -1187,6 +1247,7 @@ export const PLAYER_ACTIONS = {
   fan: r => act('fan', Math.floor(r() * S.elevators.length)),
   service: r => act('service', Math.floor(r() * S.elevators.length)),
   medical: () => act('trigger', 'medical'),
+  cable: () => act('trigger', 'cable'),
 };
 const FUZZ_SEEDS = Array.from({ length: 24 }, (_, i) => 5000 + i);
 test(`Spelaråtgärder: invarianter över ${FUZZ_SEEDS.length} dygn med slumpade åtgärder (även på natten)`, () => {
@@ -1217,6 +1278,7 @@ test(`Spelaråtgärder: invarianter över ${FUZZ_SEEDS.length} dygn med slumpade
     if (w.badFreight) fails.push(`${tag}: ${w.badFreight} fel last i fel hiss`);
     if (w.badPlatform) fails.push(`${tag}: fel på perrongen ${w.badPlatform} steg`);
     if (w.brokenUse) fails.push(`${tag}: trasig hiss/service användes ${w.brokenUse} steg`);
+    if (w.snapUse) fails.push(`${tag}: hiss med linbrott rörde sig eller tog folk ${w.snapUse} steg`);
     if (w.selfDest) fails.push(`${tag}: någon väntade på hiss till sin egen våning (${w.selfDest} steg)`);
     // (en brand eller ett strömavbrott som fortfarande pågår när dygnet slutar låser hissarna med rätta)
     // (en service som teknikern utför eller är på väg till när dygnet tar slut är inte fast)

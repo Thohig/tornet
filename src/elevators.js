@@ -6,7 +6,7 @@ import { S, log } from './state.js';
 import { arriveOnFloor, liftsAvailable, pev, pn, setTrip, toStairs, queueSpot } from './people.js';
 import { safeFloor, aheadOf, allowed, allowedDest, allowedPos, assignedTo, isFull, maybePark, rebuildPicks, stopFloors, loadKg, personKg, slotsFull, benched, keyed, posOf, outReason, OUT_TEXT, etaOutcome } from './dispatch.js';
 import { answerCalls, buttonsMode, clearCall } from './buttons.js';
-import { maybeBreak, heatOnStop, heatMul, levelStart, maybeStumble } from './service.js';
+import { maybeBreak, heatOnStop, heatMul, levelStart, maybeStumble, snapStep, snapDue, snapCable } from './service.js';
 import { doorHold, politeHold } from './cast.js';
 import { windMul } from './weather.js';
 import { peakHold } from './dispatch.js';
@@ -23,8 +23,10 @@ export function makeElevator(i) {
     passengers: [], reserved: 0, carCalls: new Set(), parkTarget: null, idleTime: 0,
     distance: 0, trips: 0, lastOff: 0, lastOn: 0, target: null, targetKind: null, fullFlash: 0,
     mode: 'normal', off: false, rs: null, rescueTarget: 0,
+    // linbrott: snapNext = linorna går av vid nästa åktur, snap = förloppet (fall → fast → utrymning)
+    snapNext: false, snap: /** @type {{ ph: string, t0: number, stopAt: number, caughtT: number, exitF: number, n: number, out: number, nextOut: number, climb: number }|null} */ (null),
     // drift: slitage 0–1+, fel, hållen för service, tekniker, energi (kW just nu, kWh i dag)
-    wear: 0, wearTrips: 0, wearDist: 0, fault: /** @type {{ what: string, t0: number, need: number }|null} */ (null),
+    wear: 0, wearTrips: 0, wearDist: 0, fault: /** @type {{ what: string, t0: number, need: number, cable?: boolean, exitF?: number, done?: number }|null} */ (null),
     hold: false, homeT: 0, techId: /** @type {number|null} */ (null), breakNext: false, serviceNeed: 0, kw: 0, kwh: 0,
     cap: d.deck2 ? CAP * 2 : CAP, // platser i korgen (dubbeldäck: CAP per däck)
     // motorvärme (0–1+, överhettad = hot), extrafläkt, nivåfel (våningar, negativt = för lågt), stängd för vinden,
@@ -76,6 +78,7 @@ export function setMode(e, m) {
 export function updateElevator(e, dt) {
   e.fullFlash = Math.max(0, e.fullFlash - dt);
   e.overloadFlash = Math.max(0, (e.overloadFlash || 0) - dt);
+  if (e.mode === 'snapped') { snapStep(e, dt); return; } // linbrott: fångapparaten är mekanisk och bryr sig inte om strömmen
   if (!S.power && e.mode !== 'rescue') { if (e.state === 'moving') e.v = 0; return; } // strömlös – står helt still
   if (e.mode === 'recall') { recallStep(e, dt); return; }
   if (e.mode === 'rescue') { rescueStep(e, dt); return; }
@@ -90,6 +93,8 @@ export function updateElevator(e, dt) {
   if (e.state === 'doors') { updateDoors(e, dt); return; }
   if (e.state === 'idle') { idleEval(e, dt); if (e.state !== 'moving') return; }
   moveStep(e, dt);
+  // linorna har knarrat (triggerCable): de går av när korgen är mitt emellan två våningar
+  if (snapDue(e)) snapCable(e);
 }
 // Brandzon: passagerare som klev på efter spärren och ska in i zonen släpps av vid hissens säkra våning
 function zoneReroute(e, f) {
@@ -281,15 +286,17 @@ export function unload(e, f) {
 export function exitAll(e, f, why) {
   // alla passagerare måste ut här (brand, ström) – de som inte var framme går vidare
   const ps = e.passengers; e.passengers = [];
-  for (const p of ps) {
-    const pf = deckFloor(e, p, f);
-    exitPassenger(e, p, pf);
-    if (p.goal === pf) { pev(p, `Kliver av hiss ${e.name} på ${fl(pf)}`); arriveOnFloor(p); continue; }
-    p.dir = Math.sign(p.goal - pf);
-    if (liftsAvailable() && allowed(pf) && allowed(p.goal)) { setTrip(p, p.goal, p.why); pev(p, `${why} – ställer mig i kön igen`); }
-    else toStairs(p, `${why} – tar trapporna`);
-  }
+  for (const p of ps) exitOne(e, p, deckFloor(e, p, f), why);
   e.carCalls.clear();
+}
+/** En passagerare måste ut på våningen pf (en riktig våning) innan hen är framme – och går vidare därifrån. */
+export function exitOne(e, p, pf, why) {
+  e.passengers = e.passengers.filter(q => q !== p);
+  exitPassenger(e, p, pf);
+  if (p.goal === pf) { pev(p, `Kliver av hiss ${e.name} på ${fl(pf)}`); arriveOnFloor(p); return; }
+  p.dir = Math.sign(p.goal - pf);
+  if (liftsAvailable() && allowed(pf) && allowed(p.goal)) { setTrip(p, p.goal, p.why); pev(p, `${why} – ställer mig i kön igen`); }
+  else toStairs(p, `${why} – tar trapporna`);
 }
 export function load(e, f) {
   // (dubbeldäck: folk på våningen ovanför kliver på övre däcket samtidigt)

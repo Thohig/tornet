@@ -53,6 +53,8 @@ function shots() {
   for (const e of S.elevators) {
     const n = e.passengers.length;
     if (!S.power && n) add(`dark${e.id}`, 70 + n, 'car', e.id, `⚡ Fast i ${e.name}`);
+    if (e.mode === 'snapped') add(`snap${e.id}`, e.snap.ph === 'evac' ? 92 : 96, 'car', e.id, e.snap.ph === 'evac' ? `🧗 Utrymning ur ${e.name}` : `🪢 Linbrott i ${e.name}`);
+    else if (e.mode === 'broken' && e.fault.cable && e.techId !== null) add(`cable${e.id}`, 22, 'car', e.id, `🔧 Linbyte i ${e.name}`);
     if ((e.mode === 'broken' || e.mode === 'rescue') && n) add(`broken${e.id}`, 70, 'car', e.id, `🔧 ${e.name} har stannat`);
     if (e.hot) add(`hot${e.id}`, 45, 'car', e.id, `🌡️ ${e.name} är överhettad`);
     if ((e.overloadFlash || 0) > 1) add(`over${e.id}`, 50, 'car', e.id, `⚖️ Överlast i ${e.name}`);

@@ -92,13 +92,13 @@ export function outReason(e) {
 export const OUT_TEXT = /** @type {Record<string, string>} */ ({
   hot: 'har överhettad motor', wind: 'stängs för vinden', off: 'är ur drift', hold: 'ska på service', zone: 'spärras av branden',
   broken: 'gick sönder', service: 'är på service', recall: 'kallas ner av brandlarmet', locked: 'är låst (brand)',
-  rescue: 'nödsänks', dead: 'är strömlös',
+  rescue: 'nödsänks', dead: 'är strömlös', snapped: 'fick linbrott',
 });
 export const operational = e => S.power && !outReason(e) && !e.sleep;
 /** kan p få hissen just nu (bortsett från strömmen och nattvilan)? */
 export const servesNow = (e, p) => !outReason(e) && !(e.vipLock && !prio(p)) && canTake(e, p);
 /** hissen är borta en längre stund (fel, service, avstängd, vind, värme) – ruttvalet tar en annan väg */
-export const outLong = e => e.mode === 'broken' || e.mode === 'service' || e.hold || benched(e);
+export const outLong = e => e.mode === 'broken' || e.mode === 'snapped' || e.mode === 'service' || e.hold || benched(e);
 /** har egen nyckel/prioritet och använder aldrig hallknapparna (VIP-gruppen, ambulansen, flyttgubbarna) */
 export const keyed = p => !!(p.vip || p.medic || p.mover);
 /** får en hiss för sig själva (VIP-läge): VIP-gruppen och ambulanspersonalen */

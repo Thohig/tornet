@@ -6,7 +6,7 @@
 import { ARR, clamp, fl } from './util.js';
 import { BX1, CAR_H, CAR_W, EL, FL, FLOORS, FLOOR_H, FLOOR_HOURS, FULL_LOAD, GARAGE_FLOORS, GROUND_Y, H, INNER_X1, LAND_X0, DOOR_X, LOBBY, MEZZ, ROOF_Y, SEAM_F, SHAFT_W, SHAFT_X0, STATION, TOP, TOWER_X1, TRAIN_LEN, TRAIN_X0, TRAIN_X1, W, carPos, floorOpen, floorY, shaftCX, shaftX, surf } from './config.js';
 import { exposure, windAt } from './weather.js';
-import { WARM_AT } from './service.js';
+import { WARM_AT, nextOut, tech } from './service.js';
 import { S, hour } from './state.js';
 import { allowed, cabinKg, keyed } from './dispatch.js';
 import { noteDetail, stateInfo } from './describe.js';
@@ -655,7 +655,20 @@ function drawRopesPx(e) {
     // motvikt och bärlinor – i stormen svänger linorna i de höga schakten
     const span = Math.max(1, e.maxF - e.minF), frac = (e.pos - e.minF) / span;
     const st = Y(shaftTop(e)), sb = Y(shaftBot(e)), cwH = 23, cwX = X(shaftX(e.id) + SHAFT_W - 15);
-    const cwY = Math.round(st + 4 + frac * (sb - st - cwH - 8));
+    const cut = ropesCut(e);
+    // linbrott: motvikten har rasat ner på sin buffert i schaktets botten
+    const cwY = cut === null ? Math.round(st + 4 + frac * (sb - st - cwH - 8)) : sb - cwH - 4;
+    if (cut !== null) {
+      // avslitna linor hänger från taket (under linbytet blir de nya längre och längre)
+      const end = Math.round(st + (yt - 4 - st) * cut);
+      R(cwX + 2, st, 1, Math.round((cwY - st) * 0.2), INK); frayed(cwX + 2, st + Math.round((cwY - st) * 0.2));
+      for (const dx of [-6, -2, 2, 6]) { R(x + cw / 2 + dx, st, 1, end - st, INK); if (end < yt - 6) frayed(x + cw / 2 + dx, end); }
+      box(cwX, cwY, 5, cwH, PAL.basement); for (let k = 1; k < 5; k++) R(cwX + 1, cwY + k * 4, 3, 1, '#4a4170');
+      // linfästet på korgtaket med stumparna kvar
+      R(x + cw / 2 - 9, yt - 4, 19, 1, INK); R(x + cw / 2 - 9, yt - 4, 1, 4, INK); R(x + cw / 2 + 9, yt - 4, 1, 4, INK);
+      if (cut < 0.99) for (const dx of [-6, 6]) { R(x + cw / 2 + dx, yt - 7, 1, 3, INK); frayed(x + cw / 2 + dx, yt - 8, -1); }
+      return;
+    }
     const amp = exposure(e) * Math.max(0, windAt() - 0.3) * 7;
     const sway = y => (amp ? Math.round(Math.sin((y + CY) / 23 + S.anim * 2.3) * amp * Math.sin(Math.PI * (y - st) / Math.max(1, yt - st))) : 0);
     if (amp) for (let y = st; y < cwY; y++) R(cwX + 2 + sway(y), y, 1, 1, INK); else R(cwX + 2, st, 1, cwY - st, INK);
@@ -667,11 +680,58 @@ function drawRopesPx(e) {
     R(x + cw / 2 - 9, yt - 4, 19, 1, INK); R(x + cw / 2 - 9, yt - 4, 1, 4, INK); R(x + cw / 2 + 9, yt - 4, 1, 4, INK);
   }
 }
+/** Linbrott: hur långt ner i schaktet linorna når (0–1 av vägen till korgen), null = hela linor */
+function ropesCut(e) {
+  if (e.mode === 'snapped') return 0.22;
+  if (e.mode !== 'broken' || !e.fault || !e.fault.cable) return null;
+  const t = tech(), on = t && t.job === e.id && t.state === 'office' && t.floor === e.fault.exitF;
+  return 0.22 + 0.78 * (on ? Math.min(1, t.workT / e.fault.need) : 0);
+}
+/** en fransig linända (dir = 1 nedåt, -1 uppåt) */
+function frayed(x, y, dir = 1) { R(x - 1, y + dir, 1, 1, INK); R(x + 1, y + dir, 1, 1, INK); R(x, y + 2 * dir, 1, 1, '#7a6f9a'); }
+/** Linbrott: gnistor från fångapparaten, takluckan, stegen upp till schaktdörren och teknikern på korgtaket */
+function drawCableRescue(e, G) {
+  const { x, cw, yt, yb } = G;
+  const s = e.snap, F = e.mode === 'broken' && e.fault && e.fault.cable ? e.fault : null;
+  if (!s && !F) return;
+  // gnistor längs styrskenorna medan korgen faller och en kort stund efter att fångapparaten tog
+  if (s && (s.ph === 'fall' || S.t - s.caughtT < 1.2)) {
+    for (const sx of [x - 2, x + cw + 1]) for (let n = 0; n < 5; n++)
+      R(sx + Math.round(vrand(-2, 2)), yb - Math.round(vrand(0, 10)) - (s.ph === 'fall' ? Math.round(vrand(0, 14)) : 0), 1, 1, vpick(['#ffd23f', '#ffffff', '#ff9f1c', '#ff5d52']));
+  }
+  const exitF = s ? s.exitF : F.exitF, top = Y(floorY(exitF) - 4);
+  const t = tech(), here = t && t.job === e.id && t.state === 'office' && t.floor === exitF ? t : null;
+  // avspärrning vid schaktdörren på våningen ovanför
+  if (here || F) for (let k = 0; k < cw; k += 4) R(x + k, top - 18, 2, 2, (k / 4) % 2 ? INK : '#ffd23f');
+  const evac = s && s.ph === 'evac';
+  if (!evac && !here) return;
+  // takluckan står öppen
+  const hx = x + Math.round(cw / 2) - 14;
+  R(hx, yt - 1, 8, 2, INK); R(hx + 1, yt - 4, 1, 3, '#8a8f99');
+  // stegen från korgtaket upp till schaktdörren
+  const lx = x + cw - 10;
+  if (top < yt - 2) { R(lx, top, 1, yt - top, '#c9a227'); R(lx + 4, top, 1, yt - top, '#c9a227'); for (let y = top + 2; y < yt; y += 3) R(lx, y, 5, 1, '#c9a227'); }
+  // teknikern på korgtaket (med pannlampa); vid linbytet står hen och drar i de nya linorna
+  if (here) {
+    const px = x + Math.round(cw / 2) - PERSON_W / 2 + (evac ? 2 : (Math.sin(S.anim * 2) > 0 ? 1 : 0)), py = yt - 1 - PERSON_H;
+    g.drawImage(personSprite(here, 'front', 0, 1, { blink: blinkOf(here) }), px, py);
+    R(px + PERSON_W / 2, py + 2, 1, 1, '#fff6a8');
+    if (!evac && Math.sin(S.anim * 9 + e.id) > 0.4) for (let n = 0; n < 3; n++) R(px - 2 - Math.round(vrand(0, 3)), py + 6 + Math.round(vrand(0, 5)), 1, 1, vpick(['#ffd23f', '#ffffff']));
+  }
+  // den som är på väg ut klättrar uppför stegen
+  const c = evac ? climber(e) : null;
+  if (c && top < yt) {
+    const k = clamp(1 - (s.nextOut - S.t) / s.climb, 0, 1), py = Math.round(yt - PERSON_H - (yt - top) * k);
+    g.drawImage(personSprite(c, 'front', 0, 1, { blink: blinkOf(c) }), lx - 2, py);
+  }
+}
+/** den som klättrar ut genom takluckan just nu (ritas på stegen, inte i korgen) */
+const climber = e => (e.snap && e.snap.ph === 'evac' && S.t > e.snap.nextOut - e.snap.climb * 0.7 ? nextOut(e) : null);
 function drawCarPx(e) {
   const G = carGeom(e);
   if (!G) return;
   const { x, cw, chh, ybOf, top, yb, yt } = G;
-  const off = e.off || e.mode === 'locked' || e.sleep || e.zoneLock || e.mode === 'broken' || e.mode === 'service' || e.hold || e.hot || e.windLock;
+  const off = e.off || e.mode === 'locked' || e.sleep || e.zoneLock || e.mode === 'broken' || e.mode === 'snapped' || e.mode === 'service' || e.hold || e.hot || e.windLock;
   const body = off ? PAL.carOff : e.color;
   // dubbeldäck: ramen mellan korgarna
   if (e.deck2) {
@@ -680,6 +740,7 @@ function drawCarPx(e) {
     for (let k = 0; k < cw - 8; k += 8) { line(x + 2 + k, y0, x + 8 + k, y1 - 1, dark(body, 0.6)); line(x + 8 + k, y0, x + 2 + k, y1 - 1, dark(body, 0.6)); }
   }
   for (let k = 0; k <= top; k++) cabinPx(e, k, x, ybOf(k), body, k === top);
+  drawCableRescue(e, G);
   if (VIEW.follow === e.id) ants(x - 3, yt - 3, cw + 6, yb - yt + 6, '#7dff9a');
   if (e.overloadFlash > 0) { if (Math.sin(S.anim * 18) > -0.2) label('ÖVERLAST!', x + cw / 2, yt - 11, '#ff2d55', '#ffffff'); }
   else if (e.fullFlash > 0) label('FULLT!', x + cw / 2, yt - 11, '#ffffff', '#ff2d55');
@@ -692,7 +753,9 @@ function drawCarPx(e) {
   if (e.mode === 'locked') label('AVSTÄNGD', x + cw / 2, yt - 11, '#ff2d55', '#ffffff');
   if (e.mode === 'recall') label(`→ TILL ${fl(e.home)}`, x + cw / 2, yt - 11, '#ff8c42');
   if (e.mode === 'rescue') label('NÖDSÄNK', x + cw / 2, yt - 11, '#7dff9a');
-  if (e.mode === 'broken') { if (Math.sin(S.anim * 6) > -0.4) label('FEL!', x + cw / 2, yt - 11, '#ff2d55', '#ffffff'); }
+  if (e.mode === 'snapped') { if (Math.sin(S.anim * 7) > -0.3) label('LINBROTT!', x + cw / 2, yt + chh / 2 - 4, '#ff2d55', '#ffffff'); }
+  if (e.mode === 'broken' && e.fault && e.fault.cable) label('LINBYTE', x + cw / 2, yt + chh / 2 - 4, '#ffd23f');
+  else if (e.mode === 'broken') { if (Math.sin(S.anim * 6) > -0.4) label('FEL!', x + cw / 2, yt - 11, '#ff2d55', '#ffffff'); }
   if (e.mode === 'service') label(e.serviceAsap ? 'NIVÅJUSTERING' : 'SERVICE', x + cw / 2, yt - 11, '#ffd23f');
   if (e.hold && e.mode === 'normal') label('→ SERVICE', x + cw / 2, yt - 11, '#ffd23f');
   if (e.mode === 'normal' && !e.hold) {
@@ -726,7 +789,8 @@ function cabinPx(e, k, x, yb, body, head) {
   if (e.facade) { line(ix + 3, iy + ih - 3, ix + 10, iy + 3, '#ffffff'); line(ix + 7, iy + ih - 3, ix + 14, iy + 3, '#ffffff'); }
   // passagerarna: hörnen först (hissetikett), bakre raden först
   g.save(); g.beginPath(); g.rect(ix, iy, iw, ih); g.clip();
-  const ps = e.passengers.filter(p => !e.deck2 || (p.deck || 0) === k);
+  const out = climber(e);
+  const ps = e.passengers.filter(p => (!e.deck2 || (p.deck || 0) === k) && p !== out);
   const order = ps.map((p, i) => ({ p, s: carSlot(i) })).sort((a, b) => Number(a.s >= 4) - Number(b.s >= 4));
   for (const { p, s } of order) {
     // bakre raden står högre upp och lite i skugga, så att huvudena syns ovanför främre raden

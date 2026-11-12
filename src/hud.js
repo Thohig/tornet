@@ -14,7 +14,7 @@ import { stateInfo } from './describe.js';
 export { stateInfo };
 import { residentDesc } from './life.js';
 import { STORM_HINT, windMs } from './weather.js';
-import { FAN_KW, jobFloor, tech } from './service.js';
+import { FAN_KW, jobFloor, tech, cableStatus } from './service.js';
 import { updatePauseBtn } from './input.js';
 import { SIM_VERSION } from './replay.js';
 
@@ -85,6 +85,8 @@ export function zoneText(d) {
   return `${fl(d.minF)}–${fl(d.maxF)} · ${d.group} zon`;
 }
 export function stateLabel(e) {
+  if (e.mode === 'snapped') return e.snap.ph === 'fall' ? 'FALLER! 🪢' : 'LINBROTT 🪢';
+  if (e.mode === 'broken' && e.fault.cable) return 'LINBYTE 🔧';
   if (e.mode === 'broken') return 'TRASIG 🔧';
   if (e.mode === 'service') return 'SERVICE 🔧';
   if (e.hold) return 'TILL SERVICE';
@@ -115,6 +117,7 @@ export function reasonAt(e, f, d) {
 }
 export function whyText(e) {
   if (e.zoneLock) return `Når ingen våning utanför brandzonen – står spärrad på ${fl(e.minF)} tills branden är släckt`;
+  if (e.mode === 'snapped' || (e.mode === 'broken' && e.fault.cable)) return cableStatus(e);
   if (e.mode === 'broken') {
     const t = S.people.find(p => p.role === 'hisstekniker' && p.job === e.id);
     return `Trasig på ${fl(e.floor)}: ${e.fault.what} · ${t ? (t.state === 'office' && t.floor === e.floor ? `${t.name} lagar den (${Math.round(100 * Math.min(1, t.workT / e.fault.need))} %)` : `${t.name} är på väg`) : 'väntar på hisstekniker'}`;
@@ -155,6 +158,7 @@ const secs = s => `${Math.max(1, Math.round(s))} s`;
 /** Teknikerns tidplan för hissen e (beställd service, nattservice eller hissfel) – null om ingen är på gång.
  *  Bara en uppskattning för gränssnittet: simuleringen slumpar arbetstiden först när arbetet börjar. */
 export function serviceStatus(e) {
+  if (e.mode === 'snapped' || (e.mode === 'broken' && e.fault.cable)) return `🔧 ${cableStatus(e)}`;
   const broken = e.mode === 'broken';
   if (!broken && !e.serviceAsap && !e.hold && e.mode !== 'service') return null;
   const t = tech(), mine = !!t && t.job === e.id, f = jobFloor(e);
@@ -247,7 +251,7 @@ export function updateHud() {
     <div class="stat">Avstod – kändes för trångt <b>${st.crowdSkips}</b></div>
     <div class="stat">Tryckte på STÄNG <b>${st.closePresses}</b></div>
     <div class="stat">★ Majken pratade 💬 <b>${st.chats}</b></div>
-    <div class="stat">Hissfel 🔧 <b>${st.faults}</b></div>
+    <div class="stat">Hissfel 🔧 <b>${st.faults}</b>${st.cables ? ` (linbrott 🪢 <b>${st.cables}</b>)` : ''}</div>
     <div class="stat">Lagade / servade <b>${st.repairs} / ${st.serviced}</b></div>
     <div class="stat">Stillestånd <b>${Math.round(st.downSec)} s</b></div>
     <div class="stat">Överhettade motorer 🌡️ <b>${st.heatStops}</b></div>
@@ -315,6 +319,16 @@ export function incidentHtml() {
     parts.push(`<div class="inc info ${cls}"><div class="inc-h">${title}<button class="inc-x" data-act="dismiss:${key}" title="Stäng">✕</button></div>
       <div class="inc-s">${body}</div>${acts ? `<div class="inc-acts">${acts}</div>` : ''}</div>`);
   };
+  // linbrott: spelaren kan inte göra något – hissjouren räddar de instängda och byter linorna
+  for (const e of S.elevators) {
+    const cab = e.mode === 'snapped' ? e.snap : e.mode === 'broken' && e.fault.cable ? e.fault : null;
+    if (!cab) continue;
+    const intro = e.mode === 'snapped' && e.snap.ph === 'fall' ? 'Bärlinorna har gått av – korgen faller!'
+      : e.mode === 'snapped' ? 'Bärlinorna gick av och fångapparaten stoppade fallet. Korgen står fast mellan två våningar.'
+      : `Alla är ute. Hissen står avstängd medan nya bärlinor dras i schaktet – det tar några timmar.`;
+    info(`cable-${e.id}-${Math.round(cab.t0)}`, 'cable', `🪢 Linbrott i ${esc(e.name)}`, `${intro}<div class="svc">${esc(cableStatus(e))}</div>`,
+      `<button class="btn xs" data-act="follow:${e.id}">📹 Visa hissen</button>`);
+  }
   // replay-länkens kontroll: avviker uppspelningen, eller är länken från en annan version?
   const R = S.replay ? S.replayCheck : null;
   if (R) {
@@ -576,7 +590,7 @@ export function showSummary() {
       <div>Överlaster: <b>${st.overloads}</b></div><div>Hissbyten: <b>${st.transfers}</b></div>
       <div>Bilar i garaget: <b>${st.carsIn}</b></div><div>Leveranser: <b>${st.deliveries}</b></div>
       <div>Felknappar: <b>${st.wrongPress}</b> (barn: ${st.kidPresses})</div><div>Spökstopp: <b>${st.ghostStops}</b></div>
-      <div>Hissfel: <b>${st.faults}</b> (stillestånd ${Math.round(st.downSec)} s)</div><div>Nattservice: <b>${st.serviced}</b> hissar</div>
+      <div>Hissfel: <b>${st.faults}</b>${st.cables ? `, varav linbrott <b>${st.cables}</b>` : ''} (stillestånd ${Math.round(st.downSec)} s)</div><div>Nattservice: <b>${st.serviced}</b> hissar</div>
       <div>Energi: <b>${st.energy.toFixed(1)} kWh</b> (körning ${st.energyRun.toFixed(1)})</div><div>Återmatat: <b>${st.regen.toFixed(1)} kWh</b></div>
       <div>★ Gunnar gnällde: <b>${st.gripes}</b> gånger</div><div>★ Kurts kaffekoppar: <b>${st.cups}</b></div>
       <div>Höll upp dörren: <b>${st.holds}</b> gånger</div><div>★ Majken pratade: <b>${st.chats}</b> gånger</div>
