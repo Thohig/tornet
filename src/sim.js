@@ -201,6 +201,7 @@ export function resetDay() {
   S.people = []; S.stats = newStats(); S.calls = {};
   S.steps = 0; S.actions = []; S.replayQueue = []; S.replay = false; S.checks = []; S.replayCheck = null;
   S.fire = null; S.power = true; S.outage = null; S.techCallAt = null; S.peakMode = null; S.wakeAt = 0;
+  S.notices = []; // gårdagens informationsrutor visas inte igen (klockan S.t börjar om från 0)
   S.nextInc = rand(60, 120);
   S.occ = new Map();
   // slitaget följer med från gårdagen (dag 1: slumpat – huset är inte nytt)

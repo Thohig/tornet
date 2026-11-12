@@ -796,6 +796,16 @@ test('Nivåfel och kyla: slitna linor ger nivåjusteringar och snubbel, kyla få
   assert(fights > 0 && warmFights === 0, `dörren tog emot ${fights} gånger i kyla och ${warmFights} när det var varmt`);
   return `nivåjusteringar ${rel[0]} → ${rel[1]} med slitna linor · ${stumbles} snubbel · dörren tog emot ${fights} gånger i kylan`;
 });
+test('Informationsrutor: ett nytt dygn börjar utan gårdagens rutor (bara en kall dag åt gången)', () => {
+  // frö 1: både dag 1 och dag 2 är kalla – förr syntes båda rutorna i början av dag 2
+  sim(1); runUntil(12);
+  const before = S.notices.length;
+  S.day++; resetDay();
+  const cold = S.notices.filter(n => n.kind === 'cold');
+  assert(cold.length <= 1, `${cold.length} rutor om kall dag samtidigt: ${cold.map(n => n.title).join(', ')}`);
+  assert(S.notices.every(n => n.t0 <= S.t), 'en ruta från i går ligger kvar');
+  return `${before} rutor på dag 1 · ${S.notices.length} när dag 2 börjar (${S.weather.temp} °C)`;
+});
 test('Hissetikett: folk avstår från trånga hissar, och turistgruppen tränger ihop sig', () => {
   sim(76); runUntil(10.3);
   const { crowdSkips, holds } = S.stats;
