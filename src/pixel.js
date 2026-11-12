@@ -4,12 +4,14 @@
 // Bara grafik: läser simuleringens tillstånd men ändrar det aldrig (utom S.fx-listan, som den
 // tecknade grafiken också räknar ner).
 import { ARR, clamp, fl } from './util.js';
-import { BX1, CAR_H, CAR_W, EL, FL, FLOORS, FLOOR_H, FLOOR_HOURS, FULL_LOAD, GROUND_Y, H, INNER_X1, LAND_X0, DOOR_X, LOBBY, ROOF_Y, SHAFT_W, SHAFT_X0, SKY, TOP, TOWER_X1, W, floorOpen, floorY, shaftCX, shaftX, surf } from './config.js';
+import { BX1, CAR_H, CAR_W, EL, FL, FLOORS, FLOOR_H, FLOOR_HOURS, FULL_LOAD, GROUND_Y, H, INNER_X1, LAND_X0, DOOR_X, LOBBY, MEZZ, ROOF_Y, SEAM_F, SHAFT_W, SHAFT_X0, TOP, TOWER_X1, W, carPos, floorOpen, floorY, shaftCX, shaftX, surf } from './config.js';
+import { exposure, windAt } from './weather.js';
+import { WARM_AT } from './service.js';
 import { S, hour } from './state.js';
 import { allowed, cabinKg } from './dispatch.js';
 import { noteDetail, stateInfo } from './describe.js';
 import { VIEW, clouds, ctx, cv, nightness, skyAt, skyline, stars } from './view.js';
-import { carSlotX, landPos, peopleBehindDoor, personHead } from './render.js';
+import { carSlot, carSlotX, landPos, peopleBehindDoor, personHead } from './render.js';
 import { vpick, vrand } from './rng.js';
 import { PX, blend, dark, light, ellipseSprite, fromCells, sprite, text, textW, plain, rgbOf, led } from './pixart.js';
 import { buttonsMode, hallLit } from './buttons.js';
@@ -239,15 +241,16 @@ function drawGroundPx() {
 // Tornet är indraget: under sky lobbyn har det full bredd (BX1), ovanför bara så brett som höga zonen
 // behöver (UX1). Taket på den breda delen blir en terrass, och under expresshissarna går garagerampen.
 const INSIDE_EL = EL.filter(e => !e.facade);
-const shaftTop = e => floorY(e.maxF + 1) + 4, shaftBot = e => floorY(e.minF) + 4;
+// (dubbeldäck: schaktet går en våning högre än nedre däckets översta stopp – topF)
+const shaftTop = e => floorY(EL[e.id].topF + 1) + 4, shaftBot = e => floorY(e.minF) + 4;
 const BASE_Y = floorY(0) + 6, DECK_Y = floorY(TOP);
-const UX1 = TOWER_X1[TOP], SEAM_Y = floorY(SKY + 1); // tornets övre högerkant och terrassens golv
+const UX1 = TOWER_X1[TOP], SEAM_Y = floorY(SEAM_F); // tornets övre högerkant och terrassens golv
 /** schaktkolumnerna (vänsterkant) med hissarna i varje – låg och hög zon kan dela kolumn */
 const COLS = [...new Set(INSIDE_EL.map(e => shaftX(e.id)))].sort((a, b) => a - b).map(x => ({ x, els: INSIDE_EL.filter(e => shaftX(e.id) === x) }));
 /** tornets högerkant i höjd med världens y */
 const towerX1At = y => (y < SEAM_Y ? UX1 : BX1);
 /** hissen ovanpå i samma schakt (staplade zoner), om någon */
-const stackedAbove = e => INSIDE_EL.find(o => o !== e && shaftX(o.id) === shaftX(e.id) && o.minF === e.maxF + 1);
+const stackedAbove = e => INSIDE_EL.find(o => o !== e && shaftX(o.id) === shaftX(e.id) && o.minF === EL[e.id].topF + 1);
 /** rampen ner till garaget: kolumnerna under expresshissarna, där inget schakt går under entrén */
 const RAMP_COLS = COLS.filter(c => c.els.every(e => e.minF >= LOBBY));
 function brickWall(x0, y0, x1, y1) {
@@ -279,7 +282,7 @@ function drawShellStatic(nn) {
   for (const c of COLS) {
     const x = X(c.x);
     for (let f = 0; f < FLOORS; f++) {
-      if (c.els.some(e => f >= e.minF && f <= e.maxF + 1) || c.x + SHAFT_W > TOWER_X1[f]) continue;
+      if (c.els.some(e => f >= e.minF && f <= e.topF + 1) || c.x + SHAFT_W > TOWER_X1[f]) continue;
       const top = Y(floorY(f + 1) + 6), bot = Y(floorY(f) - 6);
       if (bot < 0 || top > lo.height) continue;
       if (f < LOBBY) { if (!RAMP_COLS.includes(c)) R(x - 2, top - 1, SHAFT_W / PX + 4, bot - top + 2, PAL.basement); continue; }
@@ -300,7 +303,7 @@ function drawShellStatic(nn) {
     R(x - 2, t, w + 5, b - t, PAL.shaftOuter); R(x, t, w, b - t, PAL.shaft);
     R(x + 1, t, 2, b - t, PAL.rail); R(x + w - 3, t, 2, b - t, PAL.rail);
     for (let y = t + ((-CY % 8) + 8) % 8; y < b; y += 8) { R(x + 1, y, 2, 1, PAL.railDot); R(x + w - 3, y, 2, 1, PAL.railDot); }
-    if (e.express) for (let f = e.minF + 1; f < e.maxF; f++) { g.globalAlpha = 0.45; text(g, 'EXPRESS', x + w / 2, Y(floorY(f) - FLOOR_H / 2) - 3, PAL.express, 'center'); g.globalAlpha = 1; }
+    if (e.express) for (let f = e.minF + (e.deck2 ? 2 : 1); f < e.maxF; f++) { g.globalAlpha = 0.45; text(g, 'EXPRESS', x + w / 2, Y(floorY(f) - FLOOR_H / 2) - 3, PAL.express, 'center'); g.globalAlpha = 1; }
   }
   // staplade zoner: ett mellanbjälklag med maskin där låga zonens schakt slutar och höga zonens börjar
   for (const e of INSIDE_EL) {
@@ -403,7 +406,7 @@ function drawSlabsPx() {
   for (let f = 0; f <= FLOORS; f++) {
     const y = Y(floorY(f)) - 2;
     if (y < -4 || y > lo.height + 4) continue;
-    const holes = INSIDE_EL.filter(e => e.minF < f && f <= e.maxF).map(e => [shaftX(e.id), shaftX(e.id) + SHAFT_W]).sort((a, b) => a[0] - b[0]);
+    const holes = INSIDE_EL.filter(e => e.minF < f && f <= e.topF).map(e => [shaftX(e.id), shaftX(e.id) + SHAFT_W]).sort((a, b) => a[0] - b[0]);
     // bjälklaget når ut till tornets kant: den bredaste av våningarna över och under
     const edge = Math.max(f < FLOORS ? TOWER_X1[f] : 0, f > 0 ? TOWER_X1[f - 1] : 0);
     let a = f === FLOORS ? SHAFT_X0 - 8 : LAND_X0 - 20;
@@ -426,15 +429,17 @@ function lantern(e, f) {
   if (y < -14 || y > lo.height) return;
   box(x, y, w, 11, PAL.lantern);
   if (!(S.power || (S.outage && S.outage.gen))) return;
-  const here = Math.abs(e.pos - f) < 0.05 && e.state === 'doors';
+  // dubbeldäck: displayen på övre däckets våningar visar var övre däcket är
+  const cp = carPos(e.id, f), up = f - cp;
+  const here = Math.abs(e.pos - cp) < 0.05 && e.state === 'doors';
   const col = here ? '#7dff9a' : PAL.led;
-  led(g, fl(Math.round(e.pos)), x + 14, y + 2, col, 'center');
+  led(g, fl(Math.round(e.pos) + up), x + 14, y + 2, col, 'center');
   if (e.dir && (e.state === 'moving' || here)) led(g, e.dir > 0 ? '▲' : '▼', x + 2, y + 2, col);
   // hallknapparna: i KNAPPAR-läget lyser gruppens gemensamma knapp, annars hissens egna hämtningar
   const buttons = buttonsMode();
   for (const d of [1, -1]) {
-    if (d === 1 && f >= e.maxF || d === -1 && f <= e.minF) continue;
-    const lit = buttons ? hallLit(e.group, f, d) : e.pick[f + (d > 0 ? 'u' : 'd')] > 0;
+    if (d === 1 && cp >= e.maxF || d === -1 && cp <= e.minF) continue;
+    const lit = buttons ? hallLit(e.group, f, d) : e.pick[cp + (d > 0 ? 'u' : 'd')] > 0;
     const lx = x + w - 6, ly = y + (d > 0 ? 2 : 6);
     const c = lit ? '#ffe14d' : PAL.dim;
     if (d > 0) { R(lx + 2, ly, 1, 1, c); R(lx + 1, ly + 1, 3, 1, c); R(lx, ly + 2, 5, 1, c); }
@@ -531,21 +536,64 @@ function floorOverlays(f, h) {
 
 // ---------- Hissarna ----------
 function drawCarPx(e) {
-  const x = X(shaftX(e.id) + 4), yb = Y(floorY(e.pos) - 4), cw = CAR_W / PX, chh = CAR_H / PX, yt = yb - chh;
+  // nivåfel: korgen står en aning för lågt eller högt när linorna töjer sig (överdrivet så att det syns)
+  const lv = (e.level || 0) * 2.5;
+  const x = X(shaftX(e.id) + 4), cw = CAR_W / PX, chh = CAR_H / PX;
+  const ybOf = k => Y(floorY(e.pos + k + lv) - 4);
+  const top = e.deck2 ? 1 : 0, yb = ybOf(0), yt = ybOf(top) - chh; // yt = överkanten på den översta korgen
   if (yt > lo.height + 40 || yb < -40) return;
   if (!e.facade) {
-    // motvikt och bärlinor
+    // motvikt och bärlinor – i stormen svänger linorna i de höga schakten
     const span = Math.max(1, e.maxF - e.minF), frac = (e.pos - e.minF) / span;
     const st = Y(shaftTop(e)), sb = Y(shaftBot(e)), cwH = 23, cwX = X(shaftX(e.id) + SHAFT_W - 15);
     const cwY = Math.round(st + 4 + frac * (sb - st - cwH - 8));
-    R(cwX + 2, st, 1, cwY - st, INK);
+    const amp = exposure(e) * Math.max(0, windAt() - 0.3) * 7;
+    const sway = y => (amp ? Math.round(Math.sin((y + CY) / 23 + S.anim * 2.3) * amp * Math.sin(Math.PI * (y - st) / Math.max(1, yt - st))) : 0);
+    if (amp) for (let y = st; y < cwY; y++) R(cwX + 2 + sway(y), y, 1, 1, INK); else R(cwX + 2, st, 1, cwY - st, INK);
     box(cwX, cwY, 5, cwH, PAL.basement); for (let k = 1; k < 5; k++) R(cwX + 1, cwY + k * 4, 3, 1, '#4a4170');
-    for (const dx of [-6, -2, 2, 6]) R(x + cw / 2 + dx, st, 1, yt - st, INK);
+    for (const dx of [-6, -2, 2, 6]) {
+      if (amp) for (let y = st; y < yt - 4; y++) R(x + cw / 2 + dx + sway(y), y, 1, 1, INK);
+      else R(x + cw / 2 + dx, st, 1, yt - st, INK);
+    }
     R(x + cw / 2 - 9, yt - 4, 19, 1, INK); R(x + cw / 2 - 9, yt - 4, 1, 4, INK); R(x + cw / 2 + 9, yt - 4, 1, 4, INK);
   }
-  const off = e.off || e.mode === 'locked' || e.sleep || e.zoneLock || e.mode === 'broken' || e.mode === 'service' || e.hold;
+  const off = e.off || e.mode === 'locked' || e.sleep || e.zoneLock || e.mode === 'broken' || e.mode === 'service' || e.hold || e.hot || e.windLock;
   const body = off ? PAL.carOff : e.color;
-  // korgen
+  // dubbeldäck: ramen mellan korgarna
+  if (e.deck2) {
+    const y0 = ybOf(1), y1 = yb - chh;
+    R(x, y0 - 1, cw, y1 - y0 + 2, INK); R(x + 1, y0, cw - 2, y1 - y0, dark(body, 0.35));
+    for (let k = 0; k < cw - 8; k += 8) { line(x + 2 + k, y0, x + 8 + k, y1 - 1, dark(body, 0.6)); line(x + 8 + k, y0, x + 2 + k, y1 - 1, dark(body, 0.6)); }
+  }
+  for (let k = 0; k <= top; k++) cabinPx(e, k, x, ybOf(k), body, k === top);
+  if (VIEW.follow === e.id) ants(x - 3, yt - 3, cw + 6, yb - yt + 6, '#7dff9a');
+  if (e.overloadFlash > 0) { if (Math.sin(S.anim * 18) > -0.2) label('ÖVERLAST!', x + cw / 2, yt - 11, '#ff2d55', '#ffffff'); }
+  else if (e.fullFlash > 0) label('FULLT!', x + cw / 2, yt - 11, '#ffffff', '#ff2d55');
+  if (e.off) label('UR DRIFT', x + cw / 2, yt + chh / 2 - 4, '#ffe14d');
+  if (e.sleep) for (let i = 0; i < 3; i++) {
+    const k = (S.anim * 0.5 + i / 3) % 1;
+    g.globalAlpha = 1 - k; text(g, 'Z', x + cw / 2 + 3 + Math.round(k * 7), yt - 3 - Math.round(k * 13), '#bfeaff', 'left', i === 2 ? 2 : 1, INK); g.globalAlpha = 1;
+  }
+  if (e.zoneLock) label('SPÄRRAD', x + cw / 2, yt - 11, '#ff2d55', '#ffffff');
+  if (e.mode === 'locked') label('AVSTÄNGD', x + cw / 2, yt - 11, '#ff2d55', '#ffffff');
+  if (e.mode === 'recall') label(`→ TILL ${fl(e.home)}`, x + cw / 2, yt - 11, '#ff8c42');
+  if (e.mode === 'rescue') label('NÖDSÄNK', x + cw / 2, yt - 11, '#7dff9a');
+  if (e.mode === 'broken') { if (Math.sin(S.anim * 6) > -0.4) label('FEL!', x + cw / 2, yt - 11, '#ff2d55', '#ffffff'); }
+  if (e.mode === 'service') label(e.serviceAsap ? 'NIVÅJUSTERING' : 'SERVICE', x + cw / 2, yt - 11, '#ffd23f');
+  if (e.hold && e.mode === 'normal') label('→ SERVICE', x + cw / 2, yt - 11, '#ffd23f');
+  if (e.mode === 'normal' && !e.hold) {
+    if (e.hot) { if (Math.sin(S.anim * 5) > -0.3) label('ÖVERHETTAD!', x + cw / 2, yt - 11, '#ff5d52', '#ffffff'); }
+    else if (e.windLock) label('STÄNGD – STORM', x + cw / 2, yt - 11, '#5b8fb9', '#ffffff');
+    else if (e.indep) label('FLYTT · NYCKEL', x + cw / 2, yt - 11, '#d4a017');
+    else if (e.heat >= WARM_AT && e.state === 'moving') label('VARM', x + cw / 2, yt - 11, '#ff8c42');
+  }
+  // en stamgäst i korgen som pratar
+  const talker = e.passengers.find(talking);
+  if (talker) speech(talker, x + cw / 2, yt - 23);
+}
+/** En korg (dubbeldäck: k = 0 nedre, 1 övre) med sina passagerare och dörrar. head = översta korgen (namn och våg). */
+function cabinPx(e, k, x, yb, body, head) {
+  const cw = CAR_W / PX, chh = CAR_H / PX, yt = yb - chh;
   R(x, yt + (e.facade ? 2 : 0), cw, chh - (e.facade ? 2 : 0), INK);
   if (e.facade) { R(x + 2, yt, cw - 4, 2, INK); R(x + 1, yt + 1, cw - 2, 1, INK); }
   R(x + 1, yt + 1, cw - 2, chh - 2, body);
@@ -555,32 +603,35 @@ function drawCarPx(e) {
   const inner = e.facade ? PAL.cabinGlass : e.freight ? PAL.cabinFreight : PAL.cabin;
   R(ix, iy, iw, ih, inner);
   R(ix, iy + ih - 6, iw, 6, dark(inner, 0.12));
-  if (e.freight) for (let k = 0; k < 4; k++) R(ix, iy + 5 + k * 8, iw, 1, 'rgba(27,16,51,.18)');
-  else for (let k = 1; k < 4; k++) R(ix + k * Math.round(iw / 4), iy, 1, ih - 6, dark(inner, 0.08));
+  if (e.indep) {
+    // flyttdag: väggarna kläs med blå skyddsfiltar
+    R(ix, iy, iw, ih - 6, '#3f5f9f');
+    for (let yy = 0; yy < ih - 6; yy += 6) for (let xx = (yy / 6) % 2 ? 3 : 0; xx < iw; xx += 6) R(ix + xx, iy + yy, 3, 3, '#5577b8');
+  } else if (e.freight) for (let n = 0; n < 4; n++) R(ix, iy + 5 + n * 8, iw, 1, 'rgba(27,16,51,.18)');
+  else for (let n = 1; n < 4; n++) R(ix + n * Math.round(iw / 4), iy, 1, ih - 6, dark(inner, 0.08));
   if (e.facade) { line(ix + 3, iy + ih - 3, ix + 10, iy + 3, '#ffffff'); line(ix + 7, iy + ih - 3, ix + 14, iy + 3, '#ffffff'); }
-  // passagerarna: bakre raden först
+  // passagerarna: hörnen först (hissetikett), bakre raden först
   g.save(); g.beginPath(); g.rect(ix, iy, iw, ih); g.clip();
-  const ps = e.passengers;
-  const order = ps.map((p, i) => ({ p, i })).sort((a, b) => Number(a.i >= 4) - Number(b.i >= 4));
-  for (const { p, i } of order) {
+  const ps = e.passengers.filter(p => !e.deck2 || (p.deck || 0) === k);
+  const order = ps.map((p, i) => ({ p, s: carSlot(i) })).sort((a, b) => Number(a.s >= 4) - Number(b.s >= 4));
+  for (const { p, s } of order) {
     // bakre raden står högre upp och lite i skugga, så att huvudena syns ovanför främre raden
-    const back = i < 4, px = x + Math.round(carSlotX(i) / PX) - PERSON_W / 2 + (back ? 0 : 2), py = yb - (back ? 7 : 1) - PERSON_H;
+    const back = s < 4, px = x + Math.round(carSlotX(s) / PX) - PERSON_W / 2 + (back ? 0 : 2), py = yb - (back ? 7 : 1) - PERSON_H;
     if (back) g.filter = 'brightness(0.82)';
     g.drawImage(personSprite(p, 'front', 0, 1, { blink: blinkOf(p), hot: hotOf(p) }), px, py);
     g.filter = 'none';
   }
   // hissteknikern står i den öppna korgen och skruvar
-  const fixer = (e.mode === 'broken' || e.mode === 'service') && e.techId !== null ? S.people.find(p => p.id === e.techId && p.state === 'office' && p.floor === e.floor) : null;
+  const fixer = k === 0 && (e.mode === 'broken' || e.mode === 'service') && e.techId !== null ? S.people.find(p => p.id === e.techId && p.state === 'office' && p.floor === e.floor) : null;
   if (fixer) {
     const px = x + Math.round(cw / 2) - PERSON_W / 2 + (Math.sin(S.anim * 3) > 0 ? 1 : 0), py = yb - 1 - PERSON_H;
     g.drawImage(personSprite(fixer, 'front', 0, 1, { blink: blinkOf(fixer) }), px, py);
     // gnistor från verktyget
-    if (Math.sin(S.anim * 11 + e.id) > 0.3) for (let k = 0; k < 3; k++) R(px + PERSON_W + 1 + Math.round(vrand(0, 4)), py + 10 + Math.round(vrand(0, 6)), 1, 1, vpick(['#ffd23f', '#ffffff', '#ff9f1c']));
+    if (Math.sin(S.anim * 11 + e.id) > 0.3) for (let n = 0; n < 3; n++) R(px + PERSON_W + 1 + Math.round(vrand(0, 4)), py + 10 + Math.round(vrand(0, 6)), 1, 1, vpick(['#ffd23f', '#ffffff', '#ff9f1c']));
   }
   g.restore();
-  // dörrarna
-  const half = iw / 2, open = Math.round(half * (1 - e.door));
   // dörrarna är av tonat glas, så att man ser vilka som åker med
+  const half = iw / 2, open = Math.round(half * (1 - e.door));
   if (open > 0) for (const side of [0, 1]) {
     const px = side ? ix + iw - open : ix;
     R(px, iy, open, ih, PAL.doorGlass);
@@ -589,8 +640,10 @@ function drawCarPx(e) {
     R(side ? px : px + open - 1, iy, 1, ih, PAL.doorEdge);
     if (open > 4) R(side ? px + 2 : px + open - 3, iy + 3, 1, Math.min(10, ih - 12), 'rgba(255,255,255,.6)');
   }
-  // överkanten: hissens namn och färdriktning i stora LED-tecken, vågen som en liten display till höger
+  if (e.sleep) R(ix, iy, iw, ih, 'rgba(20,14,60,.45)');
   const sh = dark(body, 0.65);
+  if (!head) { text(g, k ? 'ÖVRE DÄCK' : 'NEDRE DÄCK', x + 3, yt + 2, '#ffffff', 'left', 1, sh); return; }
+  // överkanten: hissens namn och färdriktning i stora LED-tecken, vågen som en liten display till höger
   const nw = led(g, e.name, x + 2, yt + 1, '#ffffff', 'left', sh);
   if (e.dir && e.state === 'moving') led(g, e.dir > 0 ? '▲' : '▼', x + 3 + nw, yt + 1, '#ffffff', 'left', sh);
   const kg = cabinKg(e), ks = String(Math.round(kg)), kw = textW(ks) + textW('KG') + 6;
@@ -601,27 +654,6 @@ function drawCarPx(e) {
   const fr = Math.min(1, kg / e.ratedKg);
   R(ix, yb - 3, iw, 2, 'rgba(27,16,51,.6)');
   R(ix, yb - 3, Math.round(iw * fr), 2, kg > e.ratedKg ? '#ff2d55' : kg >= e.ratedKg * FULL_LOAD ? '#ff8c42' : '#7cf06b');
-  if (VIEW.follow === e.id) ants(x - 3, yt - 3, cw + 6, chh + 6, '#7dff9a');
-  if (e.overloadFlash > 0) { if (Math.sin(S.anim * 18) > -0.2) label('ÖVERLAST!', x + cw / 2, yt - 11, '#ff2d55', '#ffffff'); }
-  else if (e.fullFlash > 0) label('FULLT!', x + cw / 2, yt - 11, '#ffffff', '#ff2d55');
-  if (e.off) label('UR DRIFT', x + cw / 2, yt + chh / 2 - 4, '#ffe14d');
-  if (e.sleep) {
-    R(ix, iy, iw, ih, 'rgba(20,14,60,.45)');
-    for (let i = 0; i < 3; i++) {
-      const k = (S.anim * 0.5 + i / 3) % 1;
-      g.globalAlpha = 1 - k; text(g, 'Z', x + cw / 2 + 3 + Math.round(k * 7), yt - 3 - Math.round(k * 13), '#bfeaff', 'left', i === 2 ? 2 : 1, INK); g.globalAlpha = 1;
-    }
-  }
-  if (e.zoneLock) label('SPÄRRAD', x + cw / 2, yt - 11, '#ff2d55', '#ffffff');
-  if (e.mode === 'locked') label('AVSTÄNGD', x + cw / 2, yt - 11, '#ff2d55', '#ffffff');
-  if (e.mode === 'recall') label(`→ TILL ${fl(e.home)}`, x + cw / 2, yt - 11, '#ff8c42');
-  if (e.mode === 'rescue') label('NÖDSÄNK', x + cw / 2, yt - 11, '#7dff9a');
-  if (e.mode === 'broken') { if (Math.sin(S.anim * 6) > -0.4) label('FEL!', x + cw / 2, yt - 11, '#ff2d55', '#ffffff'); }
-  if (e.mode === 'service') label('SERVICE', x + cw / 2, yt - 11, '#ffd23f');
-  if (e.hold && e.mode === 'normal') label('→ SERVICE', x + cw / 2, yt - 11, '#ffd23f');
-  // en stamgäst i korgen som pratar
-  const talker = e.passengers.find(talking);
-  if (talker) speech(talker, x + cw / 2, yt - 23);
 }
 const blinkOf = p => Math.sin(S.anim * 0.9 + p.id * 1.7) > 0.985;
 const hotOf = p => (p.mood || 0) === 2 && Math.sin(S.anim * 8 + p.id) > 0;
@@ -781,7 +813,21 @@ function drawRoofPx() {
   box(X(SHAFT_X0 - 8), Y(ROOF_Y - 50), Math.round((UX1 - SHAFT_X0 + 4) / PX), 24, PAL.machine);
   R(X(SHAFT_X0 - 8) + 1, Y(ROOF_Y - 50) + 1, Math.round((UX1 - SHAFT_X0 + 4) / PX) - 2, 1, PAL.machineHi);
   text(g, 'MASKINRUM', X(SHAFT_X0), Y(ROOF_Y - 50) + 2, INK);
-  const wheel = (e, cx, cy) => g.drawImage(wheelSprite(e.color, Math.floor(((e.distance * 2.2) % (Math.PI / 3)) / (Math.PI / 3) * 6)), X(cx) - 8, Y(cy) - 8);
+  const wheel = (e, cx, cy) => {
+    g.drawImage(wheelSprite(e.color, Math.floor(((e.distance * 2.2) % (Math.PI / 3)) / (Math.PI / 3) * 6)), X(cx) - 8, Y(cy) - 8);
+    // varm motor: det ångar och lyser rött i maskinen; extrafläkten snurrar bredvid
+    if (e.heat >= WARM_AT * 0.85) {
+      const k = Math.min(1, (e.heat - WARM_AT * 0.85) / 0.4);
+      R(X(cx) - 9, Y(cy) + 7, 18, 2, `rgba(255,${Math.round(140 - k * 100)},40,${0.4 + k * 0.5})`);
+      for (let i = 0; i < 3; i++) { const t = (S.anim * 0.8 + i / 3) % 1; g.globalAlpha = (1 - t) * (0.4 + k * 0.6); g.drawImage(PUFF(2 + Math.round(t * 2)), X(cx) - 4 + i * 3, Y(cy) - 12 - Math.round(t * 12)); g.globalAlpha = 1; }
+    }
+    if (e.fan) {
+      const fx = X(cx) + 11, fy = Y(cy) - 3, a = S.anim * 14;
+      box(fx - 4, fy - 4, 9, 9, PAL.steel);
+      for (let i = 0; i < 3; i++) { const b = a + i * 2.094; R(fx + Math.round(Math.cos(b) * 2.5), fy + Math.round(Math.sin(b) * 2.5), 1, 1, INK); }
+      R(fx, fy, 1, 1, INK);
+    }
+  };
   for (const e of S.elevators) {
     const cx = shaftCX(e.id);
     if (EL[e.id].facade) { box(X(UX1 + 4), Y(ROOF_Y - 26), Math.round((cx - UX1 + 2) / PX), 4, PAL.steel); wheel(e, cx, ROOF_Y - 20); continue; }
@@ -805,6 +851,12 @@ function drawRoofPx() {
   text(g, 'SKYSKRAPAN', bx + bw / 2, by + Math.round((bh - 5 * ts) / 2), '#ffffff', 'center', ts, INK);
   const ax = X(UX1 - 24);
   R(ax, Y(24), 2, Y(ROOF_Y - 50) - Y(24), INK); R(ax - 7, Y(60), 16, 2, INK); R(ax - 5, Y(80), 12, 2, INK);
+  // vimpel i masten: står rakt ut i stormen
+  const w = windAt(), fl0 = Y(40), flen = 5 + Math.round(w * 16);
+  for (let i = 0; i < flen; i++) {
+    const wave = Math.round(Math.sin(S.anim * (3 + w * 9) - i * 0.6) * (1.5 - w) * (i / flen) * 2 + (1 - w) * i * 0.5);
+    R(ax + 2 + i, fl0 + wave, 1, Math.max(1, 4 - Math.floor(i * 3 / flen)), i % 6 < 3 ? '#ffe14d' : '#2a5db0');
+  }
   const blink = Math.sin(S.anim * 4) > 0;
   if (blink) R(ax - 4, Y(20) - 4, 10, 10, `rgba(255,45,85,${0.35 + n * 0.3})`);
   box(ax - 2, Y(20) - 2, 6, 6, blink ? '#ff2d55' : '#7a2033');
@@ -862,11 +914,47 @@ function drawBannersPx() {
   const list = [];
   if (S.fire) list.push([`🔥 BRAND PÅ VÅNING ${fl(S.fire.floor)}${S.fire.brigade ? ' – BRANDKÅREN SLÄCKER' : ''}`, '#ff2d55']);
   if (!S.power) list.push([`⚡ STRÖMAVBROTT${S.outage && S.outage.gen ? ' – RESERVKRAFT' : ''}`, '#6366f1']);
+  if (S.storm) list.push([`🌬️ STORM${S.storm.mode === 'sway' ? ' – SVAJLÄGE' : ''}`, '#2a5db0']);
   list.forEach(([t, c], i) => {
     const s = plain(t), on = Math.sin(S.anim * 6) > -0.3, w = textW(s) * 2 + 16, x = Math.round(lo.width / 2 - w / 2), y = Math.round(VIEW.camY / PX) - CY + 6 + i * 18;
     pill(x, y, w, 16, on ? c : INK);
     text(g, s, lo.width / 2, y + 2, on ? '#ffffff' : c, 'center', 2);
   });
+}
+// ---------- Väder och ambulans (bara grafik) ----------
+/** snöflingor när det är kallt – bara utanför huset (himlen, ovanför taket och terrassen, fasaden) */
+const snow = [];
+function drawSnowPx(dt) {
+  const c = S.weather.cold;
+  if (c <= 0) { snow.length = 0; return; }
+  const want = Math.round(40 + c * 120), w = windAt();
+  while (snow.length < want) snow.push({ x: vrand(LAND_X0, W), y: vrand(VIEW.camY - 40, VIEW.camY + VIEW.viewH), v: vrand(18, 40), p: vrand(0, 6) });
+  if (snow.length > want) snow.length = want;
+  const outside = (x, y) => y < ROOF_Y - 6 || x > BX1 + 8 || (x > UX1 + 8 && y < SEAM_Y - 6) || y > GROUND_Y + 2 && x > BX1;
+  for (const f of snow) {
+    if (S.started && !S.paused) { f.y += f.v * dt * S.speed; f.x += (Math.sin(S.anim + f.p) * 8 + w * 90) * dt * S.speed; }
+    if (f.y > VIEW.camY + VIEW.viewH + 20 || f.x > W + 10) { f.y = VIEW.camY - vrand(0, 40); f.x = vrand(LAND_X0 - 100, W); }
+    if (outside(f.x, f.y)) R(X(f.x), Y(f.y), 1, 1, 'rgba(255,255,255,.85)');
+  }
+}
+/** ambulansen: blått blinkljus i entrén medan personalen är i huset */
+function drawMedicPx() {
+  const A = S.medic;
+  if (!A || A.state === 'done' || A.state === 'called') return;
+  const top = Y(floorY(LOBBY + 1) + 4), bot = Y(floorY(LOBBY) - 4), x0 = X(LAND_X0);
+  if (bot < 0 || top > lo.height) return;
+  const on = Math.sin(S.anim * 12) > 0;
+  if (on) R(x0, top, X(INNER_X1) - x0, bot - top, 'rgba(60,120,255,.12)');
+  const x1 = X(INNER_X1);
+  box(x1 - 22, top + 3, 7, 5, on ? '#3f7cff' : '#1b2a6e');
+  label('AMBULANS', x1 - 50, top + 12, '#ffffff', '#2ec4b6');
+}
+/** skylt i entrén och på mellanplanet: övre däcket nås via rulltrappan */
+function deckSign(f) {
+  if (MEZZ < 0 || (f !== LOBBY && f !== MEZZ)) return;
+  const x = X(INNER_X1) - 66, y = Y(floorY(f + 1) + 4) + 34;
+  pill(x, y, 62, 9, PAL.sign);
+  text(g, f === LOBBY ? 'ÖVRE DÄCK: VÅN 1' : 'EXPRESS ÖVRE DÄCK', x + 31, y + 1, '#ffffff', 'center');
 }
 function drawFxPx(dt) {
   for (const f of S.fx) {
@@ -897,13 +985,15 @@ export function renderPixel(dt) {
   drawShell(hr);
   for (let f = 0; f < FLOORS; f++) {
     if (floorY(f) < VIEW.camY - 10 || floorY(f + 1) > VIEW.camY + VIEW.viewH + 10) continue;
-    drawHall(f, hr); floorOverlays(f, hr);
+    drawHall(f, hr); floorOverlays(f, hr); deckSign(f);
   }
   drawSlabsPx();
   drawTerracePx(hr);
   for (const e of S.elevators) drawCarPx(e);
   drawHallPeople();
   drawHeliPx();
+  drawSnowPx(dt);
+  drawMedicPx();
   drawSmokePx();
   drawOutagePx();
   drawRoofPx();

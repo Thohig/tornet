@@ -60,6 +60,10 @@ export function doAction(cmd) {
   const [a, b, c] = cmd.split(':');
   if (a === 'trig') { if (S.started) act('trigger', b); }
   else if (a === 'fire') act('fireMode', b);
+  else if (a === 'storm') act('stormMode', b);
+  else if (a === 'fan') act('fan', +b);
+  else if (a === 'level') act('service', +b);
+  else if (a === 'dismiss') S.dismissed.add(b); // (bara gränssnittet – simuleringen läser det aldrig)
   else if (a === 'replay') { copyReplayLink(); return; }
   else if (a === 'show') scrollToFloor(+b);
   else if (a === 'tab') { setTab(b); return; }

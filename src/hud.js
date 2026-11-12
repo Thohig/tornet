@@ -12,6 +12,8 @@ import { PAL } from './pixpal.js';
 import { stateInfo } from './describe.js';
 export { stateInfo };
 import { residentDesc } from './life.js';
+import { STORM_HINT, windMs } from './weather.js';
+import { FAN_KW } from './service.js';
 import { updatePauseBtn } from './input.js';
 
 // ---------- HUD: DOM ----------
@@ -56,7 +58,7 @@ function updateCarPop() {
   const acts = carActs(e);
   if (acts !== c.actKey) { c.actKey = acts; c.acts.innerHTML = acts; }
   const kw = e.kw > 0.05 ? `⚡ drar ${e.kw.toFixed(0)} kW` : e.kw < -0.05 ? `♻ återmatar ${(-e.kw).toFixed(0)} kW` : e.state === 'moving' ? '⚡ 0 kW' : '⚡ vila';
-  c.meta.textContent = `${Math.round(e.distance)} vån · ${e.trips} stopp · slitage ${Math.round(e.wear * 100)} % · ${kw} · ${e.kwh.toFixed(1)} kWh i dag`;
+  c.meta.textContent = `${Math.round(e.distance)} vån · ${e.trips} stopp · slitage ${Math.round(e.wear * 100)} % · 🌡️ motor ${motorC(e)} °C${e.fan ? ' 🌀' : ''} · ${kw} · ${e.kwh.toFixed(1)} kWh i dag`;
 }
 /** Placerar popupen bredvid hissen (anropas varje bildruta så att den följer med korgen) */
 export function placeCarPop() {
@@ -70,7 +72,10 @@ export function placeCarPop() {
   el.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
 }
 /** Kort beskrivning av hissens zon, t.ex. "P2–6 · låg zon" eller "E⇄6 express" */
+/** motorns temperatur i °C (värmen 0–1 där 1 = överhettningsskyddet löser ut vid 100 °C) */
+export const motorC = e => Math.round(35 + e.heat * 65);
 export function zoneText(d) {
+  if (d.deck2) return `${fl(d.minF)} ⇄ ${fl(d.maxF)} nedre · ${fl(d.upper[0])} ⇄ ${fl(d.upper[d.upper.length - 1])} övre · dubbeldäck`;
   if (d.express) return `${fl(d.minF)} ⇄ ${fl(d.maxF)} · express`;
   if (d.facade) return `${d.serves.map(fl).join(' · ')} · panorama i glas`;
   if (d.freight) return `${fl(d.minF)}–${fl(d.maxF)} · varuhiss ${d.ratedKg} kg`;
@@ -80,6 +85,9 @@ export function stateLabel(e) {
   if (e.mode === 'broken') return 'TRASIG 🔧';
   if (e.mode === 'service') return 'SERVICE 🔧';
   if (e.hold) return 'TILL SERVICE';
+  if (e.hot) return 'ÖVERHETTAD 🌡️';
+  if (e.windLock) return 'STÄNGD – STORM 🌬️';
+  if (e.indep) return 'OBEROENDE DRIFT 🔑';
   if (e.zoneLock) return 'SPÄRRAD 🚧';
   if (e.sleep) return 'NATTLÄGE 🌙';
   if (e.mode === 'recall') return 'BRANDÅTERKALLAD';
@@ -111,6 +119,9 @@ export function whyText(e) {
   if (e.mode === 'service') return `Nattservice på ${fl(e.home)} – slitaget nollställs`;
   if (e.hold) return `Ska på nattservice – tar inga nya resenärer och kör hem till ${fl(e.home)}`;
   if (e.sleep) return `Sover på ${fl(Math.round(e.pos))} för att spara energi – vaknar om det bildas kö`;
+  if (e.hot) return `Motorn är överhettad (${motorC(e)} °C) – kör klart sina passagerare men tar inga nya tills den har svalnat${e.fan ? ' · extrafläkten går' : ''}`;
+  if (e.windLock) return `Stängd för stormen – parkerar på ${fl(e.home)} tills det mojnar`;
+  if (e.indep && !e.passengers.length) return 'Oberoende drift (flyttdag): nyckelstyrd, svarar inte på anrop – bara flyttgubbarna åker';
   if (e.mode === 'recall') return `Brandåterkallning: kör direkt till ${fl(e.home)} utan stopp och släpper ut alla`;
   if (e.mode === 'locked') return `Avstängd i ${fl(e.home)} med öppna dörrar tills branden är släckt`;
   if (e.mode === 'rescue') return `Krypkör på reservkraft till ${fl(e.rescueTarget)} för att släppa ut ${e.passengers.length} instängda`;
@@ -148,7 +159,8 @@ export function updateHud() {
   const night = nightness(h) > 0.5;
   setText('clock', night ? '🌙' : '☀️');
   $('clock').title = night ? 'Natt' : 'Dag';
-  $('phase').textContent = phaseName(h);
+  const wx = `${S.weather.cold > 0 ? '❄️' : S.weather.temp >= 20 ? '🌤️' : ''} ${S.weather.temp} °C${S.storm ? ' · 🌬️ storm' : ''}`;
+  setText('phase', `${phaseName(h)} · ${wx.trim()}`);
   $('day').textContent = `Dag ${S.day} · ${S.people.length} pers · frö ${S.seed}`;
   updateCarPop();
   if (S.logDirty && isOpen('log')) {
@@ -180,11 +192,22 @@ export function updateHud() {
     <div class="stat">…varav frivilliga 🚶 <b>${st.stairsChoice}</b></div>
     <div class="stat">★ Gunnar gnällde <b>${st.gripes}</b></div>
     <div class="stat">★ Kurts kaffekoppar ☕ <b>${st.cups}</b></div>
-    <div class="stat">★ Doris höll dörren <b>${st.holds}</b></div>
+    <div class="stat">Höll upp dörren (★ Doris m.fl.) <b>${st.holds}</b></div>
+    <div class="stat">Avstod – kändes för trångt <b>${st.crowdSkips}</b></div>
+    <div class="stat">Tryckte på STÄNG <b>${st.closePresses}</b></div>
     <div class="stat">★ Majken pratade 💬 <b>${st.chats}</b></div>
     <div class="stat">Hissfel 🔧 <b>${st.faults}</b></div>
     <div class="stat">Lagade / servade <b>${st.repairs} / ${st.serviced}</b></div>
     <div class="stat">Stillestånd <b>${Math.round(st.downSec)} s</b></div>
+    <div class="stat">Överhettade motorer 🌡️ <b>${st.heatStops}</b></div>
+    <div class="stat">Vajerlarm i storm 🌬️ <b>${st.stormFaults}</b></div>
+    <div class="stat">Nivåjusteringar <b>${st.relevels}</b></div>
+    <div class="stat">Snubblade på tröskeln 🦶 <b>${st.stumbles}</b></div>
+    <div class="stat">Dörren tog emot i kylan ❄️ <b>${st.doorFights}</b></div>
+    <div class="stat">Ambulans 🚑 <b>${st.medical}</b></div>
+    <div class="stat">Flyttlass 🚚 <b>${st.moveLoads}</b></div>
+    <div class="stat">Övre däcket / rulltrappan <b>${st.upperDeck} / ${st.escalator}</b></div>
+    <div class="stat">Inlärda parkeringar 🧠 <b>${st.learnedParks}</b></div>
     <div class="stat">Energi ⚡ <b>${st.energy.toFixed(1)} kWh</b></div>
     <div class="stat">…varav körning <b>${st.energyRun.toFixed(1)} kWh</b></div>
     <div class="stat">Återmatat ♻ <b>${st.regen.toFixed(1)} kWh</b></div>
@@ -196,11 +219,75 @@ export function updateHud() {
     <div class="stat">Barn på alla knappar <b>${st.kidPresses}</b></div>
     <div class="stat">Spökstopp 👻 <b>${st.ghostStops}</b></div>
     <div class="stat">Bus rensat (antinuisance) <b>${st.nuisance}</b></div>
+    ${learnMap()}
     <div class="grade">Service: ${st.waitN ? g.letter : '–'} <span class="stars">${st.waitN ? '★'.repeat(g.stars) + '☆'.repeat(5 - g.stars) : ''}</span> · Säkerhet: ${sg}</div>`;
   updateIncidents();
 }
+/** värmekartan över det styrningen har lärt sig: köer per våning (rader) och timme (kolumner) */
+function learnMap() {
+  const m = S.learnMem;
+  if (!m) return `<div class="learn"><div class="learn-h">🧠 Inlärd trafik</div><div class="learn-e">Styrningen lär sig var det brukar bli kö – kartan fylls i från dag 2.</div></div>`;
+  const max = Math.max(1, ...m.flat()), hours = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19], b = hour() - 6;
+  const rows = [];
+  for (let f = TOP; f >= 0; f--) {
+    const cells = hours.map(hh => { const v = m[hh - 6][f] / max; return `<i style="opacity:${(0.06 + v * 0.94).toFixed(2)}"${Math.floor(b) === hh - 6 ? ' class="now"' : ''}></i>`; }).join('');
+    rows.push(`<div class="lr"><span>${fl(f)}</span>${cells}</div>`);
+  }
+  return `<div class="learn"><div class="learn-h">🧠 Inlärd trafik (kö per våning och timme, 07–19)</div>${rows.join('')}</div>`;
+}
 export function incidentHtml() {
   const parts = [];
+  // ---------- stormen (incident med val, som branden) ----------
+  if (S.storm) {
+    const St = S.storm, P = S.elevators.find(e => e.facade);
+    const b = (m, txt) => `<button class="btn sm${St.mode === m ? ' on' : ''}" data-act="storm:${m}">${txt}</button>`;
+    parts.push(`<div class="inc storm"><div class="inc-h">🌬️ Storm – <span class="lv">${windMs()}</span> m/s</div>
+      <div class="inc-s">De höga schakten och panoramahissen på fasaden svajar. Bedarrar om ~${cd(St.t0 + St.len - S.t)}s.${St.faults ? ` Vajerlarm: <b>${num(St.faults)}</b>` : ''}</div>
+      <div class="inc-q">Hur ska hissarna köras?</div>
+      <div class="inc-acts">${b('sway', '🌬️ Svajläge')}${b('none', 'Kör som vanligt')}</div>
+      <div class="inc-hint">${STORM_HINT[St.mode]}</div>
+      ${P ? `<div class="inc-acts"><button class="btn xs" data-act="follow:${P.id}">📹 Visa panoramahissen</button></div>` : ''}</div>`);
+  }
+  // ---------- överhettade motorer (incident: extrafläkt) ----------
+  for (const e of S.elevators) {
+    if (!e.hot) continue;
+    parts.push(`<div class="inc heat"><div class="inc-h">🌡️ Motorn i hiss ${esc(e.name)} är överhettad</div>
+      <div class="inc-s">Överhettningsskyddet har löst ut (<span class="lv">${motorC(e)}</span> °C): ${esc(e.name)} kör klart sina passagerare men tar inga nya förrän motorn har svalnat.</div>
+      <div class="inc-acts"><button class="btn sm${e.fan ? ' on' : ''}" data-act="fan:${e.id}" ${e.fan ? 'disabled' : ''}>🌀 ${e.fan ? 'Extrafläkten går' : 'Starta extrafläkt'}</button><button class="btn xs" data-act="follow:${e.id}">📹 Visa hissen</button></div>
+      <div class="inc-hint">Fläkten kyler ungefär fyra gånger snabbare men drar ${FAN_KW} kW. Smart och Energisnål undviker varma motorer, Rusning tar risken längre, och Närmast, Kaos och Knappar bryr sig inte alls.</div></div>`);
+  }
+  // ---------- händelser som spelaren bara informeras om ----------
+  const V = S.elevators.find(e => e.freight);
+  const info = (key, cls, title, body, acts) => {
+    if (S.dismissed.has(key)) return;
+    parts.push(`<div class="inc info ${cls}"><div class="inc-h">${title}<button class="inc-x" data-act="dismiss:${key}" title="Stäng">✕</button></div>
+      <div class="inc-s">${body}</div>${acts ? `<div class="inc-acts">${acts}</div>` : ''}</div>`);
+  };
+  const M = S.move;
+  if (M && (M.state === 'on' || (M.state === 'done' && S.t - M.t1 < 20))) {
+    info(`move-${S.day}`, 'move', `🚚 Flyttdag på ${fl(M.floor)}`,
+      M.state === 'on'
+        ? `Flyttfirman Lyft & Bär bär ut från ${fl(M.floor)} – lass <b>${num(M.done)}</b> av ${M.loads}. Varuhissen ${V ? esc(V.name) : ''} går i <b>oberoende drift</b>: nyckelstyrd, svarar inte på några anrop, bara flyttgubbarna åker med. ${M.smart ? 'Kostnadsstyrningen bokade flytten efter leveranstiden.' : 'Flytten bokades mitt i leveranstiden – paketbuden får vänta på varuhissen.'}`
+        : `Flytten är klar (${M.done} lass) – varuhissen går i vanlig trafik igen.`,
+      `${V ? `<button class="btn xs" data-act="follow:${V.id}">📹 Följ varuhissen</button>` : ''}<button class="btn xs" data-act="show:${M.floor}">Visa våningen</button>`);
+  }
+  const A = S.medic;
+  if (A && (A.state !== 'done' || S.t - A.t1 < 20)) {
+    const what = { called: `${esc(A.pname)} har svimmat på ${esc(A.where)} (${fl(A.floor)}). Ambulansen är på väg.`,
+      onway: 'Ambulanspersonalen är i huset med bår. Båren får bara plats i varuhissen, som går med förtur – VIP-läge för ambulansen.',
+      transport: `${esc(A.pname)} bärs ut på båren till ambulansen.`,
+      done: `Ambulansen har kört${A.taken ? ` med ${esc(A.pname)}` : ''} – ${Math.round(A.t1 - A.t0)} s från larm till avfärd.` }[A.state];
+    const how = A.state === 'onway' || A.state === 'transport'
+      ? (S.strategy === 'smart' || S.strategy === 'peak' || S.strategy === 'eco' ? ' Kostnadsstyrningen låter dem i varuhissen som ändå ska åt samma håll åka klart.' : ' Alla andra i varuhissen får kliva av vid nästa stopp.') : '';
+    info(`medic-${Math.round(A.t0)}`, 'medic', '🚑 Ambulans', what + how,
+      `<button class="btn xs" data-act="show:${A.floor}">Visa våningen</button>${V ? `<button class="btn xs" data-act="follow:${V.id}">📹 Följ varuhissen</button>` : ''}`);
+  }
+  for (const n of S.notices) {
+    if (S.t - n.t0 > 30) continue;
+    const acts = (n.car !== null ? `<button class="btn xs" data-act="follow:${n.car}">📹 Visa hissen</button>` : n.floor !== null ? `<button class="btn xs" data-act="show:${n.floor}">Visa våningen</button>` : '')
+      + (n.act ? `<button class="btn xs" data-act="${n.act}">${n.actLabel}</button>` : '');
+    info(`n${n.id}`, n.kind, esc(n.title), esc(n.text), acts);
+  }
   if (S.fire) {
     const F = S.fire, zmax = Math.max(0, F.floor - 2);
     const status = F.brigade ? `Brandkåren släcker – klart om ${cd(F.outAt - S.t)}s` : `Brandkåren är på väg – framme om ${cd(F.brigadeAt - S.t)}s`;
@@ -243,9 +330,11 @@ export function updateIncidents() {
     const vals = [...html.matchAll(LV)].map(m => m[1]);
     $('incBody').querySelectorAll('.lv').forEach((el, i) => { if (el.textContent !== vals[i]) el.textContent = vals[i]; });
   }
-  // rutan syns bara när något händer
-  const alerting = !!(S.fire || !S.power);
-  if ($('incPanel').hidden === alerting) $('incPanel').hidden = !alerting;
+  // rutan syns bara när något händer; den blinkar bara för incidenter (inte för information)
+  const alerting = !!(S.fire || !S.power || S.storm || S.elevators.some(e => e.hot));
+  const shown = alerting || html.includes('class="inc ');
+  if ($('incPanel').hidden === shown) $('incPanel').hidden = !shown;
+  $('incPanel').classList.toggle('calm', !alerting);
 }
 export function updateRoster() {
   if (!isOpen('roster')) return;
@@ -413,7 +502,11 @@ export function showSummary() {
       <div>Hissfel: <b>${st.faults}</b> (stillestånd ${Math.round(st.downSec)} s)</div><div>Nattservice: <b>${st.serviced}</b> hissar</div>
       <div>Energi: <b>${st.energy.toFixed(1)} kWh</b> (körning ${st.energyRun.toFixed(1)})</div><div>Återmatat: <b>${st.regen.toFixed(1)} kWh</b></div>
       <div>★ Gunnar gnällde: <b>${st.gripes}</b> gånger</div><div>★ Kurts kaffekoppar: <b>${st.cups}</b></div>
-      <div>★ Doris höll dörren: <b>${st.holds}</b> gånger</div><div>★ Majken pratade: <b>${st.chats}</b> gånger</div>
+      <div>Höll upp dörren: <b>${st.holds}</b> gånger</div><div>★ Majken pratade: <b>${st.chats}</b> gånger</div>
+      <div>Väder: <b>${S.weather.temp} °C</b>${S.weather.cold > 0 ? ` (dörren tog emot ${st.doorFights} ggr)` : ''}</div><div>Vajerlarm i storm: <b>${st.stormFaults}</b></div>
+      <div>Överhettade motorer: <b>${st.heatStops}</b></div><div>Snubbel på tröskeln: <b>${st.stumbles}</b></div>
+      <div>Ambulans: <b>${st.medical}</b></div><div>Flyttlass: <b>${st.moveLoads}</b></div>
+      <div>Övre däcket: <b>${st.upperDeck}</b> resor</div><div>Inlärda parkeringar: <b>${st.learnedParks}</b></div>
       <div>Tog trappan frivilligt: <b>${st.stairsChoice}</b></div><div>Mest sliten: <b>${S.elevators.reduce((a, e) => (e.wear > a.wear ? e : a)).name} ${Math.round(Math.max(...S.elevators.map(e => e.wear)) * 100)} %</b></div>
     </div>
     <button class="btn" id="next">NÄSTA DAG ▶</button></div>`);

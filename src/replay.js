@@ -7,6 +7,8 @@ import { S, log } from './state.js';
 import { pev, spawnBus, spawnVisitor } from './people.js';
 import { rebuildPicks } from './dispatch.js';
 import { setFireMode, startGenerator, startRescue, toggleAutoRescue, toggleOff, trigger } from './incidents.js';
+import { setStormMode } from './weather.js';
+import { orderService, startFan } from './service.js';
 
 /** Byt styrlogik: hallknapparna nollställs och alla väntande fördelas om. */
 export function changeStrategy(k) {
@@ -32,6 +34,9 @@ export const ACTIONS = {
   carOff: id => toggleOff(S.elevators[id]),
   strategy: k => changeStrategy(k),
   setting: (key, v) => { if (SETTINGS.includes(key)) S[key] = v; },
+  stormMode: m => setStormMode(m),
+  fan: id => startFan(S.elevators[id]),
+  service: id => orderService(S.elevators[id]),
   visitor: (f, x) => spawnVisitor(f, x),
   bus: () => spawnBus(),
 };
@@ -39,7 +44,7 @@ export const ACTIONS = {
 /**
  * @typedef {{ n: number, a: string, args: any[] }} RecordedAction
  * @typedef {{ v: 1, seed: number, day: number, strategy: string, autoInc: boolean, mistakes: string, maint: string,
- *   wear: number[], actions: RecordedAction[] }} Recording
+ *   wear: number[], learn?: number[][]|null, actions: RecordedAction[] }} Recording
  */
 
 /** Utför en spelaråtgärd och spela in den. Under en uppspelning tar spelaren inte över – åtgärden ignoreras. */
@@ -58,7 +63,8 @@ export function replayTick() {
 }
 /** Dygnets start (sparas av resetDay): det som inte går att räkna fram ur fröet. */
 export function recordStart() {
-  S.recStart = { seed: S.seed, day: S.day, strategy: S.strategy, autoInc: S.autoInc, mistakes: S.mistakes, maint: S.maint, wear: S.elevators.map(e => e.wear) };
+  S.recStart = { seed: S.seed, day: S.day, strategy: S.strategy, autoInc: S.autoInc, mistakes: S.mistakes, maint: S.maint, wear: S.elevators.map(e => e.wear),
+    learn: S.learnMem && S.learnMem.map(r => [...r]) };
 }
 /** Inspelningen av dygnet hittills. */
 export function recording() {
@@ -79,6 +85,7 @@ export function decodeReplay(str) {
     const rec = JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0))));
     if (rec.v !== 1 || !Number.isFinite(rec.seed) || !Array.isArray(rec.actions) || !Array.isArray(rec.wear)) return null;
     if (rec.actions.some(x => !Number.isInteger(x.n) || !(x.a in ACTIONS) || !Array.isArray(x.args))) return null;
+    if (rec.learn != null && !(Array.isArray(rec.learn) && rec.learn.every(r => Array.isArray(r) && r.every(Number.isFinite)))) return null;
     return rec;
   } catch (e) { return null; }
 }

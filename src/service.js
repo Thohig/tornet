@@ -7,7 +7,7 @@
 import { pick, rand, rng } from './rng.js';
 import { fl } from './util.js';
 import { BALANCE, DOOR_T, FLOOR_M, CAR_H, floorY, shaftCX, timeScale } from './config.js';
-import { S, hour, log } from './state.js';
+import { S, hour, log, notice } from './state.js';
 import { needsFreight, pev, pn, rerouteStranded, spawnStaff } from './people.js';
 import { rebuildPicks, travel, cabinKg } from './dispatch.js';
 import { bounceBoarders, exitAll, restoreElevator } from './elevators.js';
@@ -37,8 +37,10 @@ function energyTick(e, dt) {
   // vänteläget räknas i spelets klocktid (natten går fortare), körningen i verklig simuleringstid
   const standby = (e.sleep || e.mode === 'dead' || !S.power ? SLEEP_KW : STANDBY_KW) * dt * timeScale(hour()) / 3600;
   const run = e.kw * dt / 3600;
-  e.kwh += standby + run;
-  S.stats.energy += standby + run; S.stats.energyRun += run;
+  // extrafläkten i maskinrummet drar också ström
+  const fan = e.fan ? FAN_KW * dt / 3600 : 0;
+  e.kwh += standby + run + fan;
+  S.stats.energy += standby + run + fan; S.stats.energyRun += run;
   if (run < 0) S.stats.regen -= run;
 }
 
@@ -60,7 +62,8 @@ export function maybeBreak(e) {
     if (!S.autoInc || !S.power || S.fire) return false;
     if (rng() >= FAULT_K * e.wear * e.wear) return false;
   }
-  breakDown(e, pick(FAULTS));
+  breakDown(e, e.stormFault ? 'vajerlarm – linorna slog i schaktet i stormen' : pick(FAULTS));
+  e.stormFault = false;
   return true;
 }
 export function breakDown(e, what) {
@@ -88,7 +91,7 @@ export function triggerFault() {
   // helst en hiss med passagerare eller stopp kvar – då händer det snart
   const busy = ok.filter(e => e.passengers.length || e.carCalls.size);
   const e = pick(busy.length ? busy : ok);
-  if (e.state === 'doors' && e.door >= 1 && e.serves.has(e.floor)) breakDown(e, pick(FAULTS));
+  if (e.state === 'doors' && e.door >= 1 && e.stops.has(e.floor)) breakDown(e, pick(FAULTS));
   else { e.breakNext = true; log(`🔧 ${e.name} låter konstigt… den går sönder vid nästa stopp`, 'alert', e.color); }
 }
 
@@ -101,6 +104,9 @@ export const jobFloor = e => (e.mode === 'broken' ? e.floor : e.home);
 function chooseJob() {
   const broken = S.elevators.filter(e => e.mode === 'broken').sort((a, b) => a.fault.t0 - b.fault.t0);
   if (broken.length) return broken[0];
+  // service som spelaren har beställt (t.ex. nivåjustering efter ett snubbel) görs direkt, även på dagen
+  const asap = S.elevators.find(e => e.serviceAsap && e.mode === 'normal');
+  if (asap && !S.fire && S.power) return asap;
   if (S.maint !== 'natt' || !nightWindow() || S.fire || !S.power) return null;
   // varuhissen servas först när ingen med tung last (städvagn, verktygslåda) är kvar i huset
   const heavy = S.people.some(p => needsFreight(p) && p.state !== 'away');
@@ -123,8 +129,8 @@ export function techNext(p) {
     // gruppen behöver en vaken hiss medan den här är på service
     const twin = S.elevators.find(x => x !== e && x.group === e.group && x.sleep);
     if (twin) { twin.sleep = false; twin.sleepT = 0; log(`☀️ ${twin.name} vaknar – ${e.name} ska på service`, 'park', twin.color); }
-    p.task = `Nattservice på hiss ${e.name} (slitage ${Math.round(e.wear * 100)} %)`;
-    log(`🔧 ${e.name} tas ur trafik för nattservice – kör hem till ${fl(e.home)}`, 'alert', e.color);
+    p.task = e.serviceAsap ? `Nivåjustering och service på hiss ${e.name}` : `Nattservice på hiss ${e.name} (slitage ${Math.round(e.wear * 100)} %)`;
+    log(`🔧 ${e.name} tas ur trafik för ${e.serviceAsap ? 'beställd service' : 'nattservice'} – kör hem till ${fl(e.home)}`, 'alert', e.color);
     rerouteStranded();
   }
   return [jobFloor(e), p.task, false]; // jobbet kan ligga i entrén – det är ingen hemgång
@@ -150,6 +156,7 @@ function techTick(dt) {
   }
   if (!t && S.techCallAt === null && !S.fire) {
     if (S.elevators.some(e => e.mode === 'broken')) callTech('Hissjouren larmas');
+    else if (S.elevators.some(e => e.serviceAsap) && chooseJob()) callTech('Beställd service');
     else if (chooseJob()) callTech('Nattservice av slitna hissar');
   }
   if (!t && S.techCallAt !== null && S.t >= S.techCallAt) { S.techCallAt = null; if (chooseJob()) spawnStaff('hisstekniker'); }
@@ -179,17 +186,94 @@ function techTick(dt) {
     S.stats.serviced++;
     log(`✅ Nattservice klar på ${e.name} – slitaget ${Math.round(e.wear * 100)} % → 5 %`, 'alert', e.color);
     pev(t, `Servicen på hiss ${e.name} är klar`);
-    e.wear = 0.05;
+    e.wear = 0.05; e.serviceAsap = false;
   }
   e.hold = false; e.techId = null;
   restoreElevator(e);
   t.job = null; t.workT = 0; t.timer = rand(1, 3); // nästa beslut strax
 }
 
+// ---------- Motorvärme ----------
+// Varje start och stopp värmer motorn (mer med tung last), och den svalnar långsamt. En varm motor kör
+// långsammare; blir den för het löser överhettningsskyddet ut: hissen kör klart sina passagerare,
+// tar inga nya och står still tills motorn har svalnat. Extrafläkten (spelarens åtgärd) kyler fortare.
+export const HEAT_STOP = 0.05, HEAT_TAU = 55, FAN_TAU = 15, FAN_KW = 1.2, WARM_AT = 0.8, COOL_AT = 0.5;
+/** ett stopp värmer motorn */
+export function heatOnStop(e) { e.heat += HEAT_STOP * (0.5 + cabinKg(e) / e.ratedKg); }
+/** varm motor kör långsammare */
+export const heatMul = e => (e.heat >= WARM_AT ? 0.8 : 1);
+function heatTick(e, dt) {
+  e.heat += Math.max(0, e.kw) * dt * 0.0004; // lyfter tungt = värme
+  e.heat -= e.heat * dt / (e.fan ? FAN_TAU : HEAT_TAU);
+  if (!e.hot && e.heat >= 1 && e.mode === 'normal') {
+    e.hot = true; S.stats.heatStops++;
+    log(`🌡️ ${e.name}: motorn är överhettad – överhettningsskyddet löser ut, hissen tar inga nya resenärer`, 'alert', e.color);
+  } else if (e.hot && e.heat < COOL_AT) {
+    e.hot = false;
+    log(`🌡️ ${e.name}: motorn har svalnat – i trafik igen`, 'alert', e.color);
+  }
+  if (e.fan && !e.hot && e.heat < 0.25) { e.fan = false; log(`🌀 ${e.name}: extrafläkten stängs av`, 'alert', e.color); }
+}
+/** Spelaren startar extrafläkten i maskinrummet */
+export function startFan(e) {
+  if (!e || e.fan) return;
+  e.fan = true;
+  log(`🌀 Extrafläkten startas i ${e.name}s maskinrum – motorn kyls snabbare (drar ${FAN_KW} kW)`, 'alert', e.color);
+}
+/** Slumpad incident: kylfläkten hakar upp sig och motorn i en hiss som kör mycket blir het */
+export function triggerHeat() {
+  const ok = S.elevators.filter(e => e.mode === 'normal' && !e.hot && !e.hold);
+  if (!ok.length) return;
+  const busy = ok.filter(e => e.passengers.length || e.carCalls.size);
+  const e = pick(busy.length ? busy : ok);
+  e.heat = Math.max(e.heat, 1.05);
+  log(`🌡️ Kylningen i ${e.name}s maskinrum hakar upp sig – motorn blir het`, 'alert', e.color);
+}
+
+// ---------- Nivåfel ----------
+// Bärlinorna töjer sig när lasten ändras medan dörrarna står öppna, så korgen sjunker (eller stiger) en
+// bit. Når det LEVEL_TOL justerar hissen nivån (dörrarna hålls öppna en stund). Slitna linor töjer sig
+// mer, och i en sliten hiss kan den som kliver på eller av snubbla på kanten.
+export const STRETCH = 0.05, LEVEL_TOL = 0.025;
+/** anropas när hissen öppnar: korgen står i nivå */
+export function levelStart(e) { e.lvKg = cabinKg(e); e.level = 0; }
+/** medan dörrarna står öppna */
+export function levelTick(e) {
+  const kg = cabinKg(e);
+  e.level = -(kg - (e.lvKg || 0)) / e.ratedKg * STRETCH * (1 + 2 * e.wear);
+  if (Math.abs(e.level) > LEVEL_TOL) {
+    e.lvKg = kg; e.level = 0; e.dwellNeed += 0.25; S.stats.relevels++;
+  }
+}
+/** Kliver någon på eller av när korgen inte står i nivå? Då kan hen snubbla. */
+export function maybeStumble(e, p) {
+  if (Math.abs(e.level || 0) < LEVEL_TOL * 0.45 || e.wear < 0.4 || rng() >= 0.06 * e.wear) return;
+  const cm = Math.round(Math.abs(e.level) * 350);
+  S.stats.stumbles++;
+  p.mood = Math.max(p.mood || 0, 1);
+  pev(p, `Snubblar på tröskeln – hiss ${e.name} stod ${cm} cm ${e.level < 0 ? 'för lågt' : 'för högt'}!`);
+  log(`🦶 ${pn(p)} snubblade på tröskeln i ${e.name} (nivåfel ${cm} cm, slitage ${Math.round(e.wear * 100)} %)`, 'alert', e.color, p.id);
+  S.fx.push({ x: shaftCX(e.id), y: floorY(e.floor) - CAR_H - 30, text: 'OJ!', color: '#ffe14d', life: 1.2 });
+  if (!(S.t - (e.stumbleNoted ?? -99) < 40)) {
+    e.stumbleNoted = S.t;
+    notice('stumble', `🦶 Snubbel i hiss ${e.name}`,
+      `${p.name} snubblade på tröskeln på ${fl(e.floor)}: korgen stod ${cm} cm ${e.level < 0 ? 'för lågt' : 'för högt'}. Linorna i ${e.name} är slitna (${Math.round(e.wear * 100)} %) och töjer sig när folk kliver på och av.`,
+      { car: e.id, floor: e.floor, act: `level:${e.id}`, actLabel: '🔧 Beställ service nu' });
+  }
+}
+/** Spelaren beställer service (nivåjustering) – teknikern kommer direkt, även på dagen */
+export function orderService(e) {
+  if (!e || e.serviceAsap || e.mode !== 'normal') return;
+  e.serviceAsap = true;
+  log(`🔧 Service beställd för ${e.name} – hissteknikern larmas`, 'alert', e.color);
+}
+
 export function serviceTick(dt) {
   for (const e of S.elevators) {
     wearTick(e);
     energyTick(e, dt);
+    heatTick(e, dt);
+    if (e.state === 'doors' && e.doorPhase === 'open') levelTick(e); else if (e.state !== 'doors') e.level = 0;
     // trasiga hissar och hissar i service står med öppna dörrar
     if ((e.mode === 'broken' || e.mode === 'service') && e.door < 1) e.door = Math.min(1, e.door + dt / DOOR_T);
     // hiss som väntar på nattservice kör hem tom

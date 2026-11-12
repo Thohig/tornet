@@ -144,6 +144,12 @@ const CARGO_ROWS = {
   städvagn: { rows: ['......M', '......M', '......M', '.....M.', '.YYYYY.', 'CCCCCCC', 'CCCCCCC', 'CCCCCCC', 'CCCCCCC', 'K.....K'], pal: { C: '#36c5d6', Y: '#ffe14d', M: '#ffffff', K: INK }, dx: 8 },
   verktygslåda: { rows: ['.KKK.', 'RRRRR', 'RRRRR', 'RRRRR'], pal: { R: '#ff5d52', K: INK }, dx: 4 },
   pizza: { rows: ['PPPPPPP', 'PPPRPPP', 'PPPPPPP', 'PPPPPPP'], pal: { P: '#f5deb3', R: '#ff5d52' }, dx: -1 },
+  // ambulansens bår (tom, och med patienten under en filt), akutväskan, flyttgubbarnas lådor och filtar
+  bår: { rows: ['..............', 'WWWWWWWWWWWWWW', 'KKKKKKKKKKKKKK', '.K..........K.', '.K..........K.', 'KK..........KK'], pal: { W: '#ffffff', K: INK }, dx: 5 },
+  bårP: { rows: ['.SSS.TTTTTTTT.', 'WSSSWTTTTTTTTW', 'KKKKKKKKKKKKKK', '.K..........K.', '.K..........K.', 'KK..........KK'], pal: { W: '#ffffff', S: '#f6c48f', T: '#2ec4b6', K: INK }, dx: 5 },
+  väska: { rows: ['.KKK.', 'RRRRR', 'RRWRR', 'RWWWR', 'RRWRR'], pal: { R: '#ff5d52', W: '#ffffff', K: INK }, dx: 4 },
+  flyttlåda: { rows: ['BBBBBBBB', 'BBBYYBBB', 'BBBBBBBB', 'BBBBBBBB', 'BBBBBBBB', 'BBBBBBBB'], pal: { B: '#b07a45', Y: '#e8d27a' }, dx: 2 },
+  filtar: { rows: ['FFFFF', 'GGGGG', 'FFFFF'], pal: { F: '#3f5f9f', G: '#5577b8' }, dx: -2 },
 };
 const CARGO_CACHE = new Map();
 /** bagagefigur + förskjutning i x (pixlar, för en figur vänd åt höger) och höjd över fötterna */
@@ -156,6 +162,6 @@ export function cargoSprite(kind, dir) {
     c = dir < 0 ? flipped(r) : r;
     CARGO_CACHE.set(key, c);
   }
-  const lift = kind === 'pizza' ? 14 : kind === 'verktygslåda' ? 6 : 0;
+  const lift = kind === 'pizza' ? 14 : kind === 'verktygslåda' ? 6 : kind === 'flyttlåda' ? 9 : kind === 'filtar' ? 18 : kind === 'bår' || kind === 'bårP' ? 4 : 0;
   return { c, dx: dir < 0 ? -d.dx - c.width : d.dx, lift };
 }

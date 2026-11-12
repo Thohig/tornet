@@ -2,7 +2,7 @@
 // Datan (namn, utseende, repliker) ligger i CAST i config.js; här finns deras beteenden.
 // Allt slumpas med simuleringens rng, så stamgästerna gör samma sak varje gång med samma frö.
 import { pick, rng } from './rng.js';
-import { CAST, CAFE, LOBBY, OFFICE_FLOORS, SPOTS, floorOpen, floorWith, idx } from './config.js';
+import { CAST, CAFE, LOBBY, OFFICE_FLOORS, SPOTS, floorOpen, floorWith, idx, shaftCX } from './config.js';
 import { S, log } from './state.js';
 import { makePerson, pev, setTrip } from './people.js';
 
@@ -97,7 +97,7 @@ export function castBoard(p, e) {
 export const alwaysStairs = p => p.quirk === 'trappa';
 /** Kurt hämtar kaffe så fort han sitter vid sin plats en stund */
 export function castNext(p, h) {
-  if (p.quirk !== 'kaffe' || p.floor !== p.home || h >= 17.5 || !floorOpen(CAFE, h) || rng() > 0.55) return null;
+  if (p.quirk !== 'kaffe' || p.floor !== p.home || h >= 17.5 || !floorOpen(CAFE, h) || !floorOpen(CAFE, h + 1.2) || rng() > 0.55) return null;
   p.cups = (p.cups || 0) + 1; S.stats.cups++;
   say(p, 'coffee', { n: p.cups }, true);
   return [CAFE, `Kaffe nummer ${p.cups}`];
@@ -111,6 +111,20 @@ export function doorHold(e, f) {
   e.heldTrip = e.trips; S.stats.holds++;
   say(doris, 'hold');
   return 2.5;
+}
+/** Andra artiga passagerare håller också upp dörren ibland (slås en gång per stopp, inte om Doris redan gör det) */
+const HOLD_LINES = ['Vänta, jag håller dörren!', 'Spring, vi väntar!', 'Det finns plats!'];
+export function politeHold(e, f) {
+  if (e.heldTrip === e.trips || e.politeTrip === e.trips || !e.passengers.length) return 0;
+  const p = e.passengers.find(q => q.polite && q.state === 'ride' && !q.cast);
+  // bara för den som kommer springande – nära hissen, inte för alla som är på väg genom entrén
+  const cx = shaftCX(e.id);
+  if (!p || !S.people.some(q => q.state === 'toQueue' && q.floor === f && Math.abs(q.x - cx) < 220)) return 0;
+  e.politeTrip = e.trips;
+  if (rng() > 0.5) return 0;
+  e.heldTrip = e.trips; S.stats.holds++;
+  speak(p, pick(HOLD_LINES));
+  return 1.5;
 }
 /** Lill-Olle trycker på alla knappar mycket oftare än andra barn */
 export const kidRate = p => (p.quirk === 'bus' ? 0.6 : 0.15);

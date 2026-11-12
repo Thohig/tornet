@@ -4,7 +4,7 @@ import { K, fl } from './util.js';
 import { END_H, FLOORS, MAXP, timeScale, LOBBY, CAFE, floorWith, EL, ROOF } from './config.js';
 import { S, hooks, hour, log, newStats } from './state.js';
 import { spawnEmployee, spawnStaff, spawnVisitor, updatePerson, spawnPizza, pev } from './people.js';
-import { canTake, costBased, dispatchPerson, rebuildPicks, reoptimize, stopFloors, trafficMode } from './dispatch.js';
+import { canTake, costBased, dispatchPerson, rebuildPicks, reoptimize, stopFloors, trafficMode, benched, keyed, prio, learnBlend, emptyLearn } from './dispatch.js';
 import { serviceTick } from './service.js';
 import { castSchedule } from './cast.js';
 import { makeElevator, updateElevator } from './elevators.js';
@@ -12,6 +12,8 @@ import { buttonsMode, buttonWaitTick, dispatchCalls } from './buttons.js';
 import { incidentTick } from './incidents.js';
 import { lifeTick, lifeReset } from './life.js';
 import { recordStart, replayTick } from './replay.js';
+import { stormTick, weatherReset } from './weather.js';
+import { medicClear, visitsReset, visitsTick } from './visits.js';
 
 // ---------- Planerad rutt (för HUD) ----------
 export function plannedRoute(e) {
@@ -86,26 +88,25 @@ function nightModeTick(dt) {
     return;
   }
   // gruppens vakthiss: den första som kan köra (en trasig hiss, en på service eller en avstängd räknas inte)
-  const usable = e => e.mode === 'normal' && !e.off && !e.hold && !e.zoneLock;
+  const usable = e => e.mode === 'normal' && !benched(e) && !e.indep && !e.hold && !e.zoneLock;
   const keeper = g => S.elevators.find(x => x.group === g && usable(x));
   for (const e of S.elevators) {
     const k = keeper(e.group);
     if (k === e && e.sleep) { e.sleep = false; e.sleepT = 0; log(`☀️ ${e.name} vaknar – den ska hålla vakt i gruppen`, 'park', e.color); }
   }
   // (natten går fort: 8 s väntan är nästan en speltimme)
-  if (waiting.length > 3 || waiting.some(p => S.t - p.waitStart > 8)) {
+  if ((waiting.length > 3 || waiting.some(p => S.t - p.waitStart > 8)) && S.t >= (S.wakeAt || 0)) {
     // väck en hiss som kan ta någon i kön (den som har väntat längst först) – en åt gången, med en kort paus,
     // så att inte alla hissar vaknar för samma kö
-    if (S.t < (S.wakeAt || 0)) return;
     const queue = [...waiting].sort((a, b) => a.waitStart - b.waitStart);
     for (const p of queue) {
       const z = S.elevators.find(e => e.sleep && usable(e) && canTake(e, p));
-      if (z) { z.sleep = false; z.sleepT = 0; S.wakeAt = S.t + 3; log(`⏰ ${z.name} väcks ur nattläget – det bildas kö`, 'park', z.color); break; }
+      if (z) { z.sleep = false; z.sleepT = 0; S.wakeAt = S.t + 3; log(`⏰ ${z.name} väcks ur nattläget – det bildas kö`, 'park', z.color); return; }
     }
-    return;
   }
+  // (en kö som en hiss inte kan ta – t.ex. i en annan zon – hindrar den inte från att somna)
   for (const e of S.elevators) {
-    const idle = e.mode === 'normal' && !e.off && !e.hold && e.state === 'idle' && (eco ? e.serves.has(Math.round(e.pos)) : Math.round(e.pos) === e.home)
+    const idle = e.mode === 'normal' && !benched(e) && !e.indep && !e.hold && e.state === 'idle' && (eco ? e.stops.has(Math.round(e.pos)) : Math.round(e.pos) === e.home)
       && !e.passengers.length && !stopFloors(e).length;
     e.sleepT = idle ? (e.sleepT || 0) + dt : 0;
     // en hiss per grupp är alltid vaken
@@ -121,6 +122,8 @@ export function step(dt) {
   S.clock += dt * timeScale(hour());
   spawnTick(dt);
   lifeTick(dt);
+  visitsTick();
+  stormTick(dt);
   nightModeTick(dt);
   for (const p of S.people) updatePerson(p, dt);
   if (S.people.some(p => p.dead)) S.people = S.people.filter(p => !p.dead);
@@ -131,23 +134,28 @@ export function step(dt) {
     if (p.state !== 'wait') continue;
     wl[p.floor][K(p.dir)].push(p);
     // KNAPPAR: folk trycker på knappar; VIP-gruppen har nyckel och styrs som vanligt
-    if (buttonsMode() && !p.vip) { buttonWaitTick(p, dt); continue; }
+    if (buttonsMode() && !keyed(p)) { buttonWaitTick(p, dt); continue; }
     if (p.assigned === null && !(p.retypeAt > S.t)) dispatchPerson(p);
   }
   if (buttonsMode()) dispatchCalls();
   S.wl = wl;
   // VIP-läge: hissen som tar VIP-gruppen tar inga andra under tiden
   // (VIP-gästerna plockas ut en gång – loopen nedan ändrar bara vanliga personer)
-  const vips = S.people.filter(p => p.vip);
+  const vips = S.people.filter(prio);
   for (const e of S.elevators) {
-    const lock = vips.some(p => ((p.state === 'wait' && p.assigned === e.id) || ((p.state === 'boarding' || p.state === 'ride') && p.car === e)));
+    const holders = vips.filter(p => ((p.state === 'wait' && p.assigned === e.id) || ((p.state === 'boarding' || p.state === 'ride') && p.car === e)));
+    const lock = holders.length > 0;
     if (lock && !e.vipLock) {
-      log(`👔 VIP-läge: ${e.name} reserveras för VIP-gruppen`, 'alert', e.color);
+      const medic = holders.some(p => p.medic), who = medic ? 'ambulansen' : 'VIP-gruppen';
+      log(medic ? `🚑 Förtur: ${e.name} reserveras för ambulansen` : `👔 VIP-läge: ${e.name} reserveras för VIP-gruppen`, 'alert', e.color);
       // de som redan hade fått hissen får en annan
-      for (const p of S.people) if (p.state === 'wait' && !p.vip && p.assigned === e.id) { p.assigned = null; pev(p, `Hiss ${e.name} reserveras för VIP-gruppen – systemet letar en ny hiss åt mig`); }
+      for (const p of S.people) if (p.state === 'wait' && !prio(p) && p.assigned === e.id) { p.assigned = null; pev(p, `Hiss ${e.name} reserveras för ${who} – systemet letar en ny hiss åt mig`); }
+      for (const c of Object.values(S.calls)) if (c.car === e.id) c.car = null;
       e.vipLock = lock;
+      // ambulansen har förtur: passagerarna som inte ska åt samma håll kliver av vid nästa stopp
+      if (medic) medicClear(e);
       rebuildPicks();
-      for (const p of S.people) if (p.state === 'wait' && p.assigned === null && !p.vip) dispatchPerson(p);
+      for (const p of S.people) if (p.state === 'wait' && p.assigned === null && !prio(p) && !(buttonsMode() && !keyed(p))) dispatchPerson(p);
     }
     e.vipLock = lock;
   }
@@ -181,6 +189,8 @@ export function advance(realDt, speed) {
 export const daySeed = () => (Math.imul(S.seed >>> 0, 1000003) + S.day) >>> 0;
 export function resetDay() {
   setSeed(daySeed());
+  // lärande parkering: gårdagens anrop vägs in i minnet (följer med till nästa dygn, som slitaget)
+  learnBlend(); S.learnToday = emptyLearn();
   S.t = 0; S.clock = 0; S.sched = makeSchedule(); S.acc = 0; S.summaryShown = false; S.nextId = 1; S.sel = null; S.wl = null; S.reoptT = 0;
   S.people = []; S.stats = newStats(); S.calls = {};
   S.steps = 0; S.actions = []; S.replayQueue = []; S.replay = false;
@@ -192,10 +202,13 @@ export function resetDay() {
   S.elevators = EL.map((_, i) => makeElevator(i));
   for (const e of S.elevators) { const w0 = rand(0.1, 0.5); e.wear = carry ? carry[e.id] : w0; }
   lifeReset();
+  weatherReset();
+  visitsReset();
   recordStart();
 }
 export function newSim(seed, opts = {}) {
   S.seed = seed >>> 0; S.day = opts.day || 1; S.log = []; S.fx = []; S.elevators = [];
+  S.learnMem = null; S.learnToday = null; S.notices = []; S.dismissed = new Set();
   if (opts.strategy) S.strategy = opts.strategy;
   if (opts.autoInc !== undefined) S.autoInc = opts.autoInc;
   if (opts.mistakes !== undefined) S.mistakes = opts.mistakes;
@@ -208,6 +221,9 @@ export function startReplay(/** @type {import('./replay.js').Recording} */ rec) 
   // slitaget kom från gårdagen – samma som i inspelningen
   rec.wear.forEach((w, i) => { if (S.elevators[i]) S.elevators[i].wear = w; });
   S.recStart.wear = [...rec.wear];
+  // och det styrningen hade lärt sig om trafiken
+  S.learnMem = rec.learn ? rec.learn.map(r => [...r]) : null;
+  S.recStart.learn = S.learnMem && S.learnMem.map(r => [...r]);
   const copy = () => rec.actions.map(x => ({ ...x, args: [...x.args] }));
   S.actions = copy();
   S.replayQueue = copy().sort((a, b) => a.n - b.n);

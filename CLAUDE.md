@@ -34,14 +34,16 @@ Samma testsvit körs i webbläsaren på `/tests.html`.
 | `rng.js` | seedad slump (`rng/rand/randi/pick/shuffle`) + visuell slump (`vrand/vpick`) |
 | `sim.js` | `step(DT)`, `advance`, schemaläggning, ankomster, nattläge, VIP-lås, `resetDay`, `newSim` |
 | `people.js` | personer: tillståndsmaskin, delresor/hissbyten (`legDest`, `setTrip`), lastregler |
-| `dispatch.js` | destinationsstyrning: kostnadsfunktion, tilldelning, omfördelning, parkering, brandzon, Rusning (`trafficMode`, `peakHold`) och Energisnål (`ecoCost`) |
+| `dispatch.js` | destinationsstyrning: kostnadsfunktion, tilldelning, omfördelning, parkering (även lärande: `learnBlend`, `learnedFloor`), brandzon, Rusning (`trafficMode`, `peakHold`) och Energisnål (`ecoCost`); dubbeldäck via `posOf`/`deckOf`/`allowedPos` |
 | `buttons.js` | styrlogiken KNAPPAR (hallknappar ▲/▼ + våningsknappar, styrningen ser aldrig `p.dest`), felknappar, barn, antinuisance |
 | `elevators.js` | hissens rörelse (SCAN med "committed" stopp), dörrar, lastning, överlast |
 | `incidents.js` | brand, strömavbrott och slumpade hissfel + spelarens åtgärder |
-| `service.js` | drift: slitage, hissfel, hisstekniker, nattservice (`S.maint`) och energi (effekt efter last mot motvikt, återmatning) |
+| `service.js` | drift: slitage, hissfel, hisstekniker, nattservice (`S.maint`), beställd service (`orderService`), energi (effekt efter last mot motvikt, återmatning), motorvärme (`heat`, överhettningsskydd, extrafläkt) och nivåfel (`level`, snubbel) |
+| `weather.js` | dygnets temperatur (kyla → skorstenseffekt: dörrarna i entrén tar emot) och stormen (incident med val: svajläge/normal drift, `windAt`, `exposure`) |
+| `visits.js` | händelser som spelaren bara informeras om: flyttdag (varuhissen i oberoende drift, `e.indep`) och ambulans (bår, förtur via VIP-låset, `medicClear`) |
 | `cast.js` | stamgästerna (data i `CAST` i config): återkommande karaktärer med egenheter och repliker (`say`) |
 | `life.js` | garage/bilar, leveransbil, boendes dygnsrutiner, VIP-helikopter |
-| `replay.js` | spelarens åtgärder via `act()` (spelas in med `S.steps`), `changeStrategy`, länkformatet `?replay=` (`encodeReplay/decodeReplay`); uppspelningen startas med `startReplay` i `sim.js` |
+| `replay.js` | spelarens åtgärder via `act()` (spelas in med `S.steps`), `changeStrategy`, länkformatet `?replay=` (`encodeReplay/decodeReplay`, med slitaget och det inlärda minnet `learn`); uppspelningen startas med `startReplay` i `sim.js` |
 
 **Gränssnitt:** `render.js` (grafikens ingång + `landPos`/`personHead`: var folk syns), `pixel.js` (hela bilden i pixelgrafik), `pixart.js` (rutnätsfigurer med automatisk kontur, bitmapstypsnitt 3×5, färghjälp), `pixpeople.js` (människor ur `p.look`: sido-/framvy, gångsteg, humör, bagage), `pixpal.js` (paletten `PAL`), `view.js` (canvas, kamera, översikt, `VIEW.follow/carPop`), `hud.js` (topplist, hisspopup, flytande incidentruta, låda med flikar), `describe.js` (texter om personer för HUD och spårlapp), `input.js`, `main.js`.
 
@@ -51,7 +53,7 @@ Bilden börjar vid `LAND_X0` och varje våning ritas som en hall framför schakt
 
 Allt följer paletten **Kontor 95**: byggnadsfärger i `PAL` (`pixpal.js`), hissarnas `color` och våningarnas `acc` i `config.js`, och gränssnittet i `style.css` (blågrönt skrivbord, grå fönster med upphöjda/nedsänkta kanter, marinblå titelrader, DOS-svarta skärmar). Text på en färgad yta får färg via `PAL.on(färg)`.
 
-HUD:en är medvetet liten: allt om en hiss visas på hissen eller i popupen när man klickar på den, incidentrutan syns bara under en incident, och spårning/register/logg/resultat ligger i en låda som är stängd från början.
+HUD:en är medvetet liten: allt om en hiss visas på hissen eller i popupen när man klickar på den, incidentrutan syns bara när något händer, och spårning/register/logg/resultat ligger i en låda som är stängd från början. Incidentrutan har två sorters kort: **incidenter** som spelaren kan åtgärda (brand, ström, storm, överhettad motor – rutan blinkar) och **informationsrutor** som bara berättar och kan stängas (flyttdag, ambulans och `S.notices` via `notice()` i state.js: kall dag, snubbel). Varje kort har knappar som visar händelsen (`show:våning`, `follow:hiss`). Stängda rutor ligger i `S.dismissed` (bara gränssnittet).
 
 ## Regler som inte får brytas
 
@@ -61,7 +63,8 @@ HUD:en är medvetet liten: allt om en hiss visas på hissen eller i popupen när
 - **Simuleringsmoduler importerar aldrig** `render/view/hud/input/scenery`.
 - **Allt spelaren gör som påverkar simuleringen går via `act()`** (replay.js) – annars blir replay-länkarna fel. Platsbeläggningen ligger i `S.occ`, aldrig i config-datan.
 - **Huset är data.** Lägg till/ändra våningar och hissar i `BUILDING`; använd härledda värden (`LOBBY`, `SKY`, `ROOF`, `DOCK`, `HOME_FLOORS`, `idx('7')`, `floorWith('bank')`) – hårdkoda aldrig våningsindex. Index ≠ etikett: index 0 är `P2`, `fl(i)` ger etiketten.
-- En hiss stannar bara på `e.serves`, stannar aldrig utanför `minF..maxF`, kör aldrig över `e.ratedKg`, och åker aldrig förbi en passagerares mål.
+- En hiss stannar bara på `e.stops`, stannar aldrig utanför `minF..maxF`, kör aldrig över `e.ratedKg`, och åker aldrig förbi en passagerares mål.
+- **Dubbeldäck:** hissens läge (`e.pos`, `e.floor`, `carCalls`, `pick`, `stops`) räknas alltid i nedre däckets våningar; folkets våningar (`p.floor`, `p.dest`, `e.serves`) är riktiga våningar. Översätt med `posOf(e, f)` (personens våning → korgens läge) och `deckFloor(e, p, f)`, och låt en hiss bara köra inom ett däck (`e.legs`).
 
 ## Domänbegrepp
 
@@ -69,7 +72,10 @@ HUD:en är medvetet liten: allt om en hiss visas på hissen eller i popupen när
 - Personer: `kind` = `emp` / `vis` / `staff` / `res` (boende, stannar över natten), `role` för nattpersonal/bud, `vip`.
 - Last ≥ 22 kg → bara varuhissen; varuhissen tar bara last och personal (`elevatorAllows`).
 - Styrlogiker (`S.strategy`): `smart`, `peak` (Rusning), `eco` (Energisnål), `nearest`, `random`, `buttons`. `costBased()` = de tre som använder kostnadsfunktionen.
-- Hisslägen (`e.mode`): `normal`, `recall`, `locked`, `rescue`, `dead`, `broken` (trasig, väntar på tekniker), `service`. `e.hold` = på väg till nattservice (tar inga nya). `e.wear` följer med till nästa dygn.
+- Hisslägen (`e.mode`): `normal`, `recall`, `locked`, `rescue`, `dead`, `broken` (trasig, väntar på tekniker), `service`. `e.hold` = på väg till nattservice (tar inga nya). `e.wear` följer med till nästa dygn. `benched(e)` = tar inga nya just nu (`e.off`, `e.hot`, `e.windLock`); `e.indep` = oberoende drift (bara flyttgubbarna och ambulansen).
+- `keyed(p)` = har nyckel och använder aldrig hallknapparna (VIP, ambulans, flyttgubbar); `prio(p)` = får en hiss för sig (VIP-låset: VIP och ambulans).
+- Hissetikett: `p.space` (hur trångt man står ut med, 9 = bryr sig inte), `p.polite` (håller upp dörren). Ett fullt däck hämtar ingen (`e.deckFull`).
+- Mellanplanet `MEZZ` (våning 1): dit åker man rulltrappa från entrén till expressens övre däck (`p.escalator`).
 - Trappan: `stairsChoice` (korta resor/otåliga, `p.fit`), `p.stairsByChoice` skiljer frivilliga trappresor från utrymning m.m.
 - Brandlägen: `recall` / `zone` / `none`; i zonläge spärras hissar som inte når någon säker våning (`e.zoneLock`).
 - Nytt våningstema = post i `THEME_INFO` (config) med namn, `acc` i Kontor 95-tappning och platser – hallen ritas automatiskt.

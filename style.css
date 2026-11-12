@@ -89,6 +89,22 @@ body{background:var(--desk);font-family:var(--ui);font-size:12px;color:var(--ink
 .inc-h{font-weight:700;font-size:12px;color:#fff;margin:0 -6px 5px;padding:3px 6px;background:linear-gradient(90deg,var(--navy),var(--title2))}
 .inc.fire .inc-h{background:linear-gradient(90deg,#800000,#c0392b)}
 .inc.power .inc-h{background:linear-gradient(90deg,var(--navy),var(--title2))}
+.inc.storm .inc-h{background:linear-gradient(90deg,#1f4e79,#5b8fb9)}
+.inc.heat .inc-h{background:linear-gradient(90deg,#8a3a00,#d35400)}
+.inc.info .inc-h{background:linear-gradient(90deg,#404040,#808080);display:flex;align-items:center;gap:6px}
+.inc.info.medic .inc-h{background:linear-gradient(90deg,#006060,#2ec4b6)}
+.inc.info.move .inc-h{background:linear-gradient(90deg,#7a4a00,#d4a017)}
+.inc.info.cold .inc-h{background:linear-gradient(90deg,#1f4e79,#7fb3d5)}
+.inc-x{margin-left:auto;background:var(--face);color:#000;border:0;box-shadow:var(--raised);font:inherit;font-size:10px;line-height:1;padding:1px 4px;cursor:pointer}
+.inc-x:active{box-shadow:var(--sunken)}
+.incidents.calm{animation:none}
+.learn{grid-column:1/-1;margin:6px 0;font-size:11px}
+.learn-h{font-weight:700;margin-bottom:3px}
+.learn-e{color:#606060}
+.lr{display:flex;align-items:center;gap:1px;height:7px;margin-bottom:1px}
+.lr span{width:20px;font-size:8px;line-height:7px;text-align:right;margin-right:3px;color:#404040}
+.lr i{flex:1;height:7px;background:#008080}
+.lr i.now{outline:1px solid #c0392b}
 .inc-s{font-size:12px;line-height:1.35}
 .inc-q{font-weight:700;font-size:12px;margin-top:5px}
 .inc-acts{display:flex;gap:4px;flex-wrap:wrap;margin:4px 0}

@@ -5,15 +5,20 @@ import { CAR_W, DOOR_X, W, WAIT_X1, floorY, shaftX, surf } from './config.js';
 import { S } from './state.js';
 import { clouds } from './view.js';
 import { renderPixel } from './pixel.js';
+import { windAt } from './weather.js';
 
 /** platser i korgen: bakre raden (0–3) och främre raden (4–7), utspridda över korgens bredd */
 export function carSlotX(i) { return i < 4 ? 12 + i * (CAR_W - 24) / 3 : 16 + (i - 4) * (CAR_W - 32) / 3; }
+/** hissetikett: den i:te som kliver på ställer sig i ett ledigt hörn först, sedan i mitten (platsens index) */
+const CORNERS = [0, 3, 1, 2, 4, 7, 5, 6];
+export const carSlot = i => CORNERS[i % 8];
 export function personHead(p) {
   // var personens huvud syns just nu (för markörer & träffytor)
   if (p.dead) return null;
   if (p.state === 'ride') {
-    const e = p.car, i = e.passengers.indexOf(p);
-    return { x: shaftX(e.id) + 4 + carSlotX(i), y: floorY(e.pos) - 4 - 62, inCar: e };
+    const e = p.car, k = e.deck2 ? p.deck || 0 : 0;
+    const i = e.passengers.filter(q => !e.deck2 || (q.deck || 0) === k).indexOf(p);
+    return { x: shaftX(e.id) + 4 + carSlotX(carSlot(i)), y: floorY(e.pos + k + (e.level || 0) * 2.5) - 4 - 62, inCar: e };
   }
   // i hallen där personen syns, annars "bakom" korridoren på sin våning
   const lp = landPos(p);
@@ -83,6 +88,7 @@ export function peopleBehindDoor(f) {
 }
 
 export function render(dt) {
-  if (S.started && !S.paused) for (const c of clouds) { c.x += c.v * dt * S.speed; if (c.x > W + 80) c.x = -80; }
+  // molnen driver fortare när det blåser
+  if (S.started && !S.paused) { const w = 1 + windAt() * 5; for (const c of clouds) { c.x += c.v * dt * S.speed * w; if (c.x > W + 80) c.x = -80; } }
   renderPixel(dt);
 }

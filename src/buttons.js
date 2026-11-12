@@ -7,7 +7,7 @@ import { ARR, fl } from './util.js';
 import { CAR_H, EL, floorY, shaftCX } from './config.js';
 import { S, log } from './state.js';
 import { elevatorAllows, pev, pn, toStairs } from './people.js';
-import { allowed, eta, isFull, operational, rebuildPicks } from './dispatch.js';
+import { allowed, eta, isFull, operational, rebuildPicks, posOf } from './dispatch.js';
 import { kidPressed, kidRate } from './cast.js';
 
 export const buttonsMode = () => S.strategy === 'buttons';
@@ -24,12 +24,12 @@ export const callKey = (g, f, d) => `${g}|${f}|${d}`;
 
 /** Hissgruppen personen ställer sig vid: första gruppen där en hiss tar hen hela delresan. */
 export function bankFor(p) {
-  const d = EL.find(x => elevatorAllows(x, p) && x.serves.includes(p.floor) && x.serves.includes(p.dest));
+  const d = EL.find(x => elevatorAllows(x, p) && x.legs.some(l => l.includes(p.floor) && l.includes(p.dest)));
   return d ? d.group : null;
 }
 /** Finns det en knapp åt det hållet på våningen (går gruppen vidare åt det hållet)? */
 function hasButton(g, f, d) {
-  return EL.some(x => x.group === g && x.serves.includes(f) && x.serves.some(h => (h - f) * d > 0));
+  return EL.some(x => x.group === g && x.legs.some(l => l.includes(f) && l.some(h => (h - f) * d > 0)));
 }
 function press(g, f, d) {
   const k = callKey(g, f, d);
@@ -47,7 +47,7 @@ export function pressHallButton(p) {
   const name = GROUP_NAMES[g] || g;
   if (!allowed(p.floor) || !allowed(p.dest)) return; // brand: sköts i buttonWaitTick
   // står en hiss i gruppen redan öppen här åt rätt håll kliver man bara in – ingen knapp behövs
-  if (S.elevators.some(e => e.group === g && operational(e) && e.state === 'doors' && e.floor === p.floor && e.doorPhase !== 'closing' && (e.dir === p.dir || e.dir === 0))) {
+  if (S.elevators.some(e => e.group === g && operational(e) && e.state === 'doors' && e.floor === posOf(e, p.floor) && e.doorPhase !== 'closing' && (e.dir === p.dir || e.dir === 0))) {
     pev(p, `Hiss åt rätt håll står redan öppen vid ${name} – kliver in`);
     return;
   }
@@ -84,7 +84,7 @@ export function buttonWaitTick(p, dt) {
   if (!call && !p.fixAt) {
     // anropet besvarades men jag kom inte med (full hiss, fel håll) – tryck igen när hissen har gått
     // (en trasig hiss som står med öppna dörrar räknas inte)
-    const here = S.elevators.some(e => e.group === p.bank && operational(e) && e.state === 'doors' && e.floor === p.floor);
+    const here = S.elevators.some(e => e.group === p.bank && operational(e) && e.state === 'doors' && e.floor === posOf(e, p.floor));
     if (!here) { press(p.bank, p.floor, p.dir); pev(p, `Trycker på ${ARR(p.dir)} igen`); }
   }
   // bara för bilden och spårlappen – styrsystemet läser aldrig personerna
@@ -100,10 +100,10 @@ export function buttonWaitTick(p, dt) {
 // ---------- Personerna: knapparna inne i korgen ----------
 /** Efter påstigning: rätt knapp trycks alltid (så ingen åker förbi sitt mål) – ibland också fel. */
 export function carButtonMistakes(p, e) {
-  const ahead = f => e.serves.has(f) && f !== e.floor && (e.dir === 0 || (f - e.floor) * e.dir > 0);
+  const ahead = f => e.stops.has(f) && f !== e.floor && (e.dir === 0 || (f - e.floor) * e.dir > 0);
   if (p.child && rng() < mistakeRate(kidRate(p))) {
     kidPressed(p);
-    const all = [...e.serves].filter(ahead);
+    const all = [...e.stops].filter(ahead);
     for (const f of all) e.carCalls.add(f);
     S.stats.kidPresses++;
     pev(p, 'Trycker på ALLA knappar! Hihi!');
@@ -130,7 +130,7 @@ export function antiNuisance(e) {
   if (e.carCalls.size < e.passengers.length + 3) return;
   const n = e.carCalls.size;
   e.carCalls.clear();
-  for (const q of e.passengers) e.carCalls.add(q.dest);
+  for (const q of e.passengers) e.carCalls.add(posOf(e, q.dest));
   S.stats.nuisance++;
   log(`🧹 ${e.name}: ${n} knappar men bara ${e.passengers.length} ombord – rensar och låter alla trycka igen`, 'button', e.color);
 }
@@ -144,7 +144,7 @@ export function assignCalls(reopt = false) {
   let changed = false;
   for (const c of Object.values(S.calls)) {
     if (!allowed(c.f)) { if (c.car !== null) { c.car = null; changed = true; } continue; }
-    const cars = S.elevators.filter(e => e.group === c.g && operational(e) && e.serves.has(c.f) && !e.vipLock);
+    const cars = S.elevators.filter(e => e.group === c.g && operational(e) && !e.indep && e.serves.has(c.f) && !e.vipLock);
     const cur = c.car !== null ? S.elevators[c.car] : null;
     if (!cars.length) { if (c.car !== null) { c.car = null; changed = true; } continue; }
     if (cur && cars.includes(cur) && !reopt) continue;
@@ -162,14 +162,15 @@ export function assignCalls(reopt = false) {
 export function dispatchCalls(reopt = false) {
   if (assignCalls(reopt)) rebuildPicks();
 }
-/** Hissen öppnar på våning f: den besvarar anropet åt sitt håll (eller ett av dem om den är ledig). */
+/** Hissen öppnar på våning f: den besvarar anropet åt sitt håll (eller ett av dem om den är ledig).
+ *  Dubbeldäck: anropen på båda däckens våningar. */
 export function answerCalls(e, f) {
+  const fs = e.deck2 && e.upper.has(f + 1) ? [f, f + 1] : [f];
+  const lit = d => fs.some(g => S.calls[callKey(e.group, g, d)]);
   let d = e.dir;
-  if (d === 0) d = S.calls[callKey(e.group, f, 1)] ? 1 : S.calls[callKey(e.group, f, -1)] ? -1 : 0;
-  if (!d) return;
-  const k = callKey(e.group, f, d);
-  if (!S.calls[k]) return;
-  delete S.calls[k];
+  if (d === 0) d = lit(1) ? 1 : lit(-1) ? -1 : 0;
+  if (!d || !lit(d)) return;
+  for (const g of fs) delete S.calls[callKey(e.group, g, d)];
   e.dir = d;
   rebuildPicks();
 }

@@ -135,8 +135,10 @@ export const BUILDING = {
   elevators: [
     { name: 'L1', color: '#c0392b', group: 'låg', col: 0, start: 'E', serves: ['P2', 'P1', 'E', '1', '2', '3', '4', '5'], park: { day: 'E', lunch: '5', evening: '4' } },
     { name: 'L2', color: '#d35400', group: 'låg', col: 1, start: 'P1', serves: ['P2', 'P1', 'E', '1', '2', '3', '4', '5'], park: { day: '3', lunch: 'E', evening: 'E' } },
-    { name: 'X1', color: '#d4a017', group: 'express', col: 3, start: 'E', serves: ['E', '6'], express: true },
-    { name: 'X2', color: '#b8860b', group: 'express', col: 4, start: '6', serves: ['E', '6'], express: true },
+    // dubbeldäck: nedre däcket stannar på serves, övre däcket samtidigt på våningen ovanför (upper).
+    // Till övre däcket i entrén tar man rulltrappan upp till mellanplanet (1).
+    { name: 'X1', color: '#d4a017', group: 'express', col: 3, start: 'E', serves: ['E', '6'], upper: ['1', '7'], express: true },
+    { name: 'X2', color: '#b8860b', group: 'express', col: 4, start: '6', serves: ['E', '6'], upper: ['1', '7'], express: true },
     { name: 'H1', color: '#008080', group: 'hög', col: 0, start: '6', serves: ['6', '7', '8', '9', '10', '11', '12', '13', '14', 'T'], park: { day: '6', lunch: '6', evening: '11' } },
     { name: 'H2', color: '#2a5db0', group: 'hög', col: 1, start: '10', serves: ['6', '7', '8', '9', '10', '11', '12', '13', '14', 'T'], park: { day: '10', lunch: '6', evening: '13' } },
     { name: 'V', color: '#808080', group: 'varu', col: 2, start: 'P1', home: 'P1', freight: true, ratedKg: 1600 },
@@ -173,12 +175,24 @@ export function floorOpen(f, h) {
   return !oh || (h >= oh[0] && h < oh[1]);
 }
 export const EL = BUILDING.elevators.map((e, i) => {
-  const serves = e.serves ? e.serves.map(idx) : FDEF.map((_, k) => k);
-  const minF = Math.min(...serves), maxF = Math.max(...serves);
+  // stops = våningarna där korgen (nedre däcket) stannar – hissens läge räknas alltid i dem
+  const stops = e.serves ? e.serves.map(idx) : FDEF.map((_, k) => k);
+  // dubbeldäck: övre däcket står en våning ovanför; folk på de våningarna åker övre däcket
+  const upper = e.upper ? e.upper.map(idx) : [];
+  if (upper.some((f, k) => f !== stops[k] + 1)) throw new Error(`hiss ${e.name}: övre däcket måste ligga en våning över varje stopp`);
+  // serves = våningarna där FOLK kan kliva på och av; legs = vilka våningar man kan åka mellan (ett däck i taget)
+  const serves = [...stops, ...upper].sort((a, b) => a - b);
+  const legs = upper.length ? [stops, upper] : [stops];
+  const minF = Math.min(...stops), maxF = Math.max(...stops), topF = maxF + (upper.length ? 1 : 0);
   // hem = där hissen vilar på natten och dit den kör vid brandåterkallning (entrén om den går dit)
-  const home = e.home ? idx(e.home) : serves.includes(LOBBY) ? LOBBY : minF;
-  return { ...e, id: i, serves, minF, maxF, startF: idx(e.start), home, group: e.group || 'alla', ratedKg: e.ratedKg || RATED_KG };
+  const home = e.home ? idx(e.home) : stops.includes(LOBBY) ? LOBBY : minF;
+  return { ...e, id: i, serves, stops, upper, legs, deck2: upper.length > 0, minF, maxF, topF, startF: idx(e.start), home,
+    group: e.group || 'alla', ratedKg: e.ratedKg || RATED_KG * (upper.length ? 2 : 1) };
 });
+/** korgens läge (nedre däckets våning) när den tar folk på våning f: en våning lägre för övre däcket */
+export const carPos = (id, f) => (EL[id].upper.includes(f) ? f - 1 : f);
+/** mellanplanet: övre däckets våning ovanför entrén (rulltrappa dit från entrén), eller -1 */
+export const MEZZ = EL.some(d => d.upper.includes(LOBBY + 1) && d.stops.includes(LOBBY)) ? LOBBY + 1 : -1;
 
 // ---------- Värld (geometri) ----------
 export const FLOOR_H = 112;
@@ -190,7 +204,7 @@ const HAS_FACADE = EL.some(e => e.facade);
 // schaktkolumnen för varje hiss: col i BUILDING (hissar i olika zoner kan dela kolumn), annars i tur och ordning
 const COL = EL.map(e => (e.facade ? -1 : e.col ?? INSIDE.indexOf(e)));
 for (const a of INSIDE) for (const b of INSIDE) {
-  if (a !== b && COL[a.id] === COL[b.id] && a.minF <= b.maxF && b.minF <= a.maxF) throw new Error(`hissarna ${a.name} och ${b.name} krockar i samma schakt`);
+  if (a !== b && COL[a.id] === COL[b.id] && a.minF <= b.topF && b.minF <= a.topF) throw new Error(`hissarna ${a.name} och ${b.name} krockar i samma schakt`);
 }
 export const NCOL = Math.max(...COL) + 1;
 // rummen är alltid lika breda (x 60–619); huset växer åt höger med antalet schakt
@@ -199,10 +213,12 @@ const colX = c => SHAFT_X0 + c * (SHAFT_W + SHAFT_GAP);
 export const BX1 = colX(NCOL) + 6 - SHAFT_GAP;
 /** tornets högerkant på våning f: huset är bara så brett som schakten på den våningen behöver (indrag uppåt) */
 export const TOWER_X1 = Array.from({ length: FLOORS }, (_, f) => {
-  const cols = INSIDE.filter(e => f >= e.minF && f <= e.maxF).map(e => COL[e.id]);
+  const cols = INSIDE.filter(e => f >= e.minF && f <= e.topF).map(e => COL[e.id]);
   // under sky lobbyn och i källaren behåller huset full bredd
   return f <= SKY ? BX1 : colX(Math.max(0, ...cols) + 1) + 6 - SHAFT_GAP;
 });
+/** första våningen ovanför sky lobbyn där tornet är smalt (där takterrassen ligger) */
+export const SEAM_F = (() => { let f = SKY + 1; while (f < FLOORS && TOWER_X1[f] >= BX1) f++; return f; })();
 export const W = BX1 + (HAS_FACADE ? SHAFT_W + 52 : 60), H = GROUND_Y + LOBBY * FLOOR_H + 60;
 export const INNER_X1 = SHAFT_X0 - 5;
 export const WAIT_X1 = SHAFT_X0 - 34;
@@ -247,7 +263,7 @@ export function roomUnits(h0, h1) {
   }
   return u;
 }
-export const ROLE_NAMES = { 'väktare': 'Väktare', 'städare': 'Städare', 'vaktmästare': 'Vaktmästare', 'nattdj': 'Natt-DJ på Kanal 97', 'nattekniker': 'Nattekniker på Modemkungen', 'bud': 'Bud', 'hisstekniker': 'Hisstekniker' };
+export const ROLE_NAMES = { 'väktare': 'Väktare', 'städare': 'Städare', 'vaktmästare': 'Vaktmästare', 'nattdj': 'Natt-DJ på Kanal 97', 'nattekniker': 'Nattekniker på Modemkungen', 'bud': 'Bud', 'hisstekniker': 'Hisstekniker', 'flyttgubbe': 'Flyttgubbe på Lyft & Bär', 'ambulans': 'Ambulanssjukvårdare' };
 
 // ---------- Stamgästerna ----------
 // Återkommande karaktärer: samma namn, utseende och egenheter varje dag (logiken finns i cast.js).

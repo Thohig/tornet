@@ -5,14 +5,19 @@ import { OFFICE_FLOORS } from './config.js';
 import { S, hooks, hour, log } from './state.js';
 import { arriveOnFloor, pev, pn, setTrip, toStairs } from './people.js';
 import { allowed, inFireZone, rebuildPicks, safeFloor } from './dispatch.js';
-import { bounceBoarders, exitAll, restoreElevator } from './elevators.js';
-import { triggerFault } from './service.js';
+import { bounceBoarders, canBrakeTo, deckFloor, exitAll, restoreElevator } from './elevators.js';
+import { triggerFault, triggerHeat } from './service.js';
+import { startStorm } from './weather.js';
+import { startMedical } from './visits.js';
 
 // ---------- Incidenter ----------
 export function trigger(type) {
   if (type === 'fire') startFire();
   if (type === 'power') startOutage();
   if (type === 'fault') triggerFault();
+  if (type === 'storm' && startStorm()) incidentStarted(null);
+  if (type === 'heat') triggerHeat();
+  if (type === 'medical') startMedical(); // (ingen incident – bara en händelse som rutan berättar om)
 }
 export function incidentStarted(floor) {
   S.stats.incidents++;
@@ -61,7 +66,9 @@ export function setFireMode(m) {
       for (const g of [...e.carCalls]) if (!allowed(g)) e.carCalls.delete(g);
       for (const p of e.passengers) {
         if (allowed(p.dest)) continue;
-        p.viaStairs = true; p.dest = drop; e.carCalls.add(drop);
+        // hinner hissen inte bromsa till den säkra våningen läggs den om vid nästa stopp (zoneReroute)
+        if (!canBrakeTo(e, drop)) continue;
+        p.viaStairs = true; p.dest = deckFloor(e, p, drop); e.carCalls.add(drop);
         pev(p, `Brandzonen spärrad – hiss ${e.name} släpper av mig på ${fl(drop)}, sen trappan`);
       }
       if (e.zoneLock) log(`🚧 ${e.name} når ingen våning utanför brandzonen – kör till ${fl(drop)} och stängs av`, 'alert', e.color);
@@ -122,7 +129,7 @@ export function startRescue(e, how) {
   if (!canRescue(e)) return;
   // nödsänk till närmaste våning nedanför där hissen har dörrar (expresshissar har inga dörrar på vägen)
   let below = e.minF;
-  for (const f of e.serves) if (f <= e.pos + 1e-6 && f > below) below = f;
+  for (const f of e.stops) if (f <= e.pos + 1e-6 && f > below) below = f;
   e.mode = 'rescue'; e.rs = 'move'; e.rescueTarget = below; e.v = 0;
   S.outage.busy = e.id;
   log(`🔋 ${how === 'auto' ? 'Auto-räddning' : 'Du'} nödsänker hiss ${e.name} till ${fl(e.rescueTarget)} (${e.passengers.length} instängda)`, 'alert', e.color);
@@ -166,6 +173,8 @@ export function incidentTick(dt) {
   if (S.power) opts.push('power');
   // hissfel: en slumpad hiss går sönder vid nästa stopp (slitna hissar går dessutom sönder av sig själva)
   if (S.elevators.some(e => e.mode === 'normal' && !e.hold && !e.breakNext)) opts.push('fault');
+  if (!S.storm) opts.push('storm');
+  if (S.elevators.some(e => e.mode === 'normal' && !e.hot)) opts.push('heat');
   if (opts.length) trigger(pick(opts));
 }
 
