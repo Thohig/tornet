@@ -4,7 +4,7 @@ import { ARR, fl } from './util.js';
 import { ACC, CAP, DOOR_T, DWELL, EL, LOBBY, VMAX, shaftCX, CAR_H, floorY } from './config.js';
 import { S, log } from './state.js';
 import { arriveOnFloor, liftsAvailable, pev, pn, setTrip, toStairs, queueSpot } from './people.js';
-import { safeFloor, aheadOf, allowed, allowedPos, assignedTo, isFull, maybePark, rebuildPicks, stopFloors, loadKg, personKg, slotsFull, benched, keyed, posOf, outReason, OUT_TEXT, etaOutcome } from './dispatch.js';
+import { safeFloor, aheadOf, allowed, allowedDest, allowedPos, assignedTo, isFull, maybePark, rebuildPicks, stopFloors, loadKg, personKg, slotsFull, benched, keyed, posOf, outReason, OUT_TEXT, etaOutcome } from './dispatch.js';
 import { answerCalls, buttonsMode, clearCall } from './buttons.js';
 import { maybeBreak, heatOnStop, heatMul, levelStart, maybeStumble } from './service.js';
 import { doorHold, politeHold } from './cast.js';
@@ -97,7 +97,7 @@ function zoneReroute(e, f) {
   let here = false;
   for (const p of e.passengers) {
     const pd = deckFloor(e, p, drop);
-    if (allowed(p.dest) || p.dest === pd) continue;
+    if (allowedDest(e, p) || p.dest === pd) continue;
     e.carCalls.delete(posOf(e, p.dest)); p.viaStairs = true; p.dest = pd; e.carCalls.add(drop);
     pev(p, `Brandzonen spärrad – hiss ${e.name} släpper av mig på ${fl(pd)}, sen trappan`);
     if (drop === f) here = true;
@@ -112,7 +112,7 @@ export function idleEval(e, dt) {
   if ((up || dn) && (e.dir === 0 || assignedTo(e, f, e.dir) || !aheadOf(e, f, e.dir))) { arrive(e, f); return; }
   const stops = stopFloors(e);
   if (stops.length === 0) {
-    if (S.fire && S.fire.mode === 'zone' && !allowed(f) && f !== (safeFloor(e) ?? e.minF)) e.parkTarget = safeFloor(e) ?? e.minF;
+    if (S.fire && S.fire.mode === 'zone' && !allowedPos(e, f) && f !== (safeFloor(e) ?? e.minF)) e.parkTarget = safeFloor(e) ?? e.minF;
     if (e.parkTarget === f) e.parkTarget = null;
     if (e.parkTarget === null) { e.dir = 0; e.idleTime += dt; maybePark(e); }
     if (e.parkTarget !== null && e.parkTarget !== f) { e.dir = Math.sign(e.parkTarget - f); e.state = 'moving'; }
@@ -301,7 +301,7 @@ export function load(e, f) {
   const buttons = buttonsMode();
   for (const p of waiting) {
     // KNAPPAR: man kliver på vilken hiss som helst i sin grupp som öppnar åt rätt håll
-    const mine = buttons && !keyed(p) ? p.bank === e.group && e.legs.some(l => l.includes(p.floor) && l.includes(p.dest)) && allowed(p.dest) && !e.vipLock && !e.indep : p.assigned === e.id;
+    const mine = buttons && !keyed(p) ? p.bank === e.group && e.legs.some(l => l.includes(p.floor) && l.includes(p.dest)) && allowedDest(e, p) && !e.vipLock && !e.indep : p.assigned === e.id;
     if (!mine) {
       if (buttons && !keyed(p)) continue;
       if (p.assigned !== null && !seen(p)) { pev(p, `Hiss ${e.name} öppnar – men jag ska ta ${EL[p.assigned].name}`); }
@@ -359,7 +359,14 @@ export function restoreElevator(e) {
   for (const p of e.passengers) e.carCalls.add(posOf(e, p.dest));
   if (e.door > 0) { e.state = 'doors'; e.doorPhase = 'closing'; }
   // mellan två våningar (avbruten återkallning/nödsänkning): bromsa in till en våning i stället för att hoppa dit
-  else if (Math.abs(e.pos - Math.round(e.pos)) > 1e-6) { e.dir = d || -1; e.state = 'moving'; }
+  else if (Math.abs(e.pos - Math.round(e.pos)) > 1e-6) {
+    e.dir = d || -1; e.state = 'moving';
+    // i full fart hinner korgen inte bromsa till en våning som ligger närmare än bromssträckan –
+    // den stannar på nästa och kör tillbaka (en fysisk gräns, inte ett val av styrningen)
+    for (const p of e.passengers) {
+      if (!canBrakeTo(e, posOf(e, p.dest))) pev(p, `Hiss ${e.name} hinner inte bromsa till ${fl(p.dest)} – vänder på nästa våning`);
+    }
+  }
   else e.state = 'idle';
 }
 

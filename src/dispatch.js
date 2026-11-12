@@ -68,6 +68,9 @@ export const posOf = (e, f) => (e.deck2 && e.upper.has(f) ? f - 1 : f);
 export const deckOf = (e, f) => (e.deck2 && e.upper.has(f) ? 1 : 0);
 /** Får hissen stanna med korgen på g? (brandzonen – för dubbeldäck gäller det båda däcken) */
 export const allowedPos = (e, g) => allowed(g) && (!e.deck2 || allowed(g + 1));
+/** Får hissen släppa av p vid målet? (dubbeldäck: i zonläge kan E vara tillåten men inte mellanplanet ovanför,
+ *  och då stannar korgen inte där – målet måste läggas om) */
+export const allowedDest = (e, p) => allowedPos(e, posOf(e, p.dest));
 /** hissen tar inga nya resenärer: ur drift (spelaren), stängd för vinden eller överhettad motor */
 export const benched = e => !!(e.off || e.windLock || e.hot);
 // ---------- Tillgänglighet ----------
@@ -215,7 +218,7 @@ export function requestRide(p) {
     return;
   }
   const open = S.elevators.find(e => operational(e) && canTake(e, p) && (prio(p) || !e.vipLock) && e.id !== p.avoid && e.state === 'doors' && e.floor === posOf(e, p.floor) && e.doorPhase !== 'closing' && (e.dir === p.dir || e.dir === 0) && !isFull(e));
-  if (open && allowed(p.dest)) {
+  if (open && allowed(p.dest) && allowedDest(open, p)) {
     p.assigned = open.id;
     pev(p, `Hiss ${open.name} står redan öppen här och ska åt rätt håll – får den direkt`);
     log(`${pn(p)} ${fl(p.floor)}→${fl(p.dest)} · ${open.name} står redan här`, 'assign', open.color, p.id);
@@ -317,7 +320,9 @@ export function dispatchPerson(p) {
     toStairs(p, S.fire && S.fire.mode === 'recall' ? 'Brandåterkallning – alla hissar avstängda, tar trapporna' : 'Hissarna kör inte hit pga branden – tar trapporna');
     return;
   }
-  let cands = S.elevators.filter(e => operational(e) && !isFull(e) && canTake(e, p) && (prio(p) || !e.vipLock));
+  // (brandzon: en dubbeldäckare får inte ta någon till en våning där dess andra däck skulle stå i zonen)
+  let cands = S.elevators.filter(e => operational(e) && !isFull(e) && canTake(e, p) && (prio(p) || !e.vipLock)
+    && (!S.fire || (allowedPos(e, posOf(e, p.floor)) && allowedDest(e, p))));
   if (prio(p)) {
     // VIP: samma hiss som resten av gruppen, annars en tom hiss
     const mine = cands.filter(e => e.vipLock), empty = cands.filter(e => !e.passengers.length && !pickTotal(e));
