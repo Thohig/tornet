@@ -10,8 +10,8 @@ import { fl } from './util.js';
 import { DOCK, FL, HOME_FLOORS, LOBBY, floorWith } from './config.js';
 import { S, hour, log } from './state.js';
 import { makePerson, pev, pn, releaseSpot, setTrip } from './people.js';
-import { costBased, rebuildPicks, prio, posOf } from './dispatch.js';
-import { canBrakeTo, deckFloor, unload } from './elevators.js';
+import { costBased, prio, posOf } from './dispatch.js';
+import { canBrakeTo, deckFloor, unload, releaseCalls } from './elevators.js';
 
 export const MOVE_ITEMS = ['flyttkartonger', 'en soffa', 'en bokhylla', 'ett kylskåp', 'en säng', 'ett akvarium', 'en tv-bänk', 'ett piano(!)'];
 const freightCar = () => S.elevators.find(e => e.freight) || null;
@@ -42,9 +42,7 @@ function moveTick() {
     if (!V || V.mode !== 'normal' || V.hold) { M.at += 0.25; return; } // varuhissen är upptagen – flyttgubbarna väntar en stund
     M.state = 'on'; M.t0 = S.t;
     V.indep = true; V.parkTarget = null; V.sleep = false;
-    for (const p of S.people) if (p.state === 'wait' && p.assigned === V.id) { p.assigned = null; pev(p, `Hiss ${V.name} går i oberoende drift (flyttdag) – letar en annan hiss`); }
-    for (const c of Object.values(S.calls)) if (c.car === V.id) c.car = null;
-    rebuildPicks();
+    releaseCalls(V, 'går i oberoende drift (flyttdag)');
     for (let i = 0; i < 2; i++) spawnMover(M, i);
     log(`🚚 Flyttdag: Flyttfirman Lyft & Bär kommer – ${V.name} går i oberoende drift till flytten från ${fl(M.floor)} är klar`, 'alert', V.color);
     return;

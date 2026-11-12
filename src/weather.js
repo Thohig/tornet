@@ -57,6 +57,8 @@ export function stormTick(dt) {
     const lock = e.facade && St.mode === 'sway' && w > 0.45;
     if (lock !== !!e.windLock) {
       e.windLock = lock;
+      // utan passagerare ska den hem direkt (även om den var på väg att hämta någon när vinden stängde den)
+      if (lock && !e.passengers.length && !e.carCalls.size) e.parkTarget = e.home;
       log(lock ? `🌬️ ${e.name} stängs för vinden – parkerar på ${fl(e.home)}` : `🌬️ ${e.name} öppnar igen – vinden har mojnat`, 'alert', e.color);
     }
     if (e.windLock && e.mode === 'normal' && e.state === 'idle' && !e.passengers.length && !e.carCalls.size && Math.round(e.pos) !== e.home) e.parkTarget = e.home;

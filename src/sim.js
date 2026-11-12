@@ -3,11 +3,11 @@ import { rand, rng, setSeed } from './rng.js';
 import { K, fl } from './util.js';
 import { END_H, FLOORS, MAXP, timeScale, LOBBY, CAFE, floorWith, EL, ROOF, STATION } from './config.js';
 import { S, hooks, hour, log, newStats } from './state.js';
-import { spawnEmployee, spawnStaff, spawnVisitor, updatePerson, spawnPizza, pev, rerouteStranded } from './people.js';
-import { canTake, costBased, dispatchPerson, rebuildPicks, reoptimize, stopFloors, trafficMode, benched, keyed, prio, learnBlend, emptyLearn } from './dispatch.js';
+import { spawnEmployee, spawnStaff, spawnVisitor, updatePerson, spawnPizza, rerouteStranded } from './people.js';
+import { canTake, costBased, dispatchPerson, rebuildPicks, reoptimize, stopFloors, trafficMode, keyed, prio, learnBlend, emptyLearn, outReason } from './dispatch.js';
 import { serviceTick } from './service.js';
 import { castSchedule } from './cast.js';
-import { makeElevator, updateElevator } from './elevators.js';
+import { makeElevator, updateElevator, releaseCalls } from './elevators.js';
 import { buttonsMode, buttonWaitTick, dispatchCalls } from './buttons.js';
 import { incidentTick } from './incidents.js';
 import { lifeTick, lifeReset } from './life.js';
@@ -90,7 +90,7 @@ function nightModeTick(dt) {
     return;
   }
   // gruppens vakthiss: den första som kan köra (en trasig hiss, en på service eller en avstängd räknas inte)
-  const usable = e => e.mode === 'normal' && !benched(e) && !e.indep && !e.hold && !e.zoneLock;
+  const usable = e => !outReason(e) && !e.indep;
   const keeper = g => S.elevators.find(x => x.group === g && usable(x));
   for (const e of S.elevators) {
     const k = keeper(e.group);
@@ -108,7 +108,7 @@ function nightModeTick(dt) {
   }
   // (en kö som en hiss inte kan ta – t.ex. i en annan zon – hindrar den inte från att somna)
   for (const e of S.elevators) {
-    const idle = e.mode === 'normal' && !benched(e) && !e.indep && !e.hold && e.state === 'idle' && (eco ? e.stops.has(Math.round(e.pos)) : Math.round(e.pos) === e.home)
+    const idle = usable(e) && e.state === 'idle' && (eco ? e.stops.has(Math.round(e.pos)) : Math.round(e.pos) === e.home)
       && !e.passengers.length && !stopFloors(e).length;
     e.sleepT = idle ? (e.sleepT || 0) + dt : 0;
     // en hiss per grupp är alltid vaken
@@ -146,15 +146,15 @@ export function step(dt) {
   // (VIP-gästerna plockas ut en gång – loopen nedan ändrar bara vanliga personer)
   const vips = S.people.filter(prio);
   for (const e of S.elevators) {
+    if (!vips.length) { e.vipLock = false; continue; } // (nästan alltid: ingen VIP eller ambulans i huset)
     const holders = vips.filter(p => ((p.state === 'wait' && p.assigned === e.id) || ((p.state === 'boarding' || p.state === 'ride') && p.car === e)));
     const lock = holders.length > 0;
     if (lock && !e.vipLock) {
       const medic = holders.some(p => p.medic), who = medic ? 'ambulansen' : 'VIP-gruppen';
       log(medic ? `🚑 Förtur: ${e.name} reserveras för ambulansen` : `👔 VIP-läge: ${e.name} reserveras för VIP-gruppen`, 'alert', e.color);
       // de som redan hade fått hissen får en annan
-      for (const p of S.people) if (p.state === 'wait' && !prio(p) && p.assigned === e.id) { p.assigned = null; pev(p, `Hiss ${e.name} reserveras för ${who} – systemet letar en ny hiss åt mig`); }
-      for (const c of Object.values(S.calls)) if (c.car === e.id) c.car = null;
       e.vipLock = lock;
+      releaseCalls(e, `reserveras för ${who}`, prio);
       // ambulansen har förtur: passagerarna som inte ska åt samma håll kliver av vid nästa stopp
       if (medic) medicClear(e);
       rebuildPicks();

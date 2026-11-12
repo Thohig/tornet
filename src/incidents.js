@@ -5,7 +5,7 @@ import { OFFICE_FLOORS } from './config.js';
 import { S, hooks, hour, log } from './state.js';
 import { arriveOnFloor, pev, pn, setTrip, toStairs } from './people.js';
 import { allowed, inFireZone, rebuildPicks, safeFloor } from './dispatch.js';
-import { bounceBoarders, canBrakeTo, deckFloor, exitAll, restoreElevator } from './elevators.js';
+import { bounceBoarders, canBrakeTo, deckFloor, exitAll, restoreElevator, setMode } from './elevators.js';
 import { triggerFault, triggerHeat } from './service.js';
 import { startStorm } from './weather.js';
 import { startMedical } from './visits.js';
@@ -52,7 +52,7 @@ export function setFireMode(m) {
     for (const e of S.elevators) {
       if (e.mode !== 'normal') continue;
       bounceBoarders(e);
-      e.mode = 'recall'; e.rs = e.door > 0 ? 'close' : 'move'; e.parkTarget = null;
+      setMode(e, 'recall'); e.rs = e.door > 0 ? 'close' : 'move'; e.parkTarget = null;
     }
     for (const p of S.people) if (p.state === 'wait') p.assigned = null;
     log('🚒 BRANDÅTERKALLNING: alla hissar kör direkt till sin hemvåning (oftast E) och stängs av', 'alert');
@@ -130,7 +130,7 @@ export function startRescue(e, how) {
   // nödsänk till närmaste våning nedanför där hissen har dörrar (expresshissar har inga dörrar på vägen)
   let below = e.minF;
   for (const f of e.stops) if (f <= e.pos + 1e-6 && f > below) below = f;
-  e.mode = 'rescue'; e.rs = 'move'; e.rescueTarget = below; e.v = 0;
+  setMode(e, 'rescue'); e.rs = 'move'; e.rescueTarget = below; e.v = 0;
   S.outage.busy = e.id;
   log(`🔋 ${how === 'auto' ? 'Auto-räddning' : 'Du'} nödsänker hiss ${e.name} till ${fl(e.rescueTarget)} (${e.passengers.length} instängda${e.passengers.some(p => p.medic) ? ', ambulanspersonalen först' : ''})`, 'alert', e.color);
   for (const p of e.passengers) pev(p, `Hiss ${e.name} nödsänks på reservkraft – snart ute!`);

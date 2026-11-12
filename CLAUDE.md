@@ -19,6 +19,7 @@ npm run typecheck   # tsc på JSDoc-typer (jsconfig.json)
 npm run check       # båda
 npm run golden      # skriv om tests/golden.json efter AVSIKTLIGA beteendeändringar
 npm run bench       # simuleringens fart (steg/s per styrlogik)
+npm run league      # styrlogikerna mot varandra: väntetid (p50/p95/p99), kWh, trappa, ETA-fel; --save=x / --cmp=x
 ```
 
 Samma testsvit körs i webbläsaren på `/tests.html`.
@@ -36,7 +37,7 @@ Samma testsvit körs i webbläsaren på `/tests.html`.
 | `people.js` | personer: tillståndsmaskin, delresor/hissbyten (`legDest`, `setTrip`), lastregler |
 | `dispatch.js` | destinationsstyrning: kostnadsfunktion, tilldelning, omfördelning, parkering (även lärande: `learnBlend`, `learnedFloor`), brandzon, Rusning (`trafficMode`, `peakHold`; känner till tidtabellen: väntar in tågklumpen vid perrongen, möter tåget, väntar inte i entrén när tåget kommer) och Energisnål (`ecoCost`); dubbeldäck via `posOf`/`deckOf`/`allowedPos` |
 | `buttons.js` | styrlogiken KNAPPAR (hallknappar ▲/▼ + våningsknappar, styrningen ser aldrig `p.dest`), felknappar, barn, antinuisance |
-| `elevators.js` | hissens rörelse (SCAN med "committed" stopp), dörrar, lastning, överlast |
+| `elevators.js` | hissens rörelse (SCAN med "committed" stopp), dörrar, lastning, överlast; alla lägesbyten via `setMode` (släpper hämtningarna) |
 | `incidents.js` | brand, strömavbrott och slumpade hissfel + spelarens åtgärder |
 | `service.js` | drift: slitage, hissfel, hisstekniker, nattservice (`S.maint`), beställd service (`orderService`), energi (effekt efter last mot motvikt, återmatning), motorvärme (`heat`, överhettningsskydd, extrafläkt) och nivåfel (`level`, snubbel) |
 | `weather.js` | dygnets temperatur (kyla → skorstenseffekt: dörrarna i entrén tar emot) och stormen (incident med val: svajläge/normal drift, `windAt`, `exposure`) |
@@ -74,7 +75,7 @@ HUD:en är medvetet liten: allt om en hiss visas på hissen eller i popupen när
 - Personer: `kind` = `emp` / `vis` / `staff` / `res` (boende, stannar över natten), `role` för nattpersonal/bud, `vip`.
 - Last ≥ 22 kg → bara varuhissen; varuhissen tar bara last och personal (`elevatorAllows`).
 - Styrlogiker (`S.strategy`): `smart`, `peak` (Rusning), `eco` (Energisnål), `nearest`, `random`, `buttons`. `costBased()` = de tre som använder kostnadsfunktionen.
-- Hisslägen (`e.mode`): `normal`, `recall`, `locked`, `rescue`, `dead`, `broken` (trasig, väntar på tekniker), `service`. `e.hold` = på väg till nattservice (tar inga nya). `e.wear` följer med till nästa dygn. `benched(e)` = tar inga nya just nu (`e.off`, `e.hot`, `e.windLock`); `e.indep` = oberoende drift (bara flyttgubbarna och ambulansen).
+- Hisslägen (`e.mode`): `normal`, `recall`, `locked`, `rescue`, `dead`, `broken` (trasig, väntar på tekniker), `service`. `e.hold` = på väg till nattservice (tar inga nya). `e.wear` följer med till nästa dygn. `outReason(e)` = varför hissen inte tar nya ('' = den tar), grunden för `operational`/`servesNow`/`outLong`. `benched(e)` = tar inga nya just nu (`e.off`, `e.hot`, `e.windLock`); `e.indep` = oberoende drift (bara flyttgubbarna och ambulansen).
 - `keyed(p)` = har nyckel och använder aldrig hallknapparna (VIP, ambulans, flyttgubbar); `prio(p)` = får en hiss för sig (VIP-låset: VIP och ambulans).
 - Hissetikett: `p.space` (hur trångt man står ut med, 9 = bryr sig inte), `p.polite` (håller upp dörren). Ett fullt däck hämtar ingen (`e.deckFull`).
 - Mellanplanet `MEZZ` (våning 1): dit åker man rulltrappa från entrén till expressens övre däck (`p.escalator`).
@@ -85,6 +86,7 @@ HUD:en är medvetet liten: allt om en hiss visas på hissen eller i popupen när
 ## Arbetssätt
 
 - Kör `npm run check` efter ändringar i simuleringen. Ändras beteendet avsiktligt larmar facit-testet – kontrollera skillnaden och kör sedan `npm run golden`.
+- Ändringar i styrningen mäts med `npm run league -- 40 --save=fore` före och `--cmp=fore` efter. Ett dygn sprider ±1,5 s i snittväntan, så små skillnader är brus. Mer exakt ETA ≠ kortare väntan (se kommentaren i `eta()`).
 - Nya simuleringsfunktioner får ett test i `tests/suite.js`; regler som alltid ska gälla läggs i `watcher()` (kontrolleras varje steg över 40 slumpade dygn och över 24 dygn med slumpade spelaråtgärder). Ny spelaråtgärd = post i `ACTIONS` (replay.js) och i `PLAYER_ACTIONS` (suite.js).
 - Kontrollera grafik i webbläsaren. För att spola fram tiden i konsolen: `const st = await import('/src/state.js'), sim = await import('/src/sim.js'); while (st.hour() < 21) sim.step(sim.DT);`
 - Höj `?v=` på `style.css` i `index.html` när CSS ändras.

@@ -9,7 +9,7 @@ import {
   toggleOff, endFire, canRescue,
 } from '../src/incidents.js';
 import { liftsAvailable, spawnBus } from '../src/people.js';
-import { loadKg, allowed, safeFloor, operational, canTake, stopFloors, isFull, costBased } from '../src/dispatch.js';
+import { loadKg, allowed, safeFloor, operational, canTake, stopFloors, isFull, costBased, benched } from '../src/dispatch.js';
 import { RATED_KG, FULL_LOAD, VMAX } from '../src/config.js';
 import { needsFreight, mayUseFreight, legDest } from '../src/people.js';
 import { fl } from '../src/util.js';
@@ -37,7 +37,8 @@ function sim(seed, opts = {}) {
 function watcher() {
   const w = { passes: 0, maxRide: 0, maxWait: 0, n: 0, overweight: 0, maxKg: 0, bypassBroken: 0, prev: [],
     outOfRange: 0, wrongDoor: 0, badLeg: 0, badFreight: 0, vipMixed: 0, vipSet: [], selfDest: 0, brokenUse: 0, holdBoard: 0, prevN: [], prevHold: [],
-    jumps: 0, orphanService: 0, badReserved: 0, dupNames: 0, dupEx: '', idleWait: new Map(), idleWaitMax: 0, badPlatform: 0 };
+    jumps: 0, orphanService: 0, badReserved: 0, dupNames: 0, dupEx: '', idleWait: new Map(), idleWaitMax: 0, badPlatform: 0,
+    deadAssign: new Map(), deadAssignMax: 0, deadAssignEx: '' };
   w.before = () => S.elevators.map(e => e.pos);
   w.check = before => {
     S.elevators.forEach((e, i) => {
@@ -83,6 +84,20 @@ function watcher() {
         if (S.power && e.mode === 'normal') w.maxRide = Math.max(w.maxRide, S.t - p.rideStart);
       }
     });
+    // ingen väntar på en hiss som inte kan komma: tilldelningen till en hiss som är ur drift, på väg till service,
+    // sover, är spärrad, reserverad för någon annan eller inte går dit släpps inom ett par steg
+    // (vid strömavbrott och brandåterkallning står alla hissar, och då väntar man ut det eller tar trappan)
+    if (S.power && !(S.fire && S.fire.mode === 'recall')) {
+      for (const p of S.people) {
+        const e = p.state === 'wait' && p.assigned !== null ? S.elevators[p.assigned] : null;
+        const why = !e ? '' : e.mode !== 'normal' ? e.mode : benched(e) ? 'benched' : e.hold ? 'hold' : e.sleep ? 'sleep' : e.zoneLock ? 'zoneLock'
+          : e.vipLock && !p.vip && !p.medic ? 'vipLock' : !canTake(e, p) ? 'canTake' : '';
+        if (!why) { w.deadAssign.delete(p); continue; }
+        const since = w.deadAssign.get(p) ?? S.t;
+        w.deadAssign.set(p, since);
+        if (S.t - since > w.deadAssignMax) { w.deadAssignMax = S.t - since; w.deadAssignEx = `${p.name} → ${e.name} (${why})`; }
+      }
+    } else w.deadAssign.clear();
     // tunnelbanan: på perrongen står bara den som ska med tåget – och efter sista tåget ingen alls
     for (const p of S.people) if (p.state === 'platform' && (p.floor !== STATION || p.exitFloor !== STATION || !p.toTrain || S.trainDone)) w.badPlatform++;
     if (++w.n % 30 === 0 && liftsAvailable() && !S.fire) {
@@ -173,6 +188,15 @@ for (const [strategy, maxAvg, maxLongest] of /** @type {[string, number, number]
     return fmt(w);
   });
 }
+test('ETA: styrningens förutsagda väntan stämmer i snitt med den faktiska', () => {
+  // eta() räknar med dörrarna och med hur många som kliver på och av vid varje stopp (BOARD_S, ALIGHT_S)
+  sim(9001); runDay();
+  const st = S.stats, bias = st.etaErr / st.etaN, abs = st.etaAbs / st.etaN;
+  assert(st.etaN > 300, `bara ${st.etaN} förutsägelser`);
+  assert(Math.abs(bias) < 1, `hissen kommer i snitt ${bias.toFixed(1)} s ${bias > 0 ? 'senare' : 'tidigare'} än förutsagt`);
+  assert(abs < 6, `förutsägelsen är i snitt ${abs.toFixed(1)} s fel`);
+  return `${st.etaN} förutsägelser · i snitt ${bias >= 0 ? '+' : ''}${bias.toFixed(2)} s (medelfel ${abs.toFixed(1)} s)`;
+});
 test('Smart styrning är bättre än Närmast och Kaos (snitt över tre dygn)', () => {
   // ett enskilt dygn kan ha tur eller otur – jämför snittet över flera frön
   const avg = {};
@@ -1024,6 +1048,7 @@ function newInvariantFails(w, tag) {
   if (w.orphanService) f.push(`${tag}: hiss på service utan tekniker i ${w.orphanService} steg`);
   if (w.badReserved) f.push(`${tag}: e.reserved stämde inte med de som kliver på (${w.badReserved} steg)`);
   if (w.dupNames) f.push(`${tag}: två personer i huset hette samma sak (${w.dupNames} gånger, t.ex. ${w.dupEx})`);
+  if (w.deadAssignMax > 0.5) f.push(`${tag}: någon väntade ${w.deadAssignMax.toFixed(1)} s på en hiss som inte kunde komma (${w.deadAssignEx})`);
   if (w.idleWaitMax > 15) f.push(`${tag}: någon stod ${w.idleWaitMax.toFixed(0)} s utan tilldelad hiss medan en ledig hiss som kunde ta hen stod still`);
   return f;
 }

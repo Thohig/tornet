@@ -10,7 +10,7 @@ import { BALANCE, DOOR_T, FLOOR_M, CAR_H, floorY, shaftCX, timeScale } from './c
 import { S, hour, log, notice } from './state.js';
 import { needsFreight, pev, pn, rerouteStranded, spawnStaff } from './people.js';
 import { rebuildPicks, travel, cabinKg } from './dispatch.js';
-import { bounceBoarders, exitAll, restoreElevator } from './elevators.js';
+import { bounceBoarders, exitAll, restoreElevator, setMode } from './elevators.js';
 
 // ---------- Energi ----------
 export const MOVE_KW = 3;      // friktion, drivsystem och ventilation när korgen rör sig
@@ -68,7 +68,7 @@ export function maybeBreak(e) {
 }
 export function breakDown(e, what) {
   e.breakNext = false;
-  e.mode = 'broken'; e.hold = false; e.parkTarget = null; e.dir = 0; e.v = 0;
+  setMode(e, 'broken'); e.hold = false; e.parkTarget = null; e.dir = 0; e.v = 0;
   e.floor = Math.round(e.pos);
   e.fault = { what, t0: S.t, need: rand(12, 20) };
   e.state = 'doors'; e.doorPhase = 'open';
@@ -76,8 +76,6 @@ export function breakDown(e, what) {
   const n = e.passengers.length;
   if (n) exitAll(e, e.floor, `Hiss ${e.name} gick sönder (${what})`);
   e.carCalls.clear();
-  for (const p of S.people) if (p.state === 'wait' && p.assigned === e.id) { p.assigned = null; pev(p, `Hiss ${e.name} gick sönder – systemet letar en ny hiss åt mig`); }
-  for (const c of Object.values(S.calls)) if (c.car === e.id) c.car = null;
   S.stats.faults++;
   log(`🔧 ${e.name} gick sönder på ${fl(e.floor)}: ${what}${n ? ` – ${n} passagerare kliver ut` : ''}`, 'alert', e.color);
   rerouteStranded();
@@ -166,7 +164,7 @@ function techTick(dt) {
   if (e.mode === 'normal' && e.hold) {
     // nattservice: börjar när hissen står tom och stilla hemma
     if (e.homeT < 0.5 || e.passengers.length || e.reserved) return;
-    e.mode = 'service'; e.sleep = false; e.floor = e.home; e.state = 'doors'; e.doorPhase = 'open'; e.dir = 0;
+    setMode(e, 'service'); e.sleep = false; e.floor = e.home; e.state = 'doors'; e.doorPhase = 'open'; e.dir = 0;
     e.serviceNeed = rand(0.3, 0.5) * 3600 / timeScale(hour()); // en knapp halvtimme i speltid
     pev(t, `Öppnar hiss ${e.name} och börjar serva`);
     log(`🔧 ${pn(t)} servar ${e.name} på ${fl(e.home)}`, 'alert', e.color, t.id);

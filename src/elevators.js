@@ -4,7 +4,7 @@ import { ARR, fl } from './util.js';
 import { ACC, CAP, DOOR_T, DWELL, EL, LOBBY, VMAX, shaftCX, CAR_H, floorY } from './config.js';
 import { S, log } from './state.js';
 import { arriveOnFloor, liftsAvailable, pev, pn, setTrip, toStairs, queueSpot } from './people.js';
-import { safeFloor, aheadOf, allowed, allowedPos, assignedTo, isFull, maybePark, rebuildPicks, stopFloors, loadKg, personKg, slotsFull, benched, keyed, posOf } from './dispatch.js';
+import { safeFloor, aheadOf, allowed, allowedPos, assignedTo, isFull, maybePark, rebuildPicks, stopFloors, loadKg, personKg, slotsFull, benched, keyed, posOf, outReason, OUT_TEXT, etaOutcome } from './dispatch.js';
 import { answerCalls, buttonsMode, clearCall } from './buttons.js';
 import { maybeBreak, heatOnStop, heatMul, levelStart, maybeStumble } from './service.js';
 import { doorHold, politeHold } from './cast.js';
@@ -30,6 +30,8 @@ export function makeElevator(i) {
     // motorvärme (0–1+, överhettad = hot), extrafläkt, nivåfel (våningar, negativt = för lågt), stängd för vinden,
     // beställd service, oberoende drift (flyttdag)
     heat: 0, hot: false, fan: false, level: 0, lvKg: 0, windLock: false, serviceAsap: false, indep: false,
+    outWas: '', // senaste orsaken till att hissen var ur trafiken (outReason) – hämtningarna släpps när den ändras
+    vipLock: false, sleep: false, zoneLock: false,
   };
 }
 /** Hinner hissen stanna på våning f? Falskt bara om f ligger framför den, närmare än bromssträckan. */
@@ -49,16 +51,27 @@ export function shouldStop(e, g, d) {
   if (assignedTo(e, g, -d) && !stopFloors(e).some(x => (x - g) * d > 0)) return true;
   return false;
 }
-export function releaseCalls(e, why) {
-  // Hissen kan inte hämta fler – personerna den skulle hämta får en ny hiss
+/** Hissen kan inte hämta fler – personerna den skulle hämta (utom de som keep(p) behåller) får en ny hiss,
+ *  och hallanropen den hade tagit (KNAPPAR) går tillbaka till gruppen. */
+export function releaseCalls(e, why, keep = /** @type {((p: any) => boolean)|null} */ (null)) {
   let n = 0;
   for (const p of S.people) {
-    if (p.state === 'wait' && p.assigned === e.id) {
+    if (p.state === 'wait' && p.assigned === e.id && !(keep && keep(p))) {
       p.assigned = null; n++;
       pev(p, `Hiss ${e.name} ${why} – systemet letar en ny hiss åt mig`);
     }
   }
-  if (n) { log(`${e.name} ${why} – släpper ${n} hämtning${n > 1 ? 'ar' : ''}`, 'move', e.color); rebuildPicks(); }
+  let calls = 0;
+  for (const c of Object.values(S.calls)) if (c.car === e.id) { c.car = null; calls++; }
+  if (n) log(`${e.name} ${why} – släpper ${n} hämtning${n > 1 ? 'ar' : ''}`, 'move', e.color);
+  if (n || calls) rebuildPicks();
+}
+/** Byter hissens läge. Alla byten går hit: lämnar hissen normal drift släpps väntande hämtningar direkt,
+ *  så att ingen står och väntar på en hiss som inte kommer. */
+export function setMode(e, m) {
+  const was = e.mode;
+  e.mode = m;
+  if (m !== 'normal' && was === 'normal') releaseCalls(e, OUT_TEXT[m] || m);
 }
 export function updateElevator(e, dt) {
   e.fullFlash = Math.max(0, e.fullFlash - dt);
@@ -69,8 +82,11 @@ export function updateElevator(e, dt) {
   if (e.mode !== 'normal') return; // låst (brand) eller utrymd (ström)
   // En full hiss behåller sina hämtningar (folk kliver av längre fram) men stannar inte för dem
   // förrän det finns plats. Omfördelningen flyttar dem om en annan hiss blir klart bättre.
-  if (benched(e)) releaseCalls(e, e.hot ? 'har överhettad motor' : e.windLock ? 'stängs för vinden' : 'är ur drift');
-  if (e.hold) releaseCalls(e, 'ska på service');
+  // hissen tas ur trafiken (överhettad, vind, avstängd, service, brandzon): släpp hämtningarna en gång, när det händer
+  // (styrningen tilldelar den inga nya så länge orsaken finns kvar)
+  const out = outReason(e);
+  if (out && out !== e.outWas) releaseCalls(e, OUT_TEXT[out]);
+  e.outWas = out;
   if (e.state === 'doors') { updateDoors(e, dt); return; }
   if (e.state === 'idle') { idleEval(e, dt); if (e.state !== 'moving') return; }
   moveStep(e, dt);
@@ -318,6 +334,7 @@ export function load(e, f) {
     const w = S.t - p.waitStart;
     p.lastWait = w; p.totalWait += w;
     S.stats.waitSum += w; S.stats.waitN++; S.stats.waitMax = Math.max(S.stats.waitMax, w);
+    etaOutcome(p);
     if (p.mood >= 2) S.stats.angry++;
     p.rideStart = S.t;
     pev(p, `Kliver på hiss ${e.name} efter ${Math.round(w)}s väntan`);
@@ -336,7 +353,7 @@ export function bounceBoarders(e) {
 }
 export function restoreElevator(e) {
   const d = e.dir;
-  e.mode = 'normal'; e.rs = null; e.target = null; e.targetKind = null; e.dir = 0;
+  setMode(e, 'normal'); e.rs = null; e.target = null; e.targetKind = null; e.dir = 0;
   // den som var ombord ska fortfarande av: om återkallningen kom precis när hissen stannade på målet
   // (stoppet var redan struket men dörrarna hann aldrig öppna) läggs stoppet tillbaka
   for (const p of e.passengers) e.carCalls.add(posOf(e, p.dest));
@@ -365,7 +382,7 @@ export function recallStep(e, dt) {
     if (e.door >= 1) {
       e.doorPhase = 'open';
       if (e.passengers.length) exitAll(e, e.home, `Brandåterkallning – alla ut på ${fl(e.home)}`);
-      e.mode = 'locked'; e.rs = null;
+      setMode(e, 'locked'); e.rs = null;
       log(`🚒 ${e.name} står avstängd i ${fl(e.home)} med öppna dörrar`, 'alert', e.color);
     }
   }
@@ -383,7 +400,7 @@ export function rescueStep(e, dt) {
       e.doorPhase = 'open';
       const n = e.passengers.length;
       exitAll(e, e.floor, 'Räddad ur hissen med reservkraft');
-      e.mode = 'dead'; e.rs = null;
+      setMode(e, 'dead'); e.rs = null;
       if (S.outage) S.outage.busy = null;
       log(`🔋 ${e.name} nödsänkt till ${fl(e.floor)} – ${n} personer ute`, 'alert', e.color);
     }

@@ -3,7 +3,7 @@ import { pick, rand, randi, rng, shuffle } from './rng.js';
 import { fl } from './util.js';
 import { activityRate, roomUnits, FLOOR_HOURS, FL, NAMES, ROLE_NAMES, floorOpen, OFFICE_FLOORS, SPOTS, STAIR_X, VISIT_WHY, WAIT_X1, WALK, LOBBY, CAFE, DOCK, MEZZ, floorWith, EL, SKY, CAST, STATION, TRAIN_X0, TRAIN_X1 } from './config.js';
 import { S, clockStr, hour, log, occOf, setOcc } from './state.js';
-import { inFireZone, requestRide, loadKg, personKg, canTake, eta, benched, keyed, posOf, costBased, prio } from './dispatch.js';
+import { inFireZone, requestRide, loadKg, personKg, eta, keyed, posOf, costBased, prio, outLong, servesNow } from './dispatch.js';
 import { techNext, maybeStumble } from './service.js';
 import { moverNext, medicNext } from './visits.js';
 import { alwaysStairs, castBoard, castNext, castPizza, castWaitTick, flushSay, say } from './cast.js';
@@ -118,7 +118,7 @@ function rideEscalator(p) {
   pev(p, p.dest === MEZZ ? 'Tar rulltrappan upp till mellanplanet – expressens övre däck' : 'Tar rulltrappan ner till entrén');
 }
 // (en hiss som är reserverad för VIP-gruppen eller ambulansen räknas som ur drift för alla andra)
-const down = (id, p) => { const e = S.elevators[id]; return !!e && (e.mode === 'broken' || e.mode === 'service' || e.hold || benched(e) || (e.vipLock && !prio(p))); };
+const down = (id, p) => { const e = S.elevators[id]; return !!e && (outLong(e) || (e.vipLock && !prio(p))); };
 /** första delmålet på resvägen med minst antal byten (och kortast sträcka) med hissarna lifts, eller null */
 function route(from, goal, lifts) {
   // (en hiss kör bara mellan våningar på samma däck: legs)
@@ -294,7 +294,7 @@ export function updatePerson(p, dt) {
 }
 // ---------- Strandsatt: hissen man väntar på är trasig eller på service ----------
 /** finns det ingen fungerande hiss (sovande räknas – de vaknar) som tar personen den här delresan? */
-const stranded = p => !S.elevators.some(e => e.mode === 'normal' && !benched(e) && !e.hold && !e.zoneLock && !(e.vipLock && !prio(p)) && canTake(e, p));
+const stranded = p => !S.elevators.some(e => servesNow(e, p));
 /** Anropas när en hiss går sönder eller tas till service: de som stod och väntade på den byter väg direkt. */
 export function rerouteStranded() {
   for (const p of S.people) {

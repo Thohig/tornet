@@ -70,7 +70,32 @@ export const deckOf = (e, f) => (e.deck2 && e.upper.has(f) ? 1 : 0);
 export const allowedPos = (e, g) => allowed(g) && (!e.deck2 || allowed(g + 1));
 /** hissen tar inga nya resenärer: ur drift (spelaren), stängd för vinden eller överhettad motor */
 export const benched = e => !!(e.off || e.windLock || e.hot);
-export const operational = e => S.power && e.mode === 'normal' && !benched(e) && !e.sleep && !e.zoneLock && !e.hold;
+// ---------- Tillgänglighet ----------
+// Alla frågor om en hiss kan ta folk utgår från outReason. Undantagen är uttalade:
+//   operational – styrningen: även strömmen och nattvilan (en sovande hiss väcks, den tilldelas inte)
+//   servesNow   – ruttval, nattläge, strandade: kan p få hissen (VIP-lås, zon, last), ström och vila oräknat
+//   outLong     – ruttvalet planerar bara runt längre avbrott; brandlägena sköter allowed() och trappan
+/** Varför tar hissen inga nya resenärer? '' = den tar. Strömmen, nattvilan, VIP-låset och oberoende drift räknas inte här. */
+export function outReason(e) {
+  if (e.mode !== 'normal') return e.mode;
+  if (e.hot) return 'hot';
+  if (e.windLock) return 'wind';
+  if (e.off) return 'off';
+  if (e.hold) return 'hold';
+  if (e.zoneLock) return 'zone';
+  return '';
+}
+/** hur orsaken skrivs i loggen och i personernas dagbok ("Hiss L1 …") */
+export const OUT_TEXT = /** @type {Record<string, string>} */ ({
+  hot: 'har överhettad motor', wind: 'stängs för vinden', off: 'är ur drift', hold: 'ska på service', zone: 'spärras av branden',
+  broken: 'gick sönder', service: 'är på service', recall: 'kallas ner av brandlarmet', locked: 'är låst (brand)',
+  rescue: 'nödsänks', dead: 'är strömlös',
+});
+export const operational = e => S.power && !outReason(e) && !e.sleep;
+/** kan p få hissen just nu (bortsett från strömmen och nattvilan)? */
+export const servesNow = (e, p) => !outReason(e) && !(e.vipLock && !prio(p)) && canTake(e, p);
+/** hissen är borta en längre stund (fel, service, avstängd, vind, värme) – ruttvalet tar en annan väg */
+export const outLong = e => e.mode === 'broken' || e.mode === 'service' || e.hold || benched(e);
 /** har egen nyckel/prioritet och använder aldrig hallknapparna (VIP-gruppen, ambulansen, flyttgubbarna) */
 export const keyed = p => !!(p.vip || p.medic || p.mover);
 /** får en hiss för sig själva (VIP-läge): VIP-gruppen och ambulanspersonalen */
@@ -201,32 +226,58 @@ export function requestRide(p) {
 }
 
 // ---------- Kostnadsberäkning ----------
+/** Styrningen antecknar när den tror att hissen är framme (jämförs med verkligheten när personen kliver på). */
+function predict(p, e) { p.etaAt = S.t + eta(e, p.floor, p.dir); }
+/** anropas när p kliver på: hur fel blev förutsägelsen? (positivt = hissen kom senare än väntat) */
+export function etaOutcome(p) {
+  if (p.etaAt === undefined) return;
+  const err = S.t - p.etaAt;
+  S.stats.etaErr += err; S.stats.etaAbs += Math.abs(err); S.stats.etaN++;
+  p.etaAt = undefined;
+}
 const travelV = (dist, v) => (dist <= 0.001 ? 0 : dist / v + (v / ACC) * 0.5);
 export function travel(dist, v = VMAX) { return dist <= 0.001 ? 0 : dist / v + (v / ACC) * 0.5; }
 /** Toppfarten som kostnadsstyrningen räknar med: den vet om svajläget och varma motorer – de enkla lägena gör det inte */
 export const etaV = e => (costBased() ? VMAX * windMul(e) * heatMul(e) : VMAX);
+// Ett stopp tar längre tid ju fler som kliver på och av (uppmätt: ≈ 0,6 s per påstigande, 0,25 s per avstigande
+// utöver dörrarna). Styrningen vet hur många den ska hämta (e.pick) och vart passagerarna ska.
+export const BOARD_S = 0.6, ALIGHT_S = 0.25;
+/** extra sekunder vid varje stopp (korgens läge) för dem som kliver på och av där */
+function stopLoad(e) {
+  /** @type {Map<number, number>} */
+  const m = new Map();
+  for (const k in e.pick) { const g = parseInt(k, 10); m.set(g, (m.get(g) || 0) + e.pick[k] * BOARD_S); }
+  for (const p of e.passengers) { const g = posOf(e, p.dest); m.set(g, (m.get(g) || 0) + ALIGHT_S); }
+  return m;
+}
 export function eta(e, f, d) {
   f = posOf(e, f); // (dubbeldäck: personens våning → korgens läge)
   const stops = stopFloors(e);
+  const load = stopLoad(e), sc = (/** @type {number} */ g) => STOP_COST + (load.get(g) || 0);
   const pos = e.pos, v = etaV(e);
   const travel = dist => travelV(dist, v);
   let t = 0;
   if (e.state === 'doors') {
     if (e.floor === f && e.doorPhase !== 'closing' && (e.dir === d || e.dir === 0)) return 0;
     t += e.doorPhase === 'closing' ? e.door * DOOR_T
-      : (e.doorPhase === 'opening' ? (1 - e.door) * DOOR_T : 0) + Math.max(0, e.dwellNeed - e.dwell) + DOOR_T;
+      : (e.doorPhase === 'opening' ? (1 - e.door) * DOOR_T : 0) + Math.max(0, e.dwellNeed - e.dwell) + e.reserved * BOARD_S + DOOR_T;
   }
   const dir = e.dir;
   if (dir === 0 || stops.length === 0) return t + travel(Math.abs(f - pos));
   const ahead = (f - pos) * dir > 0.01 || (Math.abs(f - pos) <= 0.01 && e.state !== 'moving');
   if (ahead && d === dir) {
-    const n = stops.filter(g => (g - pos) * dir > 0.01 && (f - g) * dir > 0.01).length;
-    return t + travel(Math.abs(f - pos)) + n * STOP_COST;
+    let s = 0;
+    for (const g of stops) if ((g - pos) * dir > 0.01 && (f - g) * dir > 0.01) s += sc(g);
+    return t + travel(Math.abs(f - pos)) + s;
   }
   let ext = pos;
   for (const g of stops) if ((g - ext) * dir > 0) ext = g;
   if (ahead && (f - ext) * dir > 0) ext = f;
-  return t + travel(Math.abs(ext - pos)) + travel(Math.abs(ext - f)) + stops.length * STOP_COST;
+  // (alla hissens stopp räknas, även de bortom f på tillbakavägen: att bara räkna stoppen på vägen gav en
+  // träffsäkrare ETA men längre väntan – en hiss med många stopp är sämre än den ser ut, se npm run league)
+  let s = 0;
+  for (const g of stops) s += sc(g);
+  return t + travel(Math.abs(ext - pos)) + travel(Math.abs(ext - f)) + s;
 }
 export function personCost(e, p) {
   const stops = stopFloors(e);
@@ -293,7 +344,7 @@ export function dispatchPerson(p) {
     info = costs.map(x => `${x.e.name}:${Math.round(x.c)}s`).join(' ');
     why = `billigast – hämtning + resa ≈ ${Math.round(best.c)}s` + (stopFloors(chosen).includes(p.dest) ? `, ska redan till ${fl(p.dest)}` : '');
   }
-  p.assigned = chosen.id; chosen.parkTarget = null;
+  p.assigned = chosen.id; chosen.parkTarget = null; predict(p, chosen);
   pev(p, `Systemet ger mig hiss ${chosen.name} (${why})`);
   log(`${pn(p)} ${fl(p.floor)}→${fl(p.dest)} · hiss ${chosen.name} · ${info}`, 'assign', chosen.color, p.id);
   rebuildPicks();
@@ -312,7 +363,7 @@ export function reoptimize() {
       if (x < bc) { bc = x; best = e; }
     }
     if (best && bc < cc * 0.6 && cc - bc > 6) {
-      p.assigned = best.id; best.parkTarget = null;
+      p.assigned = best.id; best.parkTarget = null; predict(p, best);
       pev(p, `Omfördelning! ${cur.name} → ${best.name} (${Math.round(cc)}s → ${Math.round(bc)}s)`);
       log(`↻ ${pn(p)} flyttas ${cur.name}→${best.name} (${Math.round(cc)}s → ${Math.round(bc)}s)`, 'reopt', best.color, p.id);
       rebuildPicks();
