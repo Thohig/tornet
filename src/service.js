@@ -252,7 +252,8 @@ export function triggerCable() {
 }
 /** Linorna går av: korgen börjar falla (snapStep tar över tills fångapparaten griper). */
 export function snapCable(e) {
-  e.snapNext = false;
+  // (ett väntande hissfel eller vajerlarm försvinner med linbytet – hela hissen gås igenom)
+  e.snapNext = false; e.breakNext = false; e.stormFault = false;
   bounceBoarders(e);
   setMode(e, 'snapped');
   e.hold = false; e.parkTarget = null; e.target = null; e.targetKind = null; e.carCalls.clear();
@@ -335,7 +336,7 @@ export function cableStatus(e) {
   if (e.mode === 'snapped') {
     const s = e.snap, n = e.passengers.length;
     if (s.ph === 'fall') return `Korgen faller – fångapparaten griper strax!`;
-    if (s.ph === 'evac') return `${t ? t.name : 'Teknikern'} tar ut folk genom takluckan till ${fl(s.exitF)} – ${s.out} ute, ${n} kvar`;
+    if (s.ph === 'evac' && mine) return `${t.name} tar ut folk genom takluckan till ${fl(s.exitF)} – ${s.out} ute, ${n} kvar`;
     const who = mine ? `${t.name} är på väg till ${fl(s.exitF)}` : t ? `Teknikern ${t.name} gör klart ett annat jobb först` : S.techCallAt !== null ? 'Hissjouren är larmad' : `Väntar på hissjouren${S.fire ? ' (brand)' : ''}`;
     return `${n} instängda i ${Math.round(S.t - s.t0)} s · ${who}`;
   }

@@ -5,7 +5,7 @@ import { OFFICE_FLOORS } from './config.js';
 import { S, hooks, hour, log } from './state.js';
 import { arriveOnFloor, pev, pn, setTrip, toStairs } from './people.js';
 import { allowed, allowedDest, allowedPos, inFireZone, posOf, rebuildPicks, safeFloor } from './dispatch.js';
-import { bounceBoarders, canBrakeTo, deckFloor, exitAll, restoreElevator, setMode } from './elevators.js';
+import { canBrakeTo, deckFloor, exitAll, recallCar, restoreElevator, setMode } from './elevators.js';
 import { cableCandidate, triggerCable, triggerFault, triggerHeat } from './service.js';
 import { startStorm } from './weather.js';
 import { startMedical } from './visits.js';
@@ -50,11 +50,7 @@ export function setFireMode(m) {
   // först: hissar som var låsta/återkallade får köra igen
   for (const e of S.elevators) { e.zoneLock = false; if (e.mode === 'recall' || e.mode === 'locked') restoreElevator(e); }
   if (m === 'recall') {
-    for (const e of S.elevators) {
-      if (e.mode !== 'normal') continue;
-      bounceBoarders(e);
-      setMode(e, 'recall'); e.rs = e.door > 0 ? 'close' : 'move'; e.parkTarget = null;
-    }
+    for (const e of S.elevators) if (e.mode === 'normal') recallCar(e);
     for (const p of S.people) if (p.state === 'wait') p.assigned = null;
     log('🚒 BRANDÅTERKALLNING: alla hissar kör direkt till sin hemvåning (oftast E) och stängs av', 'alert');
   } else if (m === 'zone') {
@@ -129,7 +125,9 @@ export function startOutage() {
   log('⚡ STRÖMAVBROTT! Alla hissar stannar där de är', 'alert');
   incidentStarted(null);
 }
-export const canRescue = e => !S.power && S.outage && S.outage.gen && S.outage.busy === null && e.mode === 'normal'
+/** hissar där folk sitter fast när strömmen går: i normal drift, eller på väg hem i en brandåterkallning */
+const stranded = e => e.mode === 'normal' || e.mode === 'recall';
+export const canRescue = e => !S.power && S.outage && S.outage.gen && S.outage.busy === null && stranded(e)
   && e.passengers.length > 0 && !(e.state === 'doors' && e.door >= 0.95);
 export function startRescue(e, how) {
   if (!canRescue(e)) return;
@@ -145,7 +143,7 @@ export function outageTick(dt) {
   const O = S.outage;
   if (O.genAt !== null && !O.gen && S.t >= O.genAt) { O.gen = true; log('🔋 Reservkraften är igång – räcker till EN hiss i taget', 'alert'); }
   for (const e of S.elevators) {
-    if (e.mode !== 'normal') continue;
+    if (!stranded(e)) continue;
     if (e.state === 'doors' && e.door >= 0.95) { if (e.passengers.length) exitAll(e, e.floor, 'Strömavbrott – dörrarna står öppna, går ut'); continue; }
     for (const p of e.passengers) {
       p.trapT = (p.trapT || 0) + dt; S.stats.trappedSec += dt;

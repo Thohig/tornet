@@ -375,6 +375,13 @@ export function restoreElevator(e) {
     }
   }
   else e.state = 'idle';
+  // en hiss som kommer tillbaka mitt under en brandåterkallning (lagad, nödsänkt, linbytt) återkallas den också
+  if (S.fire && S.fire.mode === 'recall') recallCar(e);
+}
+/** Brandåterkallning av en hiss: stäng dörrarna och kör hem utan stopp (recallStep tar över) */
+export function recallCar(e) {
+  bounceBoarders(e);
+  setMode(e, 'recall'); e.rs = e.door > 0 ? 'close' : 'move'; e.parkTarget = null;
 }
 
 // ---------- Hisslägen vid incidenter ----------

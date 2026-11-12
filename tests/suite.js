@@ -412,6 +412,25 @@ test('Strömavbrott + reservkraft med auto-räddning: alla instängda kommer ut'
   assert(stillTrapped === 0, `${stillTrapped} personer sitter fortfarande fast`);
   return `${trappedAtStart} hissar med instängda räddades med reservkraft`;
 });
+test('Brand + strömavbrott: återkallade hissar kan nödsänkas, och en hiss som kommer tillbaka återkallas också', () => {
+  sim(8); runUntil(9.5);
+  act('trigger', 'power'); S.outage.backAt = S.t + 200;
+  act('trigger', 'fire'); S.fire.brigadeAt = S.t + 1000; // (branden ska pågå längre än strömavbrottet)
+  act('fireMode', 'recall'); act('generator'); run(6);
+  const n0 = S.elevators.filter(e => e.mode === 'recall' && e.passengers.length).length;
+  assert(n0 > 0, 'ingen återkallad hiss hade folk i sig när strömmen gick');
+  assert(S.elevators.some(canRescue), 'de instängda i återkallade hissar kan inte nödsänkas');
+  act('autoRescue'); run(120);
+  const left = S.elevators.reduce((a, e) => a + e.passengers.length, 0);
+  assert(left === 0, `${left} sitter fortfarande fast i återkallade hissar`);
+  assert(S.stats.trappedSec > 0, 'de instängda räknades inte');
+  while (S.outage) step(DT);
+  run(2);
+  assert(S.fire && S.fire.mode === 'recall', 'branden hann släckas – testet mäter fel sak');
+  const loose = S.elevators.filter(e => e.mode === 'normal');
+  assert(!loose.length, `${loose.map(e => e.name).join(', ')} går i normal drift mitt under återkallningen`);
+  return `${n0} återkallade hissar med instängda nödsänktes · alla återkallade när strömmen kom tillbaka`;
+});
 
 test('Hiss ur drift får inga nya resenärer', () => {
   sim(14); runUntil(7.67);
