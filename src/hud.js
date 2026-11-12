@@ -93,6 +93,7 @@ export function stateLabel(e) {
   if (e.hot) return 'ÖVERHETTAD 🌡️';
   if (e.windLock) return 'STÄNGD – STORM 🌬️';
   if (e.indep) return 'OBEROENDE DRIFT 🔑';
+  if (e.medicHold) return 'VÄNTAR – AMBULANS 🚑';
   if (e.zoneLock) return 'SPÄRRAD 🚧';
   if (e.sleep) return 'NATTLÄGE 🌙';
   if (e.mode === 'recall') return 'BRANDÅTERKALLAD';
@@ -129,6 +130,7 @@ export function whyText(e) {
   if (e.hot) return `Motorn är överhettad (${motorC(e)} °C) – kör klart sina passagerare men tar inga nya tills den har svalnat${e.fan ? ' · extrafläkten går' : ''}`;
   if (e.windLock) return `Stängd för stormen – parkerar på ${fl(e.home)} tills det mojnar`;
   if (e.indep && !e.passengers.length) return 'Oberoende drift (flyttdag): nyckelstyrd, svarar inte på anrop – bara flyttgubbarna åker';
+  if (e.medicHold) return `Står kvar på ${fl(S.medic ? S.medic.floor : Math.round(e.pos))} med ambulansens nyckel – väntar på personalen och båren`;
   if (e.mode === 'recall') return `Brandåterkallning: kör direkt till ${fl(e.home)} utan stopp och släpper ut alla`;
   if (e.mode === 'locked') return `Avstängd i ${fl(e.home)} med öppna dörrar tills branden är släckt`;
   if (e.mode === 'rescue') return `Krypkör på reservkraft till ${fl(e.rescueTarget)} för att släppa ut ${e.passengers.length} instängda`;
@@ -357,7 +359,7 @@ export function incidentHtml() {
     const dark = !S.power && (A.state === 'onway' || A.state === 'transport');
     const stuck = S.people.some(p => p.medic && p.state === 'ride');
     const what = { called: `${esc(A.pname)} har svimmat på ${esc(A.where)} (${fl(A.floor)}). Ambulansen är på väg.`,
-      onway: dark ? 'Ambulanspersonalen är i huset med bår.' : 'Ambulanspersonalen är i huset med bår. Båren får bara plats i varuhissen, som går med förtur – VIP-läge för ambulansen.',
+      onway: dark ? 'Ambulanspersonalen är i huset med bår.' : `Ambulanspersonalen är i huset med bår. Båren får bara plats i varuhissen, som går med förtur – VIP-läge för ambulansen.${A.car !== null && A.car !== undefined ? ` ${esc(S.elevators[A.car].name)} väntar på dem på ${fl(A.floor)}.` : ''}`,
       transport: `${esc(A.pname)} bärs ut på båren till ambulansen.`,
       done: `Ambulansen har kört${A.taken ? ` med ${esc(A.pname)}` : ''} – ${Math.round(A.t1 - A.t0)} s från larm till avfärd.` }[A.state];
     const how = dark

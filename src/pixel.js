@@ -766,6 +766,7 @@ function drawCarPx(e) {
     if (e.hot) { if (Math.sin(S.anim * 5) > -0.3) label('ÖVERHETTAD!', x + cw / 2, yt - 11, '#ff5d52', '#ffffff'); }
     else if (e.windLock) label('STÄNGD – STORM', x + cw / 2, yt - 11, '#5b8fb9', '#ffffff');
     else if (e.indep) label('FLYTT · NYCKEL', x + cw / 2, yt - 11, '#d4a017');
+    else if (e.medicHold) label('AMBULANS · VÄNTAR', x + cw / 2, yt - 11, '#2ec4b6');
     else if (e.heat >= WARM_AT && e.state === 'moving') label('VARM', x + cw / 2, yt - 11, '#ff8c42');
   }
   // en stamgäst i korgen som pratar

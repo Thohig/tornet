@@ -4,13 +4,14 @@
 // efter leveranstiden; de enkla lägena bokar den mitt i förmiddagen, så paketbuden får vänta.
 // Ambulans: någon svimmar. Ambulanspersonalen kommer med bår, som bara får plats i varuhissen, och får
 // hissen med prioritet. Smart styrning låter passagerarna som ändå ska åt det hållet åka klart; de enkla
-// lägena släpper av alla vid nästa stopp.
+// lägena släpper av alla vid nästa stopp. Hissen som körde upp dem står kvar, låst med deras nyckel, på
+// patientens våning tills de kommer tillbaka med båren (medicHold).
 import { pick, rand, rng } from './rng.js';
 import { fl } from './util.js';
 import { DOCK, FL, HOME_FLOORS, LOBBY, floorWith } from './config.js';
 import { S, hour, log } from './state.js';
 import { makePerson, pev, pn, releaseSpot, setTrip } from './people.js';
-import { costBased, prio, posOf } from './dispatch.js';
+import { costBased, outReason, prio, posOf } from './dispatch.js';
 import { canBrakeTo, deckFloor, unload, releaseCalls } from './elevators.js';
 
 export const MOVE_ITEMS = ['flyttkartonger', 'en soffa', 'en bokhylla', 'ett kylskåp', 'en säng', 'ett akvarium', 'en tv-bänk', 'ett piano(!)'];
@@ -103,12 +104,40 @@ function medicTick() {
     log(S.power ? '🚑 Ambulansen är framme vid entrén – personalen tar varuhissen med prioritet' : '🚑 Ambulansen är framme vid entrén – strömavbrott, personalen springer i trapporna', 'alert');
   }
   const crew = S.people.filter(p => p.medic);
+  holdTick(A, crew);
   if ((A.state === 'onway' || A.state === 'transport') && !crew.length) {
     // personalen har lämnat huset (med patienten, eller utan om hen redan hade gått)
     A.state = 'done'; A.t1 = S.t;
     S.stats.medicSec += S.t - A.t0;
     log(`🚑 Ambulansen kör iväg${A.taken ? ` med ${A.pname}` : ''} – ${Math.round(S.t - A.t0)} s från larm till avfärd`, 'alert');
   }
+}
+/** uppe hos patienten: på våningen – inte i en hiss eller i trappan (den med akutväskan kan ta trappan ner) */
+const upstairs = (A, p) => p.floor === A.floor && !['ride', 'boarding', 'stairs', 'instairs'].includes(p.state);
+/**
+ * Hissen som körde upp personalen väntar på dem: den står kvar på patientens våning (parkerar inte, somnar
+ * inte) och är låst för ambulansen tills personalen har klivit på igen med båren. Går hissen ur drift
+ * (brand, fel, avstängd) släpps den – då får personalen en annan hiss med förtur.
+ */
+function holdTick(A, crew) {
+  if (A.car === null && !A.held && (A.state === 'onway' || A.state === 'transport')) {
+    const p = crew.find(q => upstairs(A, q) && q.offAt === A.floor && q.offCar !== undefined);
+    if (p) {
+      const e = S.elevators[p.offCar];
+      if (e && e.mode === 'normal' && !outReason(e)) {
+        A.car = e.id; A.held = true; e.medicHold = true; e.parkTarget = null;
+        log(`🚑 ${e.name} står kvar på ${fl(A.floor)} med ambulansens nyckel – väntar på personalen och båren`, 'alert', e.color);
+      }
+    }
+  }
+  if (A.car === null) return;
+  const e = S.elevators[A.car];
+  if (!e) { A.car = null; return; }
+  // släpps när personalen har klivit på (eller gått därifrån), eller när hissen går ur drift
+  const gone = !crew.some(p => upstairs(A, p)), out = !gone && !!outReason(e);
+  if (!gone && !out) return;
+  e.medicHold = false; A.car = null;
+  if (out) log(`🚑 ${e.name} kan inte vänta längre på ambulansen – personalen får en annan hiss med förtur`, 'alert', e.color);
 }
 /** Någon svimmar (dygnets schema, eller spelarens test). Returnerar false om ingen passar. */
 export function startMedical() {
@@ -120,7 +149,7 @@ export function startMedical() {
   p.collapsed = true; p.timer = 1e9; p.mood = 1;
   const where = FL[p.floor].short;
   pev(p, p.floor === floorWith('aerobic') ? 'Svimmar mitt i passet! Någon ringer 112' : 'Mår dåligt och svimmar – någon ringer 112');
-  S.medic = { pid: p.id, pname: p.name, floor: p.floor, where, t0: S.t, crewAt: S.t + rand(6, 10), state: 'called', taken: false, t1: 0, spotX: p.spot ? p.spot.x : 300 };
+  S.medic = { pid: p.id, pname: p.name, floor: p.floor, where, t0: S.t, crewAt: S.t + rand(6, 10), state: 'called', taken: false, t1: 0, car: /** @type {number|null} */ (null), held: false, spotX: p.spot ? p.spot.x : 300 };
   S.stats.medical++;
   log(`🚑 ${pn(p)} har svimmat på ${where} (${fl(p.floor)}) – ambulans larmad`, 'alert', null, p.id);
   return true;

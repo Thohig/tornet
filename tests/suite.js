@@ -836,7 +836,7 @@ test('Stamgästerna: samma karaktärer varje dag, med sina egenheter', () => {
     }
     return { seen, fiaRode, st: { ...S.stats } };
   };
-  sim(91);
+  sim(92);
   const d1 = day();
   S.day++; resetDay();
   const d2 = day();
@@ -1031,6 +1031,34 @@ test('Ambulans: personalen får varuhissen med förtur och bär ut patienten på
     resp[strategy] = Math.round(A.t1 - A.t0);
   }
   return `larm till avfärd: smart ${resp.smart} s · närmast ${resp.nearest} s`;
+});
+test('Ambulans: hissen står kvar på patientens våning och väntar på personalen och båren', () => {
+  const out = [];
+  for (const strategy of ['smart', 'nearest', 'buttons']) {
+    sim(77, { strategy }); runUntil(10.5);
+    act('trigger', 'medical');
+    const A = S.medic, w = watcher();
+    let held = null, heldT = 0, moved = 0, others = 0, backIn = null;
+    while (A.state !== 'done' && !S.summaryShown) {
+      const b = w.before(); step(DT); w.check(b);
+      if (A.car !== null && !held) held = S.elevators[A.car];
+      if (held && held.medicHold) {
+        heldT += DT;
+        if (held.state === 'moving' || Math.abs(held.pos - posOf(held, A.floor)) > 1e-6) moved++;
+        if (held.passengers.some(p => !p.medic) || S.people.some(p => p.state === 'boarding' && p.car === held && !p.medic)) others++;
+      }
+      const bearer = S.people.find(p => p.medic && p.cargo && p.cargo.kind === 'bårP' && p.state === 'ride');
+      if (bearer && !backIn) backIn = bearer.car;
+    }
+    assert(held, `${strategy}: ingen hiss väntade på ambulanspersonalen`);
+    assert(heldT > 1, `${strategy}: hissen väntade bara ${heldT.toFixed(1)} s`);
+    assert(moved === 0, `${strategy}: den väntande hissen lämnade våningen (${moved} steg)`);
+    assert(others === 0, `${strategy}: andra klev på den väntande hissen`);
+    assert(backIn === held, `${strategy}: båren åkte ner i ${backIn ? backIn.name : 'ingen hiss'}, inte i ${held.name} som väntade`);
+    assert(!held.medicHold && A.car === null, `${strategy}: hissen släpptes aldrig`);
+    out.push(`${strategy} ${held.name} väntade ${heldT.toFixed(0)} s`);
+  }
+  return out.join(' · ');
 });
 test('Ambulans vid strömavbrott: personalen bär båren i trapporna och räddas först med reservkraft', () => {
   // del 1: strömmen går när ambulansen är larmad – personalen väntar inte på hissar som står still

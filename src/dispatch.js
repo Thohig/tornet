@@ -401,7 +401,7 @@ function demand(f, h) {
   return m ? m[learnBin(h)][f] + 0.5 * m[learnBin(h + 1)][f] : 0;
 }
 export function maybePark(e) {
-  if (benched(e) || e.indep || e.zoneLock || e.hold || e.sleep) return;
+  if (benched(e) || e.indep || e.medicHold || e.zoneLock || e.hold || e.sleep) return;
   // Energisnål: parkerar bara uppåt, dit det brukar bli kö – en tom hiss uppåt återmatar el
   if (S.strategy === 'eco') {
     if (e.idleTime < 3) return;

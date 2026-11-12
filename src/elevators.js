@@ -32,6 +32,7 @@ export function makeElevator(i) {
     // motorvärme (0–1+, överhettad = hot), extrafläkt, nivåfel (våningar, negativt = för lågt), stängd för vinden,
     // beställd service, oberoende drift (flyttdag)
     heat: 0, hot: false, fan: false, level: 0, lvKg: 0, windLock: false, serviceAsap: false, indep: false,
+    medicHold: false, // står kvar låst på patientens våning tills ambulanspersonalen kommer tillbaka (visits.js)
     outWas: '', // senaste orsaken till att hissen var ur trafiken (outReason) – hämtningarna släpps när den ändras
     vipLock: false, sleep: false, zoneLock: false,
   };
@@ -271,7 +272,7 @@ export function unload(e, f) {
   e.passengers = e.passengers.filter(p => posOf(e, p.dest) !== f);
   for (const p of out) {
     const ride = exitPassenger(e, p, p.dest);
-    p.trips++;
+    p.trips++; p.offCar = e.id; p.offAt = p.floor; // (vilken hiss hen kom med – ambulansens hiss väntar på dem)
     S.stats.rideSum += ride; S.stats.rideN++; S.stats.served++;
     if (e.deck2 && p.deck === 1) { S.stats.upperDeck++; p.fromUpper = true; }
     pev(p, `Kliver av hiss ${e.name} på ${fl(p.floor)}${e.deck2 ? (p.deck ? ' (övre däcket)' : ' (nedre däcket)') : ''} · åkte ${Math.round(ride)}s`);

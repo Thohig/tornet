@@ -113,7 +113,7 @@ function nightModeTick(dt) {
   }
   // (en kö som en hiss inte kan ta – t.ex. i en annan zon – hindrar den inte från att somna)
   for (const e of S.elevators) {
-    const idle = usable(e) && e.state === 'idle' && (eco ? e.stops.has(Math.round(e.pos)) : Math.round(e.pos) === e.home)
+    const idle = usable(e) && !e.medicHold && e.state === 'idle' && (eco ? e.stops.has(Math.round(e.pos)) : Math.round(e.pos) === e.home)
       && !e.passengers.length && !stopFloors(e).length;
     e.sleepT = idle ? (e.sleepT || 0) + dt : 0;
     // en hiss per grupp är alltid vaken
@@ -153,9 +153,10 @@ export function step(dt) {
   for (const e of S.elevators) {
     if (!vips.length) { e.vipLock = false; continue; } // (nästan alltid: ingen VIP eller ambulans i huset)
     const holders = vips.filter(p => ((p.state === 'wait' && p.assigned === e.id) || ((p.state === 'boarding' || p.state === 'ride') && p.car === e)));
-    const lock = holders.length > 0;
+    // (ambulansens hiss är låst även medan den står och väntar på personalen)
+    const lock = holders.length > 0 || e.medicHold;
     if (lock && !e.vipLock) {
-      const medic = holders.some(p => p.medic), who = medic ? 'ambulansen' : 'VIP-gruppen';
+      const medic = e.medicHold || holders.some(p => p.medic), who = medic ? 'ambulansen' : 'VIP-gruppen';
       log(medic ? `🚑 Förtur: ${e.name} reserveras för ambulansen` : `👔 VIP-läge: ${e.name} reserveras för VIP-gruppen`, 'alert', e.color);
       // de som redan hade fått hissen får en annan
       e.vipLock = lock;

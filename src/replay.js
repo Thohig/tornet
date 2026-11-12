@@ -52,7 +52,7 @@ export const ACTIONS = {
 // ---------- Kontrollsummor ----------
 // Simuleringens version. Höj den när beteendet ändras avsiktligt – `npm run golden` vägrar skriva om facit
 // annars. En replay-länk från en annan version spelas fortfarande upp, men spelaren får veta att dygnet kan avvika.
-export const SIM_VERSION = 6;
+export const SIM_VERSION = 7;
 /** var 900:e steg (30 sekunder) räknas en kontrollsumma av simuleringens tillstånd */
 export const CHECK_EVERY = 900;
 
