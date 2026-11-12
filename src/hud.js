@@ -348,8 +348,13 @@ export function incidentHtml() {
       ? (stuck ? ' Strömavbrott: personalen sitter fast i hissen – reservkraftens auto-räddning tar den hissen först.' : ' Strömavbrott: hissarna står still, så personalen bär båren i trapporna.')
       : A.state === 'onway' || A.state === 'transport'
       ? (S.strategy === 'smart' || S.strategy === 'peak' || S.strategy === 'eco' ? ' Kostnadsstyrningen låter dem i varuhissen som ändå ska åt samma håll åka klart.' : ' Alla andra i varuhissen får kliva av vid nästa stopp.') : '';
+    // ambulansen i huset = den som bär båren (annars den andra sjukvårdaren)
+    const crew = S.people.filter(p => p.medic && !p.dead);
+    const amb = crew.find(p => p.cargo && p.cargo.kind.startsWith('bår')) || crew[0];
+    const on = amb && VIEW.camSel && S.sel === amb;
     info(`medic-${Math.round(A.t0)}`, 'medic', '🚑 Ambulans', what + how,
-      `<button class="btn xs" data-act="show:${A.floor}">Visa våningen</button>${V ? `<button class="btn xs" data-act="follow:${V.id}">📹 Följ varuhissen</button>` : ''}`);
+      (amb ? `<button class="btn xs${on ? ' on' : ''}" data-act="person:${amb.id}" title="${on ? 'Sluta följa' : 'Följ'} ${esc(amb.name)} med båren">📹 ${on ? 'Följer ambulansen' : 'Följ ambulansen'}</button>` : '')
+      + `<button class="btn xs" data-act="show:${A.floor}">Visa våningen</button>${V ? `<button class="btn xs" data-act="follow:${V.id}">📹 Följ varuhissen</button>` : ''}`);
   }
   for (const n of S.notices) {
     if (S.t - n.t0 > 30) continue;

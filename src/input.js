@@ -51,9 +51,13 @@ export function reattachCam() {
   else {
     const p = S.people.find(q => q.id === t.id && !q.dead);
     if (!p) { VIEW.lastCam = null; return; }
-    if (S.sel !== p) select(p); else { VIEW.camSel = true; S.followHold = 0; }
-    if (S.zoom !== 'wide') toggleZoom(); else lookAt((personHead(p) || { y: GROUND_Y }).y, 0);
+    followPerson(p);
   }
+}
+/** låt kameran följa en person (spårar personen och byter till den stora vyn) */
+function followPerson(p) {
+  if (S.sel !== p) select(p); else { VIEW.camSel = true; S.followHold = 0; }
+  if (S.zoom !== 'wide') toggleZoom(); else lookAt((personHead(p) || { y: GROUND_Y }).y, 0);
 }
 /** F: koppla loss kameran om den följer något, annars koppla på den igen */
 export function toggleCam() { if (camTarget()) detachCam(); else reattachCam(); }
@@ -87,6 +91,11 @@ export function doAction(cmd) {
   else if (a === 'menu') { togglePop('menu'); return; }
   else if (a === 'carpop') { openCarPop(null); return; }
   else if (a === 'follow') { if (VIEW.follow === +b) detachCam(); else followCar(+b); }
+  else if (a === 'person') {
+    // följ en person (ambulansen); klick igen kopplar loss
+    const p = S.people.find(q => q.id === +b && !q.dead);
+    if (p && VIEW.camSel && S.sel === p) detachCam(); else if (p) followPerson(p);
+  }
   else if (a === 'cam') { if (b === 'off') detachCam(); else reattachCam(); }
   else if (a === 'pow') {
     if (b === 'gen') act('generator');
