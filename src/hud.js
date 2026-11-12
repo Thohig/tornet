@@ -262,6 +262,7 @@ export function updateHud() {
     <div class="stat">Återmatat ♻ <b>${st.regen.toFixed(1)} kWh</b></div>
     <div class="stat">Hissbyten <b>${st.transfers}</b></div>
     <div class="stat">Bilar in i garaget <b>${st.carsIn}</b></div>
+    <div class="stat">Tunnelbanan 🚇 <b>${st.trainIn} av · ${st.trainOut} på</b></div>
     <div class="stat">Paketleveranser <b>${st.deliveries}</b></div>
     <div class="stat">VIP-besök 🚁 <b>${st.vips}</b></div>
     <div class="stat">Felknappar 🙈 <b>${st.wrongPress}</b></div>
@@ -536,10 +537,10 @@ export function showOverlay(html) { const o = $('overlay'); o.innerHTML = html; 
 export function hideOverlay() { $('overlay').classList.remove('show'); }
 export function showIntro() {
   showOverlay(`<div class="card"><h1>HISS-O-MATIC 3000</h1>
-    <p>Välkommen till <b>Skyskrapan</b>! Garage och lastkaj i källaren, kontor från tandläkare till labb, en sky lobby på 6:an, bostäder högst upp och en takterrass med helikopterplatta – åtta hissar och en massa folk med bråttom.</p>
+    <p>Välkommen till <b>Skyskrapan</b>! Tunnelbana, garage och lastkaj i källaren, kontor från tandläkare till labb, en sky lobby på 6:an, bostäder högst upp och en takterrass med helikopterplatta – åtta hissar och en massa folk med bråttom.</p>
     <ul>
       <li>Det finns <b>inga knappar</b> på våningarna. Varje person har ett eget mål och får en egen hiss. Tankebubblan visar målet och hissen.</li>
-      <li>Hissarna är <b>zonindelade</b>: L1–L2 går i låg zon (P2–5) och H1–H2 i hög zon (6–T) – <b>staplade i samma schakt</b>. Expresshissarna X1–X2 kör E ⇄ 6 utan stopp. Den som ska mellan zonerna <b>byter hiss</b> (↹) i entrén och i sky lobbyn. Varuhissen V tar städvagnar och paket, och panoramahissen P åker utanpå fasaden.</li>
+      <li>Hissarna är <b>zonindelade</b>: L1–L2 går i låg zon (TB–5) och H1–H2 i hög zon (6–T) – <b>staplade i samma schakt</b>. Expresshissarna X1–X2 kör E ⇄ 6 utan stopp, och X1 går ända ner till <b>tunnelbanan</b> (TB) – där kommer folk i klump varje gång ett tåg stannar. Den som ska mellan zonerna <b>byter hiss</b> (↹) i entrén och i sky lobbyn. Varuhissen V tar städvagnar och paket, och panoramahissen P åker utanpå fasaden.</li>
       <li>Huset <b>lever</b>: bilar kör in i garaget, leveransbilen lastar av vid kajen, de boende sover, jobbar och går på taket, en fönsterputsare jobbar sig nedåt och ibland landar en VIP-helikopter på taket.</li>
       <li>Ett <b>dygn</b> tar ungefär 6 minuter – ☀️ dag och 🌙 natt syns uppe till vänster. Trafiken följer dygnet – rusning på morgonen, lunch, hemgång – och på natten är det bara väktare, städare och nattugglor. Vissa våningar stänger (caféet, banken …).</li>
       <li><b>Incidenter</b> händer: brand, strömavbrott och hissfel – då kommer en hisstekniker och lagar. Slitna hissar går oftare sönder, och utan nattservice följer slitaget med till nästa dygn. Då dyker en ruta upp med dina val. Under <b>⋯</b> kan du utlösa dem själv.</li>
@@ -577,6 +578,7 @@ export function showSummary() {
       <div>Överhettade motorer: <b>${st.heatStops}</b></div><div>Snubbel på tröskeln: <b>${st.stumbles}</b></div>
       <div>Ambulans: <b>${st.medical}</b></div><div>Flyttlass: <b>${st.moveLoads}</b></div>
       <div>Övre däcket: <b>${st.upperDeck}</b> resor</div><div>Inlärda parkeringar: <b>${st.learnedParks}</b></div>
+      <div>Tåg vid perrongen: <b>${st.trains}</b></div><div>Med tunnelbanan: <b>${st.trainIn}</b> in · <b>${st.trainOut}</b> hem</div>
       <div>Tog trappan frivilligt: <b>${st.stairsChoice}</b></div><div>Mest sliten: <b>${S.elevators.reduce((a, e) => (e.wear > a.wear ? e : a)).name} ${Math.round(Math.max(...S.elevators.map(e => e.wear)) * 100)} %</b></div>
     </div>
     <button class="btn" id="next">NÄSTA DAG ▶</button></div>`);

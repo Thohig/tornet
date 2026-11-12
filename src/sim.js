@@ -1,9 +1,9 @@
 // Simuleringssteget, fast tidssteg och nollställning av dagar.
 import { rand, rng, setSeed } from './rng.js';
 import { K, fl } from './util.js';
-import { END_H, FLOORS, MAXP, timeScale, LOBBY, CAFE, floorWith, EL, ROOF } from './config.js';
+import { END_H, FLOORS, MAXP, timeScale, LOBBY, CAFE, floorWith, EL, ROOF, STATION } from './config.js';
 import { S, hooks, hour, log, newStats } from './state.js';
-import { spawnEmployee, spawnStaff, spawnVisitor, updatePerson, spawnPizza, pev } from './people.js';
+import { spawnEmployee, spawnStaff, spawnVisitor, updatePerson, spawnPizza, pev, rerouteStranded } from './people.js';
 import { canTake, costBased, dispatchPerson, rebuildPicks, reoptimize, stopFloors, trafficMode, benched, keyed, prio, learnBlend, emptyLearn } from './dispatch.js';
 import { serviceTick } from './service.js';
 import { castSchedule } from './cast.js';
@@ -13,6 +13,7 @@ import { incidentTick } from './incidents.js';
 import { lifeTick, lifeReset } from './life.js';
 import { CHECK_EVERY, checkTick, recordStart, replayTick } from './replay.js';
 import { stormTick, weatherReset } from './weather.js';
+import { TRAIN_SHARE, trainReset, trainTick } from './train.js';
 import { medicClear, visitsReset, visitsTick } from './visits.js';
 
 // ---------- Planerad rutt (för HUD) ----------
@@ -66,7 +67,8 @@ export function spawnTick(dt) {
   if (S.fire) return; // vid brand släpps ingen in
   for (const ev of S.sched) if (!ev.done && h >= ev.at) { ev.done = true; ev.run(); }
   if (S.people.length >= MAXP) return;
-  if (rng() < arrivalRate(h) * dt) spawnEmployee();
+  // en del av de anställda kommer med tunnelbanan i stället (train.js tar med dem)
+  if (rng() < arrivalRate(h) * (STATION >= 0 ? 1 - TRAIN_SHARE : 1) * dt) spawnEmployee();
   const lunch = h >= 11.2 && h < 12.8;
   let v = h >= 9 && h < 17 ? 0.045 : 0;
   if (lunch) v += 0.07;
@@ -122,6 +124,7 @@ export function step(dt) {
   S.clock += dt * timeScale(hour());
   spawnTick(dt);
   lifeTick(dt);
+  trainTick(dt, arrivalRate);
   visitsTick();
   stormTick(dt);
   nightModeTick(dt);
@@ -155,6 +158,8 @@ export function step(dt) {
       // ambulansen har förtur: passagerarna som inte ska åt samma håll kliver av vid nästa stopp
       if (medic) medicClear(e);
       rebuildPicks();
+      // den som bara kunde åka med den här hissen tar en annan väg (t.ex. från taket via höga zonen)
+      rerouteStranded();
       for (const p of S.people) if (p.state === 'wait' && p.assigned === null && !prio(p) && !(buttonsMode() && !keyed(p))) dispatchPerson(p);
     }
     e.vipLock = lock;
@@ -203,6 +208,7 @@ export function resetDay() {
   S.elevators = EL.map((_, i) => makeElevator(i));
   for (const e of S.elevators) { const w0 = rand(0.1, 0.5); e.wear = carry ? carry[e.id] : w0; }
   lifeReset();
+  trainReset();
   weatherReset();
   visitsReset();
   recordStart();

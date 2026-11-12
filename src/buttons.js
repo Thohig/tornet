@@ -14,7 +14,7 @@ export const buttonsMode = () => S.strategy === 'buttons';
 /** Hur ofta folk trycker fel: av / lite / mycket (gäller alla styrlogiker – i de andra slår man in fel våning) */
 export const MISTAKE_LEVELS = { av: 0, lite: 1, mycket: 3 };
 export const mistakeRate = base => base * (MISTAKE_LEVELS[S.mistakes] ?? 1);
-export const GROUP_NAMES = { låg: 'låga zonen', hög: 'höga zonen', express: 'expressen', varu: 'varuhissen', panorama: 'panoramahissen' };
+export const GROUP_NAMES = { låg: 'låga zonen', hög: 'höga zonen', express: 'expressen', tbana: 'stationsexpressen', varu: 'varuhissen', panorama: 'panoramahissen' };
 
 /**
  * @typedef {{ k: string, g: string, f: number, d: number, t: number, car: number|null }} HallCall
@@ -22,10 +22,14 @@ export const GROUP_NAMES = { låg: 'låga zonen', hög: 'höga zonen', express: 
  */
 export const callKey = (g, f, d) => `${g}|${f}|${d}`;
 
-/** Hissgruppen personen ställer sig vid: första gruppen där en hiss tar hen hela delresan. */
+/** Hissgruppen personen ställer sig vid: en grupp där en hiss tar hen hela delresan. Går flera grupper dit
+ *  (t.ex. expressen och stationsexpressen mellan entrén och sky lobbyn) väljer man den som redan står öppen
+ *  åt rätt håll, annars på måfå. */
 export function bankFor(p) {
-  const d = EL.find(x => elevatorAllows(x, p) && x.legs.some(l => l.includes(p.floor) && l.includes(p.dest)));
-  return d ? d.group : null;
+  const groups = [...new Set(EL.filter(x => elevatorAllows(x, p) && x.legs.some(l => l.includes(p.floor) && l.includes(p.dest))).map(x => x.group))];
+  if (groups.length <= 1) return groups[0] ?? null;
+  const open = groups.find(g => S.elevators.some(e => e.group === g && operational(e) && e.state === 'doors' && e.floor === posOf(e, p.floor) && (e.dir === p.dir || e.dir === 0)));
+  return open ?? groups[Math.floor(rng() * groups.length)];
 }
 /** Finns det en knapp åt det hållet på våningen (går gruppen vidare åt det hållet)? */
 function hasButton(g, f, d) {

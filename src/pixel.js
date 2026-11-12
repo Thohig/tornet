@@ -4,7 +4,7 @@
 // Bara grafik: läser simuleringens tillstånd men ändrar det aldrig (utom S.fx-listan, som den
 // tecknade grafiken också räknar ner).
 import { ARR, clamp, fl } from './util.js';
-import { BX1, CAR_H, CAR_W, EL, FL, FLOORS, FLOOR_H, FLOOR_HOURS, FULL_LOAD, GROUND_Y, H, INNER_X1, LAND_X0, DOOR_X, LOBBY, MEZZ, ROOF_Y, SEAM_F, SHAFT_W, SHAFT_X0, TOP, TOWER_X1, W, carPos, floorOpen, floorY, shaftCX, shaftX, surf } from './config.js';
+import { BX1, CAR_H, CAR_W, EL, FL, FLOORS, FLOOR_H, FLOOR_HOURS, FULL_LOAD, GARAGE_FLOORS, GROUND_Y, H, INNER_X1, LAND_X0, DOOR_X, LOBBY, MEZZ, ROOF_Y, SEAM_F, SHAFT_W, SHAFT_X0, STATION, TOP, TOWER_X1, TRAIN_LEN, TRAIN_X0, TRAIN_X1, W, carPos, floorOpen, floorY, shaftCX, shaftX, surf } from './config.js';
 import { exposure, windAt } from './weather.js';
 import { WARM_AT } from './service.js';
 import { S, hour } from './state.js';
@@ -15,6 +15,7 @@ import { carSlot, carSlotX, landPos, peopleBehindDoor, personHead } from './rend
 import { vpick, vrand } from './rng.js';
 import { PX, blend, dark, light, ellipseSprite, fromCells, sprite, text, textW, plain, rgbOf, led } from './pixart.js';
 import { buttonsMode, hallLit } from './buttons.js';
+import { TRAIN_DOORS, nextTrainMin, trainDoors } from './train.js';
 import { PERSON_H, PERSON_W, cargoSprite, personSprite } from './pixpeople.js';
 import { PAL } from './pixpal.js';
 
@@ -253,6 +254,8 @@ const towerX1At = y => (y < SEAM_Y ? UX1 : BX1);
 const stackedAbove = e => INSIDE_EL.find(o => o !== e && shaftX(o.id) === shaftX(e.id) && o.minF === EL[e.id].topF + 1);
 /** rampen ner till garaget: kolumnerna under expresshissarna, där inget schakt går under entrén */
 const RAMP_COLS = COLS.filter(c => c.els.every(e => e.minF >= LOBBY));
+/** rampens nedersta våning (understa garaget – under det ligger stationen) */
+const RAMP_F = Math.min(LOBBY, ...GARAGE_FLOORS);
 function brickWall(x0, y0, x1, y1) {
   if (x1 <= x0 || y1 <= y0) return;
   R(x0, y0, x1 - x0, y1 - y0, PAL.brick);
@@ -285,7 +288,7 @@ function drawShellStatic(nn) {
       if (c.els.some(e => f >= e.minF && f <= e.topF + 1) || c.x + SHAFT_W > TOWER_X1[f]) continue;
       const top = Y(floorY(f + 1) + 6), bot = Y(floorY(f) - 6);
       if (bot < 0 || top > lo.height) continue;
-      if (f < LOBBY) { if (!RAMP_COLS.includes(c)) R(x - 2, top - 1, SHAFT_W / PX + 4, bot - top + 2, PAL.basement); continue; }
+      if (f < LOBBY) { if (!RAMP_COLS.includes(c) || f < RAMP_F) R(x - 2, top - 1, SHAFT_W / PX + 4, bot - top + 2, PAL.basement); continue; }
       const nw = Math.floor((SHAFT_W - 6) / 32);
       for (let k = 0; k < nw; k++) {
         const wx = x + Math.round(((SHAFT_W - nw * 32 + 6) / 2 + k * 32) / PX), wy = top + 11;
@@ -303,7 +306,9 @@ function drawShellStatic(nn) {
     R(x - 2, t, w + 5, b - t, PAL.shaftOuter); R(x, t, w, b - t, PAL.shaft);
     R(x + 1, t, 2, b - t, PAL.rail); R(x + w - 3, t, 2, b - t, PAL.rail);
     for (let y = t + ((-CY % 8) + 8) % 8; y < b; y += 8) { R(x + 1, y, 2, 1, PAL.railDot); R(x + w - 3, y, 2, 1, PAL.railDot); }
-    if (e.express) for (let f = e.minF + (e.deck2 ? 2 : 1); f < e.maxF; f++) { g.globalAlpha = 0.45; text(g, 'EXPRESS', x + w / 2, Y(floorY(f) - FLOOR_H / 2) - 3, PAL.express, 'center'); g.globalAlpha = 1; }
+    if (e.express) for (let f = e.minF + 1; f < e.maxF; f++) {
+      if (EL[e.id].serves.includes(f)) continue; // där dörrarna finns står ingen text g.globalAlpha = 0.45; text(g, 'EXPRESS', x + w / 2, Y(floorY(f) - FLOOR_H / 2) - 3, PAL.express, 'center'); g.globalAlpha = 1;
+    }
   }
   // staplade zoner: ett mellanbjälklag med maskin där låga zonens schakt slutar och höga zonens börjar
   for (const e of INSIDE_EL) {
@@ -327,7 +332,7 @@ function drawShellStatic(nn) {
 /** garagerampen under expresshissarna: in från gatan och i två svängar ner till P1 och P2 */
 /** rampens mått i ritytan */
 function rampGeom() {
-  return { rx0: X(RAMP_COLS[0].x - 2), rx1: X(BX1 - 4), top: Y(GROUND_Y + 8), bot: Y(BASE_Y - 6),
+  return { rx0: X(RAMP_COLS[0].x - 2), rx1: X(BX1 - 4), top: Y(GROUND_Y + 8), bot: Y(floorY(RAMP_F) - 2),
     yE: Y(GROUND_Y) + 2, y1: Y(surf(LOBBY - 1)), y0: Y(surf(LOBBY - 2)) };
 }
 function drawRampPx() {
@@ -542,6 +547,56 @@ function drawHall(f, h) {
   text(g, name, nx + 4, top + 7, '#ffffff', 'left', 1, dark(acc, 0.55));
   g.restore();
   stairSign(f, false);
+  if (f === STATION) drawPlatformPx(top, bot, h);
+}
+// ---------- Tunnelbanan ----------
+// Spåret ligger längs perrongens bakvägg mellan två tunnelmynningar; tåget är längre än perrongens synliga
+// del, så bara mitten syns. Allt läses ur S.train (simuleringen) – här ritas bara.
+const TRAIN_BODY = '#b8c0cc', TRAIN_STRIPE = '#2a5db0', TRAIN_GLASS = '#26324a';
+function drawPlatformPx(top, bot, h) {
+  const tx0 = X(TRAIN_X0), tx1 = X(TRAIN_X1), ty0 = bot - 26, ty1 = bot - 3;
+  // spårgropen och tunnelväggen bakom, med kakel ovanför
+  R(tx0 - 4, ty0 - 2, tx1 - tx0 + 6, ty1 - ty0 + 2, '#1e2430');
+  for (let x = tx0 - 4; x < tx1 + 2; x += 6) R(x, ty0 - 2, 1, ty1 - ty0 + 2, '#262d3b');
+  for (let x = tx0 - 4; x < tx1 + 2; x += 4) for (let y = top + 28 - 9; y < ty0 - 2; y += 3) R(x, y, 3, 2, (x + y) % 7 ? '#d9e2ec' : '#c3cfdc');
+  const T = S.train;
+  if (T) {
+    const doors = trainDoors(T);
+    g.save(); g.beginPath(); g.rect(tx0, ty0 - 1, tx1 - tx0, ty1 - ty0 + 1); g.clip();
+    // tåget: vagnar à 70 världsenheter, nosen långt bort i tunneln åt båda hållen
+    const x0 = X(T.x - 160), x1 = X(T.x + TRAIN_LEN + 160), y0 = ty0 + 1, y1 = ty1 - 1;
+    R(x0, y0, x1 - x0, y1 - y0, INK); R(x0, y0 + 1, x1 - x0, y1 - y0 - 2, TRAIN_BODY);
+    R(x0, y0 + 1, x1 - x0, 1, light(TRAIN_BODY, 0.4));
+    R(x0, y1 - 7, x1 - x0, 2, TRAIN_STRIPE);
+    // vagnskarvar och fönster
+    for (let wx = X(T.x - 140); wx < x1; wx += 35) R(wx, y0, 1, y1 - y0, dark(TRAIN_BODY, 0.45));
+    for (let wx = X(T.x - 160) + 3; wx < x1 - 4; wx += 7) {
+      R(wx, y0 + 4, 5, 6, TRAIN_GLASS);
+      if (S.power || nightness(h) < 0.5) R(wx, y0 + 4, 5, 1, '#ffe9a8');
+    }
+    // dörrarna glider isär när tåget står inne
+    for (const d of TRAIN_DOORS) {
+      const cx = X(T.x + d * TRAIN_LEN), gap = Math.round(doors * 3);
+      R(cx - 4, y0 + 2, 8, y1 - y0 - 3, dark(TRAIN_BODY, 0.18));
+      R(cx - 4, y0 + 3, 3, 7, TRAIN_GLASS); R(cx + 1, y0 + 3, 3, 7, TRAIN_GLASS);
+      if (gap) R(cx - gap, y0 + 2, gap * 2, y1 - y0 - 3, '#ffe9a8');
+      R(cx, y0 + 2, 1, y1 - y0 - 3, INK);
+    }
+    // hjulen
+    for (let wx = X(T.x - 150); wx < x1; wx += 35) { R(wx + 4, y1 - 1, 4, 2, INK); R(wx + 26, y1 - 1, 4, 2, INK); }
+    g.restore();
+  }
+  // tunnelmynningarna (ovanpå tåget, så att det glider in och ut ur mörkret)
+  for (const [mx, w] of [[tx0 - 6, 6], [tx1, 4]]) {
+    R(mx, ty0 - 4, w, ty1 - ty0 + 4, '#0d1018');
+    R(mx, ty0 - 5, w, 1, INK);
+  }
+  // perrongkanten med gul linje
+  R(tx0 - 6, ty1, tx1 - tx0 + 10, 1, '#ffd23f'); R(tx0 - 6, ty1 + 1, tx1 - tx0 + 10, 1, INK);
+  // avgångsskylten: DOS-svart med gul text (ingen klocka – bara minuter kvar i speltid)
+  const m = nextTrainMin(), msg = m === null ? 'INGA FLER TÅG' : T ? (T.state === 'in' ? 'TÅGET KOMMER' : T.state === 'stop' ? 'STIG PÅ!' : 'AVGÅR') : `TÅG OM ${m} MIN`;
+  const bw = textW(msg) + 6, bx = tx1 - bw, by = top + 16;
+  box(bx, by, bw, 9, '#101418'); text(g, msg, bx + 3, by + 2, m === null ? '#ff5d52' : '#ffd23f');
 }
 function stairSign(f, glow) {
   const x = X(DOOR_X) + 17, y = Y(floorY(f + 1) + 4) + 24;
@@ -552,7 +607,7 @@ function stairSign(f, glow) {
 }
 function floorOverlays(f, h) {
   const top = Y(floorY(f + 1) + 4), bot = Y(floorY(f) - 4), x0 = X(LAND_X0), x1 = X(INNER_X1);
-  const NO_DIM = ['lobby', 'apartments', 'roof', 'garage', 'dock'];
+  const NO_DIM = ['lobby', 'apartments', 'roof', 'garage', 'dock', 'station'];
   if (!NO_DIM.includes(FL[f].theme) && floorOpen(f, h)) {
     const n = nightness(h);
     if (n > 0.05 && !OCC[f]) R(x0, top, x1 - x0, bot - top, `rgba(10,6,34,${0.45 * n})`);

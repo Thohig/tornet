@@ -34,12 +34,13 @@ Samma testsvit körs i webbläsaren på `/tests.html`.
 | `rng.js` | seedad slump (`rng/rand/randi/pick/shuffle`) + visuell slump (`vrand/vpick`) |
 | `sim.js` | `step(DT)`, `advance`, schemaläggning, ankomster, nattläge, VIP-lås, `resetDay`, `newSim` |
 | `people.js` | personer: tillståndsmaskin, delresor/hissbyten (`legDest`, `setTrip`), lastregler |
-| `dispatch.js` | destinationsstyrning: kostnadsfunktion, tilldelning, omfördelning, parkering (även lärande: `learnBlend`, `learnedFloor`), brandzon, Rusning (`trafficMode`, `peakHold`) och Energisnål (`ecoCost`); dubbeldäck via `posOf`/`deckOf`/`allowedPos` |
+| `dispatch.js` | destinationsstyrning: kostnadsfunktion, tilldelning, omfördelning, parkering (även lärande: `learnBlend`, `learnedFloor`), brandzon, Rusning (`trafficMode`, `peakHold`; känner till tidtabellen: väntar in tågklumpen vid perrongen, möter tåget, väntar inte i entrén när tåget kommer) och Energisnål (`ecoCost`); dubbeldäck via `posOf`/`deckOf`/`allowedPos` |
 | `buttons.js` | styrlogiken KNAPPAR (hallknappar ▲/▼ + våningsknappar, styrningen ser aldrig `p.dest`), felknappar, barn, antinuisance |
 | `elevators.js` | hissens rörelse (SCAN med "committed" stopp), dörrar, lastning, överlast |
 | `incidents.js` | brand, strömavbrott och slumpade hissfel + spelarens åtgärder |
 | `service.js` | drift: slitage, hissfel, hisstekniker, nattservice (`S.maint`), beställd service (`orderService`), energi (effekt efter last mot motvikt, återmatning), motorvärme (`heat`, överhettningsskydd, extrafläkt) och nivåfel (`level`, snubbel) |
 | `weather.js` | dygnets temperatur (kyla → skorstenseffekt: dörrarna i entrén tar emot) och stormen (incident med val: svajläge/normal drift, `windAt`, `exposure`) |
+| `train.js` | tunnelbanan under huset: tidtabell (`headway`, `FIRST_H`/`LAST_H`), tåget i `S.train`, folk som kliver av i klump (en andel `TRAIN_SHARE` av morgonens anställda) och på, sista tåget (`S.trainDone`: alla med `exitFloor` stationen går ut genom entrén) |
 | `visits.js` | händelser som spelaren bara informeras om: flyttdag (varuhissen i oberoende drift, `e.indep`) och ambulans (bår, förtur via VIP-låset, `medicClear`) |
 | `cast.js` | stamgästerna (data i `CAST` i config): återkommande karaktärer med egenheter och repliker (`say`) |
 | `life.js` | garage/bilar, leveransbil, boendes dygnsrutiner, VIP-helikopter |
@@ -62,13 +63,14 @@ HUD:en är medvetet liten: allt om en hiss visas på hissen eller i popupen när
 - **Ett dygn = 6 minuter** (`timeScale` i config: dag 4 min, kväll 30 s, natt 90 s). Hissar och gång sker i verklig tid, så en resa genom huset tar ungefär en speltimme – planera efter det (öppettider, hemgång på natten). Vistelser i rummen (`p.timer` i läget `office`) räknas i speltid via `activityRate(h)`. Gränssnittet visar ingen klocka, bara ☀️/🌙.
 - **Simuleringsmoduler importerar aldrig** `render/view/hud/input/scenery`.
 - **Allt spelaren gör som påverkar simuleringen går via `act()`** (replay.js) – annars blir replay-länkarna fel. Platsbeläggningen ligger i `S.occ`, aldrig i config-datan.
-- **Huset är data.** Lägg till/ändra våningar och hissar i `BUILDING`; använd härledda värden (`LOBBY`, `SKY`, `ROOF`, `DOCK`, `HOME_FLOORS`, `idx('7')`, `floorWith('bank')`) – hårdkoda aldrig våningsindex. Index ≠ etikett: index 0 är `P2`, `fl(i)` ger etiketten.
+- **Huset är data.** Lägg till/ändra våningar och hissar i `BUILDING`; använd härledda värden (`LOBBY`, `SKY`, `ROOF`, `DOCK`, `STATION`, `HOME_FLOORS`, `idx('7')`, `floorWith('bank')`) – hårdkoda aldrig våningsindex. Index ≠ etikett: index 0 är tunnelbanestationen `TB`, `fl(i)` ger etiketten.
 - En hiss stannar bara på `e.stops`, stannar aldrig utanför `minF..maxF`, kör aldrig över `e.ratedKg`, och åker aldrig förbi en passagerares mål.
 - **Dubbeldäck:** hissens läge (`e.pos`, `e.floor`, `carCalls`, `pick`, `stops`) räknas alltid i nedre däckets våningar; folkets våningar (`p.floor`, `p.dest`, `e.serves`) är riktiga våningar. Översätt med `posOf(e, f)` (personens våning → korgens läge) och `deckFloor(e, p, f)`, och låt en hiss bara köra inom ett däck (`e.legs`).
 
 ## Domänbegrepp
 
-- `p.goal` = slutmål, `p.dest` = nuvarande delresa (kan vara `SKY` för hissbyte). `p.exitFloor` = var personen lämnar huset (E, garage eller lastkaj).
+- `p.goal` = slutmål, `p.dest` = nuvarande delresa (kan vara `SKY` för hissbyte). `p.exitFloor` = var personen lämnar huset (E, garage, lastkaj eller stationen `STATION`).
+- Tunnelbanan: stationen (`TB`) ligger under P2. Stationsexpressen X1 (egen grupp `tbana`) går TB ⇄ E ⇄ 6 med övre däcket P2 ⇄ 1 ⇄ 7; låga zonen och varuhissen går också ner. Den som ska med tåget går ut på perrongen (`p.toTrain`, läget `platform`) och kliver på när tåget står inne; de som kliver av har `p.fromTrain` (syns från tågets dörr i hallen). Perrongen ritas i `drawPlatformPx` (pixel.js).
 - Personer: `kind` = `emp` / `vis` / `staff` / `res` (boende, stannar över natten), `role` för nattpersonal/bud, `vip`.
 - Last ≥ 22 kg → bara varuhissen; varuhissen tar bara last och personal (`elevatorAllows`).
 - Styrlogiker (`S.strategy`): `smart`, `peak` (Rusning), `eco` (Energisnål), `nearest`, `random`, `buttons`. `costBased()` = de tre som använder kostnadsfunktionen.

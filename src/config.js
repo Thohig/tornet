@@ -78,6 +78,13 @@ export const THEME_INFO = {
     { x: 430, k: 'desk', face: 1, lift: 8, staff: true, item: 'paper', desc: 'Skriver en rapport om den gröna vätskan' },
   ] },
   garage: { name: 'Garage', short: 'garaget', acc: '#606977', spots: [] },
+  // tunnelbanestationen under huset: perrongen är hallen, tåget stannar längs bakväggen (se train.js)
+  station: { name: 'Tornplan T-bana', short: 'stationen', acc: '#3b6ea5', spots: [
+    { x: 150, k: 'door', label: 'KIOSK', desc: 'Köper en kvällstidning i kiosken' },
+    { x: 262, k: 'stand', face: -1, desc: 'Läser tidtabellen' },
+    { x: 330, k: 'chair', face: 1, lift: 6, desc: 'Sitter på en bänk på perrongen' },
+    { x: 380, k: 'chair', face: 1, lift: 6, desc: 'Sitter på en bänk på perrongen' },
+  ] },
   dock: { name: 'Garage & lastkaj', short: 'lastkajen', acc: '#6c6865', spots: [
     { x: 262, k: 'door', staff: true, label: 'PANNRUM', role: 'vaktmästare', desc: 'Kollar pannan i pannrummet' },
   ] },
@@ -108,6 +115,7 @@ export const THEME_INFO = {
 // park = var smarta styrningen parkerar den vid olika tider.
 export const BUILDING = {
   floors: [
+    { label: 'TB', theme: 'station', tags: ['station', 'basement'] },
     { label: 'P2', theme: 'garage', tags: ['garage', 'basement'] },
     { label: 'P1', theme: 'dock', tags: ['garage', 'basement', 'dock'] },
     { label: 'E', theme: 'lobby', tags: ['lobby'] },
@@ -133,11 +141,13 @@ export const BUILDING = {
   // Kolumnerna ligger så att tornet blir smalare ovanför sky lobbyn: expresshissarna ytterst, och
   // ovanpå dem en takterrass. Den som ska från låga till höga zonen åker via entrén och expressen.
   elevators: [
-    { name: 'L1', color: '#c0392b', group: 'låg', col: 0, start: 'E', serves: ['P2', 'P1', 'E', '1', '2', '3', '4', '5'], park: { day: 'E', lunch: '5', evening: '4' } },
-    { name: 'L2', color: '#d35400', group: 'låg', col: 1, start: 'P1', serves: ['P2', 'P1', 'E', '1', '2', '3', '4', '5'], park: { day: '3', lunch: 'E', evening: 'E' } },
+    { name: 'L1', color: '#c0392b', group: 'låg', col: 0, start: 'E', serves: ['TB', 'P2', 'P1', 'E', '1', '2', '3', '4', '5'], park: { day: 'E', lunch: '5', evening: '4' } },
+    { name: 'L2', color: '#d35400', group: 'låg', col: 1, start: 'P1', serves: ['TB', 'P2', 'P1', 'E', '1', '2', '3', '4', '5'], park: { day: '3', lunch: 'E', evening: 'E' } },
     // dubbeldäck: nedre däcket stannar på serves, övre däcket samtidigt på våningen ovanför (upper).
     // Till övre däcket i entrén tar man rulltrappan upp till mellanplanet (1).
-    { name: 'X1', color: '#d4a017', group: 'express', col: 3, start: 'E', serves: ['E', '6'], upper: ['1', '7'], express: true },
+    // X1 går ända ner till tunnelbanan (övre däcket öppnar då mot garaget på P2); under X2 går garagerampen.
+    // Den har en egen grupp (egna hallknappar), eftersom den når våningar som X2 inte når.
+    { name: 'X1', color: '#d4a017', group: 'tbana', col: 3, start: 'E', serves: ['TB', 'E', '6'], upper: ['P2', '1', '7'], express: true },
     { name: 'X2', color: '#b8860b', group: 'express', col: 4, start: '6', serves: ['E', '6'], upper: ['1', '7'], express: true },
     { name: 'H1', color: '#008080', group: 'hög', col: 0, start: '6', serves: ['6', '7', '8', '9', '10', '11', '12', '13', '14', 'T'], park: { day: '6', lunch: '6', evening: '11' } },
     { name: 'H2', color: '#2a5db0', group: 'hög', col: 1, start: '10', serves: ['6', '7', '8', '9', '10', '11', '12', '13', '14', 'T'], park: { day: '10', lunch: '6', evening: '13' } },
@@ -160,6 +170,7 @@ export const OFFICE_FLOORS = floorsWith('office');
 export const SKY = floorWith('sky');          // sky lobbyn: här byter man mellan zonerna
 export const ROOF = floorWith('roof');
 export const DOCK = floorWith('dock');
+export const STATION = floorWith('station'); // tunnelbanan under huset (-1 om huset saknar station)
 export const HOME_FLOORS = floorsWith('home');
 export const GARAGE_FLOORS = floorsWith('garage');
 /** Våningarnas data: temats namn/färg + våningens egna fält (label, theme, hours, tags) */
@@ -226,6 +237,8 @@ export const STAIR_X = BX0 + 6;
 // Bara grafik: bilden börjar här (rummen till vänster syns inte), och våningen visas som en
 // hall framför schakten med en korridor in mot rummen.
 export const LAND_X0 = 370, DOOR_X = LAND_X0 + 32;
+// tunnelbanan: tåget stannar längs perrongens bakvägg mellan TRAIN_X0 och TRAIN_X1 (tunnelmynningar i båda ändar)
+export const TRAIN_X0 = DOOR_X + 104, TRAIN_X1 = SHAFT_X0 - 8, TRAIN_LEN = TRAIN_X1 - TRAIN_X0;
 export const CAR_W = SHAFT_W - 8, CAR_H = 84;
 export const floorY = f => GROUND_Y - (f - LOBBY) * FLOOR_H; // golvlinjen för våning f (f får vara ett decimaltal)
 export const surf = f => floorY(f) - 4;

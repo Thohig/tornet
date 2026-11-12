@@ -37,7 +37,7 @@ export function visX(x) {
   const r = QB - QA;
   return WAIT_X1 - (QA + r * (1 - Math.exp(-(d - QA) / r)));
 }
-const SHOWN = new Set(['toQueue', 'wait', 'boarding', 'exiting', 'stairs']);
+const SHOWN = new Set(['toQueue', 'wait', 'boarding', 'exiting', 'stairs', 'platform']);
 /** @type {WeakMap<object, {state: string, floor: number, vis: boolean, vx: number, x0?: number, vx0?: number, fromDoor?: boolean}>} */
 const SEEN = new WeakMap();
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -51,15 +51,17 @@ export function landPos(p) {
   }
   if (!r || r.state !== p.state || r.floor !== p.floor && r.state !== 'ride') {
     // nytt läge: kom personen från något som syntes (hissen, kön) eller inifrån rummen?
-    const prev = r && (r.state === 'ride' || r.vis && r.floor === p.floor);
-    const vx0 = !prev ? DOOR_X : r.state === 'ride' ? p.x : r.vx;
+    // (den som just klev av tunnelbanan syns från första steget, vid tågets dörr)
+    const prev = (!r && p.fromTrain) || (r && (r.state === 'ride' || r.vis && r.floor === p.floor));
+    const vx0 = !prev ? DOOR_X : !r || r.state === 'ride' ? p.x : r.vx;
     r = { state: p.state, floor: p.floor, vis: false, vx: vx0, x0: p.x, vx0, fromDoor: !prev };
     SEEN.set(p, r);
   }
   let vx, a = 1;
-  if (p.state === 'wait') vx = visX(p.x);
+  if (p.state === 'wait' || p.state === 'platform') vx = visX(p.x);
   else {
-    const toDoor = p.state === 'exiting' || p.state === 'stairs';
+    // (den som ska med tunnelbanan går ut på perrongen, inte in i korridoren)
+    const toDoor = (p.state === 'exiting' && !p.toTrain) || p.state === 'stairs';
     if (r.fromDoor && toDoor) { r.vis = false; return null; } // inifrån och in igen: syns aldrig
     const vxT = toDoor ? DOOR_X : p.state === 'boarding' ? p.tx : visX(p.tx);
     const Dw = Math.abs(p.tx - r.x0), t = Dw > 1 ? clamp(Math.abs(p.x - r.x0) / Dw, 0, 1) : 1;

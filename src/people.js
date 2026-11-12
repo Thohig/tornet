@@ -1,9 +1,9 @@
 // Människor: utseende, resor, beslut, trapphus och platser.
 import { pick, rand, randi, rng, shuffle } from './rng.js';
 import { fl } from './util.js';
-import { activityRate, roomUnits, FLOOR_HOURS, FL, NAMES, ROLE_NAMES, floorOpen, OFFICE_FLOORS, SPOTS, STAIR_X, VISIT_WHY, WAIT_X1, WALK, LOBBY, CAFE, DOCK, MEZZ, floorWith, EL, SKY, CAST } from './config.js';
+import { activityRate, roomUnits, FLOOR_HOURS, FL, NAMES, ROLE_NAMES, floorOpen, OFFICE_FLOORS, SPOTS, STAIR_X, VISIT_WHY, WAIT_X1, WALK, LOBBY, CAFE, DOCK, MEZZ, floorWith, EL, SKY, CAST, STATION, TRAIN_X0, TRAIN_X1 } from './config.js';
 import { S, clockStr, hour, log, occOf, setOcc } from './state.js';
-import { inFireZone, requestRide, loadKg, personKg, canTake, eta, benched, keyed, posOf, costBased } from './dispatch.js';
+import { inFireZone, requestRide, loadKg, personKg, canTake, eta, benched, keyed, posOf, costBased, prio } from './dispatch.js';
 import { techNext, maybeStumble } from './service.js';
 import { moverNext, medicNext } from './visits.js';
 import { alwaysStairs, castBoard, castNext, castPizza, castWaitTick, flushSay, say } from './cast.js';
@@ -89,7 +89,7 @@ export const elevatorAllows = (d, p) => (p.medic || p.mover ? !!d.freight : d.fr
 export function legDest(from, goal, p) {
   if (from === goal) return goal;
   // hissar som är trasiga eller på service undviks om det finns en annan väg
-  const ok = EL.filter(d => elevatorAllows(d, p) && !down(d.id));
+  const ok = EL.filter(d => elevatorAllows(d, p) && !down(d.id, p));
   const plan = route(from, goal, ok);
   const hop = plan !== null ? plan : route(from, goal, EL.filter(d => elevatorAllows(d, p))) ?? (from !== SKY ? SKY : goal);
   // dubbeldäck: från entrén upp mot höga zonen kan man ta rulltrappan till mellanplanet och övre däcket
@@ -117,7 +117,8 @@ function rideEscalator(p) {
   S.stats.escalator++;
   pev(p, p.dest === MEZZ ? 'Tar rulltrappan upp till mellanplanet – expressens övre däck' : 'Tar rulltrappan ner till entrén');
 }
-const down = id => { const e = S.elevators[id]; return !!e && (e.mode === 'broken' || e.mode === 'service' || e.hold || benched(e)); };
+// (en hiss som är reserverad för VIP-gruppen eller ambulansen räknas som ur drift för alla andra)
+const down = (id, p) => { const e = S.elevators[id]; return !!e && (e.mode === 'broken' || e.mode === 'service' || e.hold || benched(e) || (e.vipLock && !prio(p))); };
 /** första delmålet på resvägen med minst antal byten (och kortast sträcka) med hissarna lifts, eller null */
 function route(from, goal, lifts) {
   // (en hiss kör bara mellan våningar på samma däck: legs)
@@ -184,8 +185,11 @@ export function gotoSpot(p, f) {
   if (!p.spot.temp && p.spot.k !== 'door') setOcc(p.spot, p.id);
   p.tx = p.spot.x;
 }
-export function spawnEmployee() {
-  const p = makePerson('emp', LOBBY, -30 - rand(0, 20));
+/** En anställd kommer till jobbet: genom entrén, eller med tunnelbanan (trainX = dörren hen kliver av vid) */
+export function spawnEmployee(trainX = null) {
+  const byTrain = trainX !== null && STATION >= 0;
+  const p = makePerson('emp', byTrain ? STATION : LOBBY, byTrain ? trainX : -30 - rand(0, 20));
+  if (byTrain) p.exitFloor = STATION;
   if (p.look.acc === 1) withCargo(p, 'portfölj'); else if (p.look.acc === 5) withCargo(p, 'ryggsäck');
   p.home = pick(OFFICE_FLOORS);
   const staffIdx = SPOTS[p.home].map((s, i) => (s.staff ? i : -1)).filter(i => i >= 0);
@@ -197,10 +201,10 @@ export function spawnEmployee() {
   p.lunchAt = rng() < 0.6 ? rand(11.2, 12.9) : 99;
   p.lunched = false;
   setTrip(p, p.home, `Till jobbet på ${FL[p.home].short}`);
-  if (rng() < 0.35) arriveByCar(p); // kör till jobbet om det finns plats i garaget
+  if (!byTrain && rng() < 0.35) arriveByCar(p); // kör till jobbet om det finns plats i garaget
   S.people.push(p);
-  pev(p, `Kliver in i entrén · ${p.why} (${fl(p.home)})`);
-  log(`${pn(p)} anländer · ska till ${fl(p.home)}`, 'person', null, p.id);
+  pev(p, `${byTrain ? 'Kliver av tunnelbanan' : 'Kliver in i entrén'} · ${p.why} (${fl(p.home)})`);
+  log(`${pn(p)} anländer${byTrain ? ' med tunnelbanan' : ''} · ska till ${fl(p.home)}`, 'person', null, p.id);
   return p;
 }
 export const openFloors = (h = hour()) => OFFICE_FLOORS.concat(CAFE).filter(f => floorOpen(f, h) && floorOpen(f, h + 1.2));
@@ -281,7 +285,7 @@ export function updatePerson(p, dt) {
       p.timer -= dt;
       if (p.timer <= 0) stairsDone(p);
       break;
-    case 'away': case 'incar': break; // utanför huset / sitter i bilen (sköts i life.js)
+    case 'away': case 'incar': case 'platform': break; // utanför huset / i bilen (life.js) / väntar på tåget (train.js)
     case 'office':
       p.timer -= dt * activityRate(hour()); // vistelsen räknas i speltid
       if (p.timer <= 0) officeDone(p);
@@ -290,7 +294,7 @@ export function updatePerson(p, dt) {
 }
 // ---------- Strandsatt: hissen man väntar på är trasig eller på service ----------
 /** finns det ingen fungerande hiss (sovande räknas – de vaknar) som tar personen den här delresan? */
-const stranded = p => !S.elevators.some(e => e.mode === 'normal' && !benched(e) && !e.hold && !e.zoneLock && canTake(e, p));
+const stranded = p => !S.elevators.some(e => e.mode === 'normal' && !benched(e) && !e.hold && !e.zoneLock && !(e.vipLock && !prio(p)) && canTake(e, p));
 /** Anropas när en hiss går sönder eller tas till service: de som stod och väntade på den byter väg direkt. */
 export function rerouteStranded() {
   for (const p of S.people) {
@@ -372,7 +376,12 @@ export function arriveOnFloor(p) {
     return;
   }
   if (p.evac && p.floor === p.exitFloor) { S.stats.evacuated++; if (S.fire) S.fire.evac++; }
-  if (p.floor === p.exitFloor && p.leaving) { p.state = 'exiting'; p.tx = p.auto ? p.auto.x + 22 : -40; p.spot = null; return; }
+  if (p.floor === p.exitFloor && p.leaving) {
+    p.state = 'exiting'; p.spot = null;
+    // tunnelbanan: ställ sig på perrongen framför tåget
+    if (p.floor === STATION) { p.toTrain = true; p.tx = rand(TRAIN_X0 + 10, TRAIN_X1 - 10); return; }
+    p.tx = p.auto ? p.auto.x + 22 : -40; return;
+  }
   p.state = 'exiting';
   gotoSpot(p, p.floor);
 }
@@ -392,6 +401,11 @@ export function boardDone(p) {
   if (p.cast) castBoard(p, e);
 }
 export function exitDone(p) {
+  if (p.toTrain && p.leaving && p.floor === STATION && p.floor === p.exitFloor) {
+    p.state = 'platform'; p.face = 1; p.waitStart = S.t;
+    pev(p, S.train ? 'Framme på perrongen – tåget står inne!' : 'Väntar på tåget på perrongen');
+    return;
+  }
   if (p.leaving && p.floor === p.exitFloor && (p.tx < 0 || p.auto)) { leaveBuilding(p); return; }
   p.state = 'office';
   p.face = p.spot.face || 1;
@@ -403,6 +417,8 @@ export function exitDone(p) {
     pev(p, `${FL[p.floor].name} har redan stängt – vänder direkt`);
   }
   else if (p.kind === 'res') p.timer = p.floor === p.home ? rand(12, 25) : rand(25, 45);
+  // framme vid tunnelbanan men inte på väg med tåget (sista tåget har gått): vidare upp till entrén
+  else if (p.floor === STATION && !p.role) { p.timer = rand(0.3, 1.2); pev(p, S.trainDone ? 'Inga fler tåg i natt – går upp till entrén' : 'Tittar på tidtabellen'); }
   else if (p.role === 'bud') { p.timer = rand(8, 15); S.stats.deliveries++; }
   else if (p.role === 'flyttgubbe') p.timer = p.floor === DOCK ? rand(1.5, 3) : rand(4, 7);
   else if (p.role === 'ambulans') p.timer = rand(5, 8);

@@ -1,7 +1,7 @@
 // Destinationsstyrning: kostnadsfunktion, tilldelning, omfördelning, parkering.
 import { pick, rand, rng } from './rng.js';
 import { ARR, K, fl } from './util.js';
-import { ACC, CAP, DOOR_T, STOP_COST, TOP, VMAX, FULL_LOAD, LOBBY, EL, idx } from './config.js';
+import { ACC, CAP, DOOR_T, STOP_COST, TOP, VMAX, FULL_LOAD, LOBBY, EL, STATION, idx } from './config.js';
 import { S, hour, log } from './state.js';
 import { liftsAvailable, pev, pn, toStairs, elevatorAllows } from './people.js';
 import { buttonsMode, mistakeRate, pressHallButton } from './buttons.js';
@@ -87,10 +87,26 @@ export function trafficMode(h) {
   return null;
 }
 export const PEAK_HOLD = 3.2;
+// Huset har två ingångar på morgonen: entrén (jämnt flöde) och tunnelbanan (klumpar när tåget stannar).
+// Rusning känner till tidtabellen: hissarna som går ner till perrongen väntar inte i entrén när ett tåg
+// är på väg, en av dem möter tåget, och vid perrongen väntar hissen in alla som kliver av.
+/** står ett tåg inne eller är det strax här? */
+export const trainNear = () => STATION >= 0 && !S.trainDone && (S.train ? S.train.state !== 'out' : S.trainNext > 0 && S.trainNext - S.t < 4);
 /** UPP-läge: en hiss som öppnar i sin hemvåning (entrén/sky lobbyn) väntar lite längre så att fler hinner med */
 export function peakHold(e, f) {
-  if (S.strategy !== 'peak' || S.peakMode !== 'upp' || f !== e.home || e.dir < 0 || e.freight) return 0;
-  return e.passengers.length + e.reserved < e.cap / 2 ? PEAK_HOLD : 0;
+  if (S.strategy !== 'peak' || S.peakMode !== 'upp' || e.dir < 0 || e.freight) return 0;
+  const room = e.passengers.length + e.reserved < e.cap / 2;
+  // vid perrongen: vänta in hela klumpen medan folk fortfarande kliver av tåget
+  if (f === STATION) return room && S.train && S.train.state === 'stop' && S.train.spawned < S.train.n ? PEAK_HOLD : 0;
+  if (f !== e.home) return 0;
+  // i entrén: en hiss som behövs vid perrongen står inte och väntar när tåget kommer
+  if (e.stops.has(STATION) && trainNear()) return 0;
+  return room ? PEAK_HOLD : 0;
+}
+/** UPP-läge: ska den här lediga hissen möta nästa tåg? (en åt gången, och bara när tåget snart är här) */
+function meetTrain(e) {
+  if (STATION < 0 || S.trainDone || S.train || !e.stops.has(STATION) || e.freight || !(S.trainNext - S.t < 8)) return false;
+  return !S.elevators.some(o => o !== e && (o.parkTarget === STATION || (Math.round(o.pos) === STATION && o.state !== 'moving')));
 }
 
 // ---------- Energisparläget ----------
@@ -309,6 +325,7 @@ export function parkFloor(e, h) {
   const at = label => (label !== undefined ? idx(label) : e.home);
   if (S.strategy === 'peak') {
     const m = trafficMode(h);
+    if (m === 'upp' && meetTrain(e)) return [STATION, 'UPP-läge – tåget kommer, möter det vid perrongen'];
     if (m === 'upp') return [e.home, 'UPP-läge – tillbaka till entrén direkt'];
     if (m === 'ned' && !e.freight) return [e.maxF, 'NED-läge – väntar högst upp i zonen'];
   }
