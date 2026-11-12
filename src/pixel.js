@@ -1017,6 +1017,8 @@ function gondolaAt(h) {
   return k < 0.25 ? { y: lerp(P[i], P[i + 1], smooth(k / 0.25)), scrub: false, crew: true } : { y: P[i + 1], scrub: true, crew: true };
 }
 const smooth = k => k * k * (3 - 2 * k);
+/** Var putsarens gondol är just nu (för regissören), eller null om huset saknar ett smalt torn. */
+export const cleanerAt = (h = hour()) => (UX1 >= BX1 ? null : gondolaAt(h));
 function drawCleanerPx(h) {
   if (UX1 >= BX1) return; // huset har inget smalt torn att putsa
   const G0 = gondolaAt(h), wind = S.storm ? windAt() : 0;

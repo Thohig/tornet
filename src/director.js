@@ -7,6 +7,7 @@ import { fl } from './util.js';
 import { vrand } from './rng.js';
 import { VIEW, camMax, camTarget } from './view.js';
 import { personHead } from './render.js';
+import { cleanerAt } from './pixel.js';
 
 const HOLD = 10;     // sekunder (verklig tid) en vanlig tagning varar
 const MIN_HOLD = 6;  // så kort får en tagning bli innan något viktigare får klippa in
@@ -15,7 +16,7 @@ const MEMORY = 6;    // så många tidigare tagningar som får straff (inte samm
 const BORED = 1.5;   // poängavdrag per sekund som något redan har visats (helikoptern på taket blir tråkig)
 const FORGET = 120;  // sekunder tills det tråkiga är glömt (avtar exponentiellt)
 
-/** @typedef {{ key: string, score: number, kind: 'car'|'person'|'floor', id: number, why: string }} Shot */
+/** @typedef {{ key: string, score: number, kind: 'car'|'person'|'floor'|'cleaner', id: number, why: string }} Shot */
 
 /** Slår på/av regissören. */
 export function toggleAuto() {
@@ -31,7 +32,7 @@ export function toggleAuto() {
 const recent = /** @type {string[]} */ ([]);
 /** sekunder som varje sak har visats, avtar med tiden */
 const seen = /** @type {Map<string, number>} */ (new Map());
-let lastAnim = 0;
+let lastAnim = 0, cleanerShown = -1e9;
 const name1 = p => p.name.split(' ')[0];
 const visible = p => { const h = personHead(p); return h && !h.hidden; };
 
@@ -63,6 +64,13 @@ function shots() {
   }
   if (S.train && STATION >= 0) add('train', 48, 'floor', STATION, '🚇 Tåget kommer');
   if (S.truck && DOCK >= 0) add('truck', 28, 'floor', DOCK, '🚚 Leveransbilen');
+  // fönsterputsaren utanför tornet: ett lugnt avbrott då och då (bara medan putsaren skrapar, och inte när det brinner)
+  const G = cleanerAt();
+  // poängen växer ju längre sedan putsaren visades, så att den dyker upp ett par gånger per dag
+  if (G && G.scrub && !S.fire) {
+    const since = S.anim - cleanerShown;
+    add('cleaner', Math.min(60, 20 + since / 3) + (S.storm ? 10 : 0), 'cleaner', 0, S.storm ? '🧽 Putsaren i blåsten' : '🧽 Fönsterputsaren');
+  }
   // ---------- folk ----------
   const queue = new Map();
   for (const p of S.people) {
@@ -84,8 +92,9 @@ function shots() {
 }
 
 /** Poäng efter hur nyligen vi visade samma sak (och lite slump så att det inte blir förutsägbart). */
-function rate(s) {
-  const i = recent.indexOf(s.key);
+function rate(s, current = false) {
+  // det som visas just nu straffas inte för att det nyss visats (då klipps det bort i förtid)
+  const i = current ? -1 : recent.indexOf(s.key);
   // incidenter (100) tål att visas länge, vardagssaker tröttnar man snabbare på
   const bored = Math.min(s.score * 0.6, (seen.get(s.key) || 0) * BORED);
   return s.score - bored - (i < 0 ? 0 : (MEMORY - i) * 6) + vrand(0, 6);
@@ -94,6 +103,7 @@ function rate(s) {
 /** Var tagningen är just nu (världens y), eller null om den inte längre går att visa. */
 function shotY(s) {
   if (s.kind === 'floor') return floorY(s.id) - FLOOR_H / 2;
+  if (s.kind === 'cleaner') { const G = cleanerAt(); return G && G.crew ? G.y - 30 : null; }
   if (s.kind === 'car') { const e = S.elevators[s.id]; return e ? floorY(e.pos) - FLOOR_H / 2 : null; }
   const p = S.people.find(q => q.id === s.id);
   if (!p || p.dead) return null;
@@ -122,7 +132,8 @@ export function updateDirector() {
     let best = null, bv = -Infinity;
     for (const c of all) { const v = rate(c); if (v > bv) { bv = v; best = c; } }
     const done = y === null || age > HOLD || !cur;
-    if (best && best.key !== (s && s.key) && (done || rate(best) > rate(cur) + CUT_OVER)) {
+    if (best && best.key !== (s && s.key) && (done || rate(best) > rate(cur, true) + CUT_OVER)) {
+      if (s && s.key === 'cleaner') cleanerShown = S.anim; // räknas från när kameran lämnar putsaren
       VIEW.shot = s = { ...best, t0: S.anim };
       recent.unshift(best.key); recent.length = Math.min(recent.length, MEMORY);
     } else if (s && cur) s.why = cur.why; // texten kan ändras (väntetid, antal)
