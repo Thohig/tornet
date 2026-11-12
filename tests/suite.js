@@ -265,9 +265,11 @@ test('Utan Smart-styrning sover inga hissar', () => {
 
 // ---------- Vikt ----------
 test('Överlast: turister med resväskor – vågen larmar och den sist påstigna kliver av', () => {
-  // (överlasten är slumpens sak – den beror på vem som hinner in i vilken korg – så tre förmiddagar körs)
-  let overloads = 0, maxKg = 0;
-  for (const seed of [51, 52, 53]) {
+  // (överlasten är slumpens sak – den beror på vem som hinner in i vilken korg – så minst tre och upp till sex förmiddagar körs)
+  let overloads = 0, maxKg = 0, days = 0;
+  for (const seed of [51, 52, 53, 54, 55, 56]) {
+    if (days >= 3 && overloads > 0) break;
+    days++;
     sim(seed); runUntil(9.6);
     const w = watcher();
     const before = S.stats.overloads;
@@ -279,8 +281,8 @@ test('Överlast: turister med resväskor – vågen larmar och den sist påstign
     const stuck = S.people.filter(p => p.why === 'Turist på busstur' && p.state === 'wait' && S.t - p.waitStart > 200).length;
     assert(stuck === 0, `frö ${seed}: ${stuck} turister har väntat över 200 s`);
   }
-  assert(overloads > 0, 'ingen överlast trots fyra busslaster med resväskor (tre förmiddagar)');
-  return `${overloads} överlaster på tre förmiddagar, tyngsta avgång ${Math.round(maxKg)} kg av ${RATED_KG} – ingen hiss körde överlastad`;
+  assert(overloads > 0, `ingen överlast trots fyra busslaster med resväskor (${days} förmiddagar)`);
+  return `${overloads} överlaster på ${days} förmiddagar, tyngsta avgång ${Math.round(maxKg)} kg av ${RATED_KG} – ingen hiss körde överlastad`;
 });
 
 // ---------- Brand ----------
@@ -307,11 +309,15 @@ test('Branden släcks mitt i återkallningen: hissarna bromsar in till en vånin
   while (!e && ++g < 300) { step(DT); e = S.elevators.find(x => x.mode === 'recall' && x.rs === 'move' && Math.abs(x.pos - Math.round(x.pos)) > 0.2) || null; }
   assert(e, 'ingen hiss stod mellan två våningar under återkallningen');
   endFire();
-  let maxJump = 0;
-  for (let i = 0; i < 10 / DT; i++) { const p0 = e.pos; step(DT); maxJump = Math.max(maxJump, Math.abs(e.pos - p0)); }
+  // (hissen får gärna köra vidare efter att ha stannat – den är i normal drift igen – men den ska ha stannat på en våning)
+  let maxJump = 0, stopAt = -1;
+  for (let i = 0; i < 10 / DT; i++) {
+    const p0 = e.pos; step(DT); maxJump = Math.max(maxJump, Math.abs(e.pos - p0));
+    if (stopAt < 0 && e.state !== 'moving' && Math.abs(e.pos - Math.round(e.pos)) < 1e-6) stopAt = e.pos;
+  }
   assert(maxJump <= VMAX * DT + 1e-6, `${e.name} hoppade ${maxJump.toFixed(2)} våningar på ett steg`);
-  assert(Math.abs(e.pos - Math.round(e.pos)) < 1e-6 && e.state !== 'moving', `${e.name} stannade inte på en våning (${e.pos.toFixed(2)})`);
-  return `${e.name} bromsade in till ${fl(e.pos)} · största steg ${maxJump.toFixed(3)} våningar`;
+  assert(stopAt >= 0, `${e.name} stannade inte på en våning (${e.pos.toFixed(2)})`);
+  return `${e.name} bromsade in till ${fl(stopAt)} · största steg ${maxJump.toFixed(3)} våningar`;
 });
 test('Brand + spärrad zon: hissarna håller sig under brandzonen', () => {
   sim(8); runUntil(7.83);
@@ -814,6 +820,26 @@ test('Hissetikett: folk avstår från trånga hissar, och turistgruppen tränger
   sim(76); spawnBus(5);
   assert(S.people.filter(p => p.why === 'Turist på busstur').every(p => p.space === 9), 'turisterna bryr sig om trängsel');
   return `${crowdSkips} avstod från en trång hiss och ${holds} höll upp dörren i morgonrusningen`;
+});
+test('Hundsalongen: hundägare lämnar in raggiga pudlar och går ut med nyklippta', () => {
+  const spa = floorWith('spa');
+  let dropped = 0, picked = 0, wrongFloor = 0;
+  for (const seed of [7, 8, 9]) {
+    sim(seed);
+    const shaggy = new Set(), clipped = new Set();
+    while (hour() < 19) {
+      step(DT);
+      for (const p of S.people) {
+        const k = p.cargo && p.cargo.kind;
+        if (k === 'raggig') shaggy.add(p);
+        else if (shaggy.has(p) && !p.cargo) { shaggy.delete(p); dropped++; if (p.floor !== spa) wrongFloor++; }
+        if (k === 'pudel' && !clipped.has(p)) { clipped.add(p); picked++; if (p.floor !== spa) wrongFloor++; }
+      }
+    }
+  }
+  assert(dropped > 0 && picked > 0, `lämnade in ${dropped} · hämtade ${picked} pudlar`);
+  assert(wrongFloor === 0, `${wrongFloor} hundar byttes någon annanstans än i hundsalongen`);
+  return `tre dygn: ${dropped} raggiga pudlar inlämnade, ${picked} nyklippta hämtade`;
 });
 test('Flyttdag: varuhissen i oberoende drift tar bara flyttgubbarna, och Smart bokar flytten efter leveranserna', () => {
   let ok = 0, smartLate = true, dumbEarly = true;

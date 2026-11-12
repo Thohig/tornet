@@ -6,6 +6,7 @@ import { S, log } from './state.js';
 import { VIEW, camTarget, cv, detachCam, followCar, lookAt, scrollBy, scrollToFloor } from './view.js';
 import { personHead, peopleBehindDoor } from './render.js';
 import { $, openCarPop, select, setTab, updateHud, updateRoster } from './hud.js';
+import { soundOn, toggleSound, unlockSound } from './sound.js';
 
 // ---------- Kontroller ----------
 export function updatePauseBtn() { $('btnPause').textContent = S.paused ? '▶' : '❚❚'; $('btnPause').classList.toggle('on', S.paused); }
@@ -96,6 +97,13 @@ export function doAction(cmd) {
 }
 $('btnPause').onclick = () => { if (!S.summaryShown) { S.paused = !S.paused; updatePauseBtn(); } };
 $('btnTags').onclick = toggleTags;
+const syncSound = () => { const b = $('btnSound'); b.textContent = soundOn() ? '🔊' : '🔇'; b.classList.toggle('on', soundOn()); };
+const flipSound = () => { toggleSound(); syncSound(); };
+$('btnSound').onclick = flipSound;
+syncSound();
+// ljudet var påslaget förra gången: webbläsaren släpper fram det först efter ett klick eller en tangent
+addEventListener('pointerdown', unlockSound, { once: true });
+addEventListener('keydown', unlockSound, { once: true });
 $('autoInc').onchange = ev => { act('setting', 'autoInc', /** @type {HTMLInputElement} */ (ev.target).checked); syncControls(); };
 /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll('#speeds .btn')).forEach(b => (b.onclick = () => setSpeed(+b.dataset.s)));
 // en knapp per styrlogik; förklaringen visas när musen vilar på knappen
@@ -145,6 +153,7 @@ $('btnBus').onclick = () => {
 window.addEventListener('keydown', ev => {
   if (ev.code === 'Space') { ev.preventDefault(); $('btnPause').click(); }
   if (ev.code === 'KeyT') toggleTags();
+  if (ev.code === 'KeyM') flipSound();
   if (ev.code === 'KeyF') toggleCam();
   if (ev.code === 'KeyS') cycleStrategy();
   if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'].includes(ev.code)) {

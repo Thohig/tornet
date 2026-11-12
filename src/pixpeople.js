@@ -139,6 +139,8 @@ export function personSprite(p, view, frame, dir, extra = {}) {
 }
 
 // ----- bagage (åt höger; spegelvänds vid behov) -----
+const POODLE = { W: '#fff4fb', w: '#e3c9dc', K: INK, N: '#2a1d3a', P: '#ff4fa3' };
+const SHAGGY = { W: '#b9a27e', w: '#8f7a58', K: INK, N: '#2a1d3a', P: '#3f7cff' }; // ostklippt: brunaktig och tovig
 const CARGO_ROWS = {
   resväska: { rows: ['.KK..', 'BBBBBB', 'BBBBBB', 'YYYYYY', 'BBBBBB', 'BBBBBB', 'BBBBBB', 'K....K'], pal: { B: '#3f7cff', Y: '#ffe14d', K: INK }, dx: -12 },
   städvagn: { rows: ['......M', '......M', '......M', '.....M.', '.YYYYY.', 'CCCCCCC', 'CCCCCCC', 'CCCCCCC', 'CCCCCCC', 'K.....K'], pal: { C: '#36c5d6', Y: '#ffe14d', M: '#ffffff', K: INK }, dx: 8 },
@@ -150,6 +152,16 @@ const CARGO_ROWS = {
   väska: { rows: ['.KKK.', 'RRRRR', 'RRWRR', 'RWWWR', 'RRWRR'], pal: { R: '#ff5d52', W: '#ffffff', K: INK }, dx: 4 },
   flyttlåda: { rows: ['BBBBBBBB', 'BBBYYBBB', 'BBBBBBBB', 'BBBBBBBB', 'BBBBBBBB', 'BBBBBBBB'], pal: { B: '#b07a45', Y: '#e8d27a' }, dx: 2 },
   filtar: { rows: ['FFFFF', 'GGGGG', 'FFFFF'], pal: { F: '#3f5f9f', G: '#5577b8' }, dx: -2 },
+  // pudeln från hundsalongen i koppel: två gångsteg, sittande (när matte/husse väntar) och framifrån (i hissen)
+  pudel: { rows: ['......WW..', '.....WWWW.', '.....WWKWN', 'WW...PWWW.', 'WWwWWWWW..', '..WWWWWW..', '..w....w..', '.WW...WW..'], pal: POODLE, dx: 7 },
+  pudel2: { rows: ['......WW..', '.....WWWW.', '.....WWKWN', 'WW...PWWW.', 'WWwWWWWW..', '..WWWWWW..', '...w..w...', '..WW.WW...'], pal: POODLE, dx: 7 },
+  pudelS: { rows: ['......WW..', '.....WWWW.', '.....WWKWN', '.....PWWW.', 'WW..WWWW..', 'WWwWWWWW..', '..WWWWWW..', '.WWWWW.WW.'], pal: POODLE, dx: 6 },
+  pudelF: { rows: ['.WWWWW.', 'WWKWKWW', '.WWNWW.', '..PPP..', '.WWWWW.', '.W...W.', 'WW...WW'], pal: POODLE, dx: 0 },
+  // den raggiga pudeln (på väg till klippning): tovig päls som hänger ner
+  ragg: { rows: ['.....wWW..', '....WWWWW.', '....wWWKWN', 'wW..PWWWw.', 'WWwWWWWWw.', '.wWWWWWWw.', '.ww....ww.', '.WW...WW..'], pal: SHAGGY, dx: 7 },
+  ragg2: { rows: ['.....wWW..', '....WWWWW.', '....wWWKWN', 'wW..PWWWw.', 'WWwWWWWWw.', '.wWWWWWWw.', '..ww..ww..', '..WW.WW...'], pal: SHAGGY, dx: 7 },
+  raggS: { rows: ['.....wWW..', '....WWWWW.', '....wWWKWN', '....PWWWw.', 'wW.WWWWWw.', 'WWwWWWWWw.', '.wWWWWWWw.', '.WWWWW.WW.'], pal: SHAGGY, dx: 6 },
+  raggF: { rows: ['wWWWWWw', 'WWKWKWW', 'wWWNWWw', '.wPPPw.', 'wWWWWWw', '.W...W.', 'WW...WW'], pal: SHAGGY, dx: 0 },
 };
 const CARGO_CACHE = new Map();
 /** bagagefigur + förskjutning i x (pixlar, för en figur vänd åt höger) och höjd över fötterna */

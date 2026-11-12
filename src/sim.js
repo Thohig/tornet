@@ -1,9 +1,10 @@
 // Simuleringssteget, fast tidssteg och nollställning av dagar.
 import { rand, rng, setSeed } from './rng.js';
 import { K, fl } from './util.js';
-import { END_H, FLOORS, MAXP, timeScale, LOBBY, CAFE, floorWith, EL, ROOF, STATION } from './config.js';
+import { END_H, FLOORS, MAXP, timeScale, LOBBY, CAFE, floorWith, floorOpen, EL, ROOF, STATION } from './config.js';
+const SPA = floorWith('spa');
 import { S, hooks, hour, log, newStats } from './state.js';
-import { spawnEmployee, spawnStaff, spawnVisitor, updatePerson, spawnPizza, rerouteStranded } from './people.js';
+import { spawnEmployee, spawnStaff, spawnVisitor, updatePerson, spawnPizza, rerouteStranded, spawnDogOwner } from './people.js';
 import { canTake, costBased, dispatchPerson, rebuildPicks, reoptimize, stopFloors, trafficMode, keyed, prio, learnBlend, emptyLearn, outReason } from './dispatch.js';
 import { serviceTick } from './service.js';
 import { castSchedule } from './cast.js';
@@ -73,7 +74,11 @@ export function spawnTick(dt) {
   let v = h >= 9 && h < 17 ? 0.045 : 0;
   if (lunch) v += 0.07;
   v *= ARRIVAL_MUL;
-  if (rng() < v * dt) spawnVisitor(LOBBY, -30, lunch && rng() < 0.7 ? CAFE : null);
+  // (hundägarna till hundsalongen delar slumptalet med besökarna – ett extra rng() i varje steg skulle flytta
+  // hela dygnets slumpföljd, och testerna har visat sig känsliga för hur många slumptal varje steg drar)
+  const u = rng();
+  if (u < v * dt) spawnVisitor(LOBBY, -30, lunch && rng() < 0.7 ? CAFE : null);
+  else if (SPA >= 0 && floorOpen(SPA, h) && floorOpen(SPA, h + 1.2) && u < (v + 0.02) * dt) spawnDogOwner();
   // turister åker panoramahissen upp till takterrassen
   if (ROOF >= 0 && h >= 9.5 && h < 19 && rng() < 0.02 * dt) spawnVisitor(LOBBY, -30, ROOF, 'Utsikt från takterrassen');
   if (h >= 17 && h < 20.5 && rng() < 0.03 * dt) spawnVisitor(LOBBY, -30, floorWith('aerobic'), 'Kvällspass på Svettis');

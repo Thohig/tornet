@@ -6,6 +6,7 @@ import { VIEW, camMax, peekFloor, resize, updateCamera } from './view.js';
 import { render } from './render.js';
 import { applyTab, buildHud, placeCarPop, showIntro, showSummary, updateHud, updateRoster, updateTracker } from './hud.js';
 import { setSpeed, syncControls } from './input.js';
+import { updateSound } from './sound.js';
 
 // ---------- Start ----------
 // Fröet kan väljas med ?seed=123 i adressen för att spela om exakt samma dag.
@@ -35,6 +36,7 @@ function frame(now) {
   updateCamera(dt);
   render(dt);
   placeCarPop();
+  updateSound();
   hudT -= dt; rosterT -= dt;
   if (hudT <= 0) { hudT = 0.15; updateHud(); updateTracker(); syncControls(); }
   if (rosterT <= 0) { rosterT = 0.4; updateRoster(); }

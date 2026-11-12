@@ -68,7 +68,10 @@ export const CARGO = {
   verktygslåda: { kind: 'verktygslåda', name: 'verktygslåda', kg: 22 },
   pizza: { kind: 'pizza', name: 'pizzakartonger', kg: 6 },
   servicevaska: { kind: 'verktygslåda', name: 'serviceväska', kg: 12 },
+  pudel: { kind: 'pudel', name: 'nyklippt pudel', kg: 7 },
+  raggig: { kind: 'raggig', name: 'raggig pudel', kg: 8 },
 };
+const SPA = floorWith('spa');
 const withCargo = (p, kind) => { p.cargo = { ...CARGO[kind] }; return p; };
 export function queueSpot(f) {
   const n = S.people.reduce((a, p) => a + (p.floor === f && (p.state === 'wait' || p.state === 'toQueue') ? 1 : 0), 0);
@@ -468,7 +471,12 @@ export function decideNext(p) {
   if (p.collapsed) { p.timer = 1e9; return null; } // ligger kvar tills ambulansen kommer
   if (p.kind === 'res') return resNext(p, h);
   if (h >= 27.5) return [p.exitFloor, 'Natten är slut – äntligen hem']; // natten går fort: hemresan tar ett par speltimmar
-  if (p.kind === 'vis') return [p.exitFloor, 'Ärendet klart – går ut'];
+  if (p.kind === 'vis') {
+    // i hundsalongen hämtar man sin pudel och har den med sig ut (kopplet syns i hallen och i hissen)
+    if (p.floor === SPA && p.cargo && p.cargo.kind === 'raggig') { p.cargo = null; pev(p, 'Lämnar in den raggiga pudeln – hämtas i morgon'); return [p.exitFloor, 'Går ut utan hund']; }
+    if (p.floor === SPA && !p.cargo) { withCargo(p, 'pudel'); pev(p, 'Får tillbaka sin nyklippta pudel'); return [p.exitFloor, 'Går ut med pudeln']; }
+    return [p.exitFloor, 'Ärendet klart – går ut'];
+  }
   if (h >= p.leaveAt) return [p.exitFloor, p.overtime ? 'Övertiden är slut – hemgång' : 'Arbetsdagen är slut – hemgång'];
   // en stängd våning lämnar man om man inte jobbar där
   if (!floorOpen(p.floor, h) && p.floor !== p.home) return [p.home, `${FL[p.floor].name} stänger – tillbaka till jobbet`];
@@ -560,5 +568,12 @@ export function spawnBus(n = 14) {
     k++;
   }
   return k;
+}
+/** hundägare till hundsalongen: hälften lämnar in en raggig pudel, hälften hämtar en nyklippt */
+export function spawnDogOwner() {
+  const drop = rng() < 0.5;
+  const p = spawnVisitor(LOBBY, -30, SPA, drop ? 'Lämnar pudeln för klippning' : VISIT_WHY[SPA]);
+  if (p && drop) withCargo(p, 'raggig');
+  return p;
 }
 export function spawnPizza() { const p = spawnVisitor(LOBBY, -30, floorWith('radio'), 'Levererar pizza till nattsändningen'); if (p) { withCargo(p, 'pizza'); castPizza(p); } return p; }
