@@ -329,7 +329,7 @@ export function incidentHtml() {
   if (M && (M.state === 'on' || (M.state === 'done' && S.t - M.t1 < 20))) {
     info(`move-${S.day}`, 'move', `🚚 Flyttdag på ${fl(M.floor)}`,
       M.state === 'on'
-        ? `Flyttfirman Lyft & Bär bär ut från ${fl(M.floor)} – lass <b>${num(M.done)}</b> av ${M.loads}. Varuhissen ${V ? esc(V.name) : ''} går i <b>oberoende drift</b>: nyckelstyrd, svarar inte på några anrop, bara flyttgubbarna åker med. ${M.smart ? 'Kostnadsstyrningen bokade flytten efter leveranstiden.' : 'Flytten bokades mitt i leveranstiden – paketbuden får vänta på varuhissen.'}`
+        ? `Flyttfirman Lyft & Bär bär ut från ${fl(M.floor)} – lass <b>${num(M.done)}</b> av ${M.loads}. Varuhissen ${V ? esc(V.name) : ''} går i <b>oberoende drift</b>: nyckelstyrd, svarar inte på några anrop, bara flyttgubbarna åker med. ${M.smart ? 'Flytten är bokad efter lunch, när förmiddagens leveranser är klara – paketbuden hade varuhissen för sig själva.' : 'Flytten bokades på förmiddagen, mitt i leveranserna – paketbuden får vänta på varuhissen.'}`
         + (S.power ? '' : ' Strömavbrott: flyttgubbarna väntar ut det med möblerna vid hissen – den som har tomma händer tar trapporna.')
         : `Flytten är klar (${M.done} lass) – varuhissen går i vanlig trafik igen.`,
       `${V ? `<button class="btn xs" data-act="follow:${V.id}">📹 Följ varuhissen</button>` : ''}<button class="btn xs" data-act="show:${M.floor}">Visa våningen</button>`);
