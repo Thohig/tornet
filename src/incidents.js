@@ -166,7 +166,8 @@ export function endOutage() {
   const trapped = Math.round(S.stats.trappedSec);
   S.outage = null;
   for (const e of S.elevators) { e.stuck = false; if (e.mode === 'dead' || e.mode === 'rescue') restoreElevator(e); }
-  for (const e of S.elevators) for (const p of e.passengers) { if (p.trapNoted) pev(p, 'Strömmen är tillbaka – hissen rullar igen!'); p.trapT = 0; p.trapNoted = false; }
+  // (de som sitter fast efter ett linbrott sitter kvar – strömmen hjälper inte dem)
+  for (const e of S.elevators) if (e.mode !== 'snapped') for (const p of e.passengers) { if (p.trapNoted) pev(p, 'Strömmen är tillbaka – hissen rullar igen!'); p.trapT = 0; p.trapNoted = false; }
   log(`💡 Strömmen är tillbaka! (totalt ${trapped} instängd-sekunder idag)`, 'alert');
 }
 export function incidentTick(dt) {

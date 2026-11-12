@@ -95,7 +95,10 @@ export function triggerFault() {
 }
 
 // ---------- Hisstekniker ----------
-export const tech = () => S.people.find(p => p.role === 'hisstekniker' && !p.dead) || null;
+/** sitter fast i en hiss med linbrott (då kan hen inte rädda någon – inte ens sig själv) */
+const trappedIn = p => p.state === 'ride' && !!p.car && p.car.mode === 'snapped';
+/** teknikern i tjänst: inte en som sitter instängd eller har gått av passet efter att ha blivit utrymd */
+export const tech = () => S.people.find(p => p.role === 'hisstekniker' && !p.dead && !p.offDuty && !trappedIn(p)) || null;
 export const nightWindow = (h = hour()) => h >= 21 && h < 27;
 /** våningen teknikern ska till för hissen e */
 export const jobFloor = e => (e.mode === 'snapped' ? e.snap.exitF : e.mode === 'broken' ? (e.fault.cable ? e.fault.exitF : e.floor) : e.home);
@@ -143,6 +146,14 @@ function callTech(why) {
   log(`📞 ${why} – hissteknikern är på väg`, 'alert');
 }
 function techTick(dt) {
+  // en tekniker som själv sitter fast efter ett linbrott släpper sitt jobb – hissjouren skickar en kollega
+  for (const p of S.people) {
+    if (p.role !== 'hisstekniker' || !trappedIn(p) || p.job === null || p.job === undefined) continue;
+    const cur = S.elevators[p.job];
+    if (cur.fault) cur.fault.done = p.workT;
+    p.job = null; p.workT = 0;
+    pev(p, `Sitter själv fast i hiss ${p.car.name} – ringer hissjouren efter en kollega`);
+  }
   const t = tech();
   // hissar vars tekniker försvann (t.ex. utrymde vid brand) släpps
   for (const e of S.elevators) {
@@ -309,6 +320,8 @@ function evacStep(e, t) {
   if (S.t < s.nextOut) return;
   const p = nextOut(e);
   if (p) {
+    // en utrymd tekniker lämnar över till kollegan och går hem (två tekniker i tjänst samtidigt går inte)
+    if (p.role === 'hisstekniker') { p.offDuty = true; p.job = null; p.goal = p.exitFloor; p.why = 'Kollegan tar över – går hem och vilar'; }
     exitOne(e, p, s.exitF, `Ute ur hiss ${e.name} genom takluckan`);
     s.out++; s.nextOut = S.t + s.climb;
     pev(p, `Klättrade ut genom takluckan och uppför stegen till ${fl(s.exitF)} – efter ${Math.round(S.t - s.t0)} s`);
@@ -337,6 +350,8 @@ function cableDown(e, t = null) {
   setMode(e, 'broken');
   e.fault = { what: 'linbrott', t0: s.t0, need: rand(CABLE_H[0], CABLE_H[1]), cable: true, exitF: s.exitF };
   e.snap = null; e.state = 'idle'; e.dir = 0; e.v = 0;
+  // (brandzonen kan ha lagt stopp och parkering på den fastkörda korgen – de gäller inte efter linbytet)
+  e.carCalls.clear(); e.parkTarget = null;
   S.stats.faults++;
   if (s.n) log(`✅ Alla ${s.n} ute ur ${e.name} efter ${Math.round(S.t - s.t0)} s – hissen stängs av medan linorna byts`, 'alert', e.color);
   if (t) { t.workT = 0; t.task = `Byter bärlinor i hiss ${e.name}`; pev(t, `Alla är ute – nu ska nya linor in i schaktet på ${e.name}`); }

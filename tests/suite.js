@@ -8,7 +8,7 @@ import {
   startFire, setFireMode, startOutage, startGenerator, toggleAutoRescue,
   toggleOff, endFire, canRescue,
 } from '../src/incidents.js';
-import { liftsAvailable, spawnBus } from '../src/people.js';
+import { liftsAvailable, spawnBus, pn } from '../src/people.js';
 import { loadKg, allowed, allowedPos, posOf, safeFloor, operational, canTake, stopFloors, isFull, costBased, benched } from '../src/dispatch.js';
 import { RATED_KG, FULL_LOAD, VMAX } from '../src/config.js';
 import { needsFreight, mayUseFreight, legDest } from '../src/people.js';
@@ -597,6 +597,29 @@ test('Linbrott: korgen faller, fångas mellan två våningar, alla tas ut genom 
   assert(w.snapUse === 0 && w.brokenUse === 0, `hissen rörde sig eller tog folk (${w.snapUse}/${w.brokenUse} steg)`);
   assert(w.outOfRange === 0 && w.jumps === 0 && w.passes === 0, 'regelbrott under linbrottet');
   return `${e.name}: ${trapped.length} instängda ut via ${fl(exitF)}, linbyte ${(hour() - h0).toFixed(1)} h`;
+});
+test('Linbrott med hissteknikern ombord: en kollega larmas, räddar alla och byter linorna', () => {
+  sim(1, { autoInc: false });
+  runUntil(10);
+  const w = watcher();
+  triggerFault();
+  let g = 0, e = null, t0 = null;
+  // linorna går av just när teknikern åker hiss till jobbet
+  while (!e && ++g < 400 / DT) {
+    const b = w.before(); step(DT); w.check(b);
+    const t = tech(), c = t && t.state === 'ride' ? t.car : null;
+    if (c && c.mode === 'normal' && c.state === 'moving' && !c.facade && c.pos - Math.floor(c.pos) > 0.35 && c.pos - Math.floor(c.pos) < 0.75 && c.pos > c.minF + 0.6) { e = c; t0 = t; snapCable(e); }
+  }
+  assert(e, 'teknikern åkte aldrig hiss');
+  while (e.mode === 'snapped' && ++g < 600 / DT) { const b = w.before(); step(DT); w.check(b); }
+  assert(e.mode === 'broken' && !e.passengers.length, `de instängda kom aldrig ut (läge ${e.mode}, ${e.passengers.length} kvar)`);
+  const t1 = tech();
+  assert(t1 && t1 !== t0 && t0.offDuty, 'ingen kollega tog över');
+  while (S.elevators.some(x => x.mode === 'broken') && ++g < 2000 / DT) { const b = w.before(); step(DT); w.check(b); }
+  assert(S.elevators.every(x => x.mode !== 'broken'), 'en hiss lagades aldrig');
+  assert(t0.state === 'away' || !S.people.includes(t0) || t0.leaving, `den utrymda teknikern gick inte hem (${t0.state})`);
+  assert(w.outOfRange === 0 && w.jumps === 0 && w.passes === 0, 'regelbrott under linbrottet');
+  return `${e.name}: ${pn(t0)} utrymd av ${pn(t1)}, båda hissarna lagade`;
 });
 test('Två linbrott: de instängda i den andra hissen väntar inte på linbytet i den första', () => {
   sim(84, { autoInc: false });
