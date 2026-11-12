@@ -3,7 +3,7 @@ import { act, encodeReplay } from './replay.js';
 import { clamp } from './util.js';
 import { BX0, CAR_H, CAR_W, DOOR_X, FLOOR_H, GROUND_Y, H, INNER_X1, ROOF_Y, STRAT_HINT, STRAT_NAMES, TOP, WAIT_X1, floorY, shaftX, surf, LOBBY } from './config.js';
 import { S, log } from './state.js';
-import { VIEW, cv, lookAt, resize, scrollBy, scrollToFloor } from './view.js';
+import { VIEW, camTarget, cv, detachCam, followCar, lookAt, resize, scrollBy, scrollToFloor, setZoomWide } from './view.js';
 import { personHead, peopleBehindDoor } from './render.js';
 import { $, openCarPop, select, setTab, updateHud, updateRoster } from './hud.js';
 
@@ -41,6 +41,22 @@ export function toggleZoom() {
   resize();
   if (S.zoom === 'wide') lookAt(S.sel ? (personHead(S.sel) || { y: GROUND_Y }).y : GROUND_Y - VIEW.viewH / 2, 0);
 }
+setZoomWide(() => { if (S.zoom !== 'wide') toggleZoom(); });
+/** koppla på kameran igen på det den senast följde (hiss, person eller våning) */
+export function reattachCam() {
+  const t = VIEW.lastCam;
+  if (!t) return;
+  if (t.kind === 'car') followCar(t.id);
+  else if (t.kind === 'floor') scrollToFloor(t.id);
+  else {
+    const p = S.people.find(q => q.id === t.id && !q.dead);
+    if (!p) { VIEW.lastCam = null; return; }
+    if (S.sel !== p) select(p); else { VIEW.camSel = true; S.followHold = 0; }
+    if (S.zoom !== 'wide') toggleZoom(); else lookAt((personHead(p) || { y: GROUND_Y }).y, 0);
+  }
+}
+/** F: koppla loss kameran om den följer något, annars koppla på den igen */
+export function toggleCam() { if (camTarget()) detachCam(); else reattachCam(); }
 // små popupfönster i topplisten (förklaring av styrlogiken, ⋯-menyn); bara ett öppet åt gången
 export function togglePop(id) {
   const el = $(id), show = !el.classList.contains('show');
@@ -70,10 +86,8 @@ export function doAction(cmd) {
   else if (a === 'hint') { togglePop('stratHint'); return; }
   else if (a === 'menu') { togglePop('menu'); return; }
   else if (a === 'carpop') { openCarPop(null); return; }
-  else if (a === 'follow') {
-    VIEW.follow = VIEW.follow === +b ? null : +b; S.followHold = 0;
-    if (VIEW.follow !== null && S.zoom !== 'wide') toggleZoom();
-  }
+  else if (a === 'follow') { if (VIEW.follow === +b) detachCam(); else followCar(+b); }
+  else if (a === 'cam') { if (b === 'off') detachCam(); else reattachCam(); }
   else if (a === 'pow') {
     if (b === 'gen') act('generator');
     if (b === 'auto') act('autoRescue');
@@ -119,6 +133,7 @@ window.addEventListener('keydown', ev => {
   if (ev.code === 'Space') { ev.preventDefault(); $('btnPause').click(); }
   if (ev.code === 'KeyT') toggleTags();
   if (ev.code === 'KeyZ') toggleZoom();
+  if (ev.code === 'KeyF') toggleCam();
   if (ev.code === 'KeyS') cycleStrategy();
   if (S.zoom === 'wide' && ['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'].includes(ev.code)) {
     ev.preventDefault();
@@ -128,7 +143,7 @@ window.addEventListener('keydown', ev => {
   if (ev.code === 'Escape') {
     if (document.querySelector('.pop.show')) document.querySelectorAll('.pop.show').forEach(p => p.classList.remove('show'));
     else if (VIEW.carPop !== null) openCarPop(null);
-    else { select(null); VIEW.follow = null; }
+    else { select(null); detachCam(); }
   }
   const m = { Digit1: 1, Digit2: 2, Digit3: 4, Digit4: 8 }[ev.code];
   if (m) setSpeed(m);

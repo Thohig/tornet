@@ -2,7 +2,7 @@
 import { S, hooks } from './state.js';
 import { advance, newSim, startReplay } from './sim.js';
 import { decodeReplay } from './replay.js';
-import { VIEW, camMax, drawOverview, resize, scrollToFloor, updateCamera } from './view.js';
+import { VIEW, camMax, drawOverview, peekFloor, resize, updateCamera } from './view.js';
 import { render } from './render.js';
 import { $, applyTab, buildHud, placeCarPop, showIntro, showSummary, updateHud, updateRoster, updateTracker } from './hud.js';
 import { setSpeed, syncControls } from './input.js';
@@ -17,7 +17,7 @@ if (rec) startReplay(rec);
 else newSim(Number.isFinite(urlSeed) ? urlSeed : Math.floor(Math.random() * 1e6));
 hooks.incident = floor => {
   if (S.speed > 2) setSpeed(1);
-  if (floor !== null) scrollToFloor(floor);
+  if (floor !== null) peekFloor(floor);
 };
 hooks.dayEnd = showSummary;
 buildHud();

@@ -8,7 +8,7 @@ import { BX1, CAR_H, CAR_W, EL, FL, FLOORS, FLOOR_H, FLOOR_HOURS, FULL_LOAD, GRO
 import { exposure, windAt } from './weather.js';
 import { WARM_AT } from './service.js';
 import { S, hour } from './state.js';
-import { allowed, cabinKg } from './dispatch.js';
+import { allowed, cabinKg, keyed } from './dispatch.js';
 import { noteDetail, stateInfo } from './describe.js';
 import { VIEW, clouds, ctx, cv, nightness, skyAt, skyline, stars } from './view.js';
 import { carSlot, carSlotX, landPos, peopleBehindDoor, personHead } from './render.js';
@@ -426,9 +426,12 @@ function drawSlabsPx() {
 function drawLanternsPx() {
   for (const e of S.elevators) for (const f of e.serves) lantern(e, f);
 }
-/** våningsdisplay ovanför hissdörren: riktning, korgens våning (LED-siffror) och hallknapparna ▲/▼ */
+/** Våningsdisplay ovanför hissdörren. KNAPPAR: riktning, korgens våning och hallknapparna ▲/▼.
+ *  Destinationsstyrning (övriga lägen): det finns inga hallknappar – displayen är bredare och visar i stället
+ *  vilka våningar hissen ska till med dem som väntar här (som "5 8 12" i verkliga hus). */
 function lantern(e, f) {
-  const x = X(shaftCX(e.id)) - 15, y = Y(floorY(f) - 108), w = 31;
+  const buttons = buttonsMode(), w = buttons ? 31 : 45;
+  const x = X(shaftCX(e.id)) - Math.floor(w / 2), y = Y(floorY(f) - 108);
   if (y < -14 || y > lo.height) return;
   box(x, y, w, 11, PAL.lantern);
   if (!(S.power || (S.outage && S.outage.gen))) return;
@@ -438,16 +441,56 @@ function lantern(e, f) {
   const col = here ? '#7dff9a' : PAL.led;
   led(g, fl(Math.round(e.pos) + up), x + 14, y + 2, col, 'center');
   if (e.dir && (e.state === 'moving' || here)) led(g, e.dir > 0 ? '▲' : '▼', x + 2, y + 2, col);
-  // hallknapparna: i KNAPPAR-läget lyser gruppens gemensamma knapp, annars hissens egna hämtningar
-  const buttons = buttonsMode();
+  if (!buttons) {
+    R(x + 24, y + 2, 1, 7, PAL.dim);
+    const dests = destsAt(e, f);
+    if (!dests.length) { R(x + 27, y + 5, 2, 1, PAL.dim); return; }
+    // så många mål som får plats, resten som "+"
+    let s = '';
+    for (const d of dests) { const t = s ? `${s} ${fl(d)}` : fl(d); if (textW(t) > w - 29) { s += '+'; break; } s = t; }
+    text(g, s, x + 27, y + 3, here ? '#7dff9a' : '#ffffff');
+    return;
+  }
+  // hallknapparna: i KNAPPAR-läget lyser gruppens gemensamma knapp
   for (const d of [1, -1]) {
     if (d === 1 && cp >= e.maxF || d === -1 && cp <= e.minF) continue;
-    const lit = buttons ? hallLit(e.group, f, d) : e.pick[cp + (d > 0 ? 'u' : 'd')] > 0;
+    const lit = hallLit(e.group, f, d);
     const lx = x + w - 6, ly = y + (d > 0 ? 2 : 6);
     const c = lit ? '#ffe14d' : PAL.dim;
     if (d > 0) { R(lx + 2, ly, 1, 1, c); R(lx + 1, ly + 1, 3, 1, c); R(lx, ly + 2, 5, 1, c); }
     else { R(lx, ly, 5, 1, c); R(lx + 1, ly + 1, 3, 1, c); R(lx + 2, ly + 2, 1, 1, c); }
   }
+}
+/** målvåningarna för dem som väntar på våning f och har fått hissen e (i färdriktningen, närmast först) */
+function destsAt(e, f) {
+  const set = new Set();
+  for (const p of S.people) if (p.floor === f && p.assigned === e.id && (p.state === 'wait' || p.state === 'boarding')) set.add(p.dest);
+  return [...set].sort((a, b) => Math.abs(a - f) - Math.abs(b - f) || a - b);
+}
+/** Destinationsterminalen vid korridoren: man slår in våningen och skärmen visar vilken hiss man ska ta.
+ *  Bara i lägen med destinationsstyrning (inte KNAPPAR). Ren grafik ur p.assigned/p.waitStart. */
+function terminal(f) {
+  if (buttonsMode() || !S.elevators.some(e => e.serves.has(f))) return;
+  // mellan skylten med antalet inne och entréns däckskylt
+  const bot = Y(floorY(f) - 4), x = X(DOOR_X) + 30, y = bot - 18;
+  if (y > lo.height || bot < 0) return;
+  // fot och stolpe
+  R(x + 1, bot - 4, 9, 1, INK); R(x + 2, bot - 5, 7, 1, '#6b7280');
+  R(x + 4, y + 8, 3, bot - 5 - (y + 8), INK); R(x + 5, y + 8, 1, bot - 5 - (y + 8), '#9aa3ad');
+  // huvudet med skärmen
+  box(x, y, 11, 9, PAL.panel); R(x + 1, y + 1, 9, 1, '#ffffff');
+  const on = S.power || (S.outage && S.outage.gen);
+  R(x + 1, y + 2, 9, 6, on ? '#0b1a10' : '#15171c');
+  if (!on) return;
+  if (S.fire && S.fire.mode !== 'none') { if (Math.sin(S.anim * 8) > 0) text(g, '!', x + 5, y + 2, '#ff2d55', 'center'); return; }
+  // senaste tilldelningen på våningen (inom ett par sekunder): hissens namn i hissens färg
+  let best = null;
+  for (const p of S.people) {
+    if (p.floor !== f || p.assigned === null || keyed(p) || (p.state !== 'wait' && p.state !== 'boarding')) continue;
+    if (S.t - p.waitStart < 2.5 && (!best || p.waitStart > best.waitStart)) best = p;
+  }
+  if (best) { const e = S.elevators[best.assigned]; text(g, e.name, x + 5, y + 2, light(e.color, 0.25), 'center'); }
+  else if (Math.floor(S.anim * 2) % 2) R(x + 2, y + 6, 2, 1, '#7dff9a'); // blinkande markör: väntar på nästa
 }
 
 // ---------- Hallen på varje våning ----------
@@ -1001,7 +1044,7 @@ export function renderPixel(dt) {
   drawShell(hr);
   for (let f = 0; f < FLOORS; f++) {
     if (floorY(f) < VIEW.camY - 10 || floorY(f + 1) > VIEW.camY + VIEW.viewH + 10) continue;
-    drawHall(f, hr); floorOverlays(f, hr); deckSign(f);
+    drawHall(f, hr); terminal(f); floorOverlays(f, hr); deckSign(f);
   }
   drawSlabsPx();
   drawTerracePx(hr);

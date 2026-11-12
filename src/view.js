@@ -19,7 +19,11 @@ export const overview = canvas('overview') || (() => {
 export const octx = overview.getContext('2d');
 // camY = världskoordinaten högst upp i bilden, viewH = hur mycket av huset som syns (i världsenheter)
 // x0 = världens x vid bildens vänsterkant: bilden börjar vid hallen, rummen till vänster syns inte
-export const VIEW = { scale: 1, dpr: 1, camY: 0, viewH: H, x0: LAND_X0, ow: 84, oh: 400, follow: /** @type {number|null} */ (null), carPop: /** @type {number|null} */ (null) };
+// Kameran kan vara kopplad till en hiss (follow), till den spårade personen (camSel) eller stå på en våning
+// (camFloor). Manuell scrollning kopplar loss den; lastCam minns vad den senast följde så att den kan kopplas på igen.
+/** @typedef {{ kind: 'car'|'person'|'floor', id: number }} CamTarget */
+export const VIEW = { scale: 1, dpr: 1, camY: 0, viewH: H, x0: LAND_X0, ow: 84, oh: 400, follow: /** @type {number|null} */ (null), carPop: /** @type {number|null} */ (null),
+  camSel: false, camFloor: /** @type {number|null} */ (null), lastCam: /** @type {CamTarget|null} */ (null) };
 export function resize() {
   // Stor vy: huset fyller bredden och kameran visar en del i taget (översikten visar resten).
   // Hela huset: allt syns, men i liten skala eftersom huset är så högt.
@@ -58,15 +62,42 @@ export function lookAt(worldY, hold = 4) {
   S.camTarget = clamp(worldY - VIEW.viewH / 2, 0, camMax());
   S.followHold = S.anim + hold;
 }
-export function scrollToFloor(f) { if (S.zoom === 'wide') lookAt(floorY(f) - FLOOR_H / 2, 5); }
+export function scrollToFloor(f) {
+  detachCam(); VIEW.camFloor = f;
+  if (S.zoom === 'wide') lookAt(floorY(f) - FLOOR_H / 2, 0);
+}
+/** titta på en våning en stund utan att koppla loss kameran (t.ex. när en incident börjar) */
+export function peekFloor(f) { if (S.zoom === 'wide') lookAt(floorY(f) - FLOOR_H / 2, 5); }
+/** vad kameran följer just nu (null = fri kamera) */
+export function camTarget() {
+  if (VIEW.follow !== null) return /** @type {CamTarget} */ ({ kind: 'car', id: VIEW.follow });
+  if (VIEW.camSel && S.sel && !S.sel.dead) return /** @type {CamTarget} */ ({ kind: 'person', id: S.sel.id });
+  if (VIEW.camFloor !== null) return /** @type {CamTarget} */ ({ kind: 'floor', id: VIEW.camFloor });
+  return null;
+}
+/** koppla loss kameran (den står kvar där den är) men minns vad den följde */
+export function detachCam() {
+  const t = camTarget();
+  if (t) VIEW.lastCam = t;
+  VIEW.follow = null; VIEW.camSel = false; VIEW.camFloor = null;
+}
+/** följ en hiss (byter till stora vyn om hela huset visas) */
+export function followCar(id) {
+  detachCam(); VIEW.follow = id; S.followHold = 0;
+  if (S.zoom !== 'wide') zoomWide();
+}
+let zoomWide = () => {};
+/** input.js lämnar över sin zoomväxling (view.js får inte importera input.js) */
+export function setZoomWide(fn) { zoomWide = fn; }
 export function updateCamera(dt) {
   if (S.zoom !== 'wide') { VIEW.camY = 0; return; }
   const p = S.sel;
+  if (VIEW.camSel && (!p || p.dead)) VIEW.camSel = false;
   if (VIEW.follow !== null && S.anim > (S.followHold || 0)) {
     // följ en hiss: håll korgen mitt i bild
     const y = floorY(S.elevators[VIEW.follow].pos) - FLOOR_H / 2;
     S.camTarget = clamp(y - VIEW.viewH * 0.5, 0, camMax());
-  } else if (p && !p.dead && S.anim > (S.followHold || 0)) {
+  } else if (VIEW.camSel && p && S.anim > (S.followHold || 0)) {
     const h = personHead(p);
     if (h) {
       const y = h.y + 40, top = VIEW.camY + VIEW.viewH * 0.22, bot = VIEW.camY + VIEW.viewH * 0.78;
@@ -80,7 +111,8 @@ export function updateCamera(dt) {
   VIEW.camY = clamp(VIEW.camY, 0, camMax());
 }
 export function scrollBy(dy) {
-  S.camTarget = null; S.followHold = S.anim + 4;
+  // manuell scrollning kopplar loss kameran
+  detachCam(); S.camTarget = null;
   VIEW.camY = clamp(VIEW.camY + dy, 0, camMax());
 }
 cv.addEventListener('wheel', ev => {
@@ -95,7 +127,7 @@ export let ovDrag = false;
 export function ovJump(ev) {
   const r = overview.getBoundingClientRect();
   const worldY = ROOF_Y + ((ev.clientY - r.top - 4) / ovRowH()) * FLOOR_H;
-  S.camTarget = null; S.followHold = S.anim + 4;
+  detachCam(); S.camTarget = null;
   VIEW.camY = clamp(worldY - VIEW.viewH / 2, 0, camMax());
 }
 overview.addEventListener('pointerdown', ev => { ovDrag = true; overview.setPointerCapture(ev.pointerId); ovJump(ev); });
