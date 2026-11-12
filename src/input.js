@@ -155,6 +155,7 @@ window.addEventListener('keydown', ev => {
   if (ev.code === 'Escape') {
     if (document.querySelector('.pop.show')) document.querySelectorAll('.pop.show').forEach(p => p.classList.remove('show'));
     else if (VIEW.carPop !== null) openCarPop(null);
+    else if (S.tab) setTab(S.tab); // stänger fönstret med flikarna
     else { select(null); detachCam(); }
   }
   const m = { Digit1: 1, Digit2: 2, Digit3: 4, Digit4: 8 }[ev.code];

@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=27">
+<link rel="stylesheet" href="style.css?v=28">
 </head>
 <body>
 <div id="app">
@@ -80,7 +80,7 @@
 
     <aside id="drawer" hidden>
       <section class="screen pane" data-pane="track">
-        <div class="pane-t">SPÅRAD PERSON</div>
+        <div class="pane-t">SPÅRAD PERSON<button class="pane-x" data-act="tab:track" title="Stäng (Esc)">✕</button></div>
         <div class="track">
           <div id="trackEmpty" class="tk-empty">Klicka på en person i huset, i registret eller i loggen för att följa hen genom hisslogiken.</div>
           <div id="trackBody" hidden>
@@ -102,7 +102,7 @@
         </div>
       </section>
       <section class="screen pane" data-pane="roster">
-        <div class="pane-t">PERSONREGISTER <span id="sum-roster"></span></div>
+        <div class="pane-t">PERSONREGISTER <span id="sum-roster"></span><button class="pane-x" data-act="tab:roster" title="Stäng (Esc)">✕</button></div>
         <div class="chips" id="rosterChips">
           <button data-f="all" class="chip on">Alla</button>
           <button data-f="wait" class="chip">Väntar</button>
@@ -112,7 +112,7 @@
         <div class="roster" id="roster"></div>
       </section>
       <section class="screen pane" data-pane="log">
-        <div class="pane-t">BESLUTSLOGG</div>
+        <div class="pane-t">BESLUTSLOGG<button class="pane-x" data-act="tab:log" title="Stäng (Esc)">✕</button></div>
         <div class="chips" id="logChips">
           <button data-f="all" class="chip on">Allt</button>
           <button data-f="lift" class="chip">Hissar</button>
@@ -123,7 +123,7 @@
         <div id="log" class="log"></div>
       </section>
       <section class="panel pane statspane" data-pane="stats">
-        <div class="label">DAGENS RESULTAT</div>
+        <div class="label">DAGENS RESULTAT<button class="pane-x" data-act="tab:stats" title="Stäng (Esc)">✕</button></div>
         <div class="stats" id="stats"></div>
       </section>
     </aside>

@@ -15,8 +15,8 @@ body{background:var(--desk);font-family:var(--ui);font-size:12px;color:var(--ink
 #game{display:block;border:2px solid;border-color:var(--shade) var(--hi) var(--hi) var(--shade);background:#000;cursor:crosshair;image-rendering:pixelated}
 
 /* ---------- Layout: topplist + spelyta (+ låda) ---------- */
-#app{display:flex;flex-direction:column;height:100vh;gap:8px;padding:8px}
-#main{flex:1;min-height:0;display:flex;gap:8px}
+#app{display:flex;flex-direction:column;height:100vh}
+#main{flex:1;min-height:0;display:flex;position:relative}
 #stage{flex:1;min-width:0;position:relative;overflow:hidden;display:flex;align-items:flex-start;justify-content:flex-start}
 
 /* ---------- Topplist (ett fönster med titelrad) ---------- */
@@ -142,14 +142,21 @@ body{background:var(--desk);font-family:var(--ui);font-size:12px;color:var(--ink
 .btn.car-b{background:var(--c);color:var(--ct);font-weight:700;min-width:26px;padding:1px 4px}
 .btn.car-b.on{box-shadow:var(--sunken);outline:2px solid #7dff9a;outline-offset:-2px}
 
-/* ---------- Lådan (spårad, register, logg, resultat) ---------- */
-#drawer{width:340px;flex:none;display:flex;flex-direction:column;gap:8px;min-height:0;overflow-y:auto;scrollbar-width:thin}
+/* ---------- Lådan (spårad, register, logg, resultat): ett fönster som flyter över spelytan ---------- */
+#drawer{
+  position:absolute;top:6px;right:6px;z-index:6;width:min(360px,calc(100% - 12px));max-height:calc(100% - 12px);
+  display:flex;flex-direction:column;min-height:0;overflow-y:auto;scrollbar-width:thin;
+  box-shadow:4px 4px 0 rgba(0,0,0,.35);
+}
+.pane-x{position:absolute;right:3px;top:2px;background:var(--face);color:#000;border:0;box-shadow:var(--raised);font:inherit;font-size:10px;line-height:1;padding:1px 4px;cursor:pointer}
+.pane-x:active{box-shadow:var(--sunken)}
+.pane .label{position:relative}
 #drawer[hidden]{display:none}
 .pane{flex:1;min-height:0;display:flex;flex-direction:column}
 .pane[hidden]{display:none}
 .pane-t{font-family:var(--ui);font-weight:700;font-size:12px;color:#fff;background:linear-gradient(90deg,var(--navy),var(--title2));margin:-3px -5px 4px;padding:3px 6px;position:relative;z-index:1}
 .pane-t span{color:var(--vga-y);font-weight:400}
-.pane .log,.pane .roster{flex:1;height:auto;min-height:120px}
+.pane .log,.pane .roster{flex:1;height:auto;min-height:120px;max-height:60vh}
 
 /* ---------- Skärmar: ett DOS-fönster i en grå ram ---------- */
 .screen{background:var(--face);box-shadow:var(--raised);padding:3px 5px 5px;position:relative;overflow:hidden}
@@ -244,6 +251,5 @@ body{background:var(--desk);font-family:var(--ui);font-size:12px;color:var(--ink
   #app{height:auto;min-height:100vh}
   body{overflow:auto}
   #main{flex-direction:column}
-  #drawer{width:auto}
   .tb-stats{margin-left:0}
 }

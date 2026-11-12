@@ -19,13 +19,13 @@ export const stage = document.getElementById('stage');
 export const VIEW = { scale: 1, dpr: 1, camY: 0, viewH: H, x0: LAND_X0, follow: /** @type {number|null} */ (null), carPop: /** @type {number|null} */ (null),
   camSel: false, camFloor: /** @type {number|null} */ (null), lastCam: /** @type {CamTarget|null} */ (null) };
 export function resize() {
-  // huset fyller bredden och kameran visar en del i taget (scrolla eller låt kameran följa)
+  // huset fyller hela bredden och kameran visar en del i taget (scrolla eller låt kameran följa)
   const stacked = window.innerWidth <= 800;
   stage.style.height = stacked ? '80vh' : '';
   const r = stage.getBoundingClientRect();
-  const innerW = r.width - 20, innerH = r.height - 20;
+  const innerW = r.width - 4, innerH = r.height - 4; // (ramen runt spelytan)
   const VW = W - VIEW.x0; // synlig bredd i världsenheter
-  const s = Math.max(0.3, Math.min(innerW / VW, 1.4));
+  const s = Math.max(0.3, innerW / VW);
   const cssW = VW * s, cssH = Math.min(H * s, innerH);
   const dpr = window.devicePixelRatio || 1;
   cv.style.width = cssW + 'px'; cv.style.height = cssH + 'px';

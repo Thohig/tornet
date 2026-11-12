@@ -6,7 +6,7 @@ import { liftsAvailable } from './people.js';
 import { costBased, costLine, eta, isFull, pickTotal, pickersAt, loadKg, cabinKg, slotsFull } from './dispatch.js';
 import { canRescue } from './incidents.js';
 import { plannedRoute, resetDay } from './sim.js';
-import { VIEW, camTarget, cv, nightness, pctx, resize, stage } from './view.js';
+import { VIEW, camTarget, cv, nightness, pctx, stage } from './view.js';
 import { personSprite } from './pixpeople.js';
 import { PAL } from './pixpal.js';
 import { stateInfo } from './describe.js';
@@ -505,7 +505,7 @@ export function select(p) {
 }
 
 // ---------- Lådan med flikar (spårad, register, logg, resultat) ----------
-// Stängd från början; samma flik igen stänger lådan.
+// Ett fönster som flyter över spelytan (spelytan behåller hela bredden). Stängd från början; samma flik igen stänger.
 export const TABS = ['track', 'roster', 'log', 'stats'];
 S.tab = (() => { try { const t = localStorage.getItem('hiss.tab'); return TABS.includes(t) ? t : null; } catch (e) { return null; } })();
 export function setTab(name) {
@@ -519,7 +519,6 @@ export function applyTab() {
   $('drawer').hidden = !S.tab;
   document.querySelectorAll('#drawer .pane').forEach(el => { /** @type {HTMLElement} */ (el).hidden = el.getAttribute('data-pane') !== S.tab; });
   document.querySelectorAll('#tabs .tab').forEach(el => el.classList.toggle('on', el.getAttribute('data-act') === 'tab:' + S.tab));
-  resize();
 }
 export const isOpen = n => S.tab === n;
 export function setText(id, t) { const el = $(id); if (el.textContent !== t) el.textContent = t; }
