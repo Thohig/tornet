@@ -4,7 +4,7 @@ import { fl } from './util.js';
 import { OFFICE_FLOORS } from './config.js';
 import { S, hooks, hour, log } from './state.js';
 import { arriveOnFloor, pev, pn, setTrip, toStairs } from './people.js';
-import { allowed, inFireZone, rebuildPicks, safeFloor } from './dispatch.js';
+import { allowed, allowedDest, allowedPos, inFireZone, posOf, rebuildPicks, safeFloor } from './dispatch.js';
 import { bounceBoarders, canBrakeTo, deckFloor, exitAll, restoreElevator, setMode } from './elevators.js';
 import { triggerFault, triggerHeat } from './service.js';
 import { startStorm } from './weather.js';
@@ -63,16 +63,21 @@ export function setFireMode(m) {
       const safe = safeFloor(e), drop = safe ?? e.minF;
       // hissar som inte når någon våning utanför zonen kör ner till sin lägsta våning och spärras
       e.zoneLock = safe === null;
-      for (const g of [...e.carCalls]) if (!allowed(g)) e.carCalls.delete(g);
+      for (const g of [...e.carCalls]) if (!allowedPos(e, g)) e.carCalls.delete(g);
       for (const p of e.passengers) {
-        if (allowed(p.dest)) continue;
+        if (allowedDest(e, p)) continue;
         // hinner hissen inte bromsa till den säkra våningen läggs den om vid nästa stopp (zoneReroute)
         if (!canBrakeTo(e, drop)) continue;
         p.viaStairs = true; p.dest = deckFloor(e, p, drop); e.carCalls.add(drop);
         pev(p, `Brandzonen spärrad – hiss ${e.name} släpper av mig på ${fl(drop)}, sen trappan`);
       }
       if (e.zoneLock) log(`🚧 ${e.name} når ingen våning utanför brandzonen – kör till ${fl(drop)} och stängs av`, 'alert', e.color);
-      if (e.parkTarget !== null && !allowed(e.parkTarget)) e.parkTarget = drop;
+      if (e.parkTarget !== null && !allowedPos(e, e.parkTarget)) e.parkTarget = drop;
+    }
+    // den som väntar på en dubbeldäckare som inte längre får stanna där (eller vid målet) får en ny hiss
+    for (const p of S.people) {
+      const e = p.state === 'wait' && p.assigned !== null ? S.elevators[p.assigned] : null;
+      if (e && (!allowedPos(e, posOf(e, p.floor)) || !allowedDest(e, p))) p.assigned = null;
     }
     log(`🚧 BRANDZON SPÄRRAD: hissarna kör bara upp till ${fl(zmax)}`, 'alert');
   } else {
