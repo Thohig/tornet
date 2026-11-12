@@ -421,6 +421,9 @@ function drawSlabsPx() {
     if (y > lo.height || y + h < 0) continue;
     R(x, y, w, 1, PAL.frame); R(x, y, 1, h, PAL.frame); R(x + w - 1, y, 1, h, PAL.frame);
   }
+}
+/** våningsdisplayerna sitter på hallväggen framför schakten: ritas efter linorna (som annars skymmer dem) men före korgarna */
+function drawLanternsPx() {
   for (const e of S.elevators) for (const f of e.serves) lantern(e, f);
 }
 /** våningsdisplay ovanför hissdörren: riktning, korgens våning (LED-siffror) och hallknapparna ▲/▼ */
@@ -535,14 +538,22 @@ function floorOverlays(f, h) {
 }
 
 // ---------- Hissarna ----------
-function drawCarPx(e) {
+/** korgens läge i lågupplösta pixlar, null om den är utanför bilden */
+function carGeom(e) {
   // nivåfel: korgen står en aning för lågt eller högt när linorna töjer sig (överdrivet så att det syns)
   const lv = (e.level || 0) * 2.5;
   const x = X(shaftX(e.id) + 4), cw = CAR_W / PX, chh = CAR_H / PX;
   const ybOf = k => Y(floorY(e.pos + k + lv) - 4);
   const top = e.deck2 ? 1 : 0, yb = ybOf(0), yt = ybOf(top) - chh; // yt = överkanten på den översta korgen
-  if (yt > lo.height + 40 || yb < -40) return;
-  if (!e.facade) {
+  if (yt > lo.height + 40 || yb < -40) return null;
+  return { x, cw, chh, ybOf, top, yb, yt };
+}
+/** motvikt och bärlinor: ritas före våningsdisplayerna (som sitter framför schakten) och korgarna */
+function drawRopesPx(e) {
+  const G = carGeom(e);
+  if (!G || e.facade) return;
+  const { x, cw, yt } = G;
+  {
     // motvikt och bärlinor – i stormen svänger linorna i de höga schakten
     const span = Math.max(1, e.maxF - e.minF), frac = (e.pos - e.minF) / span;
     const st = Y(shaftTop(e)), sb = Y(shaftBot(e)), cwH = 23, cwX = X(shaftX(e.id) + SHAFT_W - 15);
@@ -557,6 +568,11 @@ function drawCarPx(e) {
     }
     R(x + cw / 2 - 9, yt - 4, 19, 1, INK); R(x + cw / 2 - 9, yt - 4, 1, 4, INK); R(x + cw / 2 + 9, yt - 4, 1, 4, INK);
   }
+}
+function drawCarPx(e) {
+  const G = carGeom(e);
+  if (!G) return;
+  const { x, cw, chh, ybOf, top, yb, yt } = G;
   const off = e.off || e.mode === 'locked' || e.sleep || e.zoneLock || e.mode === 'broken' || e.mode === 'service' || e.hold || e.hot || e.windLock;
   const body = off ? PAL.carOff : e.color;
   // dubbeldäck: ramen mellan korgarna
@@ -989,6 +1005,8 @@ export function renderPixel(dt) {
   }
   drawSlabsPx();
   drawTerracePx(hr);
+  for (const e of S.elevators) drawRopesPx(e);
+  drawLanternsPx();
   for (const e of S.elevators) drawCarPx(e);
   drawHallPeople();
   drawHeliPx();
