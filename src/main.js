@@ -7,6 +7,7 @@ import { render } from './render.js';
 import { applyTab, buildHud, placeCarPop, showIntro, showSummary, updateHud, updateRoster, updateTracker } from './hud.js';
 import { setSpeed, syncControls } from './input.js';
 import { updateSound } from './sound.js';
+import { updateDirector } from './director.js';
 
 // ---------- Start ----------
 // Fröet kan väljas med ?seed=123 i adressen för att spela om exakt samma dag.
@@ -33,6 +34,7 @@ function frame(now) {
   const dt = Math.min(0.25, (now - last) / 1000); last = now;
   if (S.started && !S.paused) advance(dt, S.speed);
   S.anim += dt;
+  updateDirector();
   updateCamera(dt);
   render(dt);
   placeCarPop();

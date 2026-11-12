@@ -17,7 +17,9 @@ export const stage = document.getElementById('stage');
 // (camFloor). Manuell scrollning kopplar loss den; lastCam minns vad den senast följde så att den kan kopplas på igen.
 /** @typedef {{ kind: 'car'|'person'|'floor', id: number }} CamTarget */
 export const VIEW = { scale: 1, dpr: 1, camY: 0, viewH: H, x0: LAND_X0, follow: /** @type {number|null} */ (null), carPop: /** @type {number|null} */ (null),
-  camSel: false, camFloor: /** @type {number|null} */ (null), lastCam: /** @type {CamTarget|null} */ (null) };
+  camSel: false, camFloor: /** @type {number|null} */ (null), lastCam: /** @type {CamTarget|null} */ (null),
+  // regissören (director.js): automatisk kamera och den tagning den visar just nu
+  auto: false, shot: /** @type {(import('./director.js').Shot & { t0: number })|null} */ (null) };
 export function resize() {
   // huset fyller hela bredden och kameran visar en del i taget (scrolla eller låt kameran följa)
   const stacked = window.innerWidth <= 800;
@@ -60,7 +62,7 @@ export function camTarget() {
 export function detachCam() {
   const t = camTarget();
   if (t) VIEW.lastCam = t;
-  VIEW.follow = null; VIEW.camSel = false; VIEW.camFloor = null;
+  VIEW.follow = null; VIEW.camSel = false; VIEW.camFloor = null; VIEW.auto = false;
 }
 /** följ en hiss */
 export function followCar(id) {

@@ -7,6 +7,7 @@ import { VIEW, camTarget, cv, detachCam, followCar, lookAt, scrollBy, scrollToFl
 import { personHead, peopleBehindDoor } from './render.js';
 import { $, openCarPop, select, setTab, updateHud, updateRoster } from './hud.js';
 import { soundOn, toggleSound, unlockSound } from './sound.js';
+import { toggleAuto } from './director.js';
 
 // ---------- Kontroller ----------
 export function updatePauseBtn() { $('btnPause').textContent = S.paused ? '▶' : '❚❚'; $('btnPause').classList.toggle('on', S.paused); }
@@ -29,6 +30,7 @@ export function syncControls() {
   shown = key;
   $('strats').querySelectorAll('.btn').forEach(b => b.classList.toggle('on', /** @type {HTMLElement} */ (b).dataset.k === S.strategy));
   /** @type {HTMLInputElement} */ ($('autoInc')).checked = S.autoInc;
+  $('btnAuto').classList.toggle('on', VIEW.auto);
   for (const [id, key] of [['mistakeChips', 'mistakes'], ['maintChips', 'maint']]) {
     $(id).querySelectorAll('.chip').forEach(c => c.classList.toggle('on', /** @type {HTMLElement} */ (c).dataset.f === S[key]));
   }
@@ -100,6 +102,7 @@ $('btnTags').onclick = toggleTags;
 const syncSound = () => { const b = $('btnSound'); b.textContent = soundOn() ? '🔊' : '🔇'; b.classList.toggle('on', soundOn()); };
 const flipSound = () => { toggleSound(); syncSound(); };
 $('btnSound').onclick = flipSound;
+$('btnAuto').onclick = () => toggleAuto();
 syncSound();
 // ljudet var påslaget förra gången: webbläsaren släpper fram det först efter ett klick eller en tangent
 addEventListener('pointerdown', unlockSound, { once: true });
@@ -174,6 +177,7 @@ window.addEventListener('keydown', ev => {
   if (ev.code === 'KeyT') toggleTags();
   if (ev.code === 'KeyM') flipSound();
   if (ev.code === 'KeyF') toggleCam();
+  if (ev.code === 'KeyA') toggleAuto();
   if (ev.code === 'KeyS') cycleStrategy();
   if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'].includes(ev.code)) {
     ev.preventDefault();
