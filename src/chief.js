@@ -5,9 +5,12 @@
 // (`S.chief.manual`), och knappen "Låt driftchefen bestämma" lämnar tillbaka det.
 // Allt här är simulering: beslut fattas ur simuleringens tillstånd (aldrig slump), så samma frö ger
 // samma beslut. Chefen gör samma anrop som spelarens åtgärder men går inte via act() – act() är spelaren.
+// Cheferna är också personer i huset (crew.js): de sitter vid kontrollbordet, fikar i personalrummet och
+// byter skift – men besluten fattas var de än är (walkie-talkien), så huset sköter sig lika bra för det.
 import { fl } from './util.js';
-import { LOBBY } from './config.js';
+import { CREW, LOBBY } from './config.js';
 import { S, clockStr, hour, log } from './state.js';
+import { alarm, crewPerson, lookUp } from './crew.js';
 import { setStormMode, windAt, windMs } from './weather.js';
 import { setFireMode, startGenerator, toggleAutoRescue } from './incidents.js';
 import { orderService, startFan, WARM_AT } from './service.js';
@@ -16,11 +19,8 @@ import { hoistHalt } from './hoist.js';
 import { changeStrategy } from './actions.js';
 import { STRAT_NAMES } from './config.js';
 
-/** dagens och nattens driftchef (kontrollrummet byter skift klockan 22) */
-export const CHIEFS = [
-  { name: 'Gun-Britt', from: 6, look: { skin: '#f6c48f', shirt: '#2a5db0', pants: '#2b2f45', hair: 5, hairC: '#b0b0b8', tie: false, tieC: '#ffe14d', stripe: false, acc: 4 } },
-  { name: 'Rune', from: 22, look: { skin: '#e0ac7a', shirt: '#6b4a2b', pants: '#3a3a3a', hair: 1, hairC: '#3a2a1a', tie: false, tieC: '#ffe14d', stripe: true, acc: 4 } },
-];
+/** dagens och nattens driftchef (personalen i CREW, config.js – kontrollrummet byter skift klockan 22) */
+export const CHIEFS = CREW.filter(c => c.post === 'chief');
 /** vem som sitter i kontrollrummet just nu */
 export const chiefOnDuty = (h = hour()) => (h >= CHIEFS[1].from ? CHIEFS[1] : CHIEFS[0]);
 
@@ -82,7 +82,8 @@ export function setChief(on) {
   const C = S.chief;
   if (!C || C.on === !!on) return;
   C.on = !!on;
-  log(on ? `🧑‍💼 ${chiefOnDuty().name} sätter sig vid kontrollbordet – huset sköter sig självt` : '🧑‍💼 Driftchefen går på rast – alla beslut väntar på dig', 'chief');
+  log(on ? `🧑‍💼 ${chiefOnDuty().name} går tillbaka till kontrollbordet – huset sköter sig självt` : `🧑‍💼 ${chiefOnDuty().name} går på rast – alla beslut väntar på dig`, 'chief');
+  lookUp(p => p.role === 'driftchef'); // (cheferna reser sig direkt)
 }
 /** beslutet om en incident gäller inte längre: korten visar inget, och spelaren har inte längre tagit över */
 function clear(key) { delete S.chief.dec[key]; delete S.chief.manual[key]; }
@@ -92,6 +93,10 @@ const free = key => !S.chief.manual[key];
 export function chiefTick(dt) {
   const C = S.chief;
   if (!C) return;
+  // larmet går: chefen på fikarast reser sig direkt (i stället för vid nästa titt på klockan)
+  const a = alarm();
+  if (a && !C.alarmed) lookUp(p => p.onBreak);
+  C.alarmed = a;
   outcomes();
   // när incidenten är över gäller varken chefens eller spelarens beslut längre
   if (!S.storm) clear('storm');
@@ -260,3 +265,8 @@ function outcomes() {
   if (!n) return;
   for (const d of C.log) if (d.inc === L.type && !d.outcome && !d.info) d.outcome = n.text;
 }
+
+// ---------- Driftcheferna som personer (crew.js) ----------
+/** chefen i(CHIEFS) som person, om hen är i huset */
+export const chiefPerson = i => crewPerson(CHIEFS[i].id);
+export { alarm };

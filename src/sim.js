@@ -17,6 +17,7 @@ import { TRAIN_SHARE, trainReset, trainTick } from './train.js';
 import { medicClear, visitsReset, visitsTick } from './visits.js';
 import { hoistReset, hoistTick } from './hoist.js';
 import { chiefReset, chiefTick } from './chief.js';
+import { crewArrivals, crewStart, spawnCrew } from './crew.js';
 
 // ---------- Planerad rutt (för HUD) ----------
 export function plannedRoute(e) {
@@ -68,6 +69,7 @@ function makeSchedule() {
     { at: 24.5, run: () => spawnPizza() },
     { at: 26.8, run: () => spawnVisitor(LOBBY, -30, floorWith('server'), 'Akut serverlarm – ringde in från jouren') },
     ...castSchedule(), // stamgästerna kommer på sina vanliga tider
+    ...crewArrivals().map(({ at, id }) => ({ at, run: () => spawnCrew(id) })), // husets personal (crew.js)
   ];
 }
 export function spawnTick(dt) {
@@ -213,7 +215,7 @@ export function resetDay() {
   learnBlend(); S.learnToday = emptyLearn();
   S.t = 0; S.clock = 0; S.sched = makeSchedule(); S.acc = 0; S.summaryShown = false; S.nextId = 1; S.sel = null; S.wl = null; S.reoptT = 0;
   S.people = []; S.stats = newStats(); S.calls = {};
-  S.fire = null; S.power = true; S.outage = null; S.techCallAt = null; S.techCall = null; S.extraAt = null; S.powerBack = null; S.brigade = null; S.peakMode = null; S.wakeAt = 0;
+  S.fire = null; S.power = true; S.outage = null; S.foreman = null; S.techCallAt = null; S.techCall = null; S.extraAt = null; S.powerBack = null; S.brigade = null; S.peakMode = null; S.wakeAt = 0;
   S.notices = []; S.feed = []; // gårdagens informationsrutor visas inte igen (klockan S.t börjar om från 0)
   S.occ = new Map();
   // slitaget följer med från gårdagen (dag 1: slumpat – huset är inte nytt)
@@ -228,6 +230,7 @@ export function resetDay() {
   planIncidents(); // (sist: tidtabellen slumpas när allt annat är på plats)
   S.lastInc = null;
   chiefReset();
+  crewStart(); // (dagens driftchef och bildproducent sitter redan på sina platser)
 }
 export function newSim(seed, opts = {}) {
   S.seed = seed >>> 0; S.day = opts.day || 1; S.log = []; S.fx = []; S.elevators = [];

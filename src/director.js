@@ -1,8 +1,9 @@
 // Regissören: automatisk kamera som letar upp det mest sevärda i huset och klipper dit.
 // Rent gränssnitt: läser S, ändrar aldrig simuleringen (slumpen är vrand). Kameran rör sig via S.camTarget
 // precis som när man följer en hiss. Allt manuellt (scrolla, följa, klicka på någon) stänger av regissören.
-import { CONTROL, DOCK, FLOOR_H, LOBBY, ROOF, STATION, TOP, floorY } from './config.js';
-import { chiefOnDuty } from './chief.js';
+import { BREAK, CONTROL, CREW, DOCK, FLOOR_H, LOBBY, ROOF, STATION, TOP, floorY } from './config.js';
+import { alarm, chiefOnDuty } from './chief.js';
+import { CREW_BY, atPost, crewPerson, postFloor } from './crew.js';
 import { S, hour } from './state.js';
 import { fl } from './util.js';
 import { vpick, vrand } from './rng.js';
@@ -105,6 +106,17 @@ function shots() {
     else add('medicF', 80, 'floor', S.medic.floor, `🚑 ${S.medic.pname} har svimmat`);
   }
   if (S.heli && ROOF >= 0) add('heli', 75, 'floor', ROOF, '🚁 Helikoptern');
+  // husets personal (crew.js): skyndar tillbaka till kontrollrummet när larmet går, byter skift och tar rast
+  for (const p of S.people) {
+    if (p.dead) continue;
+    if (p.role === 'arbetsledare' && visible(p)) { add(`crew${p.id}`, 38, 'person', p.id, `🦺 ${p.name} från hissjouren`); continue; }
+    if (!p.crewId) continue;
+    const moving = p.state !== 'office' && visible(p), c = CREW_BY[p.crewId], pf = postFloor(c.post);
+    if (moving && p.goal === pf && alarm() && c.urgent) add(`crew${p.id}`, 64, 'person', p.id, `🏃 ${p.name} skyndar tillbaka till kontrollrummet`);
+    else if (moving && p.leaving) add(`crew${p.id}`, 30, 'person', p.id, `${c.icon} ${p.name} går hem – passet är slut`);
+    else if (moving && p.onBreak) add(`crew${p.id}`, 22, 'person', p.id, `☕ ${p.name}: ${p.breakWhy.toLowerCase()}`);
+    else if (p.state === 'office' && p.onBreak && p.floor === BREAK && BREAK >= 0) add(`brk${p.id}`, 24, 'floor', BREAK, `☕ ${p.name} fikar i personalrummet`);
+  }
   // teknikern ringer in en extra tekniker: korgen hen lagar eller våningen hen står på
   if (S.techCall && S.t < S.techCall.until) {
     const t = S.people.find(p => p.id === S.techCall.by && !p.dead);
@@ -256,14 +268,14 @@ export function updateDirector() {
 }
 
 // ---------- Bevakningen: personen vid skärmarna i kontrollrummet som klipper bilden ----------
-// Regissören är en person: hen sitter bredvid driftchefen, väljer vad som visas och tänker högt.
-// (Bara gränssnitt – namnen och tankarna påverkar aldrig simuleringen.)
-/** bevakningen i kontrollrummet, ett pass var (byter skift samtidigt som driftchefen, klockan 22) */
-export const CREW = [
-  { name: 'Ludde', from: 6, title: 'bildproducent' },
-  { name: 'Siv', from: 22, title: 'nattbevakare' },
-];
-export const crewOnDuty = (h = hour()) => (h >= CREW[1].from ? CREW[1] : CREW[0]);
+// Regissören är en person: bildproducenten (Ludde på dagen, Siv på natten – personalen i crew.js) sitter
+// bredvid driftchefen, väljer vad som visas och tänker högt. Är hen på rast går kameran på automatik.
+// (Gränssnittet läser bara: namnen och tankarna påverkar aldrig simuleringen.)
+const PRODUCERS = CREW.filter(c => c.post === 'producer').map(c => ({ id: c.id, name: c.name, from: c.from, title: c.title.split(' · ')[0].toLowerCase() }));
+/** bevakaren som har passet just nu (byter skift samtidigt som driftchefen, klockan 22) */
+export const crewOnDuty = (h = hour()) => (h >= PRODUCERS[1].from ? PRODUCERS[1] : PRODUCERS[0]);
+/** är bevakaren borta från skärmen (rast, på väg)? då sköter kameran sig själv */
+const awayFromDesk = who => { const p = crewPerson(who.id); return !!p && !atPost(p) ? p : null; };
 /** vad bevakaren tänker om en tagning, efter sorten (nyckeln utan id) */
 const THOUGHTS = {
   warn: ['Något är på gång – bäst att vara där först.', 'Den där siffran gillar jag inte…', 'Kaffet får vänta.'],
@@ -315,11 +327,14 @@ export function crewNow() {
       thought: S.paused ? 'Pausat. Jag hämtar mer kaffe.' : 'Säg till när jag ska ta över bilden igen (A).' };
   }
   if (!s) return { who, auto: true, cut: false, doing: 'Letar efter något att visa', show: '🎬 …', thought: 'Skärmarna, skärmarna…' };
+  const away = awayFromDesk(who);
   const key = `${s.key}|${s.t0}`;
   if (key !== crewKey) { crewKey = key; crewThought = vpick(THOUGHTS[s.key.replace(/\d+$/, '')] || ['Hm, vad är det där?']); }
   const doing = s.kind === 'car' ? `Följer hiss ${S.elevators[s.id].name}`
     : s.kind === 'person' ? `Följer ${(S.people.find(p => p.id === s.id) || { name: 'någon' }).name.split(' ')[0]}`
     : s.kind === 'floor' ? `Visar våning ${fl(s.id)}`
     : s.kind === 'cleaner' ? 'Zoomar in på fasaden' : 'Följer hissbalken';
+  if (away) return { who, auto: true, cut: S.anim - s.t0 < 1.2, doing: away.onBreak ? 'på rast – kameran sköter sig själv' : 'borta från skärmen – kameran sköter sig själv', show: s.why,
+    thought: away.onBreak ? `(${away.breakWhy})` : '(på väg tillbaka till skärmen)' };
   return { who, auto: true, cut: S.anim - s.t0 < 1.2, doing, show: s.why, thought: crewThought };
 }

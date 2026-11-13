@@ -9,13 +9,13 @@ import {
   toggleOff, endFire, canRescue,
 } from '../src/incidents.js';
 import { liftsAvailable, spawnBus, pn } from '../src/people.js';
-import { loadKg, allowed, allowedPos, posOf, safeFloor, operational, canTake, stopFloors, isFull, costBased, benched } from '../src/dispatch.js';
+import { loadKg, allowed, allowedPos, posOf, safeFloor, operational, canTake, stopFloors, isFull, costBased, benched, inFireZone } from '../src/dispatch.js';
 import { RATED_KG, FULL_LOAD, VMAX, DEFAULT_TEMPO, dayLength } from '../src/config.js';
 import { needsFreight, mayUseFreight, legDest } from '../src/people.js';
 import { fl } from '../src/util.js';
 import { assignCalls, antiNuisance } from '../src/buttons.js';
 import { act } from '../src/actions.js';
-import { powerKw, triggerFault, breakDown, tech, techs, techOf, snapCable, EXTRA_QUEUE, CALL_T, trapBreak, FAULT_KIND } from '../src/service.js';
+import { powerKw, triggerFault, breakDown, tech, techs, techOf, snapCable, EXTRA_QUEUE, CALL_T, trapBreak, FAULT_KIND, jobFloor } from '../src/service.js';
 import { WARN_S, FF_ATTACK_S, endOutage } from '../src/incidents.js';
 import { forceMove, BLANKET_T } from '../src/visits.js';
 import { trafficMode, learnBin, peakHold, PEAK_HOLD } from '../src/dispatch.js';
@@ -24,7 +24,10 @@ import { canBrakeTo } from '../src/elevators.js';
 import { MEZZ, STATION, TRAIN_X0, TRAIN_X1 } from '../src/config.js';
 import { LAST_H } from '../src/train.js';
 import { FIRE_FLOORS, INC_LEVELS } from '../src/incidents.js';
-import { CONTROL } from '../src/config.js';
+import { CONTROL, BREAK } from '../src/config.js';
+import { CHIEFS, chiefPerson, setChief } from '../src/chief.js';
+import { CREW_BY, atPost, crewPerson, postFloor } from '../src/crew.js';
+import { CREW } from '../src/config.js';
 
 // ---------- Ramverk ----------
 export const tests = [];
@@ -71,7 +74,8 @@ function watcher() {
       // en trasig hiss eller en hiss på service rör sig aldrig och har ingen ombord;
       // en hiss som väntar på service tar aldrig nya passagerare
       // (ett hissfel mellan två våningar har kvar sina instängda – men ingen ny kliver på)
-      if ((e.mode === 'broken' || e.mode === 'service') && ((e.passengers.length && !(e.fault && e.fault.trapped)) || e.reserved || Math.abs(e.pos - before[i]) > 1e-9)) w.brokenUse++;
+      // (en korg som vevas ner för hand vid brandlarm rör sig – service.js fireCrank)
+      if ((e.mode === 'broken' || e.mode === 'service') && ((e.passengers.length && !(e.fault && e.fault.trapped)) || e.reserved || (Math.abs(e.pos - before[i]) > 1e-9 && !(e.fault && e.fault.crank)))) w.brokenUse++;
       // (de som redan var på väg in genom dörren när hissen kallades till service får åka med)
       const aboard = e.passengers.length + e.reserved;
       // (bara om hissen var hållen redan före steget – den som klev på i samma steg som servicen beställdes hann före)
@@ -581,6 +585,53 @@ test('Instängda går före: teknikern lämnar ett långt jobb för folk som sit
   assert(w.passes === 0 && w.brokenUse === 0, `regelbrott (förbi ${w.passes}, trasig ${w.brokenUse})`);
   return `${t.name}: ${long.name} → ${e.name} (fria efter ${Math.round(freed - t0)} s) → ${long.name} igen`;
 });
+test('Instängda i två hissar: teknikern som räddar de första ringer direkt in en kollega till de andra', () => {
+  sim(43); runUntil(9);
+  const mid = x => x.mode === 'normal' && x.state === 'moving' && x.passengers.length && !x.deck2 && !x.facade && x.pos - Math.floor(x.pos) > 0.35 && x.pos - Math.floor(x.pos) < 0.75;
+  let a = null, g = 0;
+  while (!a && ++g < 120 / DT) { step(DT); a = S.elevators.find(mid) || null; }
+  assert(a, 'ingen hiss körde med folk');
+  trapBreak(a); a.fault.need = 1e6; // (det första jobbet tar lång tid)
+  g = 0;
+  while (!(techOf(a) && techOf(a).state === 'office') && ++g < 300 / DT) step(DT);
+  assert(techOf(a), `ingen tekniker kom till ${a.name}`);
+  let b = null; g = 0;
+  while (!b && ++g < 120 / DT) { step(DT); b = S.elevators.find(x => x !== a && mid(x)) || null; }
+  assert(b, 'ingen annan hiss körde med folk');
+  trapBreak(b);
+  const t0 = S.t; g = 0;
+  while (!S.techCall && ++g < 20 / DT) step(DT);
+  assert(S.techCall && S.techCall.trapped === b.name, `teknikern ringde inte efter hjälp till ${b.name} (${JSON.stringify(S.techCall)})`);
+  g = 0;
+  while (b.mode === 'broken' && ++g < 200 / DT) step(DT);
+  assert(b.mode === 'normal', `de instängda i ${b.name} blev aldrig fria`);
+  return `teknikern i ${a.name} ringde in en kollega · de i ${b.name} fria efter ${Math.round(S.t - t0)} s`;
+});
+test('Brandlarm medan folk sitter fast: teknikern vevar ner korgen för hand och släpper ut dem innan hen utryms', () => {
+  sim(43); runUntil(9);
+  const w = watcher();
+  let e = null, g = 0;
+  // en hiss högt upp (så att branden kan ligga ovanför entrén och ändå nå teknikern)
+  while (!e && ++g < 120 / DT) { step(DT); e = S.elevators.find(x => x.mode === 'normal' && x.state === 'moving' && x.passengers.length && !x.deck2 && !x.facade && x.pos > LOBBY + 3 && x.pos - Math.floor(x.pos) > 0.35 && x.pos - Math.floor(x.pos) < 0.75) || null; }
+  assert(e, 'ingen hiss körde med folk högt upp');
+  const who = [...e.passengers];
+  trapBreak(e); e.fault.need = 1e6; // (lagningen hinner inte bli klar före branden)
+  g = 0;
+  let t = null;
+  while (!(t && t.state === 'office' && t.floor === e.floor) && ++g < 300 / DT) { const b = w.before(); step(DT); w.check(b); t = techOf(e); }
+  assert(t, 'teknikern kom aldrig fram till den instängda hissen');
+  startFire(Math.max(LOBBY + 1, t.floor)); // teknikerns våning hamnar i brandzonen
+  g = 0;
+  while (who.some(p => p.state === 'ride' && p.car === e) && ++g < 60 / DT) { const b = w.before(); step(DT); w.check(b); }
+  assert(!who.some(p => p.state === 'ride' && p.car === e), `de instängda i ${e.name} sitter kvar under branden`);
+  assert(e.mode === 'broken' && !e.fault.trapped && Number.isInteger(e.pos) && e.stops.has(e.pos), `${e.name} står inte trasig vid en våning (${e.mode}, ${e.pos})`);
+  assert(who.every(p => p.dead || p.evac || !inFireZone(p.floor)), 'någon som släpptes ut i brandzonen utryms inte');
+  g = 0;
+  while (!t.dead && t.floor !== t.exitFloor && ++g < 120 / DT) step(DT);
+  assert(t.dead || t.floor === t.exitFloor, `${t.name} utrymdes inte efter vevandet`);
+  assert(S.notices.some(n => n.kind === 'fault'), 'ingen ruta när de instängda kom ut');
+  return `${who.length} ute ur ${e.name} på ${fl(e.floor)} · ${t.name} utryms`;
+});
 
 // ---------- Strömavbrott ----------
 test('Strömavbrott utan åtgärd: hissarna står still, folk sitter fast, strömmen kommer tillbaka', () => {
@@ -915,19 +966,21 @@ test('Hissfel i entrén: teknikern kliver in och lagar direkt (ingen hissresa ti
   return `${e.name} lagad på ${fl(e.floor)}`;
 });
 test('Nattservice: de slitna hissarna servas på natten, utan den slits de dag för dag', () => {
-  const days = maint => {
-    sim(1, { autoInc: true, maint });
+  const days = (maint, seed) => {
+    sim(seed, { autoInc: true, maint });
     let faults = 0, serviced = 0;
     for (let d = 1; d <= 3; d++) { runDay(); faults += S.stats.faults; serviced += S.stats.serviced; S.day++; resetDay(); }
     return { faults, serviced, wear: S.elevators.reduce((a, e) => a + e.wear, 0) / S.elevators.length };
   };
-  const night = days('natt'), none = days('fel');
-  assert(night.serviced >= 6, `bara ${night.serviced} hissar servades på tre nätter`);
+  // (felen räknas över tre frön – med ett enda frö avgör slumpen för mycket)
+  const sum = maint => [1, 2, 3].map(seed => days(maint, seed)).reduce((a, b) => ({ faults: a.faults + b.faults, serviced: a.serviced + b.serviced, wear: a.wear + b.wear / 3 }), { faults: 0, serviced: 0, wear: 0 });
+  const night = sum('natt'), none = sum('fel');
+  assert(night.serviced >= 18, `bara ${night.serviced} hissar servades på 3 × tre nätter`);
   assert(none.serviced === 0, 'service trots "bara vid fel"');
   // (dygn med många hissfel hinner teknikern serva färre på natten – därför en viss marginal)
   assert(night.wear < none.wear * 0.7 && none.wear > 0.4, `snittslitage: nattservice ${night.wear.toFixed(2)} · bara vid fel ${none.wear.toFixed(2)}`);
   assert(night.faults < none.faults, `fel: nattservice ${night.faults} · bara vid fel ${none.faults}`);
-  return `3 dygn · nattservice: ${night.serviced} servade, ${night.faults} fel, slitage ${Math.round(night.wear * 100)} % · bara vid fel: ${none.faults} fel, slitage ${Math.round(none.wear * 100)} %`;
+  return `3 frön × 3 dygn · nattservice: ${night.serviced} servade, ${night.faults} fel, slitage ${Math.round(night.wear * 100)} % · bara vid fel: ${none.faults} fel, slitage ${Math.round(none.wear * 100)} %`;
 });
 test('Nattservice som avbryts (teknikern utryms vid brand): hissen fastnar inte på service', () => {
   sim(1);
@@ -1031,7 +1084,8 @@ test('Rusning: på morgonen kör lediga hissar direkt tillbaka till entrén (ell
         if (e.parkTarget === e.home) parked++;
         // (en hiss som går ner till perrongen får möta ett tåg som snart är där – men bara en åt gången)
         else if (e.parkTarget === STATION && e.stops.has(STATION)) { meets.add(`${seed}:${S.trainNext}:${e.id}`); if (S.elevators.filter(o => o.parkTarget === STATION).length > 1) twoMeet++; }
-        else away++;
+        // (parkTarget null: hissen fick nyss en passagerare – färden räknas om i samma steg)
+        else if (e.parkTarget !== null) away++;
       }
     }
   }
@@ -1187,8 +1241,9 @@ test('Informationsrutor: ett nytt dygn börjar utan gårdagens rutor (bara en ka
   return `${before} rutor på dag 1 · ${S.notices.length} när dag 2 börjar (${S.weather.temp} °C)`;
 });
 test('Hissetikett: folk avstår från trånga hissar, och turistgruppen tränger ihop sig', () => {
-  sim(76); runUntil(10.3);
-  const { crowdSkips, holds } = S.stats;
+  // (det händer bara några gånger per morgon – därför tre frön)
+  let crowdSkips = 0, holds = 0;
+  for (const seed of [76, 77, 78]) { sim(seed); runUntil(10.3); crowdSkips += S.stats.crowdSkips; holds += S.stats.holds; }
   assert(crowdSkips > 0, 'ingen avstod från en trång hiss i morgonrusningen');
   assert(holds > 0, 'ingen höll upp dörren');
   sim(76); spawnBus(5);
@@ -1885,6 +1940,108 @@ test(`Dockhuset: utan spelaren tar sig huset igenom kaosdygn – incidenterna ta
   assert(fails.length === 0, `${fails.length} fel:\n  ${fails.slice(0, 10).join('\n  ')}`);
   assert(decs > seeds.length, `bara ${decs} beslut av chefen på ${seeds.length} dygn`);
   return `${inc} incidenter · ${decs} beslut av chefen · längst: instängd ${Math.round(trap)} s, storm ${Math.round(storm)} s, brand ${Math.round(fire)} s, avbrott ${Math.round(out)} s`;
+});
+test('Driftcheferna är personer: vid bordet, fikar när det är lugnt, skyndar tillbaka vid larm och byter skift kl 22', () => {
+  sim(31, { chief: true });
+  const gb = chiefPerson(0);
+  const atDesk = p => !!p && p.state === 'office' && p.floor === CONTROL && p.spot && p.spot.post === 'chief';
+  const inBreak = p => !!p && p.state === 'office' && p.floor === BREAK && p.spot && p.spot.brk;
+  assert(atDesk(gb), `${CHIEFS[0].name} sitter inte vid kontrollbordet när dygnet börjar`);
+  // en fikarast när det är lugnt (på dagen)
+  let fika = false, back = false;
+  while (hour() < 16 && !(fika && back)) { step(DT); if (inBreak(gb)) fika = true; else if (fika && atDesk(gb)) back = true; }
+  assert(fika && back, `${gb.name}: fika ${fika} · tillbaka vid bordet ${back}`);
+  // larm mitt i rasten: chefen reser sig och går tillbaka
+  while (hour() < 21 && !inBreak(gb)) step(DT);
+  if (!inBreak(gb)) { gb.breaks.forEach(b => { b.done = false; b.at = hour(); }); while (hour() < 21.4 && !inBreak(gb)) step(DT); }
+  assert(inBreak(gb), `${gb.name} tog ingen rast`);
+  act('trigger', 'heat', 0);
+  let g = 0;
+  while (!atDesk(gb) && ++g < 90 / DT) step(DT);
+  assert(atDesk(gb), `${gb.name} kom inte tillbaka till bordet efter larmet (${gb.state} på ${fl(gb.floor)})`);
+  // spelaren skickar chefen på rast: hen går till personalrummet, och tillbaka när chefen slås på igen
+  setChief(false); g = 0;
+  while (!inBreak(gb) && ++g < 90 / DT) step(DT);
+  assert(inBreak(gb), `${gb.name} gick inte på rast när spelaren tog över`);
+  setChief(true);
+  // skiftbytet: Rune kommer, väntar tills Gun-Britt har gått och tar över bordet – aldrig två vid bordet
+  let both = 0;
+  while (hour() < 23.5) {
+    step(DT);
+    if (S.people.filter(p => atDesk(p)).length > 1) both++;
+  }
+  const ru = chiefPerson(1);
+  assert(both === 0, 'två chefer vid bordet samtidigt');
+  assert(!chiefPerson(0), `${CHIEFS[0].name} är kvar i huset efter skiftbytet`);
+  assert(atDesk(ru), `${CHIEFS[1].name} sitter inte vid bordet efter skiftbytet (${ru ? `${ru.state} på ${fl(ru.floor)}` : 'inte i huset'})`);
+  return `${gb.name} fikade och kom tillbaka · skyndade tillbaka vid larm · ${ru.name} tog över bordet`;
+});
+test('Personalen: alla kommer till sin post, tar raster, går hem efter passet och delar aldrig plats', () => {
+  sim(31, { chief: true });
+  const posted = {}, breaks = {}, home = {}, seen = new Set();
+  let shared = 0, uncovered = 0;
+  const ids = CREW.filter(c => c.arrive !== 'event').map(c => c.id);
+  while (!S.summaryShown) {
+    step(DT);
+    const here = S.people.filter(p => p.crewId && !p.dead);
+    for (const p of here) {
+      seen.add(p.crewId);
+      if (atPost(p)) posted[p.crewId] = true;
+      if (p.onBreak && p.state === 'office') breaks[p.crewId] = true;
+    }
+    for (const id of seen) if (!crewPerson(id)) home[id] = true;
+    // aldrig två på samma plats
+    const spots = here.filter(p => p.state === 'office' && p.spot && !p.spot.temp && p.spot.k !== 'door').map(p => p.spot);
+    if (new Set(spots).size !== spots.length) shared++;
+    // kontrollrummet: chefen och bildproducenten är aldrig borta samtidigt på rast (utom när spelaren tog över)
+    const away = post => here.some(p => CREW_BY[p.crewId].post === post && p.onBreak);
+    if (away('chief') && away('producer')) uncovered++;
+  }
+  for (const id of ids) {
+    const c = CREW_BY[id];
+    assert(posted[id], `${c.name} kom aldrig till sin post (${c.post})`);
+    assert(c.breaks.length === 0 || breaks[id], `${c.name} tog ingen rast`);
+    if (c.until !== null) assert(home[id], `${c.name} gick aldrig hem efter passet`);
+  }
+  assert(shared === 0, `två ur personalen på samma plats i ${shared} steg`);
+  assert(uncovered === 0, `chefen och bildproducenten på rast samtidigt i ${uncovered} steg`);
+  return `${ids.length} i personalen · alla på post, rast och hem i tid`;
+});
+test('Fönsterputsaren: gondolen putsar bara med Hasse ombord, och hissas upp innan han går på rast', () => {
+  sim(31, { chief: true });
+  let scrubAlone = 0, scrubbed = 0, offMid = 0;
+  const C = () => S.cleaner;
+  while (hour() < 17.8) {
+    step(DT);
+    const h = crewPerson('hasse'), aboard = !!h && atPost(h);
+    if (C().scrub) { scrubbed++; if (!aboard) scrubAlone++; }
+    // den som lämnar gondolen gör det bara när den är uppe vid taket
+    if (h && h.floor === postFloor('gondola') && h.state !== 'office' && !C().parked) offMid++;
+  }
+  assert(scrubbed > 0, 'gondolen putsade aldrig');
+  assert(scrubAlone === 0, `gondolen putsade utan putsaren i ${scrubAlone} steg`);
+  assert(offMid === 0, `putsaren klev av gondolen mitt på fasaden (${offMid} steg)`);
+  return `putsade ${Math.round(scrubbed * DT)} s · alltid med Hasse ombord`;
+});
+test('Arbetsledaren från hissjouren kommer vid ett linbrott och åker när hissen går igen', () => {
+  sim(43); runUntil(9);
+  const e = S.elevators.find(x => x.mode === 'normal' && !x.facade && x.state !== 'moving' && x.pos > x.minF + 1);
+  assert(e, 'ingen hiss att ha linbrott i');
+  snapCable(e);
+  let g = 0, stig = null;
+  while (!stig && ++g < 120 / DT) { step(DT); stig = S.people.find(p => p.role === 'arbetsledare') || null; }
+  assert(stig, 'ingen arbetsledare kom');
+  g = 0;
+  while (!(stig.state === 'office' && stig.floor === jobFloor(e)) && !stig.dead && ++g < 200 / DT) step(DT);
+  assert(stig.state === 'office', `${stig.name} kom aldrig fram till hissen`);
+  // linbytet tar timmar: gör det klart direkt
+  g = 0;
+  while (e.mode === 'snapped' && ++g < 300 / DT) step(DT);
+  if (e.mode === 'broken' && e.fault) e.fault.need = 0;
+  g = 0;
+  while (!stig.dead && ++g < 300 / DT) step(DT);
+  assert(stig.dead, `${stig.name} åkte aldrig tillbaka till jouren (${e.name}: ${e.mode})`);
+  return `${stig.name} tittade på ${e.name} och åkte när den gick igen`;
 });
 /** längsta tid någon får sitta instängd när driftchefen sköter huset (linbrott: utrymning genom takluckan) */
 const DOCK_TRAP_S = 150;

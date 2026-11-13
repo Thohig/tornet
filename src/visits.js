@@ -15,6 +15,7 @@ import { makePerson, needsFreight, pev, pn, releaseSpot, setTrip } from './peopl
 import { allowedPos, costBased, outReason, OUT_TEXT, prio, posOf } from './dispatch.js';
 import { canBrakeTo, deckFloor, unload, releaseCalls } from './elevators.js';
 import { hoistHalt, hoistServes } from './hoist.js';
+import { spawnCrew } from './crew.js';
 
 const freightCar = () => S.elevators.find(e => e.freight) || null;
 
@@ -157,6 +158,8 @@ function moveTick(dt) {
     M.state = 'on'; M.t0 = S.t;
     M.crewAt = S.t + (M.blankets ? BLANKET_T : 0);
     spawnMover(M, M.crew, true);
+    // med hissbalken kommer lastaren som tar emot möblerna på takterrassen (personalen, crew.js)
+    if (M.hoist) spawnCrew('mona', false, DOCK);
     // familjen kommer hem och packar (den som är ute vänder hem)
     for (const p of family(M)) { p.moving = true; if (p.state === 'away') p.returnAt = Math.min(p.returnAt, hour() + 0.3); }
     if (!M.smart || M.blankets) { V.indep = true; V.parkTarget = null; V.sleep = false; releaseCalls(V, M.blankets ? 'kläs med skyddsfiltar (flyttdag)' : 'går i oberoende drift (flyttdag)'); }
@@ -394,6 +397,7 @@ function holdTick(A, crew) {
       if (e && e.mode === 'normal' && !outReason(e)) {
         A.car = e.id; A.held = true; e.medicHold = true; e.parkTarget = null;
         log(`🚑 ${e.name} står kvar på ${fl(A.floor)} med ambulansens nyckel – väntar på personalen och båren`, 'alert', e.color);
+        holdClear(e);
       }
     }
   }
@@ -454,6 +458,21 @@ export function medicNext(p) {
  * stopp och tar en annan hiss. Kostnadsstyrningen låter de som ändå ska på vägen åka klart; de enkla
  * lägena släpper av alla.
  */
+/** Hissen ställs på patientens våning: den som fortfarande åker med (på väg längre) kliver av här –
+ *  en hiss som väntar på ambulansen kör ingenstans */
+function holdClear(e) {
+  const f = Math.round(e.pos), out = e.passengers.filter(p => !prio(p));
+  if (!out.length) return;
+  for (const p of out) {
+    const pf = deckFloor(e, p, f);
+    if (p.dest === pf) continue;
+    pev(p, `Ambulansen behöver hiss ${e.name} – jag kliver av här på ${fl(pf)} och tar en annan hiss`);
+    p.dest = pf;
+  }
+  e.carCalls = new Set(e.passengers.map(p => posOf(e, p.dest)));
+  log(`🚑 ${e.name}: ${out.length} passagerare kliver av på ${fl(f)} – hissen väntar på ambulansen`, 'alert', e.color);
+  if (e.state === 'doors' && e.doorPhase === 'open') unload(e, f);
+}
 export function medicClear(e) {
   const crew = S.people.find(p => p.medic && p.state === 'wait' && p.assigned === e.id);
   const target = crew ? crew.floor : null;

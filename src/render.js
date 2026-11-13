@@ -1,10 +1,13 @@
 // Grafikens ingång och logiken för VAR folk syns i bilden (hallen framför hissarna).
 // Själva ritandet sker i pixel.js. Allt här är bara grafik: simuleringens p.x ändras aldrig.
 import { clamp } from './util.js';
-import { CAR_W, DOOR_X, W, WAIT_X1, floorY, shaftX, surf } from './config.js';
+import { BX1, CAR_W, DOOR_X, TOP, TOWER_X1, W, WAIT_X1, floorY, shaftX, surf } from './config.js';
+import { TERRACE_Y } from './hoist.js';
 import { S } from './state.js';
 import { clouds } from './view.js';
 import { renderPixel } from './pixel.js';
+import { PX } from './pixart.js';
+import { PERSON_H, PERSON_W } from './pixpeople.js';
 import { windAt } from './weather.js';
 
 /** platser i korgen: bakre raden (0–3) och främre raden (4–7), utspridda över korgens bredd */
@@ -12,9 +15,24 @@ export function carSlotX(i) { return i < 4 ? 12 + i * (CAR_W - 24) / 3 : 16 + (i
 /** hissetikett: den i:te som kliver på ställer sig i ett ledigt hörn först, sedan i mitten (platsens index) */
 const CORNERS = [0, 3, 1, 2, 4, 7, 5, 6];
 export const carSlot = i => CORNERS[i % 8];
+/** syns personen på sin plats (spot.win): i ett fönster i hallens bakvägg (kontrollrummet, personalrummet),
+ *  bakom receptionsdisken, i gondolen eller på takterrassen? ('hall' = står i hallen och ritas som folket där) */
+export const inWindow = p => p.state === 'office' && !!(p.spot && p.spot.win) && p.spot.win !== 'hall';
+/** var den som syns på sin plats ritas: x = figurens mitt och y = huvudets överkant, i världens koordinater
+ *  (pixel.js ritar figuren just där – samma geometri som gondolen och terrassen ritas med) */
+export function winPos(p) {
+  const s = p.spot;
+  switch (s.win) {
+    case 'gondola': return { x: TOWER_X1[TOP] + 7 + PX * 7 + PERSON_W, y: (S.cleaner ? S.cleaner.y : surf(p.floor)) - PX * (PERSON_H - 1) };
+    case 'terrace': return { x: BX1 - PX * 22 + PERSON_W, y: TERRACE_Y - PX * (PERSON_H + 1) };
+    case 'reception': return { x: s.x, y: surf(p.floor) - PX * 24 };
+    default: return { x: s.x, y: surf(p.floor) - PX * (PERSON_H + (s.k === 'stand' ? 4 : s.win === 'control' ? -5 : -1)) };
+  }
+}
 export function personHead(p) {
   // var personens huvud syns just nu (för markörer & träffytor)
   if (p.dead) return null;
+  if (inWindow(p)) { const w = winPos(p); return { x: w.x, y: w.y - 22 }; }
   if (p.state === 'ride') {
     const e = p.car, k = e.deck2 ? p.deck || 0 : 0;
     const i = e.passengers.filter(q => !e.deck2 || (q.deck || 0) === k).indexOf(p);
@@ -38,21 +56,29 @@ export function visX(x) {
   return WAIT_X1 - (QA + r * (1 - Math.exp(-(d - QA) / r)));
 }
 const SHOWN = new Set(['toQueue', 'wait', 'boarding', 'exiting', 'stairs', 'platform']);
-/** @type {WeakMap<object, {state: string, floor: number, vis: boolean, vx: number, x0?: number, vx0?: number, fromDoor?: boolean}>} */
+/** @type {WeakMap<object, {state: string, floor: number, vis: boolean, vx: number, x0?: number, vx0?: number, fromDoor?: boolean, win?: boolean}>} */
 const SEEN = new WeakMap();
 const lerp = (a, b, t) => a + (b - a) * t;
 /** var personen syns i hallen just nu: { x, a, dir } (a = synlighet 0–1), eller null om hen är "bakom" korridoren */
 export function landPos(p) {
   let r = SEEN.get(p);
+  // står på en plats i hallen (personalen vid godisautomaten, på perrongen): syns där
+  if (p.state === 'office' && p.spot && p.spot.win === 'hall') {
+    if (r) { r.state = p.state; r.floor = p.floor; r.vis = true; r.vx = p.spot.x; r.win = true; }
+    else SEEN.set(p, { state: p.state, floor: p.floor, vis: true, vx: p.spot.x, win: true });
+    return { x: p.spot.x, a: 1, dir: 0 };
+  }
   if (p.state === 'ride' || !SHOWN.has(p.state)) {
-    const vis = p.state === 'ride';
-    if (r) { r.state = p.state; r.vis = vis; r.floor = p.floor; } else SEEN.set(p, { state: p.state, floor: p.floor, vis, vx: DOOR_X });
+    const vis = p.state === 'ride', win = inWindow(p);
+    // (den som sitter i ett fönster syns där – går hen sedan ut i hallen gör hen det därifrån, inte ur korridoren)
+    if (r) { r.state = p.state; r.vis = vis; r.floor = p.floor; r.win = win; if (win) r.vx = p.spot.x; }
+    else SEEN.set(p, { state: p.state, floor: p.floor, vis, vx: win ? p.spot.x : DOOR_X, win });
     return null;
   }
   if (!r || r.state !== p.state || r.floor !== p.floor && r.state !== 'ride') {
     // nytt läge: kom personen från något som syntes (hissen, kön) eller inifrån rummen?
     // (den som just klev av tunnelbanan syns från första steget, vid tågets dörr)
-    const prev = (!r && p.fromTrain) || (r && (r.state === 'ride' || r.vis && r.floor === p.floor));
+    const prev = (!r && p.fromTrain) || (r && (r.state === 'ride' || (r.vis || r.win) && r.floor === p.floor));
     const vx0 = !prev ? DOOR_X : !r || r.state === 'ride' ? p.x : r.vx;
     r = { state: p.state, floor: p.floor, vis: false, vx: vx0, x0: p.x, vx0, fromDoor: !prev };
     SEEN.set(p, r);
@@ -61,9 +87,11 @@ export function landPos(p) {
   if (p.state === 'wait' || p.state === 'platform') vx = visX(p.x);
   else {
     // (den som ska med tunnelbanan går ut på perrongen, inte in i korridoren)
-    const toDoor = (p.state === 'exiting' && !p.toTrain) || p.state === 'stairs';
+    // (till ett fönster i bakväggen går man genom hallen och sätter sig där)
+    const toWin = p.state === 'exiting' && !!(p.spot && p.spot.win);
+    const toDoor = (p.state === 'exiting' && !p.toTrain && !toWin) || p.state === 'stairs';
     if (r.fromDoor && toDoor) { r.vis = false; return null; } // inifrån och in igen: syns aldrig
-    const vxT = toDoor ? DOOR_X : p.state === 'boarding' ? p.tx : visX(p.tx);
+    const vxT = toDoor ? DOOR_X : p.state === 'boarding' || toWin ? p.tx : visX(p.tx);
     const Dw = Math.abs(p.tx - r.x0), t = Dw > 1 ? clamp(Math.abs(p.x - r.x0) / Dw, 0, 1) : 1;
     // kort gångväg (rummet ligger nära kön): dyk upp/försvinn en bit ut i hallen i stället för att
     // rusa genom den – högst 1,6 × gångfarten i bilden

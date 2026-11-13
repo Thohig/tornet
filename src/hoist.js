@@ -49,7 +49,8 @@ export function cleanerPlan(h) {
 }
 
 export function hoistReset() {
-  S.cleaner = { y: PARK_Y, scrub: false, crew: false, parked: true, waiting: false };
+  // crew = putsaren (Hasse, crew.js) står i gondolen; recall = han vill av – gondolen hissas upp till taket
+  S.cleaner = { y: PARK_Y, scrub: false, crew: false, parked: true, waiting: false, recall: false };
   // phase: idle | rig (balken svängs ut) | fetch (kroken till luckan) | hook | lower | unrig
   // lift: panoramahissens lastläge – up | openT | load | closeT | down | openE | unload | closeE | abort (brand)
   S.hoist = { phase: 'idle', y: PARK_Y, t: 0, item: /** @type {number|null} */ (null), halted: '',
@@ -73,15 +74,18 @@ export function hoistTick(dt) {
   const C = S.cleaner, H = S.hoist, it = items();
   const work = HOIST_OK && it.some(x => x.st === 'hatch' || x.st === 'hoist');
   const needRail = work || H.phase !== 'idle';
-  // putsaren följer sitt schema, men hissas upp och parkeras när balken behöver skenan
+  // gondolen följer schemat bara med putsaren ombord; den hissas upp och parkeras när balken behöver skenan
+  // eller när han ska av (rast, blåst, passet slut)
   const plan = cleanerPlan(hour());
-  const target = needRail ? PARK_Y : plan.y;
+  const aboard = S.people.some(p => p.role === 'fönsterputsare' && !p.dead && p.state === 'office' && p.spot && p.spot.post === 'gondola');
+  if (!aboard) C.recall = false;
+  const target = needRail || !aboard || C.recall ? PARK_Y : plan.y;
   if (S.power) C.y = approach(C.y, target, CLEAN_V * dt);
-  C.crew = plan.crew;
+  C.crew = aboard;
   C.parked = Math.abs(C.y - PARK_Y) < 1e-6;
-  C.scrub = plan.scrub && !needRail && Math.abs(C.y - plan.y) < 1;
-  if (needRail && plan.crew && !C.waiting) { C.waiting = true; log('🧽 Fönsterputsaren hissas upp och parkerar – hissbalken behöver takskenan', 'move'); }
-  if (!needRail && C.waiting) { C.waiting = false; if (plan.crew) log('🧽 Takskenan är ledig – putsaren sänks ner och fortsätter putsa', 'move'); }
+  C.scrub = aboard && !C.recall && plan.scrub && !needRail && Math.abs(C.y - plan.y) < 1;
+  if (needRail && aboard && !C.waiting) { C.waiting = true; log('🧽 Fönsterputsaren hissas upp och parkerar – hissbalken behöver takskenan', 'move'); }
+  if (!needRail && C.waiting) { C.waiting = false; log('🧽 Takskenan är ledig – putsaren kan fortsätta putsa', 'move'); }
   if (HOIST_OK) { balkTick(dt, work, C.parked); liftTick(); }
 }
 

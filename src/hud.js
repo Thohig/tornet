@@ -18,6 +18,7 @@ import { FAN_KW, jobFloor, tech, techOf, cableStatus } from './service.js';
 import { hoistHalt, hoistStatus } from './hoist.js';
 import { BLANKET_T } from './visits.js';
 import { chiefOnDuty } from './chief.js';
+import { CREW_BY } from './crew.js';
 import { extraActions } from './input.js';
 
 export function $(id) { return document.getElementById(id); }
@@ -413,7 +414,7 @@ export function incidentPanel() {
 }
 export function rosterHtml() {
   const f = S.rosterFilter;
-  const ok = p => f === 'all' || (f === 'wait' ? (p.state === 'wait' || p.state === 'toQueue')
+  const ok = p => f === 'all' || (f === 'crew' ? !!p.crewId || p.role === 'arbetsledare' : f === 'wait' ? (p.state === 'wait' || p.state === 'toQueue')
     : f === 'ride' ? (p.state === 'ride' || p.state === 'boarding') : (p.state === 'office' || p.state === 'exiting'));
   const order = { wait: 0, toQueue: 1, boarding: 2, ride: 3, stairs: 4, instairs: 4, exiting: 5, office: 6, incar: 7, away: 8 };
   const list = S.people.filter(ok).sort((a, b) => (order[a.state] - order[b.state]) || (a.state === 'wait' ? a.waitStart - b.waitStart : a.id - b.id));
@@ -421,7 +422,8 @@ export function rosterHtml() {
   return list.slice(0, 150).map(p => {
     const [, col] = stateInfo(p);
     let where, t = '';
-    if (p.state === 'office') where = `${p.sleeping ? 'sover' : 'inne'} ${fl(p.floor)}`;
+    if (p.state === 'office' && p.crewId) where = `${stateInfo(p)[0].toLowerCase()} ${fl(p.floor)}`;
+    else if (p.state === 'office') where = `${p.sleeping ? 'sover' : 'inne'} ${fl(p.floor)}`;
     else if (p.state === 'away') where = 'borta';
     else if (p.state === 'assembly') where = 'ute (brand)';
     else if (p.state === 'incar') where = `bil ${fl(p.floor)}`;
@@ -430,7 +432,7 @@ export function rosterHtml() {
     else if (p.state === 'stairs' || p.state === 'instairs') where = `trappa→${fl(p.dest)}`;
     else where = `${fl(p.floor)}→${fl(p.dest)}`;
     if (p.state === 'wait') t = Math.round(S.t - p.waitStart) + 's';
-    return `<div class="rr${p.id === sid ? ' sel' : ''}" data-pid="${p.id}"><i style="background:${col}"></i><span>${p.cast ? '★ ' : ''}${esc(p.name)}</span><span>${where}</span><span class="rt">${t}</span></div>`;
+    return `<div class="rr${p.id === sid ? ' sel' : ''}" data-pid="${p.id}"><i style="background:${col}"></i><span>${p.cast ? '★ ' : p.crewId ? `${CREW_BY[p.crewId].icon} ` : ''}${esc(p.name)}</span><span>${where}</span><span class="rt">${t}</span></div>`;
   }).join('') || '<div class="rr"><i></i><span>–</span></div>';
 }
 /** Personen man följer: vem, vart, varför och vad styrningen tänker. Porträttet ritas med drawPortrait. */
@@ -439,6 +441,8 @@ export function personHtml(p) {
   let role = p.kind === 'emp' ? `Anställd · ${FL[p.home].name} (${fl(p.home)})${p.overtime ? ' · jobbar över' : ''}`
     : p.kind === 'res' ? residentDesc(p) : p.vip ? 'VIP-besök med helikopter 🚁' : p.role ? ROLE_NAMES[p.role] : 'Besökare';
   if (p.cast) role = `★ Stamgäst · ${p.title}`;
+  if (p.crewId) role = `${CREW_BY[p.crewId].icon} ${p.title}`;
+  else if (p.role === 'arbetsledare') role = `🦺 ${p.title}`;
   if (p.auto) role += ` · bil på ${fl(p.auto.floor)}`;
   role += ` · ${p.kg} kg${p.cargo ? ` + ${p.cargo.name} ${p.cargo.kg} kg` : ''}`;
   const why = p.dead ? 'Har lämnat huset' : `${p.why} → våning ${fl(p.goal ?? p.dest)}${p.goal !== p.dest && p.state !== 'office' ? ` (byter hiss på ${fl(p.dest)})` : ''}`;

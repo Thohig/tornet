@@ -4,7 +4,7 @@
 // Bara grafik: läser simuleringens tillstånd men ändrar det aldrig (utom S.fx-listan, som den
 // tecknade grafiken också räknar ner).
 import { ARR, clamp, fl } from './util.js';
-import { BX1, CAR_H, CAR_W, CONTROL, EL, FL, FLOORS, FLOOR_H, FLOOR_HOURS, FULL_LOAD, GARAGE_FLOORS, HATCH_FLOORS, GROUND_Y, H, INNER_X1, LAND_X0, DOOR_X, DOCK, LOBBY, MEZZ, ROOF_Y, SEAM_F, SHAFT_W, SHAFT_X0, STATION, TOP, TOWER_X1, TRAIN_LEN, TRAIN_X0, TRAIN_X1, W, carPos, floorOpen, floorY, shaftCX, shaftX, surf } from './config.js';
+import { BREAK, BX1, CAR_H, CAR_W, CONTROL, EL, FL, FLOORS, FLOOR_H, FLOOR_HOURS, FULL_LOAD, GARAGE_FLOORS, HATCH_FLOORS, GROUND_Y, H, INNER_X1, LAND_X0, DOOR_X, DOCK, LOBBY, MEZZ, ROOF_Y, SEAM_F, SHAFT_W, SHAFT_X0, STATION, TOP, TOWER_X1, TRAIN_LEN, TRAIN_X0, TRAIN_X1, W, SPOTS, carPos, floorOpen, floorY, shaftCX, shaftX, surf } from './config.js';
 import { exposure, windAt } from './weather.js';
 import { CALL_REPLY, WARM_AT, nextOut, techOf } from './service.js';
 import { HOIST_OK, PARK_Y, TERRACE_Y, cleanerAt } from './hoist.js';
@@ -12,14 +12,15 @@ import { S, hour } from './state.js';
 import { allowed, assignedTo, cabinKg, keyed } from './dispatch.js';
 import { noteDetail, stateInfo } from './describe.js';
 import { VIEW, clouds, ctx, cv, nightness, skyAt, skyline, stars } from './view.js';
-import { carSlot, carSlotX, landPos, peopleBehindDoor, personHead } from './render.js';
+import { carSlot, carSlotX, inWindow, landPos, peopleBehindDoor, personHead, winPos } from './render.js';
 import { vpick, vrand } from './rng.js';
 import { PX, blend, dark, light, ellipseSprite, fromCells, sprite, text, textW, plain, rgbOf, led } from './pixart.js';
 import { buttonsMode, hallLit } from './buttons.js';
 import { TRAIN_DOORS, nextTrainMin, trainDoors } from './train.js';
 import { PERSON_H, PERSON_W, cargoSprite, personSprite } from './pixpeople.js';
 import { PAL } from './pixpal.js';
-import { CHIEFS, chiefOnDuty } from './chief.js';
+import { CHIEFS, alarm, chiefOnDuty, chiefPerson } from './chief.js';
+import { HAIR_NAT, PANTS, SHIRT, SKIN } from './people.js';
 
 const INK = PAL.ink;
 
@@ -269,6 +270,7 @@ function drawGroundPx() {
 /** Gatan utanför (till höger om huset): gatlyktor, busshållplatsen, ett träd och folk som går förbi.
  *  Bara grafik: fotgängarna lånar utseendet av någon i huset och slumpas med vrand. */
 const walkers = [];
+let walkerN = 0;
 let walkerT = 0;
 function drawStreetPx(dt, h) {
   const gy = Y(GROUND_Y), n = nightness(h);
@@ -290,8 +292,11 @@ function drawStreetPx(dt, h) {
     const rate = n > 0.7 ? 0.1 : (h > 7 && h < 9.5) || (h > 16 && h < 18.5) ? 0.9 : 0.4;
     if (walkerT <= 0 && walkers.length < 6 && S.people.length) {
       walkerT = vrand(1, 3) / rate;
-      const dir = vrand(0, 1) < 0.5 ? 1 : -1, who = vpick(S.people);
-      walkers.push({ x: dir > 0 ? BX1 - 10 : W + 10, dir, v: vrand(24, 40), look: who.look, child: who.child, mood: 0, id: who.id + 7000, depth: vrand(0, 3) });
+      // (egna utseenden – inga dubbelgångare till folket i huset)
+      const dir = vrand(0, 1) < 0.5 ? 1 : -1;
+      const look = { skin: vpick(SKIN), shirt: vpick(SHIRT), pants: vpick(PANTS), hair: Math.floor(vrand(0, 6)), hairC: vpick(HAIR_NAT),
+        tie: vrand(0, 1) < 0.3, tieC: vpick(SHIRT), stripe: vrand(0, 1) < 0.5, acc: vpick([0, 0, 1, 2, 3, 5]) };
+      walkers.push({ x: dir > 0 ? BX1 - 10 : W + 10, dir, v: vrand(24, 40), look, child: vrand(0, 1) < 0.1, mood: 0, id: 7000 + walkerN++, depth: vrand(0, 3) });
     }
     for (const w of walkers) w.x += w.dir * w.v * dt * S.speed;
   }
@@ -749,14 +754,25 @@ function revolvingDoor(cx, cy, cw, ch, h) {
 /** entréns inredning: receptionsdisken, krukväxter och en lampa i taket (rulltrappan ritas för sig) */
 function lobbyProps(top, bot) {
   const dx = X(DOOR_X) + 46;
-  // receptionen: disk med dator och klocka, receptionisten bakom
-  R(dx + 4, bot - 21, 3, 3, '#f6c48f'); R(dx + 3, bot - 18, 5, 4, '#2a5db0'); R(dx + 4, bot - 22, 3, 1, '#4a2a1a');
+  // receptionen: disk med dator och klocka, receptionisten (crew.js) bakom – eller en skylt när hon är borta
+  const rec = sitters(LOBBY, 'reception')[0];
+  if (rec) {
+    const w = winPos(rec);
+    g.drawImage(personSprite(winFig(rec, 0), 'front', 0, 1, { blink: blinkOf(rec) }), X(w.x) - PERSON_W / 2, Y(w.y));
+  }
+  // godisautomaten (där den högra krukväxten stod)
+  const vx = dx + 24;
+  box(vx, bot - 22, 9, 19, '#c81e3a'); R(vx + 1, bot - 21, 7, 9, '#bfeaff');
+  for (let k = 0; k < 3; k++) R(vx + 2 + k * 2, bot - 20 + (k % 2) * 3, 1, 2, ['#ffd23f', '#7cf06b', '#ff4fa3'][k]);
+  R(vx + 2, bot - 9, 5, 2, INK); R(vx + 6, bot - 15, 1, 1, S.power ? '#7cf06b' : '#3a3f48');
   box(dx, bot - 14, 20, 11, '#8a6a46'); R(dx + 1, bot - 13, 18, 1, '#b08a5a'); R(dx + 2, bot - 9, 16, 1, '#6b4a2b');
   box(dx + 12, bot - 19, 6, 5, '#d4d0c8'); R(dx + 13, bot - 18, 4, 3, S.power ? '#38d9a9' : '#2b2f36');
   R(dx + 3, bot - 16, 3, 2, '#ffe14d');
+  const berit = !rec && S.people.find(p => p.role === 'receptionist' && !p.dead);
+  if (berit && berit.onBreak) { const t = /lunch/i.test(berit.breakWhy) ? 'LUNCH' : 'FIKA'; pill(dx, bot - 21, 21, 8, '#ffffff'); text(g, t, dx + 10, bot - 20, '#c81e3a', 'center'); }
   reserve(dx, bot - 22, 20, 19);
-  // krukväxter
-  for (const px of [dx - 10, dx + 24]) {
+  // krukväxt
+  for (const px of [dx - 10]) {
     box(px, bot - 9, 7, 6, '#a65e3a');
     for (let k = 0; k < 3; k++) R(px - 1 + k * 3, bot - 15 + (k % 2) * 2, 3, 6, ['#389a5c', '#2f7d4a', '#4caf6a'][k]);
   }
@@ -822,7 +838,8 @@ function drawHall(f, h) {
     if (FLOOR_HOURS[f] && !floorOpen(f, h)) closedGate(f, cx, cy, cw, ch);
   }
   if (th === 'lobby') lobbyProps(top, bot);
-  else if (f === CONTROL) controlRoom(top, bot, h);
+  else if (f === CONTROL) controlRoom(top, bot);
+  else if (f === BREAK) breakRoom(top, bot, h);
   else hallProps(f, th, top, bot);
   // spårad person därinne / muspekaren över korridoren
   const sel = S.sel && !S.sel.dead && S.sel.floor === f && S.sel.state !== 'ride' && personHead(S.sel)?.hidden;
@@ -845,16 +862,17 @@ function drawHall(f, h) {
 // ---------- Driftcentralen: kontrollrummet där driftchefen sitter ----------
 // Ett fönster i hallens bakvägg: en skärm per hiss (korgens läge i schaktet, rött när den är trasig),
 // ett larmljus som snurrar under incidenter, kontrollbordet och driftchefen (Gun-Britt på dagen, Rune på
-// natten). Chefen står upp under larm; har chefen rast står stolen tom. Pratbubblan ritas i drawChiefPx.
-const CHIEF_P = Object.fromEntries(CHIEFS.map((c, i) => [c.name, { id: 9100 + i, mood: 0, child: false, smoked: false, look: c.look }]));
+// natten) – cheferna är personer (chief.js): den som sitter vid bordet ritas här. Chefen står upp under larm;
+// är chefen på rast eller på väg står stolen tom. Pratbubblan ritas i drawChiefPx.
 /** var chefens huvud ritades i den här bildrutan (låg upplösning), null = syns inte */
 let chiefAt = /** @type {{ x: number, y: number }|null} */ (null);
-/** något som chefen är mitt uppe i (larmljuset snurrar) */
-const alarmOn = () => !!(S.fire || S.outage || S.storm || S.warn || S.elevators.some(e => e.mode === 'snapped' || e.hot || (e.mode === 'broken' && e.fault && e.fault.trapped)));
-function controlRoom(top, bot, h) {
+/** den som sitter i ett fönster ritas med en egen figur (humöret efter larmet – personens eget p.mood rörs inte) */
+const winFig = (p, mood) => ({ id: p.id, mood, child: false, smoked: false, look: p.look });
+const sitters = (f, win) => S.people.filter(p => !p.dead && p.floor === f && inWindow(p) && p.spot.win === win);
+function controlRoom(top, bot) {
   const wx = X(DOOR_X) + 58, ww = Math.min(108, X(INNER_X1) - 14 - wx), wy = top + 18, wh = bot - 3 - wy;
   if (ww < 50) return;
-  const power = S.power || (S.outage && S.outage.gen), alarm = alarmOn(), blink = Math.floor(S.anim * 3) % 2 === 0;
+  const power = S.power || (S.outage && S.outage.gen), alarmed = alarm(), blink = Math.floor(S.anim * 3) % 2 === 0;
   // ramen och rummet (mörkt, upplyst av skärmarna)
   box(wx - 2, wy - 2, ww + 4, wh + 3, PAL.steel);
   R(wx, wy, ww, wh, power ? '#1d2433' : '#0d1018');
@@ -871,7 +889,7 @@ function controlRoom(top, bot, h) {
   reserve(wx - 2, wy - 2, ww + 4, 9);
   // larmljuset: snurrar rött under incidenter och färgar rummet
   const lx = wx + ww - 6;
-  if (alarm) {
+  if (alarmed) {
     const sp = Math.sin(S.anim * 9);
     box(lx, wy + 1, 4, 4, sp > 0 ? '#ff2d55' : '#7a2033');
     if (sp > 0.2) R(wx, wy + 6, ww, wh - 6, 'rgba(255,45,85,.14)');
@@ -894,37 +912,47 @@ function controlRoom(top, bot, h) {
   });
   // kontrollbordet med knappar som blinkar (och en kaffekopp)
   const dy = wy + wh - 6;
-  const C = S.chief, on = !!(C && C.on), who = chiefOnDuty(h), P = CHIEF_P[who.name];
-  const px = wx + 22;
+  const C = S.chief, on = !!(C && C.on), seat = post => SPOTS[CONTROL].find(s => s.post === post);
+  const desk = seat('chief'), prod = seat('producer'), here = sitters(CONTROL, 'control');
+  const P = here.find(p => p.spot === desk), Q = here.find(p => p.spot === prod);
+  const px = X(desk.x) - PERSON_W / 2, qx = prod ? X(prod.x) - PERSON_W / 2 : 0;
   chiefAt = null;
   g.save(); g.beginPath(); g.rect(wx, wy + 6, ww, wh - 6); g.clip();
-  // stolen (syns bakom chefen – tom när chefen har rast)
+  // stolarna (syns bakom dem som sitter – tomma när de har rast eller är på väg)
   R(px + 1, dy - 7, 2, 7, '#3a3f48'); R(px + 1, dy - 1, 9, 1, '#3a3f48');
-  if (on) {
-    // under larm står chefen upp (framifrån) och följer skärmarna, annars sitter hen vid bordet vänd mot skärmen
-    P.mood = alarm ? 1 : 0;
-    const view = alarm ? 'front' : 'side', bob = alarm ? Math.round(Math.sin(S.anim * 3)) : 0;
-    const spr = personSprite(P, view, 0, 1, { blink: Math.sin(S.anim * 0.8 + 1) > 0.97 });
-    const sx = px, sy = dy - (alarm ? PERSON_H - 9 : PERSON_H - 14) + bob;
-    g.drawImage(spr, sx, sy);
-    chiefAt = { x: sx + PERSON_W / 2, y: sy };
-  } else {
-    // rast: stolsryggen och en lapp
-    R(px + 2, dy - 12, 6, 6, '#3a3f48'); R(px + 3, dy - 11, 4, 4, '#5a6070');
+  if (prod) { R(qx + PERSON_W - 3, dy - 7, 2, 7, '#3a3f48'); R(qx + 1, dy - 1, 9, 1, '#3a3f48'); }
+  // bildproducentens egen skärm (det regissören visar) med en blinkande REC-lampa
+  if (prod) {
+    const mx = qx - 11;
+    box(mx, dy - 9, 10, 9, '#d4d0c8'); R(mx + 1, dy - 8, 8, 6, power ? '#10243a' : '#15171c');
+    if (power) { R(mx + 2, dy - 6, 6, 2, '#3f7cff'); if (Q && Math.floor(S.anim * 1.5) % 2) R(mx + 7, dy - 8, 1, 1, '#ff2d55'); }
   }
+  // under larm står de upp (framifrån) och följer skärmarna, annars sitter de vid bordet
+  for (const p of here) {
+    const view = alarmed ? 'front' : 'side', bob = alarmed ? Math.round(Math.sin(S.anim * 3 + p.id)) : 0;
+    const spr = personSprite(winFig(p, alarmed ? 1 : 0), view, 0, p.spot.face || 1, { blink: Math.sin(S.anim * 0.8 + p.id) > 0.97 });
+    const sx = X(winPos(p).x) - PERSON_W / 2, sy = Y(winPos(p).y) - (alarmed ? 5 : 0) + bob;
+    g.drawImage(spr, sx, sy);
+    if (p === P) chiefAt = { x: sx + PERSON_W / 2, y: sy };
+  }
+  // rast: stolsryggen syns
+  if (!P) { R(px + 2, dy - 12, 6, 6, '#3a3f48'); R(px + 3, dy - 11, 4, 4, '#5a6070'); }
+  if (prod && !Q) { R(qx + 3, dy - 12, 6, 6, '#3a3f48'); R(qx + 4, dy - 11, 4, 4, '#5a6070'); }
   g.restore();
   box(wx + 2, dy, ww - 4, 6, '#8a909a'); R(wx + 3, dy + 1, ww - 6, 1, '#c0c6cc');
   for (let i = 0; i < 6; i++) if (power) R(wx + 40 + i * 4, dy + 3, 2, 1, (Math.floor(S.anim * 2 + i * 1.7) % 3) ? ['#7cf06b', '#ffe14d', '#ff5d52'][i % 3] : '#3a3f48');
   // skärmen på bordet: chefens senaste beslut som en blinkande rad (eller RAST)
   const tx = px + 13, ty = dy - 8;
   box(tx, ty, 14, 9, '#d4d0c8'); R(tx + 1, ty + 1, 12, 6, power ? '#0b1a10' : '#15171c');
+  const away = !P && on && CHIEFS.some((_, i) => { const q = chiefPerson(i); return q && q.onBreak; });
   if (power) {
     if (!on) text(g, 'RAST', tx + 7, ty + 1, '#ffd23f', 'center');
+    else if (away) text(g, 'FIKA', tx + 7, ty + 1, '#ffd23f', 'center');
     else if (C.say && S.t < C.say.until && blink) R(tx + 2, ty + 3, 10, 2, '#7dff9a');
     else { R(tx + 2, ty + 2, 6, 1, '#7dff9a'); R(tx + 2, ty + 4, 8, 1, '#2f6b47'); }
   }
   R(tx + 6, ty + 9, 2, 1, INK);
-  R(wx + ww - 12, dy - 3, 3, 3, '#ffffff'); R(wx + ww - 11, dy - 2, 1, 1, '#8a5a2b'); // kaffekoppen
+  R(px + 30, dy - 3, 3, 3, '#ffffff'); R(px + 31, dy - 2, 1, 1, '#8a5a2b'); // kaffekoppen
   // reflex i glaset
   line(wx + 3, wy + wh - 2, wx + 9, wy + 8, 'rgba(255,255,255,.12)');
 }
@@ -932,8 +960,78 @@ function controlRoom(top, bot, h) {
  *  sekunderna – sedan står det kvar i textremsan */
 function drawChiefPx() {
   const C = S.chief;
-  if (!chiefAt || !C || !C.on || !C.say || S.t - C.say.t0 > 3.5) return;
-  bubble(`${chiefOnDuty().name}: "${C.say.text}"`, chiefAt.x, chiefAt.y - 14, C.say.dec ? '#fff6a8' : '#ffffff');
+  if (!C || !C.on || !C.say || S.t - C.say.t0 > 3.5) return;
+  const who = chiefOnDuty();
+  let at = chiefAt;
+  // chefen är inte vid bordet (fikar, är på väg): det sägs i walkie-talkien där hen är
+  const p = chiefPerson(CHIEFS.indexOf(who));
+  if (p && !(chiefAt && inWindow(p) && p.spot.post === 'chief')) {
+    const hd = personHead(p);
+    at = hd && !hd.hidden ? { x: X(hd.x), y: Y(hd.y) + 11 } : chiefAt;
+  }
+  if (!at) return;
+  bubble(`${who.name}: "${C.say.text}"`, at.x, at.y - 14, C.say.dec ? '#fff6a8' : '#ffffff');
+}
+// ---------- Personalrummet: där driftcheferna fikar ----------
+// Ett fönster i hallens bakvägg, som kontrollrummet: soffa, bord med korsord, kaffebryggare och kylskåp.
+// De som sitter där ritas på sina platser (SPOTS[BREAK], config.js); kaffet ångar när någon är inne.
+function breakRoom(top, bot, h) {
+  const wx = X(DOOR_X) + 58, ww = Math.min(108, X(INNER_X1) - 14 - wx), wy = top + 18, wh = bot - 3 - wy;
+  if (ww < 50) return;
+  const lit = S.power || (S.outage && S.outage.gen), who = sitters(BREAK, 'break'), n = nightness(h);
+  box(wx - 2, wy - 2, ww + 4, wh + 3, PAL.steel);
+  R(wx, wy, ww, wh, lit ? (who.length || n < 0.5 ? '#d9c9a0' : '#a89a78') : '#26221c');
+  R(wx, wy, ww, 7, '#000080');
+  text(g, 'PERSONALRUM', wx + 3, wy + 1, '#ffffff');
+  reserve(wx - 2, wy - 2, ww + 4, 9);
+  const fy = wy + wh - 1; // golvet i rummet
+  g.save(); g.beginPath(); g.rect(wx, wy + 7, ww, wh - 7); g.clip();
+  // tapet, golvlist och golv
+  if (lit) for (let x = wx + 3; x < wx + ww; x += 6) R(x, wy + 7, 1, wh - 10, '#cbb98c');
+  R(wx, fy - 2, ww, 3, lit ? '#8a6a46' : '#3a2f24');
+  const B = SPOTS[BREAK].filter(s => s.brk), sofa = B.filter(s => s.k === 'chair').slice(0, 3), [c1, c2] = B.filter(s => s.k === 'chair').slice(3), fridge = B.find(s => s.k === 'stand');
+  // hyllan över soffan med kaffebryggaren och muggarna
+  const sa = Math.max(wx + 1, X(sofa[0].x) - 9), sb = X(sofa[sofa.length - 1].x) + 9;
+  R(sa + 4, wy + 15, sb - sa - 8, 1, '#6b4a2b');
+  const kx = sa + 6;
+  box(kx, wy + 8, 6, 7, '#2b2f36'); R(kx + 1, wy + 11, 4, 3, lit ? '#8a5a2b' : '#3a2a1a');
+  R(kx + 4, wy + 9, 1, 1, lit && Math.floor(S.anim * 2) % 2 ? '#ff5d52' : '#5a2a2a');
+  for (let k = 0; k < 3; k++) R(kx + 9 + k * 4, wy + 12, 2, 3, ['#ffffff', '#ffd23f', '#3f7cff'][k]);
+  // en affisch och väggklockan (visar husets klocka) ovanför bordet
+  const ax = X(c1.x) + 4, cx = X(c2.x) + 5, cy = wy + 12;
+  box(ax, wy + 9, 11, 9, '#fff8e0'); R(ax + 2, wy + 11, 7, 2, '#c81e3a'); R(ax + 2, wy + 14, 5, 1, '#3f7cff'); R(ax + 2, wy + 16, 6, 1, '#9aa3ad');
+  R(cx - 2, cy - 3, 5, 7, INK); R(cx - 3, cy - 2, 7, 5, INK); R(cx - 2, cy - 2, 5, 5, '#ffffff');
+  const hh = h % 12, a1 = (hh / 12) * Math.PI * 2, a2 = (h % 1) * Math.PI * 2;
+  R(cx + Math.round(Math.sin(a1) * 1.2), cy - Math.round(Math.cos(a1) * 1.2), 1, 1, INK);
+  R(cx + Math.round(Math.sin(a2) * 2), cy - Math.round(Math.cos(a2) * 2), 1, 1, '#c81e3a'); R(cx, cy, 1, 1, INK);
+  // soffryggen (bakom folket) och kylskåpet
+  R(sa, fy - 13, sb - sa, 8, INK); R(sa + 1, fy - 12, sb - sa - 2, 7, '#7a3f5a'); R(sa + 1, fy - 12, sb - sa - 2, 1, '#9a5f7a');
+  const fx = wx + ww - 8;
+  const open = fridge && who.some(p => p.spot === fridge);
+  box(fx, fy - 20, 8, 18, '#e8e8e8'); R(fx + 1, fy - 13, 6, 1, '#9aa3ad');
+  if (open) { R(fx + 1, fy - 19, 6, 5, lit ? '#fff6c0' : '#8a8a70'); R(fx + 2, fy - 16, 2, 2, '#ff5d52'); } // (dörren står öppen)
+  else { R(fx + 6, fy - 18, 1, 3, '#9aa3ad'); R(fx + 6, fy - 10, 1, 4, '#9aa3ad'); }
+  // folket: sittande i soffan och vid bordet, stående vid kylskåpet
+  for (const p of who) {
+    const sp = p.spot, sit = sp.k !== 'stand', dir = sp.face || 1, w = winPos(p);
+    const spr = personSprite(winFig(p, 0), 'side', 0, dir, { blink: Math.sin(S.anim * 0.7 + p.id) > 0.97 });
+    g.drawImage(spr, X(w.x) - PERSON_W / 2, Y(w.y) + (sit ? Math.round(Math.sin(S.anim * 1.3 + p.id) * 0.4) : 0));
+    // ångan ur koppen
+    if (sit && lit && Math.sin(S.anim * 2 + p.id) > -0.3) {
+      const ux = X(sp.x) + dir * 6, uy = fy - 13 - (Math.floor(S.anim * 4 + p.id) % 3);
+      R(ux, uy, 1, 1, 'rgba(255,255,255,.7)');
+    }
+  }
+  // soffans sits och armstöd framför benen, och bordet mellan stolarna
+  R(sa, fy - 6, sb - sa, 5, INK); R(sa + 1, fy - 5, sb - sa - 2, 3, '#9a5f7a');
+  R(sa, fy - 10, 3, 9, INK); R(sb - 3, fy - 10, 3, 9, INK);
+  const ta = X(c1.x) + 5, tb = X(c2.x) - 5;
+  R(ta, fy - 8, tb - ta, 2, '#6b4a2b'); R(ta + 1, fy - 6, 1, 5, '#6b4a2b'); R(tb - 2, fy - 6, 1, 5, '#6b4a2b');
+  R(ta + 2, fy - 10, 5, 2, '#f4f1e8'); R(tb - 4, fy - 11, 2, 3, '#ffffff'); // korsordet och en kopp
+  R(X(c1.x) - 3, fy - 6, 1, 5, '#3a3f48'); R(X(c2.x) + 3, fy - 6, 1, 5, '#3a3f48'); // stolsbenen
+  if (!lit) R(wx, wy + 7, ww, wh - 7, 'rgba(0,0,0,.35)');
+  g.restore();
+  line(wx + 3, wy + wh - 2, wx + 9, wy + 8, 'rgba(255,255,255,.12)');
 }
 // ---------- Flyttdagen ----------
 /** hissbalken: balken på taket med block och talja, kroken (med lasten) och lastluckorna i tornets fasad */
@@ -962,7 +1060,8 @@ function drawHoistPx() {
       const cg = cargoSprite(it.sprite, 1); if (!cg) continue;
       g.drawImage(cg.c, x - cg.c.width, ty - cg.c.height + 1); x -= cg.c.width + 3;
     }
-    if (M.items.some(i => i.st === 'terrace') || H.phase === 'lower') g.drawImage(personSprite(HOIST_CREW, 'side', 0, 1, {}), X(BX1) - 22, ty - PERSON_H + 1);
+    const mona = S.people.find(p => p.role === 'lastare' && inWindow(p));
+    if (mona) g.drawImage(personSprite(winFig(mona, 0), 'side', 0, 1, { blink: blinkOf(mona) }), X(BX1) - 22, ty - PERSON_H + 1);
   }
   if (H.phase === 'idle') return;
   // balken: en gul bom ut från taket med blocket längst ut
@@ -1373,7 +1472,7 @@ function drawHallPeople() {
   }
   list.sort((a, b) => (a.p.depth - b.p.depth) || (a.p.id - b.p.id));
   for (const { p, lp } of list) {
-    const walking = p.state !== 'wait';
+    const walking = p.state !== 'wait' && p.state !== 'office'; // (office: står på en plats i hallen, crew.js)
     const dir = walking && lp.dir ? lp.dir : (p.face || 1);
     const frame = walking ? Math.floor(((p.walkPhase || 0) % (Math.PI * 2)) / (Math.PI / 2)) % 4 : 0;
     const fx = X(lp.x), fy = Y(surf(p.floor) + p.depth * 0.6);
@@ -1492,7 +1591,7 @@ function drawCallPx() {
   }
   const reply = S.t - C.t0 >= CALL_REPLY;
   const str = reply ? 'Hissjouren: "Uppfattat – vi skickar en kollega direkt!"'
-    : `${p.name}: "Jouren? ${C.n} hissar trasiga i kö – skicka en till!"`;
+    : C.trapped ? `${p.name}: "Jouren? Folk sitter fast i ${C.trapped} – skicka en till!"` : `${p.name}: "Jouren? ${C.n} hissar trasiga i kö – skicka en till!"`;
   bubble(str, at.x, at.y - 18, reply ? '#fff6a8' : '#ffffff');
 }
 
@@ -1558,6 +1657,10 @@ const GAGS = {
   dock: ['Paket till våning 9!', 'Var är följesedeln?'],
   lobby: [],
   garage: ['Var parkerade jag nu?'],
+  win_reception: ['Välkommen till Tornet!', 'Hissarna finns till höger', 'Har du bokat tid?', 'Ta gärna en broschyr!'],
+  win_gondola: ['Skrubba, skrubba…', 'Vilken utsikt!', 'Titta inte ner, Hasse', 'Fläckfritt!'],
+  win_terrace: ['Sakta i backarna!', 'Akta pianot!', 'Lite till … STOPP!'],
+  win_break: ['Vem har tagit min mugg?', 'Kaffet är starkt i dag', 'Lugnt på skärmarna, för en gångs skull', 'Sju bokstäver: lyftdon?', 'Har någon sett walkie-talkien?', 'Mmm, kanelbulle'],
   cafe: [],
 };
 let gags = [], gagT = 2;
@@ -1567,9 +1670,10 @@ function drawGagsPx(dt) {
     if (gagT <= 0) {
       gagT = vrand(1.8, 4);
       const lo2 = VIEW.camY, hi = VIEW.camY + VIEW.viewH;
-      const cands = S.people.filter(p => p.state === 'office' && !p.sleeping && p.spot && p.spot.k !== 'door' && floorY(p.floor) > lo2 + 40 && floorY(p.floor) < hi + 40 && !gags.some(q => q.p.floor === p.floor));
+      // (vid kontrollbordet pratar chefen själv – S.chief.say)
+      const cands = S.people.filter(p => p.state === 'office' && !p.sleeping && p.spot && p.spot.k !== 'door' && p.spot.win !== 'control' && p.spot.win !== 'hall' && floorY(p.floor) > lo2 + 40 && floorY(p.floor) < hi + 40 && !gags.some(q => q.p.floor === p.floor));
       if (cands.length) {
-        const p = vpick(cands), th = FL[p.floor].theme;
+        const p = vpick(cands), th = inWindow(p) ? `win_${p.spot.win}` : FL[p.floor].theme;
         const own = GAGS[th] && GAGS[th].length ? GAGS[th] : null;
         const list = own && Math.random() < 0.75 ? own : GAGS._;
         if (list.length) gags.push({ p, text: vpick(list), life: 3.2 });
@@ -1579,6 +1683,8 @@ function drawGagsPx(dt) {
   for (const q of gags) {
     q.life -= dt;
     if (q.p.state !== 'office' || q.p.dead) { q.life = 0; continue; }
+    // i personalrummet syns den som pratar: bubblan över huvudet
+    if (inWindow(q.p)) { const hd = personHead(q.p); if (hd) { g.globalAlpha = clamp(q.life * 2, 0, 1); bubble(plain(q.text), X(hd.x), Y(hd.y) - 3); g.globalAlpha = 1; } continue; }
     // repliken hörs från rummen: bubblan sitter till höger om trappskylten med en pil mot korridoren
     const s = plain(q.text), w = textW(s) + 7, x = Math.min(X(DOOR_X) + 56, X(INNER_X1) - w - 1), y0 = Y(floorY(q.p.floor + 1) + 4) + 24;
     const y = place(x, y0, w, 10, [0, 10]);
@@ -1656,10 +1762,7 @@ function drawRoofPx() {
 // ---------- Fönsterputsaren och hissbalken ----------
 // En gondol hänger i en arm på taket utanför det smala tornet; på flyttdagen tar hissbalken samma skena
 // (läget räknas i simuleringen – hoist.js – här ritas bara).
-const CLEANER = { id: 9001, mood: 0, child: false, smoked: false,
-  look: { skin: '#f6c48f', shirt: '#2a5db0', pants: '#2a5db0', hair: 4, hairC: '#5a3a1a', tie: false, tieC: '#ffe14d', stripe: true, acc: 0 } };
-const HOIST_CREW = { id: 9002, mood: 0, child: false, smoked: false,
-  look: { skin: '#d9a066', shirt: '#ff8c42', pants: '#3a3a3a', hair: 1, hairC: '#2a1d14', tie: false, tieC: '#ffe14d', stripe: false, acc: 0 } };
+// (putsaren och lastaren på terrassen är personer i huset – crew.js)
 function drawCleanerPx() {
   const G0 = cleanerAt(); // (null: huset har inget smalt torn att putsa)
   if (!G0) return;
@@ -1672,10 +1775,10 @@ function drawCleanerPx() {
   if (gy < -20 || ay > lo.height + 20) return;
   for (const cx of [gx + 3, gx + gw - 4]) line(cx - sway, ay + 2, cx, gy - 12, '#3a3f4a');
   // putsaren (vänd mot fasaden) och hinken
-  if (G0.crew) {
-    CLEANER.mood = wind > 0.5 ? 1 : 0;
+  const hasse = G0.crew ? S.people.find(p => p.role === 'fönsterputsare' && inWindow(p)) : null;
+  if (hasse) {
     const bob = G0.scrub ? Math.round(Math.sin(S.anim * 5) * 1) : 0;
-    g.drawImage(personSprite(CLEANER, 'side', 0, -1, { blink: Math.sin(S.anim * 0.9) > 0.985 }), gx + 4, gy - PERSON_H + 1 + bob);
+    g.drawImage(personSprite(winFig(hasse, wind > 0.5 ? 1 : 0), 'side', 0, -1, { blink: blinkOf(hasse) }), gx + 4, gy - PERSON_H + 1 + bob);
     if (G0.scrub && wind < 0.5) {
       // skrapan går upp och ner mot fasaden; det glittrar där det blivit rent
       const sy = gy - 16 + Math.round(Math.sin(S.anim * 4) * 6);
@@ -1903,7 +2006,7 @@ export function renderPixel(dt) {
   for (const p of S.people) {
     if (p.dead) continue;
     if (p.state !== 'ride' && p.state !== 'away' && p.state !== 'incar' && p.state !== 'assembly') OCC[p.floor]++;
-    if (p.state === 'office' || p.state === 'instairs') OCC_IN[p.floor]++;
+    if ((p.state === 'office' && !(p.spot && p.spot.win)) || p.state === 'instairs') OCC_IN[p.floor]++;
   }
   drawSkyAll(hr);
   drawGroundPx();

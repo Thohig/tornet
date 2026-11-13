@@ -5,7 +5,8 @@
 /**
  * En plats på en våning där folk sitter, står eller försvinner in (dörr).
  * @typedef {{ x: number, k: string, desc: string, face?: number, lift?: number, staff?: boolean, label?: string,
- *   style?: string, item?: string, front?: boolean, jump?: boolean, temp?: boolean, role?: string, apt?: number, bed?: boolean }} Spot
+ *   style?: string, item?: string, front?: boolean, jump?: boolean, temp?: boolean, role?: string, apt?: number, bed?: boolean,
+ *   brk?: boolean, win?: string, post?: string, where?: string }} Spot
  */
 
 // Märklast för vanliga hissar (varuhissen har egen) – används när byggnaden läses in nedan
@@ -116,7 +117,7 @@ export const THEME_INFO = {
 export const BUILDING = {
   floors: [
     { label: 'TB', theme: 'station', tags: ['station', 'basement'] },
-    { label: 'P2', theme: 'garage', tags: ['garage', 'basement'] },
+    { label: 'P2', theme: 'garage', tags: ['garage', 'basement', 'break'] },
     { label: 'P1', theme: 'dock', tags: ['garage', 'basement', 'dock', 'control'] },
     { label: 'E', theme: 'lobby', tags: ['lobby'] },
     { label: '1', theme: 'dentist', hours: [8, 17], tags: ['office', 'dentist'] },
@@ -171,7 +172,8 @@ export const OFFICE_FLOORS = floorsWith('office');
 export const SKY = floorWith('sky');          // sky lobbyn: här byter man mellan zonerna
 export const ROOF = floorWith('roof');
 export const DOCK = floorWith('dock');
-export const CONTROL = floorWith('control');   // driftcentralen där driftchefen sitter (bara grafik, chief.js)
+export const CONTROL = floorWith('control');   // driftcentralen där driftchefen sitter vid kontrollbordet (chief.js)
+export const BREAK = floorWith('break');       // personalrummet där driftcheferna fikar och väntar på sitt pass
 export const STATION = floorWith('station'); // tunnelbanan under huset (-1 om huset saknar station)
 export const HOME_FLOORS = floorsWith('home');
 /** bostäder med lastlucka mot fasaden (hissbalken på flyttdagen) */
@@ -182,6 +184,32 @@ export const FL = FDEF.map(f => ({ ...THEME_INFO[f.theme], ...f }));
 /** Platserna per våning – en egen kopia per våning (occ = vem som sitter där) */
 /** @type {Spot[][]} */
 export const SPOTS = FL.map(f => (THEME_INFO[f.theme].spots || []).map(s => ({ ...s })));
+/** våningen med panoramahissens lastdörr mot takterrassen (hissbalkens flyttlass), eller -1 */
+export const TERRACE_F = (() => { const e = BUILDING.elevators.find(d => d.terrace); return e ? idx(e.terrace) : -1; })();
+// ---------- Personalens platser ----------
+// post = arbetsplatsen för någon i CREW (nedan), where = ett rastmål, brk = en plats i personalrummet.
+// win = var den som är där syns: 'control'/'break' i fönstren i hallens bakvägg, 'reception' bakom disken i
+// entrén, 'gondola' i fönsterputsarens gondol, 'terrace' på takterrassen, 'hall' stående i hallen.
+// Utan win försvinner man in i korridoren som alla andra. x är var personen står (pixel.js ritar runt dem).
+// (Platserna är bara för personalen – andra väljer dem aldrig, se pickSpot i people.js.)
+const INNER_X1_C = 619; // (= INNER_X1 längre ner: hallens innerkant mot schakten)
+const crewSpot = (f, s) => { if (f >= 0) SPOTS[f].push(s); };
+crewSpot(CONTROL, { x: 452, k: 'desk', face: 1, post: 'chief', win: 'control', desc: 'Sitter vid kontrollbordet och håller ögonen på skärmarna' });
+crewSpot(CONTROL, { x: 540, k: 'desk', face: -1, post: 'producer', win: 'control', desc: 'Klipper bilden vid bevakningsskärmen' });
+crewSpot(LOBBY, { x: 386, k: 'desk', face: 1, post: 'reception', win: 'reception', desc: 'Sitter i receptionen: "Välkommen till Tornet!"' });
+crewSpot(LOBBY, { x: 450, k: 'stand', face: -1, where: 'vending', win: 'hall', desc: 'Väljer godis ur automaten i entrén' });
+crewSpot(ROOF, { x: INNER_X1_C - 12, k: 'stand', face: 1, post: 'gondola', win: 'gondola', desc: 'Putsar tornets fönster från gondolen' });
+crewSpot(ROOF, { x: 300, k: 'chair', face: 1, where: 'roof', desc: 'Dricker termoskaffe på en bänk i takträdgården' });
+crewSpot(TERRACE_F, { x: INNER_X1_C - 12, k: 'stand', face: 1, post: 'terrace', win: 'terrace', desc: 'Tar emot möblerna från hissbalken på takterrassen' });
+crewSpot(STATION, { x: 470, k: 'stand', face: 1, where: 'platform', win: 'hall', desc: 'Står på perrongen och tittar på tågen' });
+crewSpot(STATION, { x: 150, k: 'door', where: 'kiosk', desc: 'Köper en korv med bröd i kiosken' });
+crewSpot(DOCK, { x: 200, k: 'stand', where: 'dock', desc: 'Sitter på flyttbilens bakgavel och delar en macka med flyttgubbarna' });
+// personalrummet: tre platser i soffan, två vid bordet och en vid kylskåpet
+for (const [x, k, face, desc] of [[414, 'chair', 1, 'Fikar i soffan i personalrummet'], [438, 'chair', 1, 'Läser kvällstidningen i soffan i personalrummet'],
+  [462, 'chair', -1, 'Pratar av sig i soffan i personalrummet'], [498, 'chair', 1, 'Löser korsordet vid bordet i personalrummet'],
+  [542, 'chair', -1, 'Äter matlådan vid bordet i personalrummet'], [570, 'stand', 1, 'Letar i kylskåpet – vem har tagit min yoghurt?']]) {
+  crewSpot(BREAK, { x, k, face, brk: true, win: 'break', desc });
+}
 export const VISIT_WHY = FL.map(f => f.visit || '');
 /** @type {Record<number, number[]>} */
 export const FLOOR_HOURS = Object.fromEntries(FDEF.map((f, i) => [i, f.hours]).filter(([, h]) => h));
@@ -353,7 +381,8 @@ export const BOHAG_BY_TYPE = {
   worker: ['sang', 'soffa', 'kyl', 'tvbank'], child: ['sang'], student: ['sang', 'skrivbord'],
   pensioner: ['sang', 'soffa', 'byra', 'piano'], vd: ['sang', 'soffa', 'kassaskap', 'hylla'], artist: ['sang', 'hylla', 'piano'],
 };
-export const ROLE_NAMES = { 'väktare': 'Väktare', 'städare': 'Städare', 'vaktmästare': 'Vaktmästare', 'nattdj': 'Natt-DJ på Kanal 97', 'nattekniker': 'Nattekniker på Modemkungen', 'bud': 'Bud', 'hisstekniker': 'Hisstekniker', 'flyttgubbe': 'Flyttgubbe på Lyft & Bär', 'ambulans': 'Ambulanssjukvårdare' };
+export const ROLE_NAMES = { 'väktare': 'Väktare', 'städare': 'Städare', 'vaktmästare': 'Vaktmästare', 'nattdj': 'Natt-DJ på Kanal 97', 'nattekniker': 'Nattekniker på Modemkungen', 'bud': 'Bud', 'hisstekniker': 'Hisstekniker', 'flyttgubbe': 'Flyttgubbe på Lyft & Bär', 'ambulans': 'Ambulanssjukvårdare', 'driftchef': 'Driftchef',
+  'bildproducent': 'Bildproducent', 'receptionist': 'Receptionist', 'fönsterputsare': 'Fönsterputsare', 'lastare': 'Lastare på Lyft & Bär', 'arbetsledare': 'Arbetsledare på hissjouren' };
 
 // ---------- Stamgästerna ----------
 // Återkommande karaktärer: samma namn, utseende och egenheter varje dag (logiken finns i cast.js).
@@ -386,6 +415,45 @@ export const CAST = [
     lines: { arrive: ['Pizza! Varm och god!', 'Kanal 97 – din kalzone är här!'] } },
 ];
 
+// ---------- Husets personal ----------
+// De som arbetar i huset har en egen post (en plats ovan), ett skift och raster – logiken finns i crew.js.
+// arrive: null = på posten när dygnet börjar, ett klockslag = kommer in genom entrén, 'event' = kommer med en
+// händelse (lastaren med flyttdagen). breaks: [klockslag, sekunder (verklig tid), rastmål, varför] där rastmålet
+// är break (personalrummet), cafe (Sky Café), roof (takträdgården), kiosk, vending (godisautomaten) eller platform.
+// cover = posten som måste vara bemannad innan man går på rast; urgent = går tillbaka till posten vid larm.
+/** @typedef {{ id: string, name: string, role: string, title: string, post: string, from: number, until: number|null,
+ *   arrive: number|null|'event', kg: number, fit: number, speed: number, space: number, polite: boolean, icon: string,
+ *   breaks: [number, number, string, string][], cover?: string, urgent?: boolean, look: object }} CrewDef */
+/** @type {CrewDef[]} */
+export const CREW = [
+  { id: 'gunbritt', name: 'Gun-Britt', role: 'driftchef', icon: '🧑‍💼', title: 'Driftchef · dagskiftet 06–22', post: 'chief', from: 6, until: 22, arrive: null,
+    kg: 68, fit: 0.85, speed: 1.1, space: 7, polite: true, urgent: true, cover: 'producer',
+    breaks: [[9.7, 25, 'break', 'Förmiddagsfika i personalrummet'], [12.3, 45, 'break', 'Lunch – matlådan i personalrummets mikro'], [14.7, 25, 'break', 'Eftermiddagsfika – lugnt på skärmarna']],
+    look: { skin: '#f6c48f', shirt: '#2a5db0', pants: '#2b2f45', hair: 5, hairC: '#b0b0b8', tie: false, tieC: '#ffe14d', stripe: false, acc: 4 } },
+  { id: 'rune', name: 'Rune', role: 'driftchef', icon: '🧑‍💼', title: 'Driftchef · nattskiftet 22–06', post: 'chief', from: 22, until: null, arrive: 21.6,
+    kg: 92, fit: 0.2, speed: 0.9, space: 9, polite: false, urgent: true, cover: 'producer',
+    breaks: [[25.4, 40, 'break', 'Nattfika – mackor och termoskaffe i personalrummet'], [28.3, 30, 'break', 'Sista koppen innan morgonen']],
+    look: { skin: '#e0ac7a', shirt: '#6b4a2b', pants: '#3a3a3a', hair: 1, hairC: '#3a2a1a', tie: false, tieC: '#ffe14d', stripe: true, acc: 4 } },
+  { id: 'ludde', name: 'Ludde', role: 'bildproducent', icon: '📹', title: 'Bildproducent · dagskiftet 06–22', post: 'producer', from: 6, until: 22, arrive: null,
+    kg: 74, fit: 0.6, speed: 1.15, space: 8, polite: false, urgent: true, cover: 'chief',
+    breaks: [[11, 20, 'vending', 'Godis ur automaten i entrén – kameran får sköta sig själv'], [13.8, 30, 'break', 'Kaffe i personalrummet']],
+    look: { skin: '#ffdbb8', shirt: '#38d9a9', pants: '#1f6f8b', hair: 3, hairC: '#d9a441', tie: false, tieC: '#ffe14d', stripe: true, acc: 3 } },
+  { id: 'siv', name: 'Siv', role: 'bildproducent', icon: '📹', title: 'Nattbevakare · nattskiftet 22–06', post: 'producer', from: 22, until: null, arrive: 21.65,
+    kg: 61, fit: 0.75, speed: 1, space: 6, polite: true, urgent: true, cover: 'chief',
+    breaks: [[23.9, 35, 'platform', 'Ut på perrongen – ser sista tåget gå'], [27, 35, 'break', 'Nattmacka i personalrummet']],
+    look: { skin: '#a8693f', shirt: '#5a2a6e', pants: '#2b2d6e', hair: 4, hairC: '#1b1033', tie: false, tieC: '#ffe14d', stripe: false, acc: 0 } },
+  { id: 'berit', name: 'Berit', role: 'receptionist', icon: '🛎️', title: 'Receptionist · 07–19', post: 'reception', from: 7, until: 19, arrive: 6.8,
+    kg: 64, fit: 0.4, speed: 1, space: 7, polite: true,
+    breaks: [[10, 30, 'cafe', 'Förmiddagsfika i Sky Café'], [12.25, 45, 'break', 'Lunch i personalrummet'], [15, 25, 'cafe', 'En latte i Sky Café']],
+    look: { skin: '#ffe4c8', shirt: '#c0392b', pants: '#2b2f45', hair: 5, hairC: '#d9a441', tie: false, tieC: '#ffe14d', stripe: false, acc: 2 } },
+  { id: 'hasse', name: 'Hasse', role: 'fönsterputsare', icon: '🧽', title: 'Fönsterputsare · Klart Glas', post: 'gondola', from: 7.6, until: 17.6, arrive: 7.4,
+    kg: 84, fit: 0.7, speed: 1, space: 9, polite: false,
+    breaks: [[10.4, 25, 'roof', 'Termoskaffe i takträdgården'], [12.6, 40, 'kiosk', 'Lunch – korv med bröd i kiosken på stationen'], [14.9, 20, 'roof', 'En cigg och utsikten på taket']],
+    look: { skin: '#f6c48f', shirt: '#2a5db0', pants: '#2a5db0', hair: 4, hairC: '#5a3a1a', tie: false, tieC: '#ffe14d', stripe: true, acc: 0 } },
+  { id: 'mona', name: 'Mona', role: 'lastare', icon: '🏗️', title: 'Lastare på Lyft & Bär · hissbalken', post: 'terrace', from: 0, until: null, arrive: 'event',
+    kg: 70, fit: 0.6, speed: 1, space: 8, polite: false, breaks: [],
+    look: { skin: '#d9a066', shirt: '#ff8c42', pants: '#3a3a3a', hair: 1, hairC: '#2a1d14', tie: false, tieC: '#ffe14d', stripe: false, acc: 0 } },
+];
 export const STRAT_NAMES = { smart: 'SMART', peak: 'RUSNING', eco: 'ENERGISNÅL', nearest: 'NÄRMAST', random: 'KAOS', buttons: 'KNAPPAR' };
 export const STRAT_HINT = {
   smart: '<b>Smart:</b> varje person får den hiss som snabbast kan hämta hen <i>och</i> köra till målet (resväg, stopp, last – rabatt om hissen redan ska dit). Omfördelar och parkerar lediga hissar smart.',

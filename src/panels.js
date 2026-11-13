@@ -185,7 +185,7 @@ function dayHtml() {
 }
 function viewHtml(v) {
   const chips = (act, cur, list) => `<div class="row">${list.map(([k, t]) => btn(`${act}:${k}`, t, cur === k)).join('')}</div>`;
-  if (v === 'roster') return chips('rf', S.rosterFilter, [['all', 'Alla'], ['wait', 'Väntar'], ['ride', 'Åker'], ['in', 'Inne']]) + `<div class="roster">${rosterHtml()}</div>`;
+  if (v === 'roster') return chips('rf', S.rosterFilter, [['all', 'Alla'], ['wait', 'Väntar'], ['ride', 'Åker'], ['in', 'Inne'], ['crew', 'Personalen']]) + `<div class="roster">${rosterHtml()}</div>`;
   if (v === 'log') return chips('lf', S.logFilter, [['all', 'Allt'], ['lift', 'Hissar'], ['person', 'Personer'], ['button', 'Knappar'], ['sel', 'Följd']]) + `<div class="log">${logHtml()}</div>`;
   if (v === 'stats') return `<div class="stats">${statsHtml()}</div>`;
   const set = (key, list) => `<div class="row">${list.map(([k, t]) => btn(`setting:${key}:${k}`, t, S[key] === k)).join('')}</div>`;

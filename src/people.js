@@ -4,12 +4,13 @@ import { fl } from './util.js';
 import { activityRate, roomUnits, FLOOR_HOURS, FL, NAMES, ROLE_NAMES, floorOpen, OFFICE_FLOORS, SPOTS, STAIR_X, VISIT_WHY, WAIT_X1, WALK, LOBBY, CAFE, MEZZ, floorWith, EL, SKY, CAST, STATION, TRAIN_X0, TRAIN_X1 } from './config.js';
 import { S, clockStr, hour, log, occOf, setOcc } from './state.js';
 import { inFireZone, requestRide, loadKg, personKg, eta, keyed, posOf, costBased, prio, outLong, servesNow } from './dispatch.js';
-import { techNext, maybeStumble } from './service.js';
+import { techNext, maybeStumble, fireCrank, foremanNext } from './service.js';
 import { moverNext, moverTimer, medicNext, moveBoard } from './visits.js';
 import { alwaysStairs, castBoard, castNext, castPizza, castWaitTick, flushSay, incidentTalk, say } from './cast.js';
 import { kickOff } from './elevators.js';
 import { arriveByCar, backFromAssembly, leaveBuilding, resNext, homeSpot } from './life.js';
 import { ffNext } from './incidents.js';
+import { CREW_LOOK, crewNext, crewSpot } from './crew.js';
 import { buttonsMode, carButtonMistakes } from './buttons.js';
 
 // ---------- Människor ----------
@@ -48,17 +49,25 @@ export function pev(p, text) {
   if (p === S.sel) S.trackDirty = true;
 }
 export function makePerson(kind, floor, x) {
-  return {
-    id: S.nextId++, name: freeName(), kind, floor, x, tx: x, dest: 0, dir: 0, state: 'toQueue',
-    waitStart: 0, waited: 0, mood: 0, face: 1, walkPhase: rng() * 6,
-    speedMul: rand(0.85, 1.15), depth: rand(-7, 0), look: makeLook(),
-    timer: 0, dead: false, car: null, assigned: null, leaving: false, rideStart: 0, spot: null,
-    why: '', hist: [], trips: 0, totalWait: 0, totalRide: 0, seen: '', patience: rand(5, 15),
-    kg: Math.round(rand(55, 105)), cargo: null, exitFloor: LOBBY,
+  // (slumptalen dras i samma ordning som alltid – dygnets slumpföljd får inte flyttas)
+  return blankPerson(kind, floor, x, {
+    name: freeName(), walkPhase: rng() * 6, speedMul: rand(0.85, 1.15), depth: rand(-7, 0), look: makeLook(),
+    patience: rand(5, 15), kg: Math.round(rand(55, 105)),
     fit: rng(), // hur gärna personen tar trappan (0 = aldrig, 1 = gärna)
     // hissetikett: hur många man står ut med i korgen (av 8) innan man hellre väntar på nästa (9 = bryr sig inte),
     // och om man håller upp dörren åt den som kommer springande
     space: 6 + Math.floor(rng() * 4), polite: rng() < 0.2,
+  });
+}
+/** En person med givna egenskaper (namn, utseende, vikt …) – drar inga slumptal (driftcheferna, chief.js) */
+export function blankPerson(kind, floor, x, o) {
+  return {
+    id: S.nextId++, name: '', kind, floor, x, tx: x, dest: 0, dir: 0, state: 'toQueue',
+    waitStart: 0, waited: 0, mood: 0, face: 1, walkPhase: 0, speedMul: 1, depth: -3, look: null,
+    timer: 0, dead: false, car: null, assigned: null, leaving: false, rideStart: 0, spot: null,
+    why: '', hist: [], trips: 0, totalWait: 0, totalRide: 0, seen: '', patience: 10,
+    kg: 75, cargo: null, exitFloor: LOBBY, fit: 0.5, space: 7, polite: false,
+    ...o,
   };
 }
 export const CARGO = {
@@ -173,12 +182,14 @@ const ROLE_SPOT_DESC = {
 };
 export function pickSpot(p, f) {
   const list = SPOTS[f];
+  if (p.crewId) return crewSpot(p, f);
   // nattpersonal: egna platser
   if (p.kind === 'res' && f === p.home) return homeSpot(p);
   const own = p.role && list.find(s => s.role === p.role);
   if (own) return own;
   if (p.role) return { x: p.nearX ?? rand(150, 470), k: 'stand', face: pick([1, -1]), desc: p.task || ROLE_SPOT_DESC[p.role] || 'Jobbar', temp: true };
-  const free = s => s.k === 'door' || occOf(s) === null;
+  // (personalens poster, rastmål och personalrummet väljer ingen annan)
+  const free = s => !s.brk && !s.post && !s.where && (s.k === 'door' || occOf(s) === null);
   if (p.kind === 'emp' && f === p.home && p.homeSpot !== undefined && free(list[p.homeSpot])) return list[p.homeSpot];
   const pref = list.filter(s => free(s) && (p.kind === 'emp' ? s.staff : !s.staff));
   const any = list.filter(free);
@@ -436,6 +447,8 @@ export function exitDone(p) {
   else if (p.role === 'ambulans') p.timer = rand(5, 8);
   else if (p.role === 'brandman') p.timer = S.fire && p.floor >= S.fire.floor ? 1e9 : rand(0.3, 1); // (släcker tills branden är ute)
   else if (p.role === 'hisstekniker') p.timer = p.job !== null && p.job !== undefined ? 1e9 : rand(1, 3); // arbetet sköts av service.js
+  else if (p.crewId) p.timer = CREW_LOOK; // (personalen tittar ofta upp: rast, larm, skiftbyte – crew.js)
+  else if (p.role === 'arbetsledare') p.timer = 6; // (tittar till hissen, se foremanNext i service.js)
   else if (p.role) p.timer = { 'väktare': rand(8, 15), 'städare': rand(25, 45), 'vaktmästare': rand(30, 50), 'nattdj': rand(60, 120), 'nattekniker': p.floor === LOBBY ? rand(4, 8) : rand(30, 70) }[p.role];
   else if (p.floor === CAFE) p.timer = rand(25, 60);
   else if (p.kind === 'vis') p.timer = rand(20, 50);
@@ -476,6 +489,10 @@ export function capTimer(p) {
 }
 export function decideNext(p) {
   const h = hour();
+  // (personalen går ut i entrén och väntar där – de lämnar inte huset)
+  if (inFireZone(p.floor) && p.crewId) { p.onBreak = false; return [LOBBY, 'BRANDLARM – går ner till entrén', false]; }
+  // (teknikern vid en korg där folk sitter fast släpper ut dem först – service.js)
+  if (inFireZone(p.floor) && p.role === 'hisstekniker' && fireCrank(p)) return null;
   if (inFireZone(p.floor) && !p.ff) { p.evac = true; p.evacFrom = p.floor; return [p.exitFloor, 'BRANDLARM – utrymning!']; }
   if (p.role) return roleNext(p, h);
   if (p.collapsed) { p.timer = 1e9; return null; } // ligger kvar tills ambulansen kommer
@@ -507,7 +524,10 @@ export function officeDone(p) {
   const leaveHere = r && r[0] === p.floor && p.role && p.floor === p.exitFloor && r[2] !== false;
   // (flyttgubben som ställde en möbel vid lastluckan tar nästa lass direkt)
   if (r && r[0] === p.floor && p.mover && !leaveHere) { p.timer = moverTimer(p); return; }
-  if (!r || (r[0] === p.floor && !leaveHere)) { p.timer = p.collapsed ? 1e9 : rand(40, 110); if (!p.collapsed) capTimer(p); return; }
+  if (!r || (r[0] === p.floor && !leaveHere)) {
+    if (p.crewId) { p.timer = CREW_LOOK; return; }
+    p.timer = p.collapsed ? 1e9 : rand(40, 110); if (!p.collapsed) capTimer(p); return;
+  }
   p.x = p.spot ? p.spot.x : p.x;
   releaseSpot(p);
   setTrip(p, r[0], r[1], r[2]);
@@ -519,9 +539,10 @@ export function officeDone(p) {
 // ---------- Kvälls- och nattpersonal ----------
 const JANITOR_TASKS = ['Byter ett lysrör', 'Lagar en knarrande dörr', 'Kollar ventilationen', 'Torkar upp en kaffefläck', 'Smörjer dörrgångjärn'];
 /** personal kommer till jobbet; extra = inringd extra hisstekniker (tar bara hissfel, åker hem när kön är tom) */
-export function spawnStaff(role, extra = false) {
+export function spawnStaff(role, extra = false, o = null) {
   const p = makePerson('staff', LOBBY, -30 - rand(0, 30));
   p.role = role;
+  if (o) Object.assign(p, o);
   if (role === 'städare') withCargo(p, 'städvagn');
   if (role === 'vaktmästare') withCargo(p, 'verktygslåda');
   if (role === 'hisstekniker') { withCargo(p, 'servicevaska'); p.job = null; p.workT = 0; p.extra = extra; }
@@ -532,15 +553,17 @@ export function spawnStaff(role, extra = false) {
   const first = roleNext(p, hour()) || [p.exitFloor, 'Inget att göra i kväll – går hem'];
   setTrip(p, first[0], first[1], first[2]);
   S.people.push(p);
-  const title = extra ? 'Extra hisstekniker (inringd)' : ROLE_NAMES[role];
+  const title = extra ? 'Extra hisstekniker (inringd)' : p.title || ROLE_NAMES[role];
   pev(p, `Kliver in i entrén · ${title} · ${p.why}`);
   log(`${pn(p)} (${title.toLowerCase()}) kommer till jobbet`, 'person', null, p.id);
   return p;
 }
 function roleNext(p, h) {
+  if (p.crewId) return crewNext(p, h);
   switch (p.role) {
     case 'bud': return [p.exitFloor, 'Paketet levererat – tillbaka till lastbilen'];
     case 'hisstekniker': return techNext(p);
+    case 'arbetsledare': return foremanNext(p);
     case 'flyttgubbe': return moverNext(p);
     case 'ambulans': return medicNext(p);
     case 'brandman': return ffNext(p);
