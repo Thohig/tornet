@@ -77,6 +77,9 @@ export function doAction(cmd) {
   else if (a === 'storm') act('stormMode', b);
   else if (a === 'fan') act('fan', +b);
   else if (a === 'level') act('service', +b);
+  else if (a === 'moveRoute') act('moveRoute', b);
+  else if (a === 'moveBlankets') act('moveBlankets', b === '1');
+  else if (a === 'moveWind') act('moveWind', b);
   else if (a === 'dismiss') S.dismissed.add(b); // (bara gränssnittet – simuleringen läser det aldrig)
   else if (a === 'replay') { copyReplayLink(); return; }
   else if (a === 'show') scrollToFloor(+b);

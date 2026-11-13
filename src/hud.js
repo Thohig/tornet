@@ -15,7 +15,8 @@ export { stateInfo };
 import { residentDesc } from './life.js';
 import { STORM_HINT, windMs } from './weather.js';
 import { FAN_KW, jobFloor, tech, cableStatus } from './service.js';
-import { hoistStatus } from './hoist.js';
+import { hoistHalt, hoistStatus } from './hoist.js';
+import { BLANKET_T } from './visits.js';
 import { updatePauseBtn } from './input.js';
 import { SIM_VERSION } from './replay.js';
 
@@ -350,21 +351,36 @@ export function incidentHtml() {
     else if (!R.checks) info(`nocheck-${S.day}`, 'drift', '🔁 Äldre replay-länk', 'Länken saknar kontrollsummor, så det går inte att se om uppspelningen blir exakt samma dygn.');
   }
   const M = S.move;
-  if (M && (M.state === 'on' || (M.state === 'done' && S.t - M.t1 < 20))) {
+  // flyttkortet syns en stund innan flytten börjar (då kan spelaren välja väg och skyddsfiltar) och under den
+  if (M && ((M.state === 'planned' && hour() >= M.at - 1.5 && !S.fire) || M.state === 'on' || (M.state === 'done' && S.t - M.t1 < 20))) {
     const out = M.items.filter(it => it.st === 'dock' || it.st === 'truck').length, flat = M.items.filter(it => it.st === 'home' || it.st === 'packing').length;
-    const bar = M.items.map(it => (it.st === 'truck' ? '▓' : it.st === 'dock' ? '▒' : it.st === 'carried' ? '░' : '·')).join('');
-    const lock = M.smart
-      ? `Varuhissen ${V ? esc(V.name) : ''} går i <b>oberoende drift</b> bara medan en stor möbel är på väg ner – kartongerna åker med som vanliga resenärer${V && V.indep ? ' (<b>låst nu</b>)' : ''}. Flytten bokades efter lunch, när förmiddagens leveranser var klara.`
-      : `Varuhissen ${V ? esc(V.name) : ''} går i <b>oberoende drift</b> hela flytten: nyckelstyrd, bara flyttgubbarna åker med. Flytten bokades på förmiddagen, mitt i leveranserna – paketbuden får vänta.`;
-    info(`move-${S.day}`, 'move', `🚚 Flyttdag på ${fl(M.floor)}`,
-      M.state === 'on'
+    const bar = M.items.map(it => (it.st === 'truck' ? '▓' : it.st === 'dock' ? '▒' : it.st === 'home' || it.st === 'packing' ? '·' : '░')).join('');
+    const xl = M.items.filter(it => it.size === 'XL').map(it => it.name.replace('(!)', ''));
+    const routeTxt = { auto: M.smart ? 'Styrningen planerar: de stora möblerna går utanpå när det är kö till varuhissen, kartongerna väntar in när buden står där.' : 'Styrningen kör XL-möblerna med hissbalken och resten i varuhissen.',
+      varu: 'Allt går i varuhissen – även det tyngsta.', balk: 'Alla stora möbler går utanpå med hissbalken; kartongerna i varuhissen.' }[M.route];
+    const lock = `Varuhissen ${V ? esc(V.name) : ''} går i <b>oberoende drift</b> ${M.smart ? 'bara medan en stor möbel är på väg ner' : 'så länge bärarna jobbar'}${V && V.indep ? ' (<b>låst nu</b>)' : ''}.`;
+    const chip = (r, t) => `<button class="btn xs${M.route === r ? ' on' : ''}" data-act="moveRoute:${r}">${t}</button>`;
+    const routes = M.state !== 'done' ? chip('auto', '🤖 Låt styrningen planera') + chip('varu', '🛗 Allt i varuhissen') + (M.hoist ? chip('balk', '🏗️ Tungt utanpå') : '') : '';
+    const blank = M.state === 'planned' ? `<button class="btn xs${M.blankets ? ' on' : ''}" data-act="moveBlankets:${M.blankets ? 0 : 1}">🧣 Skyddsfiltar: ${M.blankets ? 'ja' : 'nej'}</button>` : '';
+    const windy = M.state === 'on' && hoistHalt() === 'blåst' && M.items.some(it => it.st === 'hatch');
+    const wind = windy ? `<button class="btn xs${(M.windChoice ?? (M.smart ? 'varu' : 'wait')) === 'wait' ? ' on' : ''}" data-act="moveWind:wait">⏳ Vänta ut blåsten</button><button class="btn xs${(M.windChoice ?? (M.smart ? 'varu' : 'wait')) === 'varu' ? ' on' : ''}" data-act="moveWind:varu">🛗 Ta varuhissen</button>` : '';
+    const body = M.state === 'planned'
+      ? `<b>${esc(M.who)}</b> flyttar från ${fl(M.floor)} i dag – Flyttfirman Lyft & Bär kommer ${M.smart ? 'efter lunch, när förmiddagens leveranser är klara' : 'på förmiddagen, mitt i leveranserna'}. Bohaget: <b>${num(M.loads)}</b> lass${xl.length ? `, bland annat ${esc(xl.join(' och '))}` : ''}.`
+        + ` <b>Välj väg</b> för möblerna och om varuhissen ska kläs med <b>skyddsfiltar</b> (tar ${BLANKET_T} s i början, men inga repor i väggarna). ${routeTxt}`
+        + (M.dockWait > 0 ? ' Flyttbilen väntar på gatan – leveransbilen står vid lastkajen.' : '')
+      : M.state === 'on'
         ? `<b>${esc(M.who)}</b> flyttar från ${fl(M.floor)} med Flyttfirman Lyft & Bär. Bohaget: <b>${num(M.loads)}</b> lass – ${num(flat)} kvar i lägenheten, ${num(out)} nere vid flyttbilen, ${num(M.truck)} inlastade.`
-          + `<div class="svc" title="▓ i flyttbilen · ▒ på lastkajen · ░ bärs · · i lägenheten">${bar}</div>${lock}`
+          + `<div class="svc" title="▓ i flyttbilen · ▒ på lastkajen · ░ på väg · · i lägenheten">${bar}</div>`
+          + (S.t < M.crewAt ? `Flyttgubbarna klär ${V ? esc(V.name) : 'varuhissen'} med skyddsfiltar. ` : '') + `${routeTxt} ${lock}`
           + (hoistStatus(M) ? ` <b>Hissbalken:</b> ${esc(hoistStatus(M))}` : '')
-          + (M.pivots ? ` ${M.pivots === 1 ? 'En möbel' : `${num(M.pivots)} möbler`} har fått vändas i hissdörren.` : '')
+          + (windy ? ' <b>Blåsten stoppar hissbalken</b> – vänta ut den, eller bär ner det som står vid lastluckan i varuhissen?' : '')
+          + (M.pivots ? ` ${M.pivots === 1 ? 'En möbel' : `${num(M.pivots)} möbler`} har fått vändas i hissdörren${M.stuck ? `, ${num(M.stuck)} fastnade helt` : ''}.` : '')
+          + (M.broken ? ` 💥 ${num(M.broken)} lass tappades.` : '') + (M.scratches ? ` ${num(M.scratches)} repor i varuhissen.` : '')
+          + (M.notes.truck ? ' Leveransbilen får vänta på gatan – flyttbilen står vid lastkajen.' : '')
           + (S.power ? '' : ' Strömavbrott: flyttgubbarna väntar ut det med möblerna vid hissen – den som har tomma händer tar trapporna.')
-        : `Flytten är klar: ${num(M.loads)} lass på ${Math.round(M.t1 - M.t0)} s${M.hoisted ? ` (${num(M.hoisted)} med hissbalken och panoramahissen)` : ''}, varuhissen var låst i ${Math.round(M.indepSec)} s. Den går i vanlig trafik igen.`,
-      `${V ? `<button class="btn xs" data-act="follow:${V.id}">📹 Följ varuhissen</button>` : ''}<button class="btn xs" data-act="show:${M.floor}">Visa våningen</button><button class="btn xs" data-act="show:${DOCK}">Lastkajen</button>`);
+        : `Flytten är klar: ${num(M.loads)} lass på ${Math.round(M.t1 - M.t0)} s${M.hoisted ? ` (${num(M.hoisted)} med hissbalken och panoramahissen)` : ''}, varuhissen var låst i ${Math.round(M.indepSec)} s. Den går i vanlig trafik igen.`;
+    info(`move-${S.day}`, 'move', `🚚 Flyttdag på ${fl(M.floor)}`, body,
+      `${routes}${blank}${wind}${V && M.state !== 'planned' ? `<button class="btn xs" data-act="follow:${V.id}">📹 Följ varuhissen</button>` : ''}<button class="btn xs" data-act="show:${M.floor}">Visa våningen</button><button class="btn xs" data-act="show:${DOCK}">Lastkajen</button>`);
   }
   const A = S.medic;
   if (A && (A.state !== 'done' || S.t - A.t1 < 20)) {
@@ -589,6 +605,16 @@ export function showIntro() {
     <button class="btn" id="go">KÖR!</button></div>`);
   $('go').onclick = () => { hideOverlay(); S.started = true; log('Dag 1 börjar – dörrarna öppnas!', 'sys'); };
 }
+/** flyttdagen i resultatet (tom om ingen flyttade i dag) */
+function moveSummary() {
+  const M = S.move;
+  if (!M || M.state === 'planned') return '';
+  const dur = M.state === 'done' ? `${Math.round(M.t1 - M.t0)} s` : 'blev inte klar';
+  const route = { auto: 'styrningen planerade', varu: 'allt i varuhissen', balk: 'tungt utanpå' }[M.route];
+  return `<div>🚚 Flytten (${esc(M.who)}): <b>${dur}</b> · ${route}</div><div>Via varuhissen <b>${M.viaV}</b> · hissbalken <b>${M.hoisted}</b> lass</div>
+      <div>Varuhissen låst: <b>${Math.round(M.indepSec)} s</b>${M.blankets ? ' (med skyddsfiltar)' : ` · repor <b>${M.scratches}</b>`}</div><div>Buden väntade som mest: <b>${Math.round(M.budWait)} s</b>${M.dockWait ? ` · flyttbilen väntade ${Math.round(M.dockWait)} s` : ''}</div>
+      <div>Vändes i dörren: <b>${M.pivots}</b>${M.stuck ? ` (fastnade helt ${M.stuck})` : ''}</div><div>Tappat: <b>${M.broken}</b> lass 💥</div>`;
+}
 export function showSummary() {
   S.summaryShown = true; S.paused = true;
   const st = S.stats, avg = st.waitN ? st.waitSum / st.waitN : 0, g = grade(avg);
@@ -614,6 +640,7 @@ export function showSummary() {
       <div>Ambulans: <b>${st.medical}</b></div><div>Flyttlass: <b>${st.moveLoads}</b></div>
       <div>Övre däcket: <b>${st.upperDeck}</b> resor</div><div>Inlärda parkeringar: <b>${st.learnedParks}</b></div>
       <div>Tåg vid perrongen: <b>${st.trains}</b></div><div>Med tunnelbanan: <b>${st.trainIn}</b> in · <b>${st.trainOut}</b> hem</div>
+      ${moveSummary()}
       <div>Tog trappan frivilligt: <b>${st.stairsChoice}</b></div><div>Mest sliten: <b>${S.elevators.reduce((a, e) => (e.wear > a.wear ? e : a)).name} ${Math.round(Math.max(...S.elevators.map(e => e.wear)) * 100)} %</b></div>
     </div>
     <button class="btn" id="next">NÄSTA DAG ▶</button></div>`);

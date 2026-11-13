@@ -864,7 +864,7 @@ function cabinPx(e, k, x, yb, body, head) {
   const inner = e.facade ? PAL.cabinGlass : e.freight ? PAL.cabinFreight : PAL.cabin;
   R(ix, iy, iw, ih, inner);
   R(ix, iy + ih - 6, iw, 6, dark(inner, 0.12));
-  if (e.indep || (e.freight && S.move && S.move.state === 'on')) {
+  if (e.freight && S.move && S.move.state === 'on' && S.move.blankets) {
     // flyttdag: väggarna kläs med blå skyddsfiltar (hela flytten, även när hissen inte är låst)
     R(ix, iy, iw, ih - 6, '#3f5f9f');
     for (let yy = 0; yy < ih - 6; yy += 6) for (let xx = (yy / 6) % 2 ? 3 : 0; xx < iw; xx += 6) R(ix + xx, iy + yy, 3, 3, '#5577b8');

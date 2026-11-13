@@ -16,6 +16,7 @@ import { fl } from '../src/util.js';
 import { assignCalls, antiNuisance } from '../src/buttons.js';
 import { act, recording, encodeReplay, decodeReplay, SIM_VERSION, CHECK_EVERY, stateHash } from '../src/replay.js';
 import { powerKw, triggerFault, breakDown, tech, snapCable } from '../src/service.js';
+import { forceMove, BLANKET_T } from '../src/visits.js';
 import { trafficMode, learnBin, peakHold, PEAK_HOLD } from '../src/dispatch.js';
 import { windAt, startStorm } from '../src/weather.js';
 import { canBrakeTo } from '../src/elevators.js';
@@ -37,7 +38,7 @@ function sim(seed, opts = {}) {
 // Vakt som kontrollerar invarianter efter varje steg
 function watcher() {
   const w = { passes: 0, maxRide: 0, maxWait: 0, n: 0, overweight: 0, maxKg: 0, bypassBroken: 0, prev: [],
-    outOfRange: 0, wrongDoor: 0, liftPass: 0, railClash: 0, badLeg: 0, badFreight: 0, vipMixed: 0, vipSet: [], selfDest: 0, brokenUse: 0, snapUse: 0, prevSnapN: [], holdBoard: 0, prevN: [], prevHold: [],
+    outOfRange: 0, wrongDoor: 0, liftPass: 0, railClash: 0, moveBad: 0, badLeg: 0, badFreight: 0, vipMixed: 0, vipSet: [], selfDest: 0, brokenUse: 0, snapUse: 0, prevSnapN: [], holdBoard: 0, prevN: [], prevHold: [],
     jumps: 0, orphanService: 0, badReserved: 0, dupNames: 0, dupEx: '', idleWait: new Map(), idleWaitMax: 0, badPlatform: 0,
     deadAssign: new Map(), deadAssignMax: 0, deadAssignEx: '', prevMode: [], late: [] };
   w.before = () => S.elevators.map(e => e.pos);
@@ -99,6 +100,12 @@ function watcher() {
         if (S.power && e.mode === 'normal') w.maxRide = Math.max(w.maxRide, S.t - p.rideStart);
       }
     });
+    // flyttdagen: varje lass är på ett ställe – den som bär eller packar det, balken, panoramahissen
+    if (S.move && S.move.state === 'on') for (const it of S.move.items) {
+      const holders = S.people.filter(p => p.mover && p.item === it.id).length;
+      const ok = it.st === 'packing' || it.st === 'carried' ? holders === 1 : holders === 0;
+      if (!ok || (it.st === 'hoist' && S.hoist.item !== it.id) || (it.st === 'lift' && S.hoist.liftItem !== it.id)) w.moveBad++;
+    }
     // takskenan: ingen last hänger i hissbalken medan putsarens gondol är nere
     if (S.hoist && S.hoist.item !== null && !S.cleaner.parked) w.railClash++;
     // ingen väntar på en hiss som inte kan komma: tilldelningen till en hiss som är ur drift, på väg till service,
@@ -1061,7 +1068,7 @@ test('Flyttdag: hushållets bohag bärs ut och lastas in, oberoende drift tar ba
   assert(smartLate && dumbEarly, 'bokningstiderna stämmer inte');
   const avg = a => a.reduce((x, y) => x + y, 0) / a.length;
   // (de enkla lägena låser varuhissen så länge bärarna jobbar – det sista kan gå med hissbalken)
-  assert(avg(lockShare.smart) < 0.5 && avg(lockShare.nearest) > 0.85, `varuhissen låst: smart ${Math.round(avg(lockShare.smart) * 100)} %, närmast ${Math.round(avg(lockShare.nearest) * 100)} % av flytten`);
+  assert(avg(lockShare.smart) < 0.5 && avg(lockShare.nearest) > 0.75, `varuhissen låst: smart ${Math.round(avg(lockShare.smart) * 100)} %, närmast ${Math.round(avg(lockShare.nearest) * 100)} % av flytten`);
   assert(pivots > 0, 'ingen möbel fastnade någonsin i dörren');
   return `${ok} flyttdagar · varuhissen låst ${Math.round(avg(lockShare.smart) * 100)} % av flytten (smart) mot ${Math.round(avg(lockShare.nearest) * 100)} % (närmast) · ${pivots} pivoteringar`;
 });
@@ -1079,12 +1086,14 @@ test('Hissbalken: pianot och kassaskåpet går ut genom lastluckan och ner med p
       for (const p of V.passengers) if (p.mover && p.item !== null && M.items[p.item].size === 'XL') xlInV++;
       if (S.hoist.phase !== 'idle' && S.cleaner.crew) cleanerWaited += DT;
       // en storm när lasten hänger ute: balken ska stå still
-      if (!stormed && n === 1 && S.hoist.phase === 'lower') { stormed = true; startStorm(); S.storm.t0 -= S.storm.len * 0.4; }
+      // (spelaren väljer att vänta ut blåsten – annars bär Smart ner det som står vid luckan i varuhissen)
+      if (!stormed && n === 1 && S.hoist.phase === 'lower') { stormed = true; act('moveWind', 'wait'); startStorm(); S.storm.t0 -= S.storm.len * 0.4; }
       if (S.hoist.halted === 'blåst') { if (lastY !== null && S.hoist.y !== lastY) windHeld = -1e9; else windHeld++; lastY = S.hoist.y; } else lastY = null;
     }
     assert(M.state === 'done' && M.truck === M.loads, `frö ${seed}: flytten blev inte klar (${M.truck}/${M.loads})`);
     const xl = M.items.filter(i => i.size === 'XL').length;
-    assert(M.hoisted === xl && xlInV === 0, `frö ${seed}: ${M.hoisted} av ${xl} XL-möbler gick med hissbalken (${xlInV} steg i varuhissen)`);
+    const xlBalk = M.items.filter(i => i.size === 'XL' && i.via === 'balk').length;
+    assert(xlBalk === xl && M.hoisted >= xl && xlInV === 0, `frö ${seed}: ${xlBalk} av ${xl} XL-möbler gick med hissbalken (${xlInV} steg i varuhissen)`);
     assert(w.railClash === 0 && w.liftPass === 0 && w.wrongDoor === 0, `frö ${seed}: regelbrott (skena ${w.railClash}, passagerare i lastläge ${w.liftPass}, dörr ${w.wrongDoor})`);
     hoisted += M.hoisted;
   }
@@ -1092,6 +1101,72 @@ test('Hissbalken: pianot och kassaskåpet går ut genom lastluckan och ner med p
   assert(windHeld > 0, 'balken stannade aldrig i blåsten (eller rörde sig ändå)');
   assert(cleanerWaited > 0, 'putsaren behövde aldrig vänta på balken');
   return `${n} flyttdagar · ${hoisted} möbler med hissbalken · stod still i blåst ${Math.round(windHeld * DT)} s · putsaren väntade ${Math.round(cleanerWaited)} s`;
+});
+/** kör flytten på frö seed (med flyttdag även om slumpen inte gav någon) med spelarens val, till den är klar */
+function runMove(seed, strategy, route, blankets, during) {
+  sim(seed, { strategy });
+  if (!S.move) forceMove();
+  const M = S.move;
+  act('moveRoute', route); act('moveBlankets', blankets);
+  const w = watcher();
+  let g = 0;
+  while (!S.summaryShown && M.state !== 'done' && ++g < 40 * 3600) { const b = w.before(); step(DT); w.check(b); if (during) during(M); }
+  assert(M.state === 'done' && M.truck === M.loads, `frö ${seed} ${route}: flytten blev inte klar (${M.truck}/${M.loads})`);
+  assert(w.moveBad === 0 && w.passes === 0 && w.liftPass === 0 && w.railClash === 0, `frö ${seed} ${route}: regelbrott (lass ${w.moveBad}, förbi ${w.passes}, lastläge ${w.liftPass}, skena ${w.railClash})`);
+  return M;
+}
+test('Flyttdag: spelarens val – allt i varuhissen, tungt utanpå eller planerat, med eller utan skyddsfiltar', () => {
+  let lockVaru = 0, lockBalk = 0, scratches = 0, crewLate = 0;
+  for (const seed of [200, 201, 202]) {
+    const varu = runMove(seed, 'smart', 'varu', true);
+    assert(varu.hoisted === 0 && varu.items.every(it => it.via === 'varu'), `frö ${seed}: allt i varuhissen – men ${varu.hoisted} gick med balken`);
+    lockVaru += varu.indepSec;
+    const balk = runMove(seed, 'smart', 'balk', true);
+    assert(balk.items.every(it => (it.size === 'L' || it.size === 'XL') === (it.via === 'balk')), `frö ${seed}: tungt utanpå – fel väg för någon möbel`);
+    lockBalk += balk.indepSec;
+    crewLate += balk.crewAt - balk.t0 >= BLANKET_T - 1e-9 ? 1 : 0;
+    const bare = runMove(seed, 'smart', 'auto', false);
+    assert(bare.crewAt === bare.t0, 'utan skyddsfiltar ska bärarna börja direkt');
+    scratches += bare.scratches;
+  }
+  assert(lockBalk < lockVaru / 2, `med hissbalken var varuhissen låst ${Math.round(lockBalk)} s mot ${Math.round(lockVaru)} s i varuhissen`);
+  assert(crewLate === 3, 'med skyddsfiltar började bärarna innan filtarna hängde uppe');
+  assert(scratches > 0, 'inga repor i varuhissen utan skyddsfiltar');
+  return `varuhissen låst ${Math.round(lockVaru)} s (allt i varuhissen) mot ${Math.round(lockBalk)} s (tungt utanpå) · ${scratches} repor utan filtar`;
+});
+test('Flyttdag: händelser – möbeln fastnar och tar balken, blåsten, varuhissen går sönder, något tappas, lastkajen är upptagen', () => {
+  // en möbel som fastnar helt bärs tillbaka och tar hissbalken
+  let stuck = 0, broken = 0;
+  for (let seed = 200; seed < 230 && (!stuck || !broken); seed++) {
+    const M = runMove(seed, 'nearest', 'auto', true);
+    stuck += M.items.filter(it => it.pivoted && it.via === 'balk' && it.size === 'L').length > 0 && M.stuck ? 1 : 0;
+    broken += M.broken;
+  }
+  assert(stuck > 0, 'ingen möbel fastnade helt och tog hissbalken');
+  assert(broken > 0, 'inget tappades någonsin');
+  // blåsten stoppar balken medan något står vid lastluckan: Smart bär ner det i varuhissen, de enkla lägena väntar
+  const viaStorm = {};
+  for (const strategy of ['smart', 'nearest']) {
+    let stormed = false;
+    const M = runMove(203, strategy, 'balk', true, M => {
+      if (!stormed && M.items.some(it => it.st === 'hatch')) { stormed = true; startStorm(); S.storm.t0 -= S.storm.len * 0.4; S.storm.peak = 1; }
+    });
+    viaStorm[strategy] = M.items.filter(it => it.forceV).length;
+  }
+  assert(viaStorm.smart > 0 && viaStorm.nearest === 0, `blåsten: smart bar ner ${viaStorm.smart}, närmast ${viaStorm.nearest} i varuhissen`);
+  // varuhissen går sönder när flytten börjar: allt som går tar hissbalken
+  let broke = false;
+  const MB = runMove(204, 'smart', 'auto', false, M => {
+    const V = S.elevators.find(e => e.freight);
+    if (!broke && M.state === 'on' && V.mode === 'normal' && V.state !== 'moving' && !V.passengers.length) { broke = true; breakDown(V, 'styrkortet hänger sig'); }
+  });
+  assert(broke && MB.hoisted >= 2, `varuhissen gick sönder men bara ${MB.hoisted} lass tog balken`);
+  // de enkla lägena bokar flytten mitt i leveranserna: flyttbilen får vänta på gatan
+  sim(205, { strategy: 'nearest' }); if (!S.move) forceMove();
+  runUntil(S.move.at + 0.3);
+  assert(S.move.dockWait > 0 || S.move.state === 'on', 'flyttbilen borde ha väntat på leveransbilen');
+  const dock = S.move.dockWait;
+  return `fastnade och tog balken · ${broken} tappade · i blåsten bar smart ner ${viaStorm.smart} · trasig varuhiss: ${MB.hoisted} lass med balken · flyttbilen väntade ${dock.toFixed(1)} s`;
 });
 test('Ambulans: personalen får varuhissen med förtur och bär ut patienten på bår', () => {
   const resp = {};
@@ -1357,6 +1432,7 @@ function newInvariantFails(w, tag) {
   if (w.orphanService) f.push(`${tag}: hiss på service utan tekniker i ${w.orphanService} steg`);
   if (w.liftPass) f.push(`${tag}: panoramahissen tog passagerare i lastläge ${w.liftPass} steg`);
   if (w.railClash) f.push(`${tag}: last i hissbalken medan putsaren var nere ${w.railClash} steg`);
+  if (w.moveBad) f.push(`${tag}: ett flyttlass var på två ställen (eller inget) ${w.moveBad} steg`);
   if (w.badReserved) f.push(`${tag}: e.reserved stämde inte med de som kliver på (${w.badReserved} steg)`);
   if (w.dupNames) f.push(`${tag}: två personer i huset hette samma sak (${w.dupNames} gånger, t.ex. ${w.dupEx})`);
   if (w.deadAssignMax > 0.5) f.push(`${tag}: någon väntade ${w.deadAssignMax.toFixed(1)} s på en hiss som inte kunde komma (${w.deadAssignEx})`);
@@ -1426,6 +1502,9 @@ export const PLAYER_ACTIONS = {
   service: r => act('service', Math.floor(r() * S.elevators.length)),
   medical: () => act('trigger', 'medical'),
   cable: () => act('trigger', 'cable'),
+  moveRoute: r => act('moveRoute', ['auto', 'varu', 'balk'][Math.floor(r() * 3)]),
+  moveBlankets: r => act('moveBlankets', r() < 0.5),
+  moveWind: r => act('moveWind', r() < 0.5 ? 'wait' : 'varu'),
 };
 const FUZZ_SEEDS = Array.from({ length: 24 }, (_, i) => 5000 + i);
 test(`Spelaråtgärder: invarianter över ${FUZZ_SEEDS.length} dygn med slumpade åtgärder (även på natten)`, () => {

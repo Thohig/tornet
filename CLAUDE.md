@@ -19,7 +19,7 @@ npm run typecheck   # tsc på JSDoc-typer (jsconfig.json)
 npm run check       # båda
 npm run golden      # skriv om tests/golden.json efter AVSIKTLIGA beteendeändringar
 npm run bench       # simuleringens fart (steg/s per styrlogik)
-npm run league      # styrlogikerna mot varandra: väntetid (p50/p95/p99), kWh, trappa, ETA-fel; --save=x / --cmp=x
+npm run league      # styrlogikerna mot varandra: väntetid (p50/p95/p99), kWh, trappa, ETA-fel; --save=x / --cmp=x; --flytt --flyttval=auto|varu|balk
 ```
 
 Samma testsvit körs i webbläsaren på `/tests.html`.
@@ -42,7 +42,7 @@ Samma testsvit körs i webbläsaren på `/tests.html`.
 | `service.js` | drift: slitage, hissfel, hisstekniker, nattservice (`S.maint`), beställd service (`orderService`), energi (effekt efter last mot motvikt, återmatning), motorvärme (`heat`, överhettningsskydd, extrafläkt), nivåfel (`level`, snubbel) och linbrott (`snapCable`: fritt fall → fångapparaten → utrymning genom takluckan till `e.snap.exitF` → linbyte i speltimmar; instängda går före teknikerns andra jobb) |
 | `weather.js` | dygnets temperatur (kyla → skorstenseffekt: dörrarna i entrén tar emot) och stormen (incident med val: svajläge/normal drift, `windAt`, `exposure`) |
 | `train.js` | tunnelbanan under huset: tidtabell (`headway`, `FIRST_H`/`LAST_H`), tåget i `S.train`, folk som kliver av i klump (en andel `TRAIN_SHARE` av morgonens anställda) och på, sista tåget (`S.trainDone`: alla med `exitFloor` stationen går ut genom entrén) |
-| `visits.js` | händelser som spelaren bara informeras om: flyttdag (ett hushåll flyttar med sitt bohag – `BOHAG` i config – bärare och lastare, varuhissen i oberoende drift `e.indep`: hela flytten, eller med Smart bara för de stora möblerna; långa möbler kan behöva vändas i dörren, `pivotCheck`) och ambulans (bår, förtur via VIP-låset, `medicClear`) |
+| `visits.js` | händelser som spelaren bara informeras om: flyttdag (ett hushåll flyttar med sitt bohag – `BOHAG` i config – bärare och lastare, vägen för varje möbel i `viaHoist` – spelarens val på flyttkortet via `act` (`moveRoute`: auto/varu/balk, `moveBlankets`, `moveWind`), annars Smarts plan efter kön och vinden; varuhissen i oberoende drift `e.indep` medan bärarna jobbar, eller med Smart bara för de stora möblerna; händelser i `moveBoard`: vänds/fastnar i dörren, repor utan filtar; tappade lass; lastkajen har plats för en bil) och ambulans (bår, förtur via VIP-låset, `medicClear`) |
 | `hoist.js` | takskenan på tornets tak: fönsterputsarens gondol (`S.cleaner`, schemat i `cleanerPlan`) och hissbalken (`S.hoist`) som delar den – XL-möbler (piano, kassaskåp) hissas ut genom lastluckan (`hatch` i `BUILDING`) ner till takterrassen och åker panoramahissen i lastläge (`e.mode === 'lift'`, lastdörr `terrace` i `BUILDING`) till entrén; gondolen parkerar medan balken är ute, balken stannar i blåst/brand/strömavbrott |
 | `cast.js` | stamgästerna (data i `CAST` i config): återkommande karaktärer med egenheter och repliker (`say`) |
 | `life.js` | garage/bilar, leveransbil, boendes dygnsrutiner, VIP-helikopter |

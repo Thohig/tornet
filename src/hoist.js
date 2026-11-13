@@ -51,7 +51,7 @@ export function cleanerPlan(h) {
 export function hoistReset() {
   S.cleaner = { y: PARK_Y, scrub: false, crew: false, parked: true, waiting: false };
   // phase: idle | rig (balken svängs ut) | fetch (kroken till luckan) | hook | lower | unrig
-  // lift: panoramahissens lastläge – up | openT | load | closeT | down | openE | unload | closeE
+  // lift: panoramahissens lastläge – up | openT | load | closeT | down | openE | unload | closeE | abort (brand)
   S.hoist = { phase: 'idle', y: PARK_Y, t: 0, item: /** @type {number|null} */ (null), halted: '',
     lift: /** @type {string|null} */ (null), liftT: 0, liftItem: /** @type {number|null} */ (null) };
 }
@@ -142,11 +142,11 @@ function liftTick() {
   const waiting = it.some(x => x.st === 'terrace');
   if (P.mode === 'lift') {
     // brand: lasset får vänta på terrassen, hissen går tillbaka till brandläget
-    if (S.fire) {
+    // (dörrarna stängs först – vid terrassen har hissen ingen vanlig dörr)
+    if (S.fire && S.hoist.lift !== 'abort') {
       const x = S.hoist.liftItem !== null && S.move ? S.move.items[S.hoist.liftItem] : null;
       if (x) x.st = 'terrace';
-      S.hoist.lift = null; S.hoist.liftItem = null;
-      restoreElevator(P);
+      S.hoist.liftItem = null; S.hoist.lift = 'abort';
     }
     return;
   }
@@ -165,6 +165,7 @@ export function liftStep(e, dt) {
   const close = () => { e.state = 'doors'; e.doorPhase = 'closing'; e.door = Math.max(0, e.door - dt / DOOR_T); return e.door <= 0; };
   switch (H.lift) {
     case 'closeE': if (close()) H.lift = 'up'; return;
+    case 'abort': if (close()) { H.lift = null; restoreElevator(e); } return;
     case 'up':
       e.state = 'moving'; e.target = e.terraceF; e.targetKind = 'lift';
       if (moveTo(e, e.terraceF, vmaxOf(e), dt)) { e.floor = e.terraceF; H.lift = 'openT'; }

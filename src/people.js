@@ -5,7 +5,7 @@ import { activityRate, roomUnits, FLOOR_HOURS, FL, NAMES, ROLE_NAMES, floorOpen,
 import { S, clockStr, hour, log, occOf, setOcc } from './state.js';
 import { inFireZone, requestRide, loadKg, personKg, eta, keyed, posOf, costBased, prio, outLong, servesNow } from './dispatch.js';
 import { techNext, maybeStumble } from './service.js';
-import { moverNext, moverTimer, medicNext, pivotCheck } from './visits.js';
+import { moverNext, moverTimer, medicNext, moveBoard } from './visits.js';
 import { alwaysStairs, castBoard, castNext, castPizza, castWaitTick, flushSay, say } from './cast.js';
 import { kickOff } from './elevators.js';
 import { arriveByCar, leaveBuilding, resNext, homeSpot } from './life.js';
@@ -399,7 +399,7 @@ export function boardDone(p) {
   if (loadKg(e) > e.ratedKg) { kickOff(e, p); return; }
   p.avoid = undefined;
   maybeStumble(e, p);
-  pivotCheck(e, p); // (flyttdag: en lång möbel kan behöva vändas i dörren)
+  if (moveBoard(e, p)) return; // (flyttdag: en lång möbel kan behöva vändas i dörren – eller fastna helt)
   if (!e.carCalls.has(posOf(e, p.dest))) {
     e.carCalls.add(posOf(e, p.dest));
     pev(p, `Inne i hiss ${e.name} – ${fl(p.dest)} läggs på hissens stopplista`);

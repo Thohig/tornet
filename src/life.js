@@ -62,7 +62,14 @@ function autoTick(dt) {
 // ---------- Lastkajen ----------
 function truckTick(dt) {
   const h = hour(), T = S.truck;
-  if (!T && h >= 8 && h < 11.5) { S.truck = { x: -260, state: 'in', sent: 0 }; log('🚚 Leveransbilen backar in vid lastkajen på P1', 'sys'); return; }
+  if (!T && h >= 8 && h < 11.5) {
+    // lastkajen har plats för en bil: står flyttbilen där får leveransbilen (och buden) vänta på gatan
+    if (S.move && S.move.state === 'on') {
+      if (!S.move.notes.truck) { S.move.notes.truck = true; log('🚚 Leveransbilen får vänta på gatan – flyttbilen står vid lastkajen, buden kommer senare', 'alert'); }
+      return;
+    }
+    S.truck = { x: -260, state: 'in', sent: 0 }; log('🚚 Leveransbilen backar in vid lastkajen på P1', 'sys'); return;
+  }
   if (!T) return;
   if (T.state === 'in') { T.x = Math.min(70, T.x + 150 * dt); if (T.x >= 70) T.state = 'parked'; }
   else if (T.state === 'parked') {

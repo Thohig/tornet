@@ -9,12 +9,12 @@
 // patientens våning tills de kommer tillbaka med båren (medicHold).
 import { pick, rand, rng, shuffle } from './rng.js';
 import { fl } from './util.js';
-import { BOHAG, BOHAG_BY_TYPE, CAR_H, DOCK, FL, HOME_FLOORS, LOBBY, floorWith, floorY, shaftCX } from './config.js';
+import { BOHAG, BOHAG_BY_TYPE, CAR_H, DOCK, DOOR_X, FL, HOME_FLOORS, LOBBY, floorWith, floorY, shaftCX } from './config.js';
 import { S, hour, log } from './state.js';
-import { makePerson, pev, pn, releaseSpot, setTrip } from './people.js';
-import { allowedPos, costBased, outReason, prio, posOf } from './dispatch.js';
+import { makePerson, needsFreight, pev, pn, releaseSpot, setTrip } from './people.js';
+import { allowedPos, costBased, outReason, OUT_TEXT, prio, posOf } from './dispatch.js';
 import { canBrakeTo, deckFloor, unload, releaseCalls } from './elevators.js';
-import { hoistServes } from './hoist.js';
+import { hoistHalt, hoistServes } from './hoist.js';
 
 const freightCar = () => S.elevators.find(e => e.freight) || null;
 
@@ -39,12 +39,18 @@ export function visitsTick(dt) {
 // Ett hushåll i en av bostäderna flyttar ut. Bohaget (BOHAG i config) blir en lista med lass: kartongerna
 // staplas på en kärra, möblerna bärs en i taget. Bärarna skruvar isär och bär ner till lastkajen, där
 // lastaren lastar in i flyttbilen. De boende packar hemma och går när lägenheten är tom.
-// Smart: varuhissen går i oberoende drift bara medan en stor möbel är på väg – kartongerna åker med som
-// vanliga resenärer. De enkla lägena låser varuhissen hela flytten.
-/** st: home → packing → carried (bärs) → dock → truck, eller för XL med hissbalken: home → packing → hatch (vid lastluckan)
+// Vägen för varje möbel: varuhissen eller hissbalken (lastluckan → terrassen → panoramahissen, hoist.js).
+// Spelaren väljer på flyttkortet (act: moveRoute/moveBlankets/moveWind): allt i varuhissen, tungt utanpå
+// eller låt styrningen planera. Smart planerar per möbel efter kön vid varuhissen och vinden; de enkla
+// lägena kör XL med balken och resten i varuhissen, som är låst så länge bärarna jobbar.
+/** st: home → packing → carried (bärs) → dock → truck, eller med hissbalken: home → packing → hatch (vid lastluckan)
  *  → hoist (hänger i balken) → terrace → lift (i panoramahissen) → truck
  * @typedef {{ id: number, key: string, name: string, size: 'S'|'M'|'L'|'XL', kg: number, sprite: string, long: boolean, pivoted?: boolean,
- *   st: 'home'|'packing'|'carried'|'dock'|'hatch'|'hoist'|'terrace'|'lift'|'truck' }} MoveItem */
+ *   forceV?: boolean, via?: 'varu'|'balk', st: 'home'|'packing'|'carried'|'dock'|'hatch'|'hoist'|'terrace'|'lift'|'truck' }} MoveItem */
+/** spelarens vägval: auto = låt styrningen planera */
+export const MOVE_ROUTES = ['auto', 'varu', 'balk'];
+/** sekunder det tar att klä varuhissen med skyddsfiltar innan bärarna börjar */
+export const BLANKET_T = 10;
 /** Väljer hushållet som flyttar och packar bohaget (anropas när dygnet börjar, efter de boende) */
 function planMove(smart, at) {
   // (stamgästerna – Majken och Lill-Olle – bor kvar)
@@ -70,15 +76,61 @@ function planMove(smart, at) {
   const list = items.filter(it => it.size === 'S').concat(order).map((it, i) => ({ ...it, id: i }));
   const who = H.members.find(p => p.rtype !== 'child') || H.members[0];
   return { floor: H.f, apt: H.apt, family: H.members.map(p => p.id), who: who.name, at, smart, items: list,
-    loads: list.length, done: 0, truck: 0, loadT: 0, pivots: 0, indepSec: 0, hoisted: 0, crew: list.length > 9 ? 3 : 2, hoist: hoistServes(H.f),
+    loads: list.length, done: 0, truck: 0, loadT: 0, crew: list.length > 9 ? 3 : 2, hoist: hoistServes(H.f),
+    // spelarens val
+    route: 'auto', blankets: true, windChoice: /** @type {string|null} */ (null), crewAt: 0, crewOut: false,
+    // vad som hände (resultatet)
+    pivots: 0, stuck: 0, broken: 0, scratches: 0, indepSec: 0, hoisted: 0, viaV: 0, dockWait: 0, budWait: 0,
+    notes: /** @type {Record<string, boolean>} */ ({}),
     state: 'planned', t0: 0, t1: 0 };
+}
+/** Bara för mätningar (ligan): ett dygn med flyttdag även när slumpen inte gav någon */
+export function forceMove() {
+  if (S.move || DOCK < 0 || !HOME_FLOORS.length) return;
+  const smart = costBased();
+  S.move = planMove(smart, smart ? 12.6 : 9.5);
 }
 /** de som bor i lägenheten som töms */
 const family = M => S.people.filter(p => M.family.includes(p.id) && !p.dead);
 /** finns det kvar något i lägenheten (inte packat och nerburet än)? */
 export const leftInFlat = M => M.items.some(it => it.st === 'home' || it.st === 'packing');
-const heavyOnWay = (M, V) => S.people.some(p => p.mover && p.item !== undefined && p.item !== null && (M.items[p.item].size === 'L' || M.items[p.item].size === 'XL')
+const big = it => it.size === 'L' || it.size === 'XL';
+const heavyOnWay = (M, V) => S.people.some(p => p.mover && p.item !== undefined && p.item !== null && big(M.items[p.item])
   && ((p.state === 'wait' && p.floor !== DOCK) || ((p.state === 'boarding' || p.state === 'ride') && p.car === V)));
+/** hur många med tung last (bud, städare) som väntar på varuhissen just nu */
+const freightQueue = () => S.people.filter(p => p.state === 'wait' && !p.mover && !p.medic && needsFreight(p)).length;
+/** varuhissen går inte (trasig, linbyte, service, avstängd …) */
+const vDown = V => !V || V.mode !== 'normal' || !!outReason(V) && !V.indep && !V.liftWant;
+/** Ska möbeln ut med hissbalken? Spelarens val först, sedan styrningens plan. */
+export function viaHoist(M, it) {
+  if (!M.hoist || it.forceV) return false;
+  // varuhissen går inte: allt som går tar balken (om det inte blåser för mycket)
+  if (vDown(freightCar())) return true;
+  if (M.route === 'varu') return false;
+  if (M.route === 'balk') return big(it);
+  if (it.size === 'XL') return true;
+  // Smart: en stor möbel går utanpå när det är kö till varuhissen (eller förmiddagens leveranser) och vinden tillåter
+  return M.smart && it.size === 'L' && hoistHalt() !== 'blåst' && (freightQueue() >= 2 || hour() < 11.5);
+}
+/** spelarens val på flyttkortet (via act – spelas in) */
+export function setMoveRoute(r) {
+  const M = S.move;
+  if (!M || M.state === 'done' || !MOVE_ROUTES.includes(r) || M.route === r) return;
+  M.route = r;
+  log(`🚚 Flytten: ${{ auto: 'styrningen planerar vägen för varje möbel', varu: 'allt går i varuhissen', balk: 'de stora möblerna går utanpå med hissbalken' }[r]}`, 'alert');
+}
+export function setMoveBlankets(on) {
+  const M = S.move;
+  if (!M || M.state !== 'planned' || M.blankets === !!on) return;
+  M.blankets = !!on;
+  log(on ? '🚚 Flytten: varuhissen kläs med skyddsfiltar (tar en stund i början)' : '🚚 Flytten: inga skyddsfiltar – det går fortare, men väggarna kan få sig en smäll', 'alert');
+}
+export function setMoveWind(c) {
+  const M = S.move;
+  if (!M || M.state !== 'on' || (c !== 'wait' && c !== 'varu')) return;
+  M.windChoice = c;
+  log(c === 'varu' ? '🚚 Flytten: det som står vid lastluckan bärs ner i varuhissen i stället' : '🚚 Flytten: möblerna vid lastluckan väntar tills det mojnar', 'alert');
+}
 function moveTick(dt) {
   const M = S.move;
   if (!M) return;
@@ -86,22 +138,33 @@ function moveTick(dt) {
   if (M.state === 'planned') {
     if (hour() < M.at || S.fire) return;
     if (!V || V.mode !== 'normal' || V.hold) { M.at += 0.25; return; } // varuhissen är upptagen – flyttgubbarna väntar en stund
+    // lastkajen har plats för en bil: står leveransbilen där får flyttbilen vänta på gatan
+    if (S.truck && S.truck.state !== 'out') {
+      M.dockWait += dt;
+      if (!M.notes.dock) { M.notes.dock = true; log('🚚 Flyttbilen får vänta på gatan – leveransbilen står vid lastkajen', 'alert'); }
+      return;
+    }
     M.state = 'on'; M.t0 = S.t;
-    for (let i = 0; i < M.crew; i++) spawnMover(M, i, false);
+    M.crewAt = S.t + (M.blankets ? BLANKET_T : 0);
     spawnMover(M, M.crew, true);
     // familjen kommer hem och packar (den som är ute vänder hem)
     for (const p of family(M)) { p.moving = true; if (p.state === 'away') p.returnAt = Math.min(p.returnAt, hour() + 0.3); }
-    if (!M.smart) { V.indep = true; V.parkTarget = null; V.sleep = false; releaseCalls(V, 'går i oberoende drift (flyttdag)'); }
+    if (!M.smart || M.blankets) { V.indep = true; V.parkTarget = null; V.sleep = false; releaseCalls(V, M.blankets ? 'kläs med skyddsfiltar (flyttdag)' : 'går i oberoende drift (flyttdag)'); }
     log(`🚚 Flyttdag: ${M.who} flyttar från ${fl(M.floor)} – Flyttfirman Lyft & Bär kommer med ${M.crew + 1} man för ${M.loads} lass`
-      + (M.smart ? ` (${V.name} går i oberoende drift bara när de stora möblerna åker)` : ` – ${V.name} går i oberoende drift tills flytten är klar`), 'alert', V.color);
+      + (M.blankets ? ` · först kläs ${V.name} med skyddsfiltar` : ''), 'alert', V.color);
     return;
   }
   if (M.state !== 'on') return;
+  // skyddsfiltarna hänger uppe: bärarna börjar
+  if (!M.crewOut && S.t >= M.crewAt) {
+    M.crewOut = true;
+    for (let i = 0; i < M.crew; i++) spawnMover(M, i, false);
+  }
   // flyttgubbar som försvann (utrymde vid brand): det de hade påbörjat ligger kvar i lägenheten, och när
   // branden är släckt kommer de tillbaka och fortsätter
   const crew = S.people.filter(p => p.mover);
   for (const it of M.items) if ((it.st === 'packing' || it.st === 'carried') && !crew.some(p => p.item === it.id)) it.st = 'home';
-  if (!S.fire) {
+  if (!S.fire && M.crewOut) {
     const carriers = crew.filter(p => !p.loader).length, need = leftInFlat(M) || M.items.some(it => it.st === 'carried');
     if (need && !carriers) {
       for (let i = 0; i < M.crew; i++) spawnMover(M, i, false);
@@ -109,16 +172,30 @@ function moveTick(dt) {
     }
     if (!crew.some(p => p.loader) && M.items.some(it => it.st !== 'truck')) spawnMover(M, M.crew, true);
   }
-  // Smart: oberoende drift bara medan en stor möbel är på väg ner (kartongerna åker som vanliga resenärer);
-  // de enkla lägena låser den så länge bärarna jobbar (det som är kvar efter dem går med hissbalken)
+  // blåsten stoppar hissbalken: det som står vid lastluckan väntar – eller bärs ner i varuhissen
+  // (Smart väljer varuhissen, de enkla lägena väntar; spelaren kan välja själv)
+  const atHatch = M.items.filter(it => it.st === 'hatch');
+  if (hoistHalt() === 'blåst' && atHatch.length) {
+    if (!M.notes.wind) { M.notes.wind = true; log(`🌬️ Blåsten stoppar hissbalken – ${atHatch.map(it => it.name).join(' och ')} står vid lastluckan`, 'alert'); }
+    if ((M.windChoice ?? (M.smart ? 'varu' : 'wait')) === 'varu' && !vDown(V)) {
+      for (const it of atHatch) { it.st = 'home'; it.forceV = true; }
+      log('🚚 Det som stod vid lastluckan bärs ner i varuhissen i stället', 'move');
+    }
+  }
+  // varuhissen gick sönder mitt i flytten: det som går tar hissbalken
+  if (vDown(V) && M.hoist && !M.notes.vdown && V && V.mode !== 'normal') { M.notes.vdown = true; log(`🚚 ${V.name} ${OUT_TEXT[V.mode] || 'går inte'} – flyttgubbarna tar allt med hissbalken`, 'alert', V.color); }
+  // varuhissen: filtarna hängs upp i början; sedan låser Smart den bara för de stora möblerna,
+  // de enkla lägena så länge bärarna jobbar (det som är kvar efter dem går med hissbalken)
   if (V) {
-    const want = M.smart ? heavyOnWay(M, V) : S.people.some(p => p.mover && !p.loader);
+    const want = !M.crewOut ? M.blankets : M.smart ? heavyOnWay(M, V) : S.people.some(p => p.mover && !p.loader);
     if (want !== V.indep) {
       V.indep = want;
       if (want) { V.parkTarget = null; V.sleep = false; releaseCalls(V, 'går i oberoende drift för en stor möbel'); }
     }
   }
   if (V && V.indep) M.indepSec += dt;
+  // budens väntan vid varuhissen under flytten (resultatet)
+  for (const p of S.people) if (p.role === 'bud' && p.state === 'wait') M.budWait = Math.max(M.budWait, S.t - p.waitStart);
   // lastaren vid flyttbilen lastar in det som står på lastkajen
   const loader = S.people.find(p => p.mover && p.loader);
   const pile = M.items.find(it => it.st === 'dock');
@@ -130,9 +207,10 @@ function moveTick(dt) {
     }
   }
   if (loader && M.truck >= M.loads && loader.state === 'office' && loader.timer > 1) { loader.timer = 0.2; }
-  if (!S.people.some(p => p.mover)) {
+  if (!S.people.some(p => p.mover) && M.crewOut) {
     M.state = 'done'; M.t1 = S.t;
     if (V) V.indep = false;
+    S.stats.moves++;
     log(`🚚 Flytten från ${fl(M.floor)} är klar – ${M.loads} lass på ${Math.round(S.t - M.t0)} s${M.pivots ? ` (${M.pivots} gånger fick en möbel vändas i hissdörren)` : ''} · ${V ? V.name : 'varuhissen'} går i vanlig trafik igen`, 'alert', V ? V.color : null);
   }
 }
@@ -140,10 +218,11 @@ function moveTick(dt) {
 const LOAD_T = { S: 2, M: 3.5, L: 5.5, XL: 7 };
 /** rumstimer i lägenheten: hur länge det tar att packa klart / skruva isär innan lasset kan bäras */
 const PACK_T = { S: [2, 4], M: [4, 7], L: [8, 14], XL: [10, 16] };
+const FILTAR = () => ({ kind: 'filtar', name: 'flyttfiltar', kg: 8 });
 function spawnMover(M, i, loader) {
   const p = makePerson('staff', DOCK, 120 + i * 24);
   p.role = 'flyttgubbe'; p.mover = true; p.exitFloor = DOCK; p.loader = loader; p.item = null;
-  p.cargo = { kind: 'filtar', name: 'flyttfiltar', kg: 8 };
+  p.cargo = FILTAR();
   p.look.shirt = '#ff8c42'; p.look.tie = false; p.look.acc = 0; // tröja i flyttfirmans orange
   p.task = loader ? 'Lastar flyttbilen vid lastkajen' : `Bär ut bohaget från ${fl(M.floor)}`;
   if (loader) {
@@ -162,8 +241,14 @@ export function moverTimer(p) {
   const it = M.items.find(x => x.st === 'home');
   if (!it) return 0.5;
   it.st = 'packing'; p.item = it.id;
-  if (it.size === 'L' || it.size === 'XL') pev(p, it.key === 'piano' ? 'Spänner fast pianot på kärran – försiktigt!' : `Skruvar isär ${it.name.replace(/^(en|ett) /, '')}`);
-  return rand(PACK_T[it.size][0], PACK_T[it.size][1]);
+  if (big(it)) pev(p, it.key === 'piano' ? 'Spänner fast pianot på kärran – försiktigt!' : `Skruvar isär ${it.name.replace(/^(en|ett) /, '')}`);
+  let t = rand(PACK_T[it.size][0], PACK_T[it.size][1]);
+  // Smart: kartongerna får vänta en stund när buden står i kö vid varuhissen
+  if (M.smart && M.route === 'auto' && it.size === 'S' && freightQueue() >= 2) {
+    t += 6;
+    pev(p, 'Packar en kartong till – buden står i kö vid varuhissen');
+  }
+  return t;
 }
 /** flyttgubbens nästa beslut (anropas från personernas rollogik) */
 export function moverNext(p) {
@@ -173,9 +258,16 @@ export function moverNext(p) {
   if (p.floor === DOCK) {
     if (p.item !== null && p.item !== undefined) {
       const it = M.items[p.item];
-      it.st = 'dock'; M.done++; S.stats.moveLoads++; p.item = null;
+      it.st = 'dock'; M.done++; M.viaV++; S.stats.moveLoads++; p.item = null;
       pev(p, `Ställer av ${it.name} vid flyttbilen (${M.done}/${M.loads})`);
-      p.cargo = { kind: 'filtar', name: 'flyttfiltar', kg: 8 };
+      p.cargo = FILTAR();
+      // ibland tappas något (det mesta klarar sig)
+      if ((it.size === 'S' || it.size === 'M') && rng() < 0.06) {
+        M.broken++; S.stats.moveBroken++;
+        S.fx.push({ x: DOOR_X + 40, y: floorY(DOCK) - 40, text: 'KRASCH!', color: '#ff5d52', life: 1.6, size: 14 });
+        log(`💥 KRASCH! ${it.size === 'S' ? 'En flyttkartong' : cap(it.name)} tappas vid flyttbilen – det klirrar`, 'alert', null, p.id);
+        for (const q of family(M)) pev(q, it.size === 'S' ? 'Hörde du? Det var nog porslinet …' : `Nej! ${cap(it.name)}!`);
+      }
     }
     if (!leftInFlat(M)) return [p.exitFloor, 'Allt är nerburet – åker hem'];
     p.task = 'Hämtar nästa lass';
@@ -183,30 +275,63 @@ export function moverNext(p) {
   }
   if (p.floor === M.floor && p.item !== null && p.item !== undefined) {
     const it = M.items[p.item];
-    // XL (piano, kassaskåp): ställs vid lastluckan – hissbalken tar den – och bäraren tar nästa lass
-    if (it.size === 'XL' && M.hoist) {
-      it.st = 'hatch'; p.item = null;
+    // med hissbalken: ställs vid lastluckan – balken tar den – och bäraren tar nästa lass
+    if (viaHoist(M, it)) {
+      it.st = 'hatch'; it.via = 'balk'; p.item = null;
       pev(p, `Ställer ${it.name} vid lastluckan – hissbalken tar den ner till terrassen`);
       return [M.floor, `Ställer ${it.name} vid lastluckan`, false];
     }
-    it.st = 'carried';
+    it.st = 'carried'; it.via = 'varu';
     p.cargo = { kind: it.sprite, name: it.name, kg: it.kg };
     p.task = `Bär ${it.name}`;
     return [DOCK, `Bär ner ${it.name} till flyttbilen`, false]; // (lastkajen är utgången – men det är ingen hemgång)
   }
   return [DOCK, leftInFlat(M) ? 'Tillbaka till flyttbilen' : 'Inget mer att bära – tillbaka till flyttbilen', false];
 }
-/** en flyttgubbe kliver på varuhissen med en lång möbel: ibland måste den vändas för att komma in */
-export function pivotCheck(e, p) {
+const cap = s => s[0].toUpperCase() + s.slice(1);
+/**
+ * En flyttgubbe kliver på varuhissen med en möbel (anropas från boardDone). Långa möbler kan behöva vändas
+ * ("PIVOT!") och ibland fastnar de helt: då bärs möbeln tillbaka till lastluckan och tar hissbalken – eller
+ * (utan balk, eller när spelaren valt allt i varuhissen) trycks den in med våld. Utan skyddsfiltar kan
+ * stora möbler skrapa i väggarna. Returnerar true om flyttgubben fick kliva av igen.
+ */
+export function moveBoard(e, p) {
   const M = S.move;
-  if (!M || !p.mover || p.item === null || p.item === undefined || !e.freight) return;
+  if (!M || !p.mover || p.item === null || p.item === undefined || !e.freight) return false;
   const it = M.items[p.item];
-  if (!it.long || it.pivoted || rng() >= 0.45) return;
+  if (big(it) && !M.blankets && rng() < 0.35) {
+    M.scratches++; e.wear += 0.03;
+    S.fx.push({ x: shaftCX(e.id), y: floorY(e.floor) - CAR_H - 10, text: 'SKRRT!', color: '#ffd23f', life: 1.2 });
+    log(`🪵 ${cap(it.name)} skrapar i väggen i ${e.name} – inga skyddsfiltar`, 'move', e.color, p.id);
+  }
+  if (!it.long || it.pivoted || rng() >= 0.45) return false;
   it.pivoted = true; M.pivots++;
+  const name = cap(it.name);
+  // fastnar helt (bara på väg ner från lägenheten)
+  if (p.floor === M.floor && rng() < 0.3) {
+    M.stuck++;
+    if (M.hoist && M.route !== 'varu' && !it.forceV) {
+      e.passengers = e.passengers.filter(q => q !== p);
+      if (!e.passengers.some(q => posOf(e, q.dest) === posOf(e, p.dest))) e.carCalls.delete(posOf(e, p.dest));
+      p.car = null; p.state = 'office'; p.goal = M.floor; p.dest = M.floor; p.item = null; p.cargo = FILTAR();
+      it.st = 'hatch'; it.via = 'balk';
+      p.timer = moverTimer(p);
+      S.fx.push({ x: shaftCX(e.id), y: floorY(e.floor) - CAR_H - 26, text: 'FAST!', color: '#ff5d52', life: 1.8, size: 14 });
+      pev(p, `${name} går inte in i hissen hur vi än vrider – vi bär den till lastluckan, hissbalken får ta den`);
+      log(`🛋️ ${name} fastnar helt i dörren till ${e.name} – bärs tillbaka och tar hissbalken i stället`, 'alert', e.color, p.id);
+      return true;
+    }
+    e.dwellNeed = Math.max(e.dwellNeed, e.dwell + rand(10, 14));
+    if (!M.blankets) { M.scratches++; e.wear += 0.04; }
+    S.fx.push({ x: shaftCX(e.id), y: floorY(e.floor) - CAR_H - 26, text: 'TRYCK!', color: '#ff5d52', life: 2, size: 14 });
+    log(`🛋️ ${name} fastnar helt i dörren till ${e.name} – flyttgubbarna trycker in den med våld`, 'alert', e.color, p.id);
+    return false;
+  }
   e.dwellNeed = Math.max(e.dwellNeed, e.dwell + rand(4, 7)); // dörrarna står öppna medan den vänds
   S.fx.push({ x: shaftCX(e.id), y: floorY(e.floor) - CAR_H - 26, text: 'PIVOT!', color: '#ff8c42', life: 1.8, size: 14 });
-  pev(p, `${it.name[0].toUpperCase()}${it.name.slice(1)} fastnar i dörren – PIVOT! PIVOT! (vänder och vrider)`);
-  log(`🛋️ ${it.name[0].toUpperCase()}${it.name.slice(1)} fastnar i dörren till ${e.name} – flyttgubbarna vänder och vrider`, 'move', e.color, p.id);
+  pev(p, `${name} fastnar i dörren – PIVOT! PIVOT! (vänder och vrider)`);
+  log(`🛋️ ${name} fastnar i dörren till ${e.name} – flyttgubbarna vänder och vrider`, 'move', e.color, p.id);
+  return false;
 }
 /** de boende som flyttar: packar hemma och går när lägenheten är tom (anropas av resNext i life.js) */
 export function movingResNext(p) {

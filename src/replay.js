@@ -9,6 +9,7 @@ import { pev, spawnBus, spawnVisitor } from './people.js';
 import { rebuildPicks } from './dispatch.js';
 import { setFireMode, startGenerator, startRescue, toggleAutoRescue, toggleOff, trigger } from './incidents.js';
 import { setStormMode } from './weather.js';
+import { setMoveBlankets, setMoveRoute, setMoveWind } from './visits.js';
 import { orderService, startFan } from './service.js';
 
 /** Byt styrlogik: hallknapparna nollställs och alla väntande fördelas om. */
@@ -40,6 +41,9 @@ export const ACTIONS = {
   service: id => orderService(S.elevators[id]),
   visitor: (f, x) => spawnVisitor(f, x),
   bus: () => spawnBus(),
+  moveRoute: r => setMoveRoute(r),
+  moveBlankets: on => setMoveBlankets(on),
+  moveWind: c => setMoveWind(c),
 };
 
 /**
@@ -52,7 +56,7 @@ export const ACTIONS = {
 // ---------- Kontrollsummor ----------
 // Simuleringens version. Höj den när beteendet ändras avsiktligt – `npm run golden` vägrar skriva om facit
 // annars. En replay-länk från en annan version spelas fortfarande upp, men spelaren får veta att dygnet kan avvika.
-export const SIM_VERSION = 11;
+export const SIM_VERSION = 12;
 /** var 900:e steg (30 sekunder) räknas en kontrollsumma av simuleringens tillstånd */
 export const CHECK_EVERY = 900;
 
