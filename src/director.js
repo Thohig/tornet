@@ -3,9 +3,9 @@
 // precis som när man följer en hiss. Allt manuellt (scrolla, följa, klicka på någon) stänger av regissören.
 import { CONTROL, DOCK, FLOOR_H, LOBBY, ROOF, STATION, TOP, floorY } from './config.js';
 import { chiefOnDuty } from './chief.js';
-import { S } from './state.js';
+import { S, hour } from './state.js';
 import { fl } from './util.js';
-import { vrand } from './rng.js';
+import { vpick, vrand } from './rng.js';
 import { VIEW, camMax, camTarget } from './view.js';
 import { personHead } from './render.js';
 import { cleanerAt } from './hoist.js';
@@ -212,3 +212,70 @@ export function updateDirector() {
 }
 /** Text till kameraknappen: vad regissören visar. */
 export const autoWhy = () => (VIEW.auto && VIEW.shot ? VIEW.shot.why : '');
+
+// ---------- Bevakningen: personen vid skärmarna i kontrollrummet som klipper bilden ----------
+// Regissören är en person: hen sitter bredvid driftchefen, väljer vad som visas och tänker högt.
+// (Bara gränssnitt – namnen och tankarna påverkar aldrig simuleringen.)
+/** bevakningen i kontrollrummet, ett pass var (byter skift samtidigt som driftchefen, klockan 22) */
+export const CREW = [
+  { name: 'Ludde', from: 6, title: 'bildproducent' },
+  { name: 'Siv', from: 22, title: 'nattbevakare' },
+];
+export const crewOnDuty = (h = hour()) => (h >= CREW[1].from ? CREW[1] : CREW[0]);
+/** vad bevakaren tänker om en tagning, efter sorten (nyckeln utan id) */
+const THOUGHTS = {
+  warn: ['Något är på gång – bäst att vara där först.', 'Den där siffran gillar jag inte…', 'Kaffet får vänta.'],
+  chief: ['Chefen bestämmer – jag visar varför.', 'Nu blir det beslut i kontrollrummet.', 'Chefen har den där blicken igen.'],
+  fire: ['Brand! Alla skärmar på det här.', 'Håll kameran stilla, håll kameran stilla…', 'Det här ska med i kvällsnyheterna.'],
+  ff: ['Där kommer brandkåren – snyggt jobbat.', 'Följer brandmännen hela vägen upp.'],
+  assembly: ['Alla ute? Räknar huvuden…', 'Fullt på återsamlingsplatsen.'],
+  strike: ['Oj! Det smällde i hela huset.', 'Blixten – såg ni det?!'],
+  relight: ['Ljuset är tillbaka. Puh.', 'Våning för våning tänds det igen.'],
+  medic: ['Ambulansen – fri väg, tack.', 'Håller VIP-låset under uppsikt.'],
+  medicF: ['Någon har svimmat – ambulansen är larmad.', 'Hjälpen är på väg.'],
+  heli: ['Helikoptern! Alltid lika mäktigt.', 'Vem kommer med helikopter en vardag?'],
+  call: ['Teknikern ringer jouren – det blir en lång dag.', 'Hissjouren igen…'],
+  dark: ['De sitter i mörkret. Stackars dem.', 'Kommer reservkraften snart?'],
+  snap: ['Linbrott! Fångapparaten måste hålla…', 'Jag vågar knappt titta.', 'Ut genom takluckan – försiktigt nu.'],
+  cable: ['Linbyte. Det här tar timmar.', 'Teknikern har det tungt i schaktet.'],
+  broken: ['Hissen står still – folk sitter fast.', 'Kom igen, teknikern…'],
+  hot: ['Motorn är het. Chefen borde kolla fläkten.', 'Det luktar bränd broms härifrån.'],
+  over: ['Överlast! Någon får ta nästa.', 'Summern tjuter – det är alltid någon med en kartong.'],
+  storm: ['Panoramahissen svajar i blåsten.', 'Inte för de höjdrädda i dag.'],
+  move: ['Flyttgubbarna – bara de inte repar dörren.', 'Soffan går aldrig in. Den går aldrig in.'],
+  svc: ['Nattservice. Lugnt och skönt.', 'Teknikern smörjer och skruvar.'],
+  full: ['Fullsatt hiss – trångt där inne.', 'Sardinburk på väg uppåt.'],
+  train: ['Nu väller de in från perrongen.', 'Tunnelbanan i tid, för en gångs skull.'],
+  truck: ['Leveransbilen vid lastkajen.', 'Paket till hela huset igen.'],
+  cleaner: ['Fönsterputsaren – han är min favorit.', 'Lite lugn och ro där ute på fasaden.'],
+  hoist: ['Möbeln dinglar utanför fasaden…', 'Försiktigt med balken nu!'],
+  liftload: ['Flyttlasset åker panoramahissen.', 'Lastläge – inga turister i den hissen nu.'],
+  say: ['Vad säger hen nu då?', 'Den här vill jag höra.', 'Stamgästerna är bäst.'],
+  vip: ['VIP på väg – låset är på.', 'Någon viktig. Se upptagen ut.'],
+  sur: ['Den där har väntat länge. Inte bra.', 'Sur min. Smart borde skicka en hiss.'],
+  cast: ['Där är ju en stamgäst!', 'Känner igen den där.'],
+  q: ['Kö! Var är hissarna?', 'Det klumpar ihop sig här.'],
+  lobby: ['Lugnt i entrén.', 'Inget särskilt händer – fint.'],
+  ride: ['Jag följer en hiss en stund.', 'Bara rutin.'],
+};
+let crewKey = '', crewThought = '';
+/** Vad bevakaren heter, gör och tänker just nu (null innan dygnet har börjat). */
+export function crewNow() {
+  if (!S.started) return null;
+  const who = crewOnDuty(), s = VIEW.shot;
+  if (!VIEW.auto) {
+    const t = camTarget();
+    return { who, auto: false, cut: false,
+      doing: 'Du har kameran',
+      show: t ? `📹 Du följer ${t.kind === 'car' ? `hiss ${S.elevators[t.id].name}` : t.kind === 'floor' ? `våning ${fl(t.id)}` : (S.people.find(p => p.id === t.id) || { name: 'någon' }).name}` : '📹 Fri kamera – du scrollar själv',
+      thought: S.paused ? 'Pausat. Jag hämtar mer kaffe.' : 'Säg till när jag ska ta över bilden igen (A).' };
+  }
+  if (!s) return { who, auto: true, cut: false, doing: 'Letar efter något att visa', show: '🎬 …', thought: 'Skärmarna, skärmarna…' };
+  const key = `${s.key}|${s.t0}`;
+  if (key !== crewKey) { crewKey = key; crewThought = vpick(THOUGHTS[s.key.replace(/\d+$/, '')] || ['Hm, vad är det där?']); }
+  const doing = s.kind === 'car' ? `Följer hiss ${S.elevators[s.id].name}`
+    : s.kind === 'person' ? `Följer ${(S.people.find(p => p.id === s.id) || { name: 'någon' }).name.split(' ')[0]}`
+    : s.kind === 'floor' ? `Visar våning ${fl(s.id)}`
+    : s.kind === 'cleaner' ? 'Zoomar in på fasaden' : 'Följer hissbalken';
+  return { who, auto: true, cut: S.anim - s.t0 < 1.2, doing, show: s.why, thought: crewThought };
+}

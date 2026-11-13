@@ -7,7 +7,7 @@ import { costBased, costLine, eta, isFull, pickTotal, pickersAt, loadKg, cabinKg
 import { canRescue } from './incidents.js';
 import { plannedRoute, resetDay } from './sim.js';
 import { VIEW, camTarget, cv, nightness, pctx, stage } from './view.js';
-import { autoWhy } from './director.js';
+import { autoWhy, crewNow } from './director.js';
 import { personSprite } from './pixpeople.js';
 import { PAL } from './pixpal.js';
 import { stateInfo } from './describe.js';
@@ -213,7 +213,7 @@ function updateCamBar() {
   const cars = S.elevators.map(e => `<button class="btn xs car-b${VIEW.follow === e.id ? ' on' : ''}" data-act="follow:${e.id}" style="--c:${e.color};--ct:${PAL.on(e.color)}" data-hint="<b>Hiss ${esc(e.name)}:</b> ${VIEW.follow === e.id ? 'kameran följer hissen – klicka för att sluta' : 'klicka så följer kameran hissen'}.">${esc(e.name)}</button>`).join('');
   const why = autoWhy();
   const cam = VIEW.auto
-    ? `<button class="btn cam-b on" data-act="cam:off" data-hint="<b>Regissör:</b> visar ${esc(why) || 'snart något'}. Klicka för att koppla loss kameran (A).">🎬 <span>${esc(why) || '…'}</span></button>`
+    ? `<button class="btn cam-b on" data-act="cam:off" data-hint="<b>Regissör:</b> visar ${esc(why) || 'snart något'}. Klicka för att koppla loss kameran (A).">🎬 <span>Regissör</span></button>`
     : t
     ? `<button class="btn cam-b on" data-act="cam:off" data-hint="<b>Kamera:</b> följer ${camName(t)}. Klicka för att koppla loss (F) – att scrolla gör samma sak.">📹 <span>${camName(t, true)}</span></button>`
     : lastName ? `<button class="btn cam-b" data-act="cam:on" data-hint="<b>Fri kamera:</b> du styr själv med scroll. Klicka för att följa ${lastName} igen (F).">📹 <span>fri</span></button>`
@@ -294,7 +294,7 @@ ${st.extraTechs ? `    <div class="stat">Extra tekniker inringda <b>${st.extraTe
     <div class="grade">Service: ${st.waitN ? g.letter : '–'} <span class="stars">${st.waitN ? '★'.repeat(g.stars) + '☆'.repeat(5 - g.stars) : ''}</span> · Säkerhet: ${sg}</div>`;
   updateIncidents();
   updateFeed();
-  updateCaption();
+  updateCrew();
 }
 // ---------- Driftradion: det senaste som hänt och driftchefens beslut, i klartext ----------
 let feedKey = '';
@@ -314,18 +314,22 @@ function updateFeed() {
     + (quiet ? '' : F.map((f, i) => `<div class="fl${i === F.length - 1 ? ' new' : ''}${f.kind === 'chief' ? ' chief' : ''}${S.t - f.t > 60 ? ' old' : ''}">`
       + `<span class="lt">${f.time}</span>${f.color ? `<span class="ld" style="background:${f.color}"></span>` : ''}<span>${esc(f.text)}</span></div>`).join(''));
 }
-// ---------- Regissörens bildtext: vad kameran klippte till, en stund efter klippet ----------
-const CAPTION_S = 4;
-let capKey = '';
-function updateCaption() {
-  const el = $('caption'), s = VIEW.shot;
-  const on = VIEW.auto && !!s && S.anim - s.t0 < CAPTION_S;
-  if (el.hidden === on) el.hidden = !on;
-  if (!on) return;
-  const key = `${s.key}|${s.t0}|${s.why}`;
-  if (key === capKey) return;
-  capKey = key;
-  el.innerHTML = `<span class="rec">🎬</span>${esc(s.why)}`;
+// ---------- Bevakningen i topplisten: vem som klipper bilden, vad hen visar och vad hen tänker ----------
+let crewKey = '';
+function updateCrew() {
+  const el = $('crew'), c = crewNow();
+  if (el.hidden === !!c) el.hidden = !c;
+  if (!c) return;
+  const key = `${c.who.name}|${c.auto}|${c.cut}|${c.doing}|${c.show}|${c.thought}`;
+  if (key === crewKey) return;
+  crewKey = key;
+  el.classList.toggle('on', c.auto); el.classList.toggle('cut', c.cut);
+  el.dataset.hint = c.auto
+    ? `<b>Bevakningen:</b> ${esc(c.who.name)} sitter vid skärmarna i kontrollrummet och klipper bilden till det mest sevärda. Klicka (eller A) för att ta kameran själv.`
+    : `<b>Bevakningen:</b> du har kameran. Klicka (eller A) så tar ${esc(c.who.name)} över och klipper bilden åt dig.`;
+  el.innerHTML = `<div class="crew-h"><span class="crew-rec">${c.auto ? '● REC' : '❚❚ AV'}</span><b>📹 ${esc(c.who.name)}</b> <i>${esc(c.who.title)}</i> · ${esc(c.doing)}</div>`
+    + `<div class="crew-show">${esc(c.show)}</div>`
+    + `<div class="crew-th">💭 ${esc(c.thought)}</div>`;
 }
 /** värmekartan över det styrningen har lärt sig: köer per våning (rader) och timme (kolumner) */
 function learnMap() {

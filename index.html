@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=34">
+<link rel="stylesheet" href="style.css?v=35">
 </head>
 <body>
 <div id="app">
@@ -36,6 +36,7 @@
       <div class="strats" id="strats"></div>
       <div class="pop hint" id="stratHint"></div>
     </div>
+    <div class="crew" id="crew" data-act="auto" hidden></div>
     <button id="btnBus" class="btn hot" data-hint="<b>BUSS!</b> En turistbuss stannar utanför och släpper in en hel busslast besökare på en gång. Prova mitt i rusningen. Fungerar inte när huset är stängt eller det brinner.">BUSS!</button>
     <div class="tb-stats" id="tbStats" data-hint="<b>Dagens resultat:</b> betyg (A–F efter snittväntan), antal avklarade resor, hur många som väntar på hiss just nu och snittväntan i sekunder. Mer i 🏆."></div>
     <nav class="tabs" id="tabs">
@@ -98,7 +99,6 @@
     <main id="stage">
       <canvas id="game"></canvas>
       <section class="float feed" id="feed" hidden></section>
-      <div class="caption" id="caption" hidden></div>
       <section class="float incidents" id="incPanel" hidden><div id="incBody"></div></section>
       <section class="float car" id="carPop" hidden></section>
     </main>

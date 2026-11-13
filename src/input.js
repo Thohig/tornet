@@ -101,6 +101,7 @@ export function doAction(cmd) {
     const p = S.people.find(q => q.id === +b && !q.dead);
     if (p && VIEW.camSel && S.sel === p) detachCam(); else if (p) followPerson(p);
   }
+  else if (a === 'auto') toggleAuto();
   else if (a === 'cam') { if (b === 'off') detachCam(); else reattachCam(); }
   else if (a === 'pow') {
     if (b === 'gen') act('generator');
