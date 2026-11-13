@@ -28,7 +28,11 @@ let slow = 1;
 function slowTarget() {
   if (!S.started || S.paused) return 1;
   let m = 1;
-  for (const e of S.elevators) if (e.mode === 'snapped' && e.snap.ph === 'fall') m = Math.min(m, 0.25); // fritt fall
+  for (const e of S.elevators) {
+    if (e.mode !== 'snapped') continue;
+    if (e.snap.ph === 'fall') m = Math.min(m, 0.25); // fritt fall
+    else if (e.snap.ph === 'trapped' && S.t - e.snap.caughtT < 0.6) m = Math.min(m, 0.35); // fångapparaten tar tag
+  }
   if (S.storm && S.storm.struck !== null && S.t - S.storm.struck < 1.5) m = Math.min(m, 0.3); // blixten
   if (S.fire && S.t - S.fire.t0 < 2.5) m = Math.min(m, 0.4); // branden bryter ut
   return m;
@@ -105,7 +109,17 @@ function shots() {
   for (const e of S.elevators) {
     const n = e.passengers.length;
     if (!S.power && n) add(`dark${e.id}`, 70 + n, 'car', e.id, `⚡ Fast i ${e.name}`);
-    if (e.mode === 'snapped') add(`snap${e.id}`, e.snap.ph === 'evac' ? 92 : 96, 'car', e.id, e.snap.ph === 'evac' ? `🧗 Utrymning ur ${e.name}` : `🪢 Linbrott i ${e.name}`);
+    // linbrottet: hissen vars linor fransar sig följs redan när den kör (samma nyckel som själva linbrottet,
+    // så att kameran står kvar när det smäller), fallet och fångapparaten klipper in direkt
+    if (e.snapNext && e.mode === 'normal') {
+      if (e.state === 'moving') add(`snap${e.id}`, 95, 'car', e.id, `🪢 ${e.name} kör – linorna håller inte länge`, true);
+      else add(`snapwait${e.id}`, 30, 'car', e.id, `🪢 Linorna i ${e.name} fransar sig`);
+    }
+    if (e.mode === 'snapped') {
+      const s = e.snap, now = s.ph === 'fall' || (s.ph === 'trapped' && S.t - s.caughtT < 2);
+      add(`snap${e.id}`, s.ph === 'evac' ? 92 : now ? 99 : 96, 'car', e.id,
+        s.ph === 'evac' ? `🧗 Utrymning ur ${e.name}` : s.ph === 'fall' ? `🪢 ${e.name} faller!` : now ? `🪢 Fångapparaten tog i ${e.name}` : `🪢 Linbrott i ${e.name}`, now);
+    }
     else if (e.mode === 'broken' && e.fault.cable && e.techId !== null) add(`cable${e.id}`, 22, 'car', e.id, `🔧 Linbyte i ${e.name}`);
     if ((e.mode === 'broken' || e.mode === 'rescue') && n) add(`broken${e.id}`, 70, 'car', e.id, `🔧 ${e.name} har stannat`);
     if (e.hot) add(`hot${e.id}`, 45, 'car', e.id, `🌡️ ${e.name} är överhettad`);
@@ -196,13 +210,23 @@ export function updateDirector() {
     let best = null, bv = -Infinity;
     for (const c of all) { const v = rate(c); if (v > bv) { bv = v; best = c; } }
     const done = y === null || age > HOLD || !cur;
+    // något brådskande har brutit ut men det bästa är inte brådskande och räcker inte för att klippa:
+    // då vinner det bästa av det brådskande (annars missas t.ex. fallet vid ett linbrott)
+    if (urgent && best && !best.urgent && !done && !(rate(best) > rate(cur, true) + CUT_OVER)) {
+      let ub = null, uv = -Infinity;
+      for (const c of all) if (c.urgent && (!s || c.key !== s.key)) { const v = rate(c); if (v > uv) { uv = v; ub = c; } }
+      if (ub) best = ub;
+    }
     if (best && best.key !== (s && s.key) && (done || (urgent && best.urgent) || rate(best) > rate(cur, true) + CUT_OVER)) {
       if (s && s.key === 'cleaner') cleanerShown = S.anim; // räknas från när kameran lämnar putsaren
       VIEW.shot = s = { ...best, t0: S.anim };
       recent.unshift(best.key); recent.length = Math.min(recent.length, MEMORY);
-    } else if (s && cur) s.why = cur.why; // texten kan ändras (väntetid, antal)
+    }
   }
   if (!s) return;
+  // texten kan ändras medan tagningen pågår (väntetid, antal, "faller!" → "fångapparaten tog")
+  const now = all.find(c => c.key === s.key);
+  if (now) s.why = now.why;
   const sy = shotY(s);
   if (sy === null) return;
   // hissar hålls mitt i bild; folk och våningar får röra sig lite innan kameran följer efter
@@ -235,6 +259,7 @@ const THOUGHTS = {
   call: ['Teknikern ringer jouren – det blir en lång dag.', 'Hissjouren igen…'],
   dark: ['De sitter i mörkret. Stackars dem.', 'Kommer reservkraften snart?'],
   snap: ['Linbrott! Fångapparaten måste hålla…', 'Jag vågar knappt titta.', 'Ut genom takluckan – försiktigt nu.'],
+  snapwait: ['Det knarrar i linorna… jag håller ett öga på den.', 'Den där hissen skulle jag inte åka med just nu.'],
   cable: ['Linbyte. Det här tar timmar.', 'Teknikern har det tungt i schaktet.'],
   broken: ['Hissen står still – folk sitter fast.', 'Kom igen, teknikern…'],
   hot: ['Motorn är het. Chefen borde kolla fläkten.', 'Det luktar bränd broms härifrån.'],
