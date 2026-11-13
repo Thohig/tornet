@@ -17,6 +17,7 @@ const CUT_OVER = 25; // så mycket intressantare måste det nya vara för att kl
 const MEMORY = 6;    // så många tidigare tagningar som får straff (inte samma sak hela tiden)
 const BORED = 1.5;   // poängavdrag per sekund som något redan har visats (helikoptern på taket blir tråkig)
 const FORGET = 120;  // sekunder tills det tråkiga är glömt (avtar exponentiellt)
+const GONE_HOLD = 3; // så länge en våningstagning står kvar efter att händelsen är över
 
 /** @typedef {{ key: string, score: number, kind: 'car'|'person'|'floor'|'cleaner'|'hoist', id: number, why: string, urgent?: boolean }} Shot */
 
@@ -60,9 +61,9 @@ export function toggleAuto() {
 const recent = /** @type {string[]} */ ([]);
 /** sekunder som varje sak har visats, avtar med tiden */
 const seen = /** @type {Map<string, number>} */ (new Map());
-let lastAnim = 0, cleanerShown = -1e9;
+let lastAnim = 0, cleanerShown = -1e9, lastDay = -1;
 /** nödsänkningar: hiss-id → när regissören först såg den och var den slutade (för tagningen efteråt) */
-const rescues = /** @type {Map<number, { t0: number, floor: number, t1: number|null }>} */ (new Map());
+const rescues = /** @type {Map<number, { t0: number, floor: number, t1: number|null, seen: number }>} */ (new Map());
 const RESCUE_AFTER = 4; // sekunder (speltid) kameran stannar kvar medan de räddade kliver ut
 const name1 = p => p.name.split(' ')[0];
 const visible = p => { const h = personHead(p); return h && !h.hidden; };
@@ -82,7 +83,8 @@ function shots() {
     else if (W.type === 'power') add('warn', 80, 'floor', LOBBY, '💡 Lamporna flimrar…', true);
     else if (W.type === 'storm') add('warn', 80, 'floor', top, '🌥️ Ovädret drar in', true);
     else if (W.type === 'heat') add('warn', 82, 'floor', Math.min(top, S.elevators[W.car].maxF), `🌡️ Motorn i ${S.elevators[W.car].name} brummar`, true);
-    else add('warn', 86, 'car', W.car, W.type === 'cable' ? `🪢 Linorna i ${S.elevators[W.car].name} knarrar` : `🔩 ${S.elevators[W.car].name} gnisslar`, true);
+    else add('warn', 86, 'car', W.car, W.type === 'cable' ? `🪢 Linorna i ${S.elevators[W.car].name} knarrar`
+      : W.type === 'pano' ? `🔩 ${S.elevators[W.car].name} hackar på fasaden` : `🔩 ${S.elevators[W.car].name} gnisslar`, true);
   }
   // driftchefen fattar ett beslut: kameran klipper till kontrollrummet en stund (och sedan tillbaka) – utom
   // medan en hiss nödsänks: då visas sänkningen och beslutet syns i kontrollrumspanelen
@@ -105,7 +107,11 @@ function shots() {
     if (amb) add('medic', 90, 'person', amb.id, '🚑 Ambulansen');
     else add('medicF', 80, 'floor', S.medic.floor, `🚑 ${S.medic.pname} har svimmat`);
   }
-  if (S.heli && ROOF >= 0) add('heli', 75, 'floor', ROOF, '🚁 Helikoptern');
+  // helikoptern är sevärd när den landar och lyfter – parkerad står den kvar hela VIP-besöket (timmar)
+  if (S.heli && ROOF >= 0) {
+    if (S.heli.state === 'parked') add('heliP', 14, 'floor', ROOF, '🚁 Helikoptern väntar på taket');
+    else add('heli', 75, 'floor', ROOF, S.heli.state === 'land' ? '🚁 Helikoptern landar' : '🚁 Helikoptern lyfter');
+  }
   // panoramahissen fast på fasaden: korgen, repet och den som firas ner (pano.js)
   const Pn = S.pano;
   if (Pn && Pn.ph !== 'done') {
@@ -134,9 +140,12 @@ function shots() {
     const n = e.passengers.length;
     // nödsänkningen på reservkraft: klipper in direkt när korgen börjar krypa ner (före chefens beslut i
     // kontrollrummet – det syns i panelen) och stannar kvar tills de räddade har klivit ut (samma nyckel hela vägen)
-    const r = rescues.get(e.id);
+    // (en sänkning som regissören inte såg sluta – kameran var manuell – är inaktuell och glöms)
+    let r = rescues.get(e.id);
+    if (r && S.t - r.seen > 1) { rescues.delete(e.id); r = undefined; }
+    if (r) r.seen = S.t;
     if (e.mode === 'rescue') {
-      if (!r || r.t1 !== null) rescues.set(e.id, { t0: S.t, floor: e.rescueTarget, t1: null });
+      if (!r || r.t1 !== null) rescues.set(e.id, { t0: S.t, floor: e.rescueTarget, t1: null, seen: S.t });
       const t0 = rescues.get(e.id).t0;
       add(`rescue${e.id}`, 96, 'car', e.id, e.rs === 'open' ? `🔋 Dörrarna i ${e.name} går upp – ${n} kliver ut`
         : `🔋 ${e.name} nödsänks till ${fl(e.rescueTarget)} · ${n} instängda`, S.t - t0 < 1);
@@ -159,7 +168,7 @@ function shots() {
         s.ph === 'evac' ? `🧗 Utrymning ur ${e.name}` : s.ph === 'fall' ? `🪢 ${e.name} faller!` : now ? `🪢 Fångapparaten tog i ${e.name}` : `🪢 Linbrott i ${e.name}`, now);
     }
     else if (e.mode === 'broken' && e.fault.cable && e.techId !== null) add(`cable${e.id}`, 22, 'car', e.id, `🔧 Linbyte i ${e.name}`);
-    if (e.mode === 'broken' && n) add(`broken${e.id}`, 70, 'car', e.id, `🔧 ${e.name} har stannat`);
+    if (e.mode === 'broken' && n && !(e.fault && e.fault.pano)) add(`broken${e.id}`, 70, 'car', e.id, `🔧 ${e.name} har stannat`);
     if (e.hot) add(`hot${e.id}`, 45, 'car', e.id, `🌡️ ${e.name} är överhettad`);
     if ((e.overloadFlash || 0) > 1) add(`over${e.id}`, 50, 'car', e.id, `⚖️ Överlast i ${e.name}`);
     if (S.storm && e.facade) add('storm', 55, 'car', e.id, `🌬️ ${e.name} i stormen`);
@@ -232,6 +241,8 @@ export function updateDirector() {
   if (camTarget()) { VIEW.auto = false; return; }
   if (!S.started || S.anim < (S.followHold || 0)) return;
   const dt = Math.max(0, Math.min(0.25, S.anim - lastAnim)); lastAnim = S.anim;
+  // ett nytt dygn: personernas id börjar om från 1 och S.t från 0 – gårdagens tagning pekar på fel person
+  if (S.day !== lastDay) { lastDay = S.day; VIEW.shot = null; rescues.clear(); }
   let s = VIEW.shot;
   if (!S.paused) {
     const k = Math.exp(-dt / FORGET);
@@ -241,32 +252,42 @@ export function updateDirector() {
   const age = s ? S.anim - s.t0 : Infinity;
   const y = s ? shotY(s) : null;
   const all = S.paused ? [] : shots();
-  // något som just bryter ut får klippa in direkt (om det inte redan visas något sådant – en brådskande tagning
-  // som inte längre finns, t.ex. chefens beslut när nödsänkningen börjar, skyddar inte)
-  const live = s && all.some(c => c.key === s.key);
-  const urgent = all.some(c => c.urgent && (!s || (c.key !== s.key && (!s.urgent || !live))));
-  if (!S.paused && (y === null || age > MIN_HOLD || urgent)) {
-    const cur = s && all.find(c => c.key === s.key);
+  // samma tagning som nu visas (samma nyckel – helst samma mål, t.ex. samma brandman)
+  const cur = s ? all.find(c => c.key === s.key && c.kind === s.kind && c.id === s.id) || all.find(c => c.key === s.key) : undefined;
+  // något som just bryter ut får klippa in direkt, om det som visas inte självt är brådskande just nu (en tagning
+  // som var brådskande när den klipptes in skyddar inte längre – t.ex. chefens beslut när nödsänkningen börjar)
+  const urgent = all.some(c => c.urgent && (!s || (c.key !== s.key && !(cur && cur.urgent))));
+  // en våningstagning vars händelse är över (chefens replik, tåget har gått) står inte kvar och visar ingenting
+  const gone = !!s && !cur && s.kind === 'floor' && age > GONE_HOLD;
+  if (!S.paused && (y === null || age > MIN_HOLD || urgent || gone)) {
+    // (slumpen i rate dras en gång per tagning och bildruta, så att jämförelserna nedan håller ihop)
+    const val = new Map(all.map(c => [c, rate(c)]));
+    const curV = cur ? rate(cur, true) : -Infinity;
     let best = null, bv = -Infinity;
-    for (const c of all) { const v = rate(c); if (v > bv) { bv = v; best = c; } }
+    for (const c of all) { const v = val.get(c); if (v > bv) { bv = v; best = c; } }
     const done = y === null || age > HOLD || !cur;
     // något brådskande har brutit ut men det bästa är inte brådskande och räcker inte för att klippa:
     // då vinner det bästa av det brådskande (annars missas t.ex. fallet vid ett linbrott)
-    if (urgent && best && !best.urgent && !done && !(rate(best) > rate(cur, true) + CUT_OVER)) {
+    if (urgent && best && !best.urgent && !done && !(bv > curV + CUT_OVER)) {
       let ub = null, uv = -Infinity;
-      for (const c of all) if (c.urgent && (!s || c.key !== s.key)) { const v = rate(c); if (v > uv) { uv = v; ub = c; } }
+      for (const c of all) if (c.urgent && (!s || c.key !== s.key)) { const v = val.get(c); if (v > uv) { uv = v; ub = c; } }
       if (ub) best = ub;
     }
-    if (best && best.key !== (s && s.key) && (done || (urgent && best.urgent) || rate(best) > rate(cur, true) + CUT_OVER)) {
+    if (best && best.key !== (s && s.key) && (done || (urgent && best.urgent) || val.get(best) > curV + CUT_OVER)) {
       if (s && s.key === 'cleaner') cleanerShown = S.anim; // räknas från när kameran lämnar putsaren
       VIEW.shot = s = { ...best, t0: S.anim };
       recent.unshift(best.key); recent.length = Math.min(recent.length, MEMORY);
     }
   }
   if (!s) return;
-  // texten kan ändras medan tagningen pågår (väntetid, antal, "faller!" → "fångapparaten tog")
-  const now = all.find(c => c.key === s.key);
-  if (now) s.why = now.why;
+  // texten kan ändras medan tagningen pågår (väntetid, antal, "faller!" → "fångapparaten tog"), och målet också:
+  // panoramaräddningen går från korgen till den som firas ner, brandmannen man följde har gått in, teknikern
+  // som ringer kliver ur hissen – samma tagning, så kameran följer med i stället för att stå kvar
+  const now = all.find(c => c.key === s.key && c.kind === s.kind && c.id === s.id) || all.find(c => c.key === s.key);
+  if (now) {
+    s.why = now.why;
+    if (now.kind !== s.kind || now.id !== s.id) { s.kind = now.kind; s.id = now.id; }
+  }
   const sy = shotY(s);
   if (sy === null) return;
   // hissar hålls mitt i bild; folk och våningar får röra sig lite innan kameran följer efter
@@ -281,7 +302,12 @@ export function updateDirector() {
 // (Gränssnittet läser bara: namnen och tankarna påverkar aldrig simuleringen.)
 const PRODUCERS = CREW.filter(c => c.post === 'producer').map(c => ({ id: c.id, name: c.name, from: c.from, title: c.title.split(' · ')[0].toLowerCase() }));
 /** bevakaren som har passet just nu (byter skift samtidigt som driftchefen, klockan 22) */
-export const crewOnDuty = (h = hour()) => (h >= PRODUCERS[1].from ? PRODUCERS[1] : PRODUCERS[0]);
+// – men vid skiftbytet är det den som faktiskt sitter vid skärmen (den som går av sitter kvar tills hen går)
+export function crewOnDuty(h = hour()) {
+  const sched = h >= PRODUCERS[1].from ? PRODUCERS[1] : PRODUCERS[0];
+  if (h !== hour() || atPost(crewPerson(sched.id))) return sched;
+  return PRODUCERS.find(c => atPost(crewPerson(c.id))) || sched;
+}
 /** är bevakaren borta från skärmen (rast, på väg)? då sköter kameran sig själv */
 const awayFromDesk = who => { const p = crewPerson(who.id); return !!p && !atPost(p) ? p : null; };
 /** vad bevakaren tänker om en tagning, efter sorten (nyckeln utan id) */
@@ -296,6 +322,9 @@ const THOUGHTS = {
   medic: ['Ambulansen – fri väg, tack.', 'Håller VIP-låset under uppsikt.'],
   medicF: ['Någon har svimmat – ambulansen är larmad.', 'Hjälpen är på väg.'],
   heli: ['Helikoptern! Alltid lika mäktigt.', 'Vem kommer med helikopter en vardag?'],
+  heliP: ['Helikoptern står och väntar på sin VIP.', 'Piloten läser tidningen i cockpit.'],
+  crew: ['Kollegorna i farten.', 'Där går en av våra egna.'],
+  brk: ['Fika i personalrummet – det unnar jag dem.', 'Någon har tagit sista kanelbullen.'],
   call: ['Teknikern ringer jouren – det blir en lång dag.', 'Hissjouren igen…'],
   dark: ['De sitter i mörkret. Stackars dem.', 'Kommer reservkraften snart?'],
   rescue: ['Krypfart på reservkraft – sakta men säkert.', 'Snart ute nu, håll ut!', 'Där går dörrarna upp. Puh.'],
