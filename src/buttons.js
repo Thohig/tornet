@@ -2,7 +2,8 @@
 // det ser bara anrop i hallen (våning + riktning per hissgrupp) och knapparna inne i korgen.
 // Här finns också felknappar: folk som trycker på båda knapparna, åt fel håll, på fel våning, och
 // barn som trycker på alla knappar. Felen slumpas med simuleringens rng() (deterministiskt).
-import { rand, rng } from './rng.js';
+import { stream } from './rng.js';
+const { rand, rng } = stream('knappar');
 import { ARR, fl } from './util.js';
 import { CAR_H, EL, floorY, shaftCX } from './config.js';
 import { S, log } from './state.js';

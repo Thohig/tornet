@@ -7,7 +7,8 @@
 // Driftchefen väljer (chief.js), spelaren kan ta över (act('panoRescue', …)), och har ingen valt när räddarna är
 // på plats väljer räddningsledaren själv. När alla är ute lagar hissteknikern hydrauliken.
 // (Simulering: läget ligger i S.pano – grafiken i pixel.js läser bara.)
-import { rand, rng } from './rng.js';
+import { stream } from './rng.js';
+const { rand, rng } = stream('panorama');
 import { CAR_H, CAR_W, EL, FLOOR_H, GROUND_Y, INNER_X1, LOBBY, ROOF, SEAM_F, TERRACE_F, floorY, shaftCX } from './config.js';
 import { S, incidentOver, log } from './state.js';
 import { makePerson, pev, pn, rerouteStranded, setTrip } from './people.js';

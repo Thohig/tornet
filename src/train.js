@@ -1,7 +1,8 @@
 // Tunnelbanan under huset: tåg enligt tidtabell som lämnar av folk i klump och tar med dem som ska hem.
 // Tåget kör in från vänster längs perrongens bakvägg, stannar, öppnar dörrarna och kör vidare åt höger.
 // Allt ligger i simuleringen (S.train) – grafiken i pixel.js läser bara läget.
-import { rand, randi, rng } from './rng.js';
+import { stream } from './rng.js';
+const { rand, randi, rng } = stream('tåg');
 import { CAFE, LOBBY, MAXP, STATION, TRAIN_LEN, TRAIN_X0, TRAIN_X1, floorOpen, timeScale } from './config.js';
 import { S, hour, log, notice } from './state.js';
 import { pev, pn, setTrip, spawnEmployee, spawnVisitor } from './people.js';

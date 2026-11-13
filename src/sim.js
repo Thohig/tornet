@@ -1,5 +1,8 @@
 // Simuleringssteget, fast tidssteg och nollställning av dagar.
-import { rand, rng, setSeed } from './rng.js';
+import { setSeed, stream } from './rng.js';
+// ankomsterna har en ström per sort, så att t.ex. fler besökare inte flyttar när de anställda kommer
+const EMP = stream('anställda'), VIS = stream('besökare'), DOG = stream('hundägare'), TOUR = stream('turister'), GYM = stream('kvällspass');
+const WEAR = stream('slitage');
 import { K, fl } from './util.js';
 import { END_H, FLOORS, MAXP, timeScale, pace, setTempo, LOBBY, CAFE, floorWith, floorOpen, EL, ROOF, STATION } from './config.js';
 const SPA = floorWith('spa');
@@ -79,21 +82,19 @@ export function spawnTick(dt) {
   for (const ev of S.sched) if (!ev.done && h >= ev.at) { ev.done = true; ev.run(); }
   if (S.people.length >= MAXP) return;
   // en del av de anställda kommer med tunnelbanan i stället (train.js tar med dem)
-  if (rng() < arrivalRate(h) * (STATION >= 0 ? 1 - TRAIN_SHARE : 1) * dt) spawnEmployee();
+  if (EMP.rng() < arrivalRate(h) * (STATION >= 0 ? 1 - TRAIN_SHARE : 1) * dt) spawnEmployee();
   const lunch = h >= 11.2 && h < 12.8;
   let v = h >= 9 && h < 17 ? 0.045 : 0;
   if (lunch) v += 0.07;
   // besökarna räknas per speltimme (pace): ett längre dygn ger inte fler besökare, bara glesare
   const pc = pace(h);
   v *= ARRIVAL_MUL * pc;
-  // (hundägarna till hundsalongen delar slumptalet med besökarna – ett extra rng() i varje steg skulle flytta
-  // hela dygnets slumpföljd, och testerna har visat sig känsliga för hur många slumptal varje steg drar)
-  const u = rng();
-  if (u < v * dt) spawnVisitor(LOBBY, -30, lunch && rng() < 0.7 ? CAFE : null);
-  else if (SPA >= 0 && floorOpen(SPA, h) && floorOpen(SPA, h + 1.2) && u < (v + 0.02 * pc) * dt) spawnDogOwner();
+  if (VIS.rng() < v * dt) spawnVisitor(LOBBY, -30, lunch && VIS.rng() < 0.7 ? CAFE : null);
+  // hundägarna till hundsalongen
+  if (SPA >= 0 && floorOpen(SPA, h) && floorOpen(SPA, h + 1.2) && DOG.rng() < 0.02 * pc * dt) spawnDogOwner();
   // turister åker panoramahissen upp till takterrassen
-  if (ROOF >= 0 && h >= 9.5 && h < 19 && rng() < 0.02 * pc * dt) spawnVisitor(LOBBY, -30, ROOF, 'Utsikt från takterrassen');
-  if (h >= 17 && h < 20.5 && rng() < 0.03 * pc * dt) spawnVisitor(LOBBY, -30, floorWith('aerobic'), 'Kvällspass på Svettis');
+  if (ROOF >= 0 && h >= 9.5 && h < 19 && TOUR.rng() < 0.02 * pc * dt) spawnVisitor(LOBBY, -30, ROOF, 'Utsikt från takterrassen');
+  if (h >= 17 && h < 20.5 && GYM.rng() < 0.03 * pc * dt) spawnVisitor(LOBBY, -30, floorWith('aerobic'), 'Kvällspass på Svettis');
 }
 // Nattläge (Smart, Rusning, Energisnål): överflödiga hissar somnar i entrén för att spara energi och vaknar vid kö.
 // Energisnål låter dessutom lediga hissar sova dygnet runt, där de står.
@@ -223,7 +224,7 @@ export function resetDay() {
   // slitaget följer med från gårdagen (dag 1: slumpat – huset är inte nytt)
   const carry = S.day > 1 && S.elevators.length === EL.length ? S.elevators.map(e => e.wear) : null;
   S.elevators = EL.map((_, i) => makeElevator(i));
-  for (const e of S.elevators) { const w0 = rand(0.1, 0.5); e.wear = carry ? carry[e.id] : w0; }
+  for (const e of S.elevators) { const w0 = WEAR.rand(0.1, 0.5); e.wear = carry ? carry[e.id] : w0; }
   lifeReset();
   trainReset();
   weatherReset();

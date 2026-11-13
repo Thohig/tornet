@@ -1,5 +1,6 @@
 // Hissarna: rörelse, dörrar, av-/påstigning och incidentlägen.
-import { rand, rng } from './rng.js';
+import { stream } from './rng.js';
+const { rand, rng } = stream('hissar');
 import { ARR, fl } from './util.js';
 import { ACC, CAP, DOOR_T, DWELL, EL, LOBBY, VMAX, shaftCX, CAR_H, floorY } from './config.js';
 import { S, log } from './state.js';

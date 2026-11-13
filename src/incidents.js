@@ -1,5 +1,8 @@
 // Incidenter: brand och strömavbrott.
-import { pick, rand, rng } from './rng.js';
+import { stream } from './rng.js';
+const { pick, rand, rng } = stream('incidenter');
+// dygnets tidtabell har en egen ström: slumpens nivå (av/lugn/normal/kaos) ändrar inte hur incidenterna själva förlöper
+const T = stream('tidtabell');
 import { fl } from './util.js';
 import { FL, LOBBY, OFFICE_FLOORS, TOP } from './config.js';
 import { S, hooks, hour, incidentOver, log } from './state.js';
@@ -284,24 +287,23 @@ export const INC_LEVELS = ['av', 'lugn', 'normal', 'kaos'];
 export const INC_LEVEL_NAMES = { av: 'Av', lugn: 'Lugnt', normal: 'Normalt', kaos: 'Kaos' };
 /** Dygnets tidtabell (anropas av resetDay, och från klockslaget from när spelaren ändrar slumpen). */
 export function planIncidents(from = 6) {
-  // (Av slumpar fram en vanlig tidtabell och kastar den: dygnets slumpföljd blir densamma som förr)
-  const lv = S.incLevel === 'av' ? 'normal' : S.incLevel;
   S.warn = null;
+  const lv = S.incLevel;
+  if (lv === 'av') { S.incPlan = []; return; }
   const h0 = Math.max(7, from), left = Math.max(0, (22 - h0) / 15);
-  const day = () => { for (;;) { const h = rand(h0, 22); if (rng() * 1.6 < INC_WEIGHT(h)) return h; } };
-  // (Normalt drar slumptalen i samma ordning som alltid – facit och ligan påverkas inte)
-  let n = lv === 'normal' ? 1 + (rng() < 0.6 ? 1 : 0) + (rng() < 0.25 ? 1 : 0)
-    : lv === 'lugn' ? (rng() < 0.6 ? 1 : 0) : 3 + (rng() < 0.6 ? 1 : 0) + (rng() < 0.4 ? 1 : 0);
+  const day = () => { for (;;) { const h = T.rand(h0, 22); if (T.rng() * 1.6 < INC_WEIGHT(h)) return h; } };
+  let n = lv === 'normal' ? 1 + (T.rng() < 0.6 ? 1 : 0) + (T.rng() < 0.25 ? 1 : 0)
+    : lv === 'lugn' ? (T.rng() < 0.6 ? 1 : 0) : 3 + (T.rng() < 0.6 ? 1 : 0) + (T.rng() < 0.4 ? 1 : 0);
   if (from > 6) n = Math.round(n * left);
   /** @type {{ at: number, night: boolean }[]} */
   const plan = [];
   if (h0 < 22) for (let i = 0; i < n; i++) plan.push({ at: day(), night: false });
   const night = lv === 'normal' ? 0.3 : lv === 'lugn' ? 0.1 : 0.6;
-  if (rng() < night) plan.push({ at: rand(Math.max(23.5, from), 28.5), night: true }); // strömavbrott i mörkret
+  if (T.rng() < night) plan.push({ at: T.rand(Math.max(23.5, from), 28.5), night: true }); // strömavbrott i mörkret
   plan.sort((a, b) => a.at - b.at);
   const gap = lv === 'kaos' ? INC_GAP / 2 : INC_GAP;
   for (let i = 1; i < plan.length; i++) plan[i].at = Math.max(plan[i].at, plan[i - 1].at + gap);
-  S.incPlan = S.incLevel === 'av' ? [] : plan.filter(x => x.at < 29.5 && x.at >= from);
+  S.incPlan = plan.filter(x => x.at < 29.5 && x.at >= from);
 }
 /** Spelaren ändrar slumpen: resten av dygnets tidtabell slumpas om (en förvarning som pågår får fortsätta). */
 export function setIncLevel(v) {

@@ -7,7 +7,8 @@
 // hissen med prioritet. Smart styrning låter passagerarna som ändå ska åt det hållet åka klart; de enkla
 // lägena släpper av alla vid nästa stopp. Hissen som körde upp dem står kvar, låst med deras nyckel, på
 // patientens våning tills de kommer tillbaka med båren (medicHold).
-import { pick, rand, rng, shuffle } from './rng.js';
+import { stream } from './rng.js';
+const { pick, rand, rng, shuffle } = stream('händelser');
 import { fl } from './util.js';
 import { BOHAG, BOHAG_BY_TYPE, CAR_H, DOCK, DOOR_X, FL, HOME_FLOORS, LOBBY, floorWith, floorY, shaftCX } from './config.js';
 import { S, hour, log } from './state.js';

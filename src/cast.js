@@ -1,7 +1,8 @@
 // Stamgästerna: återkommande karaktärer med samma namn, utseende och egenheter varje dag.
 // Datan (namn, utseende, repliker) ligger i CAST i config.js; här finns deras beteenden.
 // Allt slumpas med simuleringens rng, så stamgästerna gör samma sak varje gång med samma frö.
-import { pick, rng } from './rng.js';
+import { stream } from './rng.js';
+const { pick, rng } = stream('repliker');
 import { CAST, CAFE, LOBBY, OFFICE_FLOORS, SPOTS, floorOpen, floorWith, idx, shaftCX } from './config.js';
 import { S, log } from './state.js';
 import { makePerson, pev, setTrip } from './people.js';

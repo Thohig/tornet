@@ -1,5 +1,6 @@
 // Destinationsstyrning: kostnadsfunktion, tilldelning, omfördelning, parkering.
-import { pick, rand, rng } from './rng.js';
+import { stream } from './rng.js';
+const { pick, rand, rng } = stream('styrning');
 import { ARR, K, fl } from './util.js';
 import { ACC, CAP, DOOR_T, STOP_COST, TOP, VMAX, FULL_LOAD, LOBBY, EL, STATION, idx } from './config.js';
 import { S, hour, log } from './state.js';

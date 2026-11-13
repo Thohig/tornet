@@ -1,5 +1,6 @@
 // Husets liv: bilar i garaget, leveranser vid lastkajen, de boendes dygnsrutiner och VIP-besök med helikopter.
-import { pick, rand, rng } from './rng.js';
+import { stream } from './rng.js';
+const { pick, rand, rng } = stream('liv');
 import { fl } from './util.js';
 import { DOCK, FL, GARAGE_FLOORS, HOME_FLOORS, LOBBY, OFFICE_FLOORS, ROOF, SPOTS, floorOpen, floorWith, pace } from './config.js';
 import { S, clockStr, hour, log, occOf, setOcc } from './state.js';

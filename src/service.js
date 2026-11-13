@@ -5,7 +5,8 @@
 // teknikern igenom de mest slitna hissarna på natten. Slitaget följer med till nästa dygn.
 // Energin räknas fysikaliskt: korgen balanseras av en motvikt (korgen + 45 % av märklasten), så
 // motorn drar ström när den lyfter obalansen och återmatar el när obalansen drar den.
-import { pick, rand, rng } from './rng.js';
+import { stream } from './rng.js';
+const { pick, rand, rng } = stream('drift');
 import { fl } from './util.js';
 import { BALANCE, DOOR_T, FLOOR_M, FLOOR_H, CAR_H, VMAX, floorY, shaftCX, timeScale, tempoWear } from './config.js';
 import { S, hour, incidentOver, log, notice } from './state.js';

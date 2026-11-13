@@ -3,7 +3,8 @@
 // trögt och tar ibland emot (elevators.js). Stormen är en incident med val, som branden: höga schakt
 // och panoramahissen på fasaden svajar. I SVAJLÄGE kör de höga hissarna långsammare och panoramahissen
 // parkerar i entrén; i normal drift kör allt som vanligt – och linorna kan slå i schaktet (hissfel).
-import { rand, rng } from './rng.js';
+import { stream } from './rng.js';
+const { rand, rng } = stream('väder');
 import { clamp, fl } from './util.js';
 import { LOBBY, SKY } from './config.js';
 import { S, incidentOver, log, notice } from './state.js';

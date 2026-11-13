@@ -1,5 +1,8 @@
 // Människor: utseende, resor, beslut, trapphus och platser.
-import { pick, rand, randi, rng, shuffle } from './rng.js';
+import { stream } from './rng.js';
+const { pick, rand, rng } = stream('folk');
+// vem en ny person är (namn, utseende, vikt, tålamod …) har en egen ström, skild från vad folk gör
+const G = stream('gestalt');
 import { fl } from './util.js';
 import { activityRate, roomUnits, FLOOR_HOURS, FL, NAMES, ROLE_NAMES, floorOpen, OFFICE_FLOORS, SPOTS, STAIR_X, VISIT_WHY, WAIT_X1, WALK, LOBBY, CAFE, MEZZ, floorWith, EL, SKY, CAST, STATION, TRAIN_X0, TRAIN_X1 } from './config.js';
 import { S, clockStr, hour, log, occOf, setOcc } from './state.js';
@@ -22,22 +25,22 @@ export const HAIR_NAT = ['#2a1a10', '#5a3412', '#d9a441', '#b8461f', '#1b1033', 
 export const HAIR_FUN = ['#3f7cff', '#ff4fa3', '#7cf06b'];
 export function makeLook() {
   return {
-    skin: pick(SKIN), shirt: pick(SHIRT), pants: pick(PANTS),
-    hair: randi(0, 6), hairC: rng() < 0.12 ? pick(HAIR_FUN) : pick(HAIR_NAT),
-    tie: rng() < 0.35, tieC: pick(SHIRT), stripe: rng() < 0.5,
-    acc: pick([0, 0, 1, 1, 2, 2, 3, 4, 5]),
+    skin: G.pick(SKIN), shirt: G.pick(SHIRT), pants: G.pick(PANTS),
+    hair: G.randi(0, 6), hairC: G.rng() < 0.12 ? G.pick(HAIR_FUN) : G.pick(HAIR_NAT),
+    tie: G.rng() < 0.35, tieC: G.pick(SHIRT), stripe: G.rng() < 0.5,
+    acc: G.pick([0, 0, 1, 1, 2, 2, 3, 4, 5]),
   };
 }
 export const pn = p => `${p.name} (${p.id})`;
 // Namnen är unika i huset: en ny person får ett namn som ingen annan i huset bär just nu, och aldrig
-// ett stamgästnamn (inte heller delar som "Pelle" i Pizza-Pelle). Exakt ett rng()-anrop, som förut.
+// ett stamgästnamn (inte heller delar som "Pelle" i Pizza-Pelle).
 const CAST_WORDS = new Set(CAST.flatMap(c => c.name.split(/[- ]/)));
 const POOL = NAMES.filter(n => !CAST_WORDS.has(n));
 const SUFFIX = 'BCDEFGHJKLMNOPRST';
 export function freeName() {
   const used = new Set(S.people.map(p => p.name));
   const free = POOL.filter(n => !used.has(n));
-  const r = rng();
+  const r = G.rng();
   if (free.length) return free[Math.floor(r * free.length)];
   // alla namn är upptagna: samma namn med en bokstav efter (Lisa B, Lisa C …)
   const base = POOL[Math.floor(r * POOL.length)];
@@ -50,14 +53,13 @@ export function pev(p, text) {
   if (p === S.sel) S.trackDirty = true;
 }
 export function makePerson(kind, floor, x) {
-  // (slumptalen dras i samma ordning som alltid – dygnets slumpföljd får inte flyttas)
   return blankPerson(kind, floor, x, {
-    name: freeName(), walkPhase: rng() * 6, speedMul: rand(0.85, 1.15), depth: rand(-7, 0), look: makeLook(),
-    patience: rand(5, 15), kg: Math.round(rand(55, 105)),
-    fit: rng(), // hur gärna personen tar trappan (0 = aldrig, 1 = gärna)
+    name: freeName(), walkPhase: G.rng() * 6, speedMul: G.rand(0.85, 1.15), depth: G.rand(-7, 0), look: makeLook(),
+    patience: G.rand(5, 15), kg: Math.round(G.rand(55, 105)),
+    fit: G.rng(), // hur gärna personen tar trappan (0 = aldrig, 1 = gärna)
     // hissetikett: hur många man står ut med i korgen (av 8) innan man hellre väntar på nästa (9 = bryr sig inte),
     // och om man håller upp dörren åt den som kommer springande
-    space: 6 + Math.floor(rng() * 4), polite: rng() < 0.2,
+    space: 6 + Math.floor(G.rng() * 4), polite: G.rng() < 0.2,
   });
 }
 /** En person med givna egenskaper (namn, utseende, vikt …) – drar inga slumptal (driftcheferna, chief.js) */
@@ -208,17 +210,17 @@ export function gotoSpot(p, f) {
 /** En anställd kommer till jobbet: genom entrén, eller med tunnelbanan (trainX = dörren hen kliver av vid) */
 export function spawnEmployee(trainX = null) {
   const byTrain = trainX !== null && STATION >= 0;
-  const p = makePerson('emp', byTrain ? STATION : LOBBY, byTrain ? trainX : -30 - rand(0, 20));
+  const p = makePerson('emp', byTrain ? STATION : LOBBY, byTrain ? trainX : -30 - G.rand(0, 20));
   if (byTrain) p.exitFloor = STATION;
   if (p.look.acc === 1) withCargo(p, 'portfölj'); else if (p.look.acc === 5) withCargo(p, 'ryggsäck');
-  p.home = pick(OFFICE_FLOORS);
+  p.home = G.pick(OFFICE_FLOORS);
   const staffIdx = SPOTS[p.home].map((s, i) => (s.staff ? i : -1)).filter(i => i >= 0);
-  p.homeSpot = pick(staffIdx);
+  p.homeSpot = G.pick(staffIdx);
   // de flesta går hem 16–18:30, en del jobbar över på kvällen och några är riktiga nattugglor
-  const r = rng();
-  p.leaveAt = r < 0.85 ? rand(15.8, 18.6) : r < 0.97 ? rand(19, 22.5) : rand(23, 27);
+  const r = G.rng();
+  p.leaveAt = r < 0.85 ? G.rand(15.8, 18.6) : r < 0.97 ? G.rand(19, 22.5) : G.rand(23, 27);
   if (p.leaveAt >= 19) p.overtime = true;
-  p.lunchAt = rng() < 0.6 ? rand(11.2, 12.9) : 99;
+  p.lunchAt = G.rng() < 0.6 ? G.rand(11.2, 12.9) : 99;
   p.lunched = false;
   setTrip(p, p.home, `Till jobbet på ${FL[p.home].short}`);
   if (!byTrain && rng() < 0.35) arriveByCar(p); // kör till jobbet om det finns plats i garaget
@@ -237,10 +239,10 @@ export function spawnVisitor(floor = 0, x = -30, dest = null, why = null) {
     const cand = open.filter(f => f !== floor);
     if (floor === LOBBY) {
       if (!cand.length) return null;
-      const r = rng();
+      const r = G.rng();
       const dentist = floorWith('dentist');
-      dest = r < 0.18 && cand.includes(dentist) ? dentist : r < 0.38 && cand.includes(CAFE) ? CAFE : pick(cand);
-    } else dest = rng() < 0.35 || !cand.length ? LOBBY : pick(cand);
+      dest = r < 0.18 && cand.includes(dentist) ? dentist : r < 0.38 && cand.includes(CAFE) ? CAFE : G.pick(cand);
+    } else dest = G.rng() < 0.35 || !cand.length ? LOBBY : G.pick(cand);
   }
   const p = makePerson('vis', floor, x);
   setTrip(p, dest, why || (dest === LOBBY ? 'Ska ut ur huset' : VISIT_WHY[dest]));
@@ -544,7 +546,7 @@ export function officeDone(p) {
 const JANITOR_TASKS = ['Byter ett lysrör', 'Lagar en knarrande dörr', 'Kollar ventilationen', 'Torkar upp en kaffefläck', 'Smörjer dörrgångjärn'];
 /** personal kommer till jobbet; extra = inringd extra hisstekniker (tar bara hissfel, åker hem när kön är tom) */
 export function spawnStaff(role, extra = false, o = null) {
-  const p = makePerson('staff', LOBBY, -30 - rand(0, 30));
+  const p = makePerson('staff', LOBBY, -30 - G.rand(0, 30));
   p.role = role;
   if (o) Object.assign(p, o);
   if (role === 'städare') withCargo(p, 'städvagn');
@@ -552,8 +554,8 @@ export function spawnStaff(role, extra = false, o = null) {
   if (role === 'hisstekniker') { withCargo(p, 'servicevaska'); p.job = null; p.workT = 0; p.extra = extra; }
   const floors = OFFICE_FLOORS.concat(CAFE);
   if (role === 'väktare') { p.route = [...floors].reverse().concat(LOBBY); p.ri = -1; }
-  if (role === 'städare') p.route = shuffle([...floors]).slice(0, 4); // tre städare delar på huset
-  if (role === 'vaktmästare') p.route = shuffle([...floors]).slice(0, 3);
+  if (role === 'städare') p.route = G.shuffle([...floors]).slice(0, 4); // tre städare delar på huset
+  if (role === 'vaktmästare') p.route = G.shuffle([...floors]).slice(0, 3);
   const first = roleNext(p, hour()) || [p.exitFloor, 'Inget att göra i kväll – går hem'];
   setTrip(p, first[0], first[1], first[2]);
   S.people.push(p);

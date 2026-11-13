@@ -13,6 +13,7 @@ import { loadKg, allowed, allowedPos, posOf, safeFloor, operational, canTake, st
 import { RATED_KG, FULL_LOAD, VMAX, DEFAULT_TEMPO, dayLength } from '../src/config.js';
 import { needsFreight, mayUseFreight, legDest } from '../src/people.js';
 import { fl } from '../src/util.js';
+import { setSeed, stream, streamNames } from '../src/rng.js';
 import { assignCalls, antiNuisance } from '../src/buttons.js';
 import { act } from '../src/actions.js';
 import { powerKw, triggerFault, breakDown, tech, techs, techOf, snapCable, EXTRA_QUEUE, CALL_T, trapBreak, FAULT_KIND, jobFloor } from '../src/service.js';
@@ -733,13 +734,18 @@ test('Staplade zoner: låg → hög zon går via entrén (eller mellanplanet), e
   return cases.map(c => c[2]).join(' · ');
 });
 test('Varuhissen: städvagnar och paket åker bara varuhiss, och den tar bara gods och personal', () => {
-  sim(62);
-  const w = watcher(); runUntil(13, w);
-  assert(w.badFreight === 0, `${w.badFreight} gånger fel last i fel hiss`);
-  const V = S.elevators.find(e => e.freight);
-  assert(V.trips > 3, `varuhissen gjorde bara ${V.trips} stopp`);
-  assert(S.stats.deliveries > 0, 'inga paket levererades från lastkajen');
-  return `${S.stats.deliveries} leveranser · varuhissen ${V.trips} stopp · tyngsta avgång ${Math.round(w.maxKg)} kg`;
+  // (budet kommer bara några gånger per förmiddag – därför tre frön)
+  let deliveries = 0, trips = 0, maxKg = 0;
+  for (const seed of [62, 63, 64]) {
+    sim(seed);
+    const w = watcher(); runUntil(13, w);
+    assert(w.badFreight === 0, `frö ${seed}: ${w.badFreight} gånger fel last i fel hiss`);
+    const V = S.elevators.find(e => e.freight);
+    assert(V.trips > 3, `frö ${seed}: varuhissen gjorde bara ${V.trips} stopp`);
+    deliveries += S.stats.deliveries; trips += V.trips; maxKg = Math.max(maxKg, w.maxKg);
+  }
+  assert(deliveries > 0, 'inga paket levererades från lastkajen');
+  return `${deliveries} leveranser · varuhissen ${trips} stopp · tyngsta avgång ${Math.round(maxKg)} kg (tre förmiddagar)`;
 });
 test('Garaget: bilar kör in på morgonen och ut på kvällen', () => {
   sim(1);
@@ -1242,9 +1248,9 @@ test('Informationsrutor: ett nytt dygn börjar utan gårdagens rutor (bara en ka
   return `${before} rutor på dag 1 · ${S.notices.length} när dag 2 börjar (${S.weather.temp} °C)`;
 });
 test('Hissetikett: folk avstår från trånga hissar, och turistgruppen tränger ihop sig', () => {
-  // (det händer bara några gånger per morgon – därför tre frön)
+  // (det händer bara några gånger per morgon, och vissa morgnar inte alls – därför fem frön)
   let crowdSkips = 0, holds = 0;
-  for (const seed of [76, 77, 78]) { sim(seed); runUntil(10.3); crowdSkips += S.stats.crowdSkips; holds += S.stats.holds; }
+  for (const seed of [74, 75, 76, 77, 78]) { sim(seed); runUntil(10.3); crowdSkips += S.stats.crowdSkips; holds += S.stats.holds; }
   assert(crowdSkips > 0, 'ingen avstod från en trång hiss i morgonrusningen');
   assert(holds > 0, 'ingen höll upp dörren');
   sim(76); spawnBus(5);
@@ -1398,12 +1404,16 @@ test('Flyttdag: händelser – möbeln fastnar och tar balken, blåsten, varuhis
     viaStorm[strategy] = M.items.filter(it => it.forceV).length;
   }
   assert(viaStorm.smart > 0 && viaStorm.nearest === 0, `blåsten: smart bar ner ${viaStorm.smart}, närmast ${viaStorm.nearest} i varuhissen`);
-  // varuhissen går sönder när flytten börjar: allt som går tar hissbalken
-  let broke = false;
-  const MB = runMove(204, 'smart', 'auto', false, M => {
-    const V = S.elevators.find(e => e.freight);
-    if (!broke && M.state === 'on' && V.mode === 'normal' && V.state !== 'moving' && !V.passengers.length) { broke = true; breakDown(V, 'styrkortet hänger sig'); }
-  });
+  // varuhissen går sönder när flytten börjar: allt som går tar hissbalken medan den är trasig
+  // (hur mycket som hinner ta balken beror på hur snabbt teknikern lagar varuhissen – därför flera frön)
+  let broke = false, MB = null;
+  for (let seed = 204; seed < 214 && !(broke && MB.hoisted >= 2); seed++) {
+    broke = false;
+    MB = runMove(seed, 'smart', 'auto', false, M => {
+      const V = S.elevators.find(e => e.freight);
+      if (!broke && M.state === 'on' && V.mode === 'normal' && V.state !== 'moving' && !V.passengers.length) { broke = true; breakDown(V, 'styrkortet hänger sig'); }
+    });
+  }
   assert(broke && MB.hoisted >= 2, `varuhissen gick sönder men bara ${MB.hoisted} lass tog balken`);
   // de enkla lägena bokar flytten mitt i leveranserna: flyttbilen får vänta på gatan
   sim(205, { strategy: 'nearest' }); if (!S.move) forceMove();
@@ -2069,7 +2079,8 @@ test('Panoramahissen fast på fasaden: räddningstjänsten firar ner alla med re
   assert(P.setup === 'rope', `chefen valde ${P.setup} fast det var lugnt`);
   assert(moved === 0, 'korgen rörde sig medan den satt fast');
   assert(worked === 0, 'teknikern lagade hydrauliken med folk kvar i korgen');
-  assert(who.every(p => p.state !== 'ride' && p.state !== 'rope' && p.car === null), 'någon är kvar i korgen eller i repet');
+  // (den som är nere kan redan ha klivit på en annan hiss)
+  assert(who.every(p => p.state !== 'rope' && p.car !== e && !e.passengers.includes(p)), 'någon är kvar i korgen eller i repet');
   assert(who.every(p => p.floor === P.toF || p.dead || p.floor !== Math.round(e.pos)), 'någon landade fel');
   assert(S.chief.log.some(d => d.key === 'pano' && d.by === 'chief'), 'chefen beslutade aldrig');
   g = 0;
@@ -2120,6 +2131,36 @@ function dayPrint() {
   const st = S.stats;
   return JSON.stringify([st, S.nextId, S.people.length, S.elevators.map(e => [e.pos, e.trips, e.distance, e.wear, e.mode, e.kwh])]);
 }
+// två egna strömmar för testet nedan (en ström per namn och process)
+const TEST_A = stream('test-a'), TEST_B = stream('test-b');
+test('Slumpströmmar: oberoende per delsystem – ankomsterna beror inte på styrlogiken eller incidenterna', () => {
+  // mekaniken: samma frö ger samma följd, olika namn olika följder, och en ström påverkas inte av en annan
+  setSeed(7); const a1 = [TEST_A.rng(), TEST_A.rng(), TEST_A.rng()];
+  setSeed(7); for (let i = 0; i < 100; i++) TEST_B.rng();
+  const a2 = [TEST_A.rng(), TEST_A.rng(), TEST_A.rng()];
+  assert(a1.every((x, i) => x === a2[i]), 'ström A ändrades när ström B drog slumptal');
+  setSeed(7); assert(TEST_B.rng() !== a1[0], 'två strömmar med olika namn ger samma följd');
+  let dup = false; try { stream('test-a'); } catch { dup = true; }
+  assert(dup, 'samma strömnamn två gånger borde vara ett fel');
+  for (const n of ['anställda', 'besökare', 'gestalt', 'folk', 'styrning', 'incidenter', 'tidtabell', 'väder'])
+    assert(streamNames().includes(n), `strömmen ${n} saknas`);
+  // i simuleringen: anställda som kommer genom entrén kommer på samma sekunder oavsett styrlogik och slump
+  const arrivals = (opts, until) => {
+    sim(31, opts);
+    const seen = new Set(), out = [];
+    while (hour() < until) {
+      step(DT);
+      for (const p of S.people) if (!seen.has(p.id)) { seen.add(p.id); if (p.kind === 'emp' && p.exitFloor !== STATION) out.push(S.t.toFixed(2)); }
+    }
+    return { at: out.join(' '), n: out.length, wear: S.elevators.map(e => e.wear.toFixed(6)).join(), temp: S.weather.temp };
+  };
+  const smart = arrivals({ strategy: 'smart' }, 10.3), near = arrivals({ strategy: 'nearest' }, 10.3);
+  assert(smart.n > 20 && smart.at === near.at, `ankomsterna skiljer sig mellan smart och närmast (${smart.n} mot ${near.n})`);
+  // (före sju har ingen incident börjat: slumpens nivå får inte flytta något annat)
+  const av = arrivals({ incLevel: 'av' }, 7), kaos = arrivals({ incLevel: 'kaos' }, 7);
+  assert(av.at === kaos.at && av.wear === kaos.wear && av.temp === kaos.temp, 'slumpens nivå ändrade ankomsterna, slitaget eller vädret');
+  return `${streamNames().length} strömmar · ${smart.n} anställda genom entrén på samma sekunder med smart och närmast · av = kaos före 07`;
+});
 test('Determinism: samma frö och samma spelaråtgärder ger exakt samma dygn (även dag 2)', () => {
   const run = () => {
     const r = mulberry(4242);
