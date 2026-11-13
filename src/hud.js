@@ -17,7 +17,7 @@ import { FAN_KW, jobFloor, tech, techOf, cableStatus } from './service.js';
 import { hoistHalt, hoistStatus } from './hoist.js';
 import { BLANKET_T } from './visits.js';
 import { chiefOnDuty } from './chief.js';
-import { updatePauseBtn } from './input.js';
+import { extraActions, updatePauseBtn } from './input.js';
 
 // ---------- HUD: DOM ----------
 export function $(id) { return document.getElementById(id); }
@@ -622,9 +622,23 @@ export function safetyGrade() {
 // ---------- Overlays ----------
 export function showOverlay(html) { const o = $('overlay'); o.innerHTML = html; o.classList.add('show'); }
 export function hideOverlay() { $('overlay').classList.remove('show'); }
+// Välkomstrutan är kort så att KÖR! alltid syns: vad man tittar på, de tre viktigaste handgreppen och
+// tangenterna. Resten ligger under "Mer om huset". Samma ruta är hjälpen (?) under spelet – då pausas
+// tiden medan den är öppen. Enter, mellanslag och Esc stänger den.
+let introKeys = /** @type {((ev: KeyboardEvent) => void)|null} */ (null);
 export function showIntro() {
-  showOverlay(`<div class="card"><h1>HISS-O-MATIC 3000</h1>
-    <p>Välkommen till <b>Skyskrapan</b>! Tunnelbana, garage och lastkaj i källaren, kontor från tandläkare till labb, en sky lobby på 6:an, bostäder högst upp och en takterrass med helikopterplatta – åtta hissar och en massa folk med bråttom.</p>
+  const help = !!S.started, wasPaused = S.paused;
+  if (help) { S.paused = true; updatePauseBtn(); }
+  showOverlay(`<div class="card intro"><h1>HISS-O-MATIC 3000${help ? ' · HJÄLP' : ''}</h1>
+    <p>Välkommen till <b>Skyskrapan</b> – åtta hissar, ${FL.length} våningar och en massa folk med bråttom. <b>Huset sköter sig självt:</b> driftchefen tar besluten och berättar varför, och regissören 🎬 klipper bilden till det som händer. Luta dig tillbaka och titta.</p>
+    <ul class="intro-short">
+      <li><b>Klicka</b> på en person, hiss eller korridor för att följa och se vad som händer.</li>
+      <li><b>Högerklicka</b> på en våning eller hiss för att framkalla något just där – brand, hissfel, besökare …</li>
+      <li><b>🎛️ Styr</b>: styrlogik, driftchefen, slumpen och allt som kan framkallas.</li>
+      <li class="intro-keys"><kbd>Mellanslag</kbd> paus · <kbd>−</kbd>/<kbd>+</kbd> hastighet · <kbd>H</kbd> biografläge · <kbd>S</kbd> styrlogik · <kbd>T</kbd> namnbrickor · <kbd>F</kbd> koppla loss/på kameran · <kbd>A</kbd> regissör (kameran väljer själv) · <kbd>Esc</kbd> stäng/sluta spåra</li>
+    </ul>
+    <button class="btn" id="go">${help ? 'TILLBAKA' : 'KÖR!'}</button>
+    <details class="intro-more"><summary>Mer om huset</summary>
     <ul>
       <li>Det finns <b>inga knappar</b> på våningarna. Varje person har ett eget mål och får en egen hiss. Tankebubblan visar målet och hissen.</li>
       <li>Hissarna är <b>zonindelade</b>: L1–L2 går i låg zon (TB–5) och H1–H2 i hög zon (6–T) – <b>staplade i samma schakt</b>. Expresshissarna X1–X2 kör E ⇄ 6 utan stopp, och X1 går ända ner till <b>tunnelbanan</b> (TB) – där kommer folk i klump varje gång ett tåg stannar. Den som ska mellan zonerna <b>byter hiss</b> (↹) i entrén och i sky lobbyn. Varuhissen V tar städvagnar och paket, och panoramahissen P åker utanpå fasaden.</li>
@@ -637,11 +651,26 @@ export function showIntro() {
       <li>Klicka på en tom yta på en våning för att släppa in en besökare. <b>BUSS!</b> (under 🎛️ Styr, eller högerklicka i entrén) släpper in en busslast.</li>
       <li><b>Scrolla</b> med mushjulet eller piltangenterna. <b>Minikartan</b> till vänster visar hela tornet – klicka på en våning eller en hiss för att hoppa dit. Kameran följer den du spårar.</li>
       <li>📋 register, 📜 logg och 🏆 resultat öppnas i en låda till höger.</li>
-      <li><kbd>Mellanslag</kbd> paus · <kbd>−</kbd>/<kbd>+</kbd> hastighet · <kbd>H</kbd> biografläge · <kbd>S</kbd> styrlogik · <kbd>T</kbd> namnbrickor · <kbd>F</kbd> koppla loss/på kameran · <kbd>A</kbd> regissör (kameran väljer själv) · <kbd>Esc</kbd> stäng/sluta spåra</li>
     </ul>
-    <button class="btn" id="go">KÖR!</button></div>`);
-  $('go').onclick = () => { hideOverlay(); S.started = true; log('Dag 1 börjar – dörrarna öppnas!', 'sys'); };
+    </details></div>`);
+  const go = () => {
+    if (introKeys) { removeEventListener('keydown', introKeys, true); introKeys = null; }
+    hideOverlay();
+    if (help) { S.paused = wasPaused; updatePauseBtn(); return; }
+    S.started = true; log('Dag 1 börjar – dörrarna öppnas!', 'sys');
+  };
+  $('go').onclick = go;
+  /** @type {HTMLElement} */ ($('go')).focus();
+  // fångas före spelets tangenter (annars pausar mellanslaget och Esc kopplar loss kameran)
+  if (introKeys) removeEventListener('keydown', introKeys, true);
+  introKeys = ev => {
+    if (!['Enter', 'NumpadEnter', 'Space', 'Escape'].includes(ev.code)) return;
+    if (ev.code !== 'Escape' && /** @type {HTMLElement} */ (ev.target).closest('summary')) return; // (fäller ut "Mer om huset")
+    ev.preventDefault(); ev.stopImmediatePropagation(); go();
+  };
+  addEventListener('keydown', introKeys, true);
 }
+extraActions.help = () => { if (!$('overlay').classList.contains('show')) showIntro(); };
 /** flyttdagen i resultatet (tom om ingen flyttade i dag) */
 function moveSummary() {
   const M = S.move;
