@@ -103,7 +103,7 @@ export const servesNow = (e, p) => !outReason(e) && !(e.vipLock && !prio(p)) && 
 /** hissen är borta en längre stund (fel, service, avstängd, vind, värme) – ruttvalet tar en annan väg */
 export const outLong = e => e.mode === 'broken' || e.mode === 'snapped' || e.mode === 'service' || e.hold || benched(e);
 /** har egen nyckel/prioritet och använder aldrig hallknapparna (VIP-gruppen, ambulansen, flyttgubbarna) */
-export const keyed = p => !!(p.vip || p.medic || p.mover || p.ff);
+export const keyed = p => !!(p.vip || p.medic || p.mover || p.ff || p.rescue);
 /** får en hiss för sig själva (VIP-läge): VIP-gruppen och ambulanspersonalen */
 export const prio = p => !!(p.vip || p.medic);
 /** strategier som använder kostnadsfunktionen (Smart och dess varianter) */

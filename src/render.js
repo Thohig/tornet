@@ -3,6 +3,7 @@
 import { clamp } from './util.js';
 import { BX1, CAR_W, DOOR_X, TOP, TOWER_X1, W, WAIT_X1, floorY, shaftX, surf } from './config.js';
 import { TERRACE_Y } from './hoist.js';
+import { riderPos } from './pano.js';
 import { S } from './state.js';
 import { clouds } from './view.js';
 import { renderPixel } from './pixel.js';
@@ -33,6 +34,8 @@ export function personHead(p) {
   // var personens huvud syns just nu (för markörer & träffytor)
   if (p.dead) return null;
   if (inWindow(p)) { const w = winPos(p); return { x: w.x, y: w.y - 22 }; }
+  // firas ner längs fasaden (eller klättrar nerför stegbilens stege) – pano.js
+  if (p.state === 'rope') { const r = riderPos(p); if (r) return { x: r.x, y: r.y - 22 }; }
   if (p.state === 'ride') {
     const e = p.car, k = e.deck2 ? p.deck || 0 : 0;
     const i = e.passengers.filter(q => !e.deck2 || (q.deck || 0) === k).indexOf(p);

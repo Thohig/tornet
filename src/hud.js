@@ -15,6 +15,7 @@ export { stateInfo };
 import { residentDesc } from './life.js';
 import { STORM_HINT, windMs } from './weather.js';
 import { FAN_KW, jobFloor, tech, techOf, cableStatus } from './service.js';
+import { LADDER_MAX, ladderReach, ropeWindy } from './pano.js';
 import { hoistHalt, hoistStatus } from './hoist.js';
 import { BLANKET_T } from './visits.js';
 import { chiefOnDuty } from './chief.js';
@@ -153,7 +154,7 @@ export function carActs(e) {
   if (S.started && e.mode === 'normal') {
     b.push(`<span class="trig-car">Framkalla:<button class="btn xs" data-act="trig:fault:${e.id}" data-hint="Hissen går sönder vid nästa stopp (ibland mellan två våningar med folk i)">🔧 Fel</button>`
       + `<button class="btn xs" data-act="trig:heat:${e.id}" ${e.hot ? 'disabled' : ''} data-hint="Kylningen hakar upp sig och motorn blir het">🌡️ Het</button>`
-      + `${e.facade ? '' : `<button class="btn xs" data-act="trig:cable:${e.id}" ${e.snapNext ? 'disabled' : ''} data-hint="Linorna går av på nästa åktur">🪢 Linbrott</button>`}</span>`);
+      + `${e.facade ? `<button class="btn xs" data-act="trig:pano" ${e.panoNext || S.pano ? 'disabled' : ''} data-hint="Hydrauliken låser sig nästa gång den kör med folk – korgen fastnar utanpå huset">🧗 Fast</button>` : `<button class="btn xs" data-act="trig:cable:${e.id}" ${e.snapNext ? 'disabled' : ''} data-hint="Linorna går av på nästa åktur">🪢 Linbrott</button>`}</span>`);
   }
   return b.join('');
 }
@@ -268,6 +269,23 @@ export function incidentHtml() {
       ${chiefLine(`heat${e.id}`, 'Starta extrafläkten?')}
       <div class="inc-acts"><button class="btn sm${e.fan ? ' on' : ''}" data-act="fan:${e.id}" ${e.fan ? 'disabled' : ''}>🌀 ${e.fan ? 'Extrafläkten går' : 'Starta extrafläkt'}</button><button class="btn xs" data-act="follow:${e.id}">📹 Visa hissen</button></div>
       <div class="inc-hint">Fläkten kyler ungefär fyra gånger snabbare men drar ${FAN_KW} kW. Smart och Energisnål undviker varma motorer, Rusning tar risken längre, och Närmast, Kaos och Knappar bryr sig inte alls.</div>`, true));
+  }
+  // ---------- panoramahissen sitter fast på fasaden (incident med val: rep eller stegbil) ----------
+  const Pn = S.pano;
+  if (Pn && Pn.ph !== 'done') {
+    const e = S.elevators[Pn.car], reach = ladderReach(e), windy = ropeWindy();
+    const b = (h, txt, ok, hint) => `<button class="btn sm${Pn.how === h ? ' on' : ''}" data-act="pano:${h}" ${ok ? '' : 'disabled'} data-hint="${hint}">${txt}</button>`;
+    const status = !Pn.crew ? `Räddningstjänsten är på väg (~${cd(Pn.crewAt - S.t)}s).`
+      : !Pn.how ? 'Räddningstjänsten är på plats och väntar på besked.'
+      : Pn.ph === 'stuck' ? (Pn.how === 'rope' ? 'Räddarna är på väg upp på taket med repet.' : 'Stegbilen ställer sig under korgen.')
+      : Pn.ph === 'rig' ? (Pn.how === 'rope' ? 'Räddarna riggar repet ovanför korgen.' : 'Stegen reses mot korgen.')
+      : Pn.rider ? `${esc((S.people.find(p => p.id === Pn.rider.id) || { name: 'Någon' }).name)} ${Pn.setup === 'rope' ? 'firas ner' : 'klättrar ner'} – ${Pn.out}/${Pn.n} ute.`
+      : Pn.setup === 'rope' && windy ? `För blåsigt för repet (${windMs()} m/s) – räddarna väntar på taket. ${Pn.out}/${Pn.n} ute.` : `${Pn.out}/${Pn.n} ute.`;
+    parts.push(card('pano', 'pano', `🧗 ${esc(e.name)} sitter fast på fasaden`, `
+      <div class="inc-s">Hydrauliken har låst sig och korgen hänger utanpå huset med <span class="lv">${e.passengers.length + (Pn.rider ? 1 : 0)}</span> instängda. Den går inte att veva ner – de måste ut utanpå huset. ${status}</div>
+      ${chiefLine('pano', 'Hur ska de instängda ut?')}
+      <div class="inc-acts">${b('rope', '🧗 Rep från taket', true, `Räddarna firar ner en i taget ${Pn.toF === LOBBY ? 'till gatan' : 'till takterrassen'} – stannar i hård vind`)}${b('ladder', '🚒 Stegbilen', reach, reach ? 'Stegen från gatan – fungerar i blåst' : `Stegen når bara ${LADDER_MAX} våningar upp`)}<button class="btn xs" data-act="follow:${e.id}">📹 Visa hissen</button></div>
+      <div class="inc-hint">Repet går fortare när det är lugnt; stegbilen klarar blåsten men når inte högt. Teknikern kan inte laga hydrauliken förrän alla är ute.</div>`, true));
   }
   // ---------- händelser som spelaren bara informeras om ----------
   const V = S.elevators.find(e => e.freight);
@@ -416,7 +434,7 @@ export function rosterHtml() {
   const f = S.rosterFilter;
   const ok = p => f === 'all' || (f === 'crew' ? !!p.crewId || p.role === 'arbetsledare' : f === 'wait' ? (p.state === 'wait' || p.state === 'toQueue')
     : f === 'ride' ? (p.state === 'ride' || p.state === 'boarding') : (p.state === 'office' || p.state === 'exiting'));
-  const order = { wait: 0, toQueue: 1, boarding: 2, ride: 3, stairs: 4, instairs: 4, exiting: 5, office: 6, incar: 7, away: 8 };
+  const order = { wait: 0, toQueue: 1, boarding: 2, ride: 3, rope: 3, stairs: 4, instairs: 4, exiting: 5, office: 6, incar: 7, away: 8, assembly: 8, platform: 4 };
   const list = S.people.filter(ok).sort((a, b) => (order[a.state] - order[b.state]) || (a.state === 'wait' ? a.waitStart - b.waitStart : a.id - b.id));
   const sid = S.sel ? S.sel.id : -1;
   return list.slice(0, 150).map(p => {

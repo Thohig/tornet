@@ -20,7 +20,7 @@ export const S = {
   // KNAPPAR-läget: hallanrop { 'grupp|våning|riktning': anrop } och hur ofta folk trycker fel (av/lite/mycket)
   calls: /** @type {Record<string, import('./buttons.js').HallCall>} */ ({}), mistakes: 'lite',
   // drift: underhåll 'natt' (nattservice) eller 'fel' (bara när något går sönder), när teknikern kommer, rusningsläge
-  maint: 'natt', techCallAt: /** @type {number|null} */ (null), foreman: /** @type {{ car: number, at: number }|null} */ (null),
+  maint: 'natt', techCallAt: /** @type {number|null} */ (null), foreman: /** @type {{ car: number, at: number }|null} */ (null), pano: /** @type {any} */ (null),
   // extra tekniker: samtalet till hissjouren (syns i grafiken) och när kollegan kommer
   techCall: /** @type {{ by: number, t0: number, until: number, n: number, cars: number[], trapped?: string|null }|null} */ (null), extraAt: /** @type {number|null} */ (null), peakMode: /** @type {string|null} */ (null),
   // väder (temperatur, stormen som incident), flyttdag, ambulans och informationsrutor (se notice)

@@ -6,6 +6,7 @@ import { S, log } from './state.js';
 import { arriveOnFloor, liftsAvailable, pev, pn, setTrip, toStairs, queueSpot } from './people.js';
 import { safeFloor, aheadOf, allowed, allowedDest, allowedPos, assignedTo, isFull, maybePark, rebuildPicks, stopFloors, loadKg, personKg, slotsFull, benched, keyed, posOf, outReason, OUT_TEXT, etaOutcome } from './dispatch.js';
 import { answerCalls, buttonsMode, clearCall } from './buttons.js';
+import { panoDue, panoStick } from './pano.js';
 import { maybeBreak, heatOnStop, heatMul, levelStart, maybeStumble, snapStep, snapDue, snapCable, trapDue, trapBreak } from './service.js';
 import { doorHold, politeHold } from './cast.js';
 import { liftStep } from './hoist.js';
@@ -101,6 +102,7 @@ export function updateElevator(e, dt) {
   if (e.state === 'idle') { idleEval(e, dt); if (e.state !== 'moving') return; }
   // ett hissfel som stoppar korgen mellan två våningar (folk sitter fast tills teknikern lagat den)
   if (trapDue(e)) { trapBreak(e); return; }
+  if (panoDue(e)) { panoStick(e); return; } // (panoramahissen fastnar på fasaden – pano.js)
   moveStep(e, dt);
   // linorna har knarrat (triggerCable): de går av när korgen är mitt emellan två våningar
   if (snapDue(e)) snapCable(e);

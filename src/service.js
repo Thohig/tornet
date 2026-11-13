@@ -155,9 +155,11 @@ export const CALL_T = 6, CALL_REPLY = 3.5;
 export const queuedFaults = () => S.elevators.filter(e => (e.mode === 'broken' || (e.mode === 'snapped' && e.snap.ph !== 'fall')) && e.techId === null);
 export const nightWindow = (h = hour()) => h >= 21 && h < 27;
 /** våningen teknikern ska till för hissen e */
-export const jobFloor = e => (e.mode === 'snapped' ? e.snap.exitF : e.mode === 'broken' ? (e.fault.cable ? e.fault.exitF : e.floor) : e.home);
+// (panoramahissens hydraulaggregat står vid dess hemvåning – korgen hänger ju utanpå huset)
+export const jobFloor = e => (e.mode === 'snapped' ? e.snap.exitF : e.mode === 'broken' ? (e.fault.cable ? e.fault.exitF : e.fault.pano ? e.home : e.floor) : e.home);
 /** folk sitter fast i hissen e och väntar på en tekniker (linbrott, eller korgen har stannat mellan två våningar) */
-const trapping = e => e.passengers.length > 0 &&
+// (panoramahissen på fasaden räknas inte: där kan teknikern inget göra förrän räddningstjänsten har fått ut dem)
+const trapping = e => e.passengers.length > 0 && !(e.fault && e.fault.pano) &&
   ((e.mode === 'snapped' && e.snap.ph !== 'fall') || (e.mode === 'broken' && !!e.fault && !!e.fault.trapped));
 /** Nästa jobb för teknikern p (null = vem som helst): trasiga hissar först, sedan (på natten, med nattservice)
  *  den mest slitna. En hiss som en annan tekniker redan har tagit hoppas över. Den extra teknikern tar bara fel. */
@@ -328,6 +330,7 @@ function workTick(t, dt) {
   const e = S.elevators[t.job];
   if (t.state !== 'office' || t.floor !== jobFloor(e)) return;
   if (e.fault && e.fault.crank) return; // (vevar ner korgen för hand vid brandlarm – lagningen får vänta)
+  if (e.fault && e.fault.pano && e.fault.trapped) return; // (panoramahissen: räddningstjänsten först, pano.js)
   if (e.mode === 'normal' && e.hold) {
     // nattservice: börjar när hissen står tom och stilla hemma
     if (e.homeT < 0.5 || e.passengers.length || e.reserved) return;
@@ -379,7 +382,7 @@ function workTick(t, dt) {
 export function fireCrank(t) {
   if (!hasJob(t)) return false;
   const e = S.elevators[t.job];
-  if (e.mode !== 'broken' || !e.fault || !e.fault.trapped || !e.passengers.length || t.state !== 'office' || t.floor !== jobFloor(e)) return false;
+  if (e.mode !== 'broken' || !e.fault || !e.fault.trapped || e.fault.pano || !e.passengers.length || t.state !== 'office' || t.floor !== jobFloor(e)) return false;
   if (!e.fault.crank) {
     const stops = [...e.stops], below = stops.filter(f => f <= e.pos + 1e-6).sort((a, b) => b - a);
     const to = below.length ? below[0] : stops.sort((a, b) => Math.abs(a - e.pos) - Math.abs(b - e.pos))[0];
@@ -633,7 +636,7 @@ export function serviceTick(dt) {
     // trasiga hissar och hissar i service står med öppna dörrar
     if (e.mode === 'snapped' && e.snap.ph !== 'fall') trappedTick(e, dt);
     // (en hiss med linbrott står mellan två våningar – där finns inga dörrar att öppna)
-    if ((e.mode === 'broken' || e.mode === 'service') && !(e.fault && (e.fault.cable || e.fault.trapped)) && e.door < 1) e.door = Math.min(1, e.door + dt / DOOR_T);
+    if ((e.mode === 'broken' || e.mode === 'service') && !(e.fault && (e.fault.cable || e.fault.trapped || e.fault.pano)) && e.door < 1) e.door = Math.min(1, e.door + dt / DOOR_T);
     if (e.mode === 'broken' && e.fault && e.fault.trapped) stuckTick(e, dt);
     if (e.mode === 'broken' && e.fault && e.fault.crank) crankTick(e, dt);
     // hiss som väntar på nattservice kör hem tom

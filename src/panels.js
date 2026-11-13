@@ -167,7 +167,7 @@ function trigHtml() {
   const t = (k, label, hint) => btn(`trig:${k}`, label, false, hint);
   return `<div class="row"><span class="trig-fire">${btn(`trig:fire:${UI.fireFloor}`, '🔥 Brand', false, 'Det börjar brinna – på vald våning eller en slumpad', S.fire ? ' disabled' : '')}${fire}</span>`
     + `${t('power', '⚡ Ström', 'Strömavbrott i hela huset')}${t('storm', '🌬️ Storm', 'Ett oväder: de höga schakten svajar')}${t('lightning', '⛈️ Blixt', 'Blixten slår ner (och ibland ut strömmen)')}</div>`
-    + `<div class="row">${t('fault', '🔧 Hissfel', 'En slumpad hiss går sönder')}${t('heat', '🌡️ Het motor', 'En motor överhettas')}${t('cable', '🪢 Linbrott', 'Linorna går av i en hiss')}</div>`
+    + `<div class="row">${t('fault', '🔧 Hissfel', 'En slumpad hiss går sönder')}${t('heat', '🌡️ Het motor', 'En motor överhettas')}${t('cable', '🪢 Linbrott', 'Linorna går av i en hiss')}${t('pano', '🧗 Fast på fasaden', 'Panoramahissen fastnar utanför huset – de instängda måste firas ner')}</div>`
     + `<div class="row">${t('medical', '🚑 Ambulans', 'Någon svimmar')}${t('move', '🚚 Flytt', 'Ett hushåll flyttar')}${t('vip', '🚁 VIP', 'VIP-helikoptern landar')}${t('train', '🚇 Tågstörning', 'Tåget blir försenat')}</div>`
     + `<div class="row">${t('cold', '❄️ Kyla', 'En kall dag: dörrarna i entrén tar emot')}${t('heatwave', '☀️ Värme', 'Värmebölja: motorerna kyls sämre')}${btn('bus', '👥 BUSS!', false, 'En busslast turister väller in i entrén', S.fire ? ' disabled' : '')}</div>`
     + `<div class="dim small">Följ en hiss eller våning för att framkalla något just där.</div>`;

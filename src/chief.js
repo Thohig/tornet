@@ -11,6 +11,7 @@ import { fl } from './util.js';
 import { CREW, LOBBY } from './config.js';
 import { S, clockStr, hour, log } from './state.js';
 import { alarm, crewPerson, lookUp } from './crew.js';
+import { ladderReach, ropeWindy, setPanoHow } from './pano.js';
 import { setStormMode, windAt, windMs } from './weather.js';
 import { setFireMode, startGenerator, toggleAutoRescue } from './incidents.js';
 import { orderService, startFan, WARM_AT } from './service.js';
@@ -104,6 +105,7 @@ export function chiefTick(dt) {
   if (!S.outage) clear('power');
   for (const e of S.elevators) if (!e.hot && !e.fan && (C.dec[`heat${e.id}`] || C.manual[`heat${e.id}`])) clear(`heat${e.id}`);
   if (!S.move || S.move.state === 'done') clear('move');
+  if (!S.pano || S.pano.ph === 'done') clear('pano');
   if (!C.on) return;
   stormTick();
   fireTick();
@@ -112,6 +114,7 @@ export function chiefTick(dt) {
   serviceTick(dt);
   strategyTick(dt);
   moveTick();
+  panoChiefTick();
   watchTick();
 }
 
@@ -235,6 +238,22 @@ function moveTick() {
     setMoveWind(ok ? 'varu' : 'wait');
     decide('move', ok ? 'Lasset vid luckan går i varuhissen' : 'Lasset vid luckan får vänta', ok ? 'blåsten stoppar hissbalken, men varuhissen går' : 'blåsten stoppar balken och varuhissen går inte', { say: 'Balken står still – ta varuhissen!' });
   }
+}
+
+// --- Panoramahissen sitter fast på fasaden: rep från taket eller stegbilen från gatan ---
+function panoChiefTick() {
+  const P = S.pano, C = S.chief;
+  if (!P || P.ph === 'done' || !free('pano')) return;
+  const e = S.elevators[P.car], windy = ropeWindy(), reach = ladderReach(e);
+  // första beslutet när korgen fastnar; sedan byter chefen till stegbilen om det blåser upp och den når
+  if (C.dec.pano && !(P.how === 'rope' && windy && reach && !P.rider)) return;
+  if (S.t - P.t0 < 2) return; // (chefen hinner se det på skärmen)
+  const how = windy && reach ? 'ladder' : 'rope';
+  if (!setPanoHow(how, 'chief')) return;
+  const where = P.toF === LOBBY ? 'ner till gatan' : 'in på takterrassen';
+  if (how === 'ladder') decide('pano', 'Stegbilen från gatan', `${windMs()} m/s är för blåsigt för repet, och stegen når upp till ${e.name}`, { inc: 'pano', car: e.id, say: 'Stegbilen – det blåser för mycket för rep!' });
+  else if (windy) decide('pano', 'Firas ner – när vinden mojnar', `stegbilen når inte upp till ${e.name}, och i ${windMs()} m/s kan räddarna inte fira någon – de väntar på taket`, { inc: 'pano', car: e.id, say: 'Vi får vänta ut vinden…' });
+  else decide('pano', 'Firas ner med rep från taket', `hydrauliken går inte att veva – räddningstjänsten firar ner dem en i taget ${where}`, { inc: 'pano', car: e.id, say: `Fira ner dem från taket!` });
 }
 
 // --- Det chefen ser på skärmarna och berättar (inga beslut) ---

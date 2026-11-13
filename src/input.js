@@ -92,6 +92,7 @@ export function doAction(cmd) {
   else if (a === 'moveRoute') act('moveRoute', b);
   else if (a === 'moveBlankets') act('moveBlankets', b === '1');
   else if (a === 'moveWind') act('moveWind', b);
+  else if (a === 'pano') act('panoRescue', b);
   else if (a === 'dismiss') S.dismissed.add(b); // (bara gränssnittet – simuleringen läser det aldrig)
   else if (a === 'incfold') foldInc(b);
   else if (a === 'show') followFloor(+b);

@@ -21,6 +21,7 @@ import { PERSON_H, PERSON_W, cargoSprite, personSprite } from './pixpeople.js';
 import { PAL } from './pixpal.js';
 import { CHIEFS, alarm, chiefOnDuty, chiefPerson } from './chief.js';
 import { CREW_BY } from './crew.js';
+import { RAISE_T, RIG_T, ROPE_DX, riderPos } from './pano.js';
 import { HAIR_NAT, PANTS, SHIRT, SKIN } from './people.js';
 
 const INK = PAL.ink;
@@ -342,6 +343,49 @@ function drawShell(h) {
   const ns = nightStep(h);
   layer('shell', `${ns}|${S.power}`, () => drawShellStatic(ns));
   drawRampCarsPx();
+  drawDockTrucksPx();
+}
+// ---------- Lastkajen: leveransbilen och flyttbilen (life.js, visits.js) ----------
+// Lastkajen ligger nere på P1, på vändplanet där rampen från gatan svänger. Bilen backar ner för rampen och
+// ställer sig med bakdörrarna mot kajen (till vänster). Kajen har plats för en bil: står flyttbilen där väntar
+// leveransbilen på gatan, och tvärtom. Allt här är grafik – läget kommer ur simuleringen.
+const DOCK_DRIVE_S = 3; // (flyttbilen: så länge den syns köra ner för rampen eller upp igen)
+/** en bil vid lastkajen: x = bilens vänsterkant (bakdörrarna), yb = golvet under hjulen; open = bakdörrarna öppna */
+function dockTruck(x, yb, kind, open) {
+  const flytt = kind === 'flytt', body = flytt ? '#f4f1e8' : '#ffd23f', w = flytt ? 40 : 32, hgt = flytt ? 15 : 12;
+  // skåpet (bak, till vänster) och hytten (fram, till höger)
+  box(x, yb - hgt - 3, w - 9, hgt, body);
+  box(x + w - 10, yb - 12, 10, 9, flytt ? '#ff8c42' : '#d4a017'); R(x + w - 8, yb - 11, 6, 4, '#bfeaff');
+  R(x + 1, yb - 5, w - 2, 2, INK);
+  for (const wx of [x + 3, x + w - 8]) { R(wx, yb - 4, 5, 4, INK); R(wx + 1, yb - 3, 3, 2, '#5a5a5a'); }
+  if (flytt) { R(x + 2, yb - hgt + 1, w - 13, 3, '#ff8c42'); text(g, 'FLYTT', x + (w - 9) / 2, yb - hgt + 5, '#ff8c42', 'center'); }
+  else { R(x + 2, yb - hgt - 1, w - 13, 1, '#c81e3a'); text(g, 'PAKET', x + (w - 9) / 2, yb - hgt + 2, INK, 'center'); }
+  // bakdörrarna står öppna mot kajen
+  if (open) { R(x - 1, yb - hgt - 3, 2, hgt, INK); R(x - 3, yb - hgt - 2, 2, hgt - 2, dark(body, 0.25)); }
+  return w;
+}
+function drawDockTrucksPx() {
+  if (!RAMP_COLS.length || DOCK < 0) return;
+  const { rx0, rx1, top, bot, yE, y1 } = rampGeom();
+  if (top > lo.height || bot < 0) return;
+  // från gatan (öppningen i fasaden) ner till vändplanet på P1 – u = 0 på gatan, 1 parkerad vid kajen
+  const at = u => ({ x: Math.round(rx1 + 6 + (rx0 + 3 - (rx1 + 6)) * u), y: Math.round(yE + (y1 - yE) * u) });
+  const draw = (u, kind, open) => {
+    const p = at(clamp(u, 0, 1));
+    g.save(); g.beginPath(); g.rect(rx0, top, X(BX1 + 7) - rx0 + 30, bot - top); g.clip();
+    dockTruck(p.x, p.y, kind, open && u >= 1);
+    if (u < 1 && Math.floor(S.anim * 4) % 2) R(p.x - 1, p.y - 7, 1, 2, '#ff5d52'); // (backljuset)
+    g.restore();
+  };
+  // leveransbilen: x i simuleringen går från −260 (gatan) till 70 (vid kajen)
+  const T = S.truck;
+  if (T) draw((T.x + 260) / 330, 'paket', T.state === 'parked');
+  // flyttbilen: står vid kajen medan flytten pågår (och kör ner/upp precis i början och slutet)
+  const M = S.move;
+  if (M && M.state === 'on') draw(Math.min(1, (S.t - M.t0) / DOCK_DRIVE_S), 'flytt', true);
+  else if (M && M.state === 'done' && S.t - M.t1 < DOCK_DRIVE_S) draw(1 - (S.t - M.t1) / DOCK_DRIVE_S, 'flytt', false);
+  // väntar på gatan (lastkajen är upptagen): utanför garageöppningen
+  if (M && M.state === 'planned' && M.dockWait > 0) dockTruck(rx1 + 10, yE, 'flytt', false);
 }
 function drawShellStatic(nn) {
   // huset: rumsdelen (under hallarna) och schakttornet i två block; kontur runt
@@ -972,6 +1016,45 @@ function drawChiefPx() {
   }
   if (!at) return;
   bubble(`${who.name}: "${C.say.text}"`, at.x, at.y - 14, C.say.dec ? '#fff6a8' : '#ffffff');
+}
+// ---------- Panoramahissen fast på fasaden (pano.js) ----------
+// Repet från taket ovanför korgen och den som firas ner i sele, eller stegbilen på gatan med stegen rest mot
+// korgen och den som klättrar ner. Läget räknas i simuleringen (S.pano) – här ritas bara.
+function drawPanoPx() {
+  const P = S.pano;
+  if (!P || !P.crew) return;
+  const e = S.elevators[P.car], cx = X(shaftCX(e.id)), gy = Y(GROUND_Y), carBot = Y(floorY(e.pos));
+  const way = P.setup || P.how, rider = P.rider ? S.people.find(p => p.id === P.rider.id) : null, rp = rider ? riderPos(rider) : null;
+  if (way === 'ladder') {
+    // stegbilen under korgen: hytt, flak och blåljus
+    const tx = cx - 44, on = Math.sin(S.anim * 11) > 0;
+    box(tx, gy - 12, 34, 10, '#c81e3a'); box(tx + 33, gy - 16, 11, 14, '#c81e3a'); R(tx + 35, gy - 15, 7, 5, '#bfeaff');
+    R(tx + 2, gy - 9, 30, 1, '#ffd23f'); text(g, '112', tx + 17, gy - 10, '#ffffff', 'center');
+    box(tx + 36, gy - 19, 5, 3, on ? '#3f7cff' : '#1b2a6e');
+    for (const wx of [tx + 4, tx + 26, tx + 36]) { R(wx, gy - 3, 5, 3, INK); R(wx + 1, gy - 2, 3, 1, '#5a5a5a'); }
+    // stegen reses från flaket mot korgens golv
+    const k = P.ph === 'stuck' ? 0 : P.ph === 'rig' ? clamp(1 - (P.t - S.t) / RAISE_T, 0, 1) : 1;
+    const x0 = tx + 8, y0 = gy - 13, x1 = Math.round(x0 + (cx - 6 - x0) * k), y1 = Math.round(y0 + (carBot - y0) * k);
+    if (k > 0) {
+      line(x0, y0, x1, y1, INK); line(x0 + 3, y0, x1 + 3, y1, INK);
+      const n = Math.max(1, Math.floor(Math.hypot(x1 - x0, y1 - y0) / 4));
+      for (let i = 1; i < n; i++) { const t = i / n; R(Math.round(x0 + (x1 - x0) * t), Math.round(y0 + (y1 - y0) * t), 4, 1, '#d4d0c8'); }
+    }
+  } else if (way === 'rope' && P.ph !== 'stuck') {
+    // blocket på taket ovanför panoramahissen och repet ner till korgen (eller till den som firas ner)
+    // (repet hänger mellan fasaden och glasröret, bredvid korgen)
+    const rx = X(shaftCX(e.id) + ROPE_DX), ay = Y(floorY(EL[e.id].topF) - CAR_H - 30), k = P.ph === 'rig' ? clamp(1 - (P.t - S.t) / RIG_T, 0, 1) : 1;
+    box(rx - 3, ay - 3, 7, 5, '#ffd23f'); R(rx - 6, ay - 6, 13, 2, INK);
+    const endY = rp ? Y(rp.y) + 2 : Math.round(ay + (carBot - ay) * k), endX = rp ? X(rp.x) : rx;
+    line(rx, ay + 2, endX, endY, '#ff8c42');
+    if (!rp && k >= 1) { R(rx - 1, carBot - 2, 3, 2, '#ff8c42'); } // (selen väntar vid korgens dörr)
+  }
+  // den som är på väg ner: framifrån, i sele (repet) eller med händerna på stegen
+  if (rider && rp) {
+    const sx = X(rp.x) - PERSON_W / 2, sy = Y(rp.y) + Math.round(Math.sin(S.anim * 3 + rider.id) * (way === 'rope' ? 1 : 0));
+    g.drawImage(personSprite(winFig(rider, rider.mood || 0), 'front', 0, 1, { blink: blinkOf(rider) }), sx, sy);
+    if (way === 'rope') { R(sx + 2, sy + 11, PERSON_W - 4, 1, '#ff8c42'); R(sx + PERSON_W / 2, sy + 9, 1, 4, '#ff8c42'); }
+  }
 }
 // ---------- Personalrummet: där driftcheferna fikar ----------
 // Ett fönster i hallens bakvägg, som kontrollrummet: soffa, bord med korsord, kaffebryggare och kylskåp.
@@ -2044,6 +2127,7 @@ export function renderPixel(dt) {
   drawMovePilesPx();
   drawStreetPx(dt, hr);
   drawHallPeople();
+  drawPanoPx();
   drawHeliPx();
   drawSnowPx(dt);
   drawWeatherPx();

@@ -136,6 +136,7 @@ const TALK = {
   heat: ['Det luktade bränt motor förut.', 'Hissen var varm som en bastu!'],
   cable: ['Hörde du om linbrottet?! Jag tar trappan i morgon.', 'De fick klättra ut genom taket!'],
   fault: ['Den där hissen krånglade förut – jag satt fast!', 'Teknikern fick bända upp dörrarna.'],
+  pano: ['Såg du? De firade ner folk från panoramahissen!', 'Jag tar trappan i en vecka nu.', 'Hängde de verkligen i rep utanpå huset?'],
 };
 /** någon i korgen pratar om den senaste incidenten (en gång per person och incident) */
 export function incidentTalk(p, e) {

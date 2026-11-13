@@ -28,6 +28,7 @@ import { CONTROL, BREAK } from '../src/config.js';
 import { CHIEFS, chiefPerson, setChief } from '../src/chief.js';
 import { CREW_BY, atPost, crewPerson, postFloor } from '../src/crew.js';
 import { CREW } from '../src/config.js';
+import { PANO, ladderReach, PANO_CREW_S, PANO_DEFAULT_S } from '../src/pano.js';
 
 // ---------- Ramverk ----------
 export const tests = [];
@@ -1742,6 +1743,8 @@ export const PLAYER_ACTIONS = {
   service: r => act('service', Math.floor(r() * S.elevators.length)),
   medical: () => act('trigger', 'medical'),
   cable: () => act('trigger', 'cable'),
+  pano: () => act('trigger', 'pano'),
+  panoRescue: r => act('panoRescue', r() < 0.5 ? 'rope' : 'ladder'),
   moveRoute: r => act('moveRoute', ['auto', 'varu', 'balk'][Math.floor(r() * 3)]),
   moveBlankets: r => act('moveBlankets', r() < 0.5),
   moveWind: r => act('moveWind', r() < 0.5 ? 'wait' : 'varu'),
@@ -1751,7 +1754,7 @@ export const PLAYER_ACTIONS = {
   carTrigger: r => act('trigger', ['fault', 'heat', 'cable'][Math.floor(r() * 3)], Math.floor(r() * S.elevators.length)),
   incLevel: r => act('incLevel', ['av', 'lugn', 'normal', 'kaos'][Math.floor(r() * 4)]),
   chief: r => act('chief', r() < 0.7),
-  chiefBack: r => act('chiefBack', ['storm', 'fire', 'power', 'strategy', 'move', `heat${Math.floor(r() * S.elevators.length)}`][Math.floor(r() * 6)]),
+  chiefBack: r => act('chiefBack', ['storm', 'fire', 'power', 'strategy', 'move', 'pano', `heat${Math.floor(r() * S.elevators.length)}`][Math.floor(r() * 7)]),
 };
 const FUZZ_SEEDS = Array.from({ length: 24 }, (_, i) => 5000 + i);
 test(`Spelaråtgärder: invarianter över ${FUZZ_SEEDS.length} dygn med slumpade åtgärder (även på natten)`, () => {
@@ -2042,6 +2045,67 @@ test('Arbetsledaren från hissjouren kommer vid ett linbrott och åker när hiss
   while (!stig.dead && ++g < 300 / DT) step(DT);
   assert(stig.dead, `${stig.name} åkte aldrig tillbaka till jouren (${e.name}: ${e.mode})`);
   return `${stig.name} tittade på ${e.name} och åkte när den gick igen`;
+});
+/** kör tills panoramahissen sitter fast på fasaden (framkallat), eller kasta */
+function panoStuck(w) {
+  act('trigger', 'pano');
+  let g = 0;
+  while (!S.pano && ++g < 900 / DT) { const b = w && w.before(); step(DT); if (w) w.check(b); }
+  if (!S.pano) throw new Fail('panoramahissen fastnade aldrig');
+  return S.elevators[PANO.id];
+}
+test('Panoramahissen fast på fasaden: räddningstjänsten firar ner alla med rep, sedan lagas hydrauliken', () => {
+  sim(43, { chief: true }); runUntil(9.5);
+  const w = watcher(), e = panoStuck(w), who = [...e.passengers], P = S.pano;
+  assert(who.length > 0 && e.mode === 'broken' && e.fault.pano, 'korgen fastnade inte med folk i');
+  const at = Math.round(e.pos * 1000);
+  let g = 0, moved = 0, worked = 0;
+  while (S.pano && S.pano.ph !== 'done' && ++g < 400 / DT) {
+    const b = w.before(); step(DT); w.check(b);
+    if (Math.round(e.pos * 1000) !== at) moved++;
+    if (techOf(e) && techOf(e).workT > 0 && e.passengers.length) worked++;
+  }
+  assert(P.ph === 'done', `räddningen blev aldrig klar (${P.ph}, ${e.passengers.length} kvar)`);
+  assert(P.setup === 'rope', `chefen valde ${P.setup} fast det var lugnt`);
+  assert(moved === 0, 'korgen rörde sig medan den satt fast');
+  assert(worked === 0, 'teknikern lagade hydrauliken med folk kvar i korgen');
+  assert(who.every(p => p.state !== 'ride' && p.state !== 'rope' && p.car === null), 'någon är kvar i korgen eller i repet');
+  assert(who.every(p => p.floor === P.toF || p.dead || p.floor !== Math.round(e.pos)), 'någon landade fel');
+  assert(S.chief.log.some(d => d.key === 'pano' && d.by === 'chief'), 'chefen beslutade aldrig');
+  g = 0;
+  while (e.mode !== 'normal' && ++g < 300 / DT) step(DT);
+  assert(e.mode === 'normal', `${e.name} lagades aldrig (${e.mode})`);
+  g = 0;
+  while (S.pano && ++g < 200 / DT) step(DT);
+  assert(!S.pano && !S.people.some(p => p.rescue), 'räddningstjänsten åkte aldrig');
+  assert(w.passes === 0 && w.brokenUse === 0, `regelbrott (förbi ${w.passes}, trasig ${w.brokenUse})`);
+  return `${who.length} firade ner till ${fl(P.toF)} på ${Math.round(P.t1 - P.t0)} s · ${e.name} lagad`;
+});
+test('Panoramahissen fast på fasaden: stegbilen (spelarens val) – och utan chef väljer räddningsledaren själv', () => {
+  // spelaren väljer stegbilen (när den når) – annars går valet inte igenom
+  let ok = null;
+  for (const seed of [43, 44, 45, 46]) {
+    sim(seed); runUntil(9.5);
+    const e = panoStuck(null);
+    const reach = ladderReach(e);
+    act('panoRescue', 'ladder');
+    assert(reach ? S.pano.how === 'ladder' : S.pano.how !== 'ladder', `stegbilen valdes fast den ${reach ? '' : 'inte '}når`);
+    if (!reach) continue;
+    const P = S.pano;
+    let g = 0;
+    while (P.ph !== 'done' && ++g < 300 / DT) step(DT);
+    assert(P.ph === 'done' && P.setup === 'ladder', `stegbilen fick inte ut dem (${P.ph}/${P.setup})`);
+    ok = `${P.n} nerför stegen på ${Math.round(P.t1 - P.t0)} s`;
+    break;
+  }
+  assert(ok, 'panoramahissen fastnade aldrig inom stegens räckvidd');
+  // utan chef och utan spelare: räddningsledaren väljer när räddarna har varit på plats en stund
+  sim(43); runUntil(9.5);
+  panoStuck(null);
+  let g = 0;
+  while (!S.pano.how && ++g < (PANO_CREW_S + PANO_DEFAULT_S + 5) / DT) step(DT);
+  assert(S.pano.how && S.pano.by === 'crew', `ingen valde metod (${S.pano.how}, ${S.pano.by})`);
+  return `${ok} · räddningsledaren valde ${S.pano.how} själv`;
 });
 /** längsta tid någon får sitta instängd när driftchefen sköter huset (linbrott: utrymning genom takluckan) */
 const DOCK_TRAP_S = 150;

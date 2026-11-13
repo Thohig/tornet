@@ -30,6 +30,7 @@ export function stateInfo(p) {
     case 'away': return ['BORTA', '#8d96c9'];
     case 'assembly': return ['UTE – ÅTERSAMLING', '#ff8c42'];
     case 'incar': return ['KÖR BIL', '#94a3b8'];
+    case 'rope': return [S.pano && S.pano.setup === 'ladder' ? 'KLÄTTRAR NER' : 'FIRAS NER', '#ff8c42'];
   }
   return ['?', '#ffffff'];
 }
@@ -52,6 +53,7 @@ export function noteDetail(p) {
     case 'away': return 'Inte i huset just nu';
     case 'assembly': return 'Väntar på återsamlingsplatsen utanför entrén';
     case 'incar': return `Kör in i garaget på ${fl(p.floor)}`;
+    case 'rope': return S.pano && S.pano.setup === 'ladder' ? 'På stegbilens stege, på väg ner till gatan' : 'Hänger i selen längs fasaden';
   }
   return '';
 }

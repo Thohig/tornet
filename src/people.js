@@ -11,6 +11,7 @@ import { kickOff } from './elevators.js';
 import { arriveByCar, backFromAssembly, leaveBuilding, resNext, homeSpot } from './life.js';
 import { ffNext } from './incidents.js';
 import { CREW_LOOK, crewNext, crewSpot } from './crew.js';
+import { rescueNext } from './pano.js';
 import { buttonsMode, carButtonMistakes } from './buttons.js';
 
 // ---------- Människor ----------
@@ -187,6 +188,8 @@ export function pickSpot(p, f) {
   if (p.kind === 'res' && f === p.home) return homeSpot(p);
   const own = p.role && list.find(s => s.role === p.role);
   if (own) return own;
+  // (räddningstjänsten står synligt i hallen eller på taket)
+  if (p.rescue) return { x: p.nearX, k: 'stand', face: 1, desc: p.task, temp: true, win: 'hall' };
   if (p.role) return { x: p.nearX ?? rand(150, 470), k: 'stand', face: pick([1, -1]), desc: p.task || ROLE_SPOT_DESC[p.role] || 'Jobbar', temp: true };
   // (personalens poster, rastmål och personalrummet väljer ingen annan)
   const free = s => !s.brk && !s.post && !s.where && (s.k === 'door' || occOf(s) === null);
@@ -449,6 +452,7 @@ export function exitDone(p) {
   else if (p.role === 'hisstekniker') p.timer = p.job !== null && p.job !== undefined ? 1e9 : rand(1, 3); // arbetet sköts av service.js
   else if (p.crewId) p.timer = CREW_LOOK; // (personalen tittar ofta upp: rast, larm, skiftbyte – crew.js)
   else if (p.role === 'arbetsledare') p.timer = 6; // (tittar till hissen, se foremanNext i service.js)
+  else if (p.role === 'räddare') p.timer = 4; // (räddningstjänsten vid panoramahissen, pano.js)
   else if (p.role) p.timer = { 'väktare': rand(8, 15), 'städare': rand(25, 45), 'vaktmästare': rand(30, 50), 'nattdj': rand(60, 120), 'nattekniker': p.floor === LOBBY ? rand(4, 8) : rand(30, 70) }[p.role];
   else if (p.floor === CAFE) p.timer = rand(25, 60);
   else if (p.kind === 'vis') p.timer = rand(20, 50);
@@ -564,6 +568,7 @@ function roleNext(p, h) {
     case 'bud': return [p.exitFloor, 'Paketet levererat – tillbaka till lastbilen'];
     case 'hisstekniker': return techNext(p);
     case 'arbetsledare': return foremanNext(p);
+    case 'räddare': return rescueNext(p);
     case 'flyttgubbe': return moverNext(p);
     case 'ambulans': return medicNext(p);
     case 'brandman': return ffNext(p);

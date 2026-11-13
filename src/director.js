@@ -106,6 +106,14 @@ function shots() {
     else add('medicF', 80, 'floor', S.medic.floor, `🚑 ${S.medic.pname} har svimmat`);
   }
   if (S.heli && ROOF >= 0) add('heli', 75, 'floor', ROOF, '🚁 Helikoptern');
+  // panoramahissen fast på fasaden: korgen, repet och den som firas ner (pano.js)
+  const Pn = S.pano;
+  if (Pn && Pn.ph !== 'done') {
+    const pe = S.elevators[Pn.car], rider = Pn.rider ? S.people.find(p => p.id === Pn.rider.id) : null;
+    if (rider) add('pano', 94, 'person', rider.id, `🧗 ${rider.name} ${Pn.setup === 'rope' ? 'firas ner längs fasaden' : 'klättrar nerför stegen'} (${Pn.out + 1}/${Pn.n})`, S.t - Pn.rider.t0 < 0.6);
+    else add('pano', Pn.ph === 'stuck' ? 86 : 84, 'car', pe.id, Pn.ph === 'rig' ? (Pn.how === 'rope' ? `🧗 Räddarna riggar repet ovanför ${pe.name}` : `🚒 Stegbilen reser stegen mot ${pe.name}`)
+      : `🛗 ${pe.name} sitter fast på fasaden · ${pe.passengers.length} instängda`, S.t - Pn.t0 < 2);
+  }
   // husets personal (crew.js): skyndar tillbaka till kontrollrummet när larmet går, byter skift och tar rast
   for (const p of S.people) {
     if (p.dead) continue;
@@ -296,6 +304,7 @@ const THOUGHTS = {
   cable: ['Linbyte. Det här tar timmar.', 'Teknikern har det tungt i schaktet.'],
   broken: ['Hissen står still – folk sitter fast.', 'Kom igen, teknikern…'],
   hot: ['Motorn är het. Chefen borde kolla fläkten.', 'Det luktar bränd broms härifrån.'],
+  pano: ['Fast på fasaden – med utsikt, i alla fall.', 'Firas ner? Jag skulle aldrig våga.', 'Sakta, sakta…', 'Det här blir tv.'],
   over: ['Överlast! Någon får ta nästa.', 'Summern tjuter – det är alltid någon med en kartong.'],
   storm: ['Panoramahissen svajar i blåsten.', 'Inte för de höjdrädda i dag.'],
   move: ['Flyttgubbarna – bara de inte repar dörren.', 'Soffan går aldrig in. Den går aldrig in.'],
