@@ -60,6 +60,9 @@ const recent = /** @type {string[]} */ ([]);
 /** sekunder som varje sak har visats, avtar med tiden */
 const seen = /** @type {Map<string, number>} */ (new Map());
 let lastAnim = 0, cleanerShown = -1e9;
+/** nödsänkningar: hiss-id → när regissören först såg den och var den slutade (för tagningen efteråt) */
+const rescues = /** @type {Map<number, { t0: number, floor: number, t1: number|null }>} */ (new Map());
+const RESCUE_AFTER = 4; // sekunder (speltid) kameran stannar kvar medan de räddade kliver ut
 const name1 = p => p.name.split(' ')[0];
 const visible = p => { const h = personHead(p); return h && !h.hidden; };
 
@@ -80,9 +83,10 @@ function shots() {
     else if (W.type === 'heat') add('warn', 82, 'floor', Math.min(top, S.elevators[W.car].maxF), `🌡️ Motorn i ${S.elevators[W.car].name} brummar`, true);
     else add('warn', 86, 'car', W.car, W.type === 'cable' ? `🪢 Linorna i ${S.elevators[W.car].name} knarrar` : `🔩 ${S.elevators[W.car].name} gnisslar`, true);
   }
-  // driftchefen fattar ett beslut: kameran klipper till kontrollrummet en stund (och sedan tillbaka)
-  const C = S.chief;
-  if (C && C.on && C.say && C.say.dec && CONTROL >= 0 && S.t - C.say.t0 < 3)
+  // driftchefen fattar ett beslut: kameran klipper till kontrollrummet en stund (och sedan tillbaka) – utom
+  // medan en hiss nödsänks: då visas sänkningen och beslutet syns i kontrollrumspanelen
+  const C = S.chief, lowering = S.elevators.some(e => e.mode === 'rescue');
+  if (C && C.on && C.say && C.say.dec && CONTROL >= 0 && S.t - C.say.t0 < 3 && !lowering)
     add('chief', 88, 'floor', CONTROL, `🧑‍💼 ${chiefOnDuty().name}: ${C.say.text}`, S.t - C.say.t0 < 1);
   if (S.fire) add('fire', 100, 'floor', S.fire.floor, `🔥 Brand på ${fl(S.fire.floor)}`, S.t - S.fire.t0 < 2);
   // brandmännen på väg upp (i brandhissen eller trapphuset)
@@ -108,7 +112,21 @@ function shots() {
   }
   for (const e of S.elevators) {
     const n = e.passengers.length;
-    if (!S.power && n) add(`dark${e.id}`, 70 + n, 'car', e.id, `⚡ Fast i ${e.name}`);
+    // nödsänkningen på reservkraft: klipper in direkt när korgen börjar krypa ner (före chefens beslut i
+    // kontrollrummet – det syns i panelen) och stannar kvar tills de räddade har klivit ut (samma nyckel hela vägen)
+    const r = rescues.get(e.id);
+    if (e.mode === 'rescue') {
+      if (!r || r.t1 !== null) rescues.set(e.id, { t0: S.t, floor: e.rescueTarget, t1: null });
+      const t0 = rescues.get(e.id).t0;
+      add(`rescue${e.id}`, 96, 'car', e.id, e.rs === 'open' ? `🔋 Dörrarna i ${e.name} går upp – ${n} kliver ut`
+        : `🔋 ${e.name} nödsänks till ${fl(e.rescueTarget)} · ${n} instängda`, S.t - t0 < 1);
+    } else if (r) {
+      if (r.t1 === null) r.t1 = S.t;
+      // (efterspelet viker när nästa hiss börjar nödsänkas – sänkningarna är korta och får inte missas)
+      if (S.t - r.t1 < RESCUE_AFTER && !lowering) add(`rescue${e.id}`, 90, 'car', e.id, `🔋 Ute ur ${e.name} på ${fl(r.floor)}`);
+      else rescues.delete(e.id);
+    }
+    if (!S.power && n && e.mode !== 'rescue') add(`dark${e.id}`, 70 + n, 'car', e.id, `⚡ Fast i ${e.name}`);
     // linbrottet: hissen vars linor fransar sig följs redan när den kör (samma nyckel som själva linbrottet,
     // så att kameran står kvar när det smäller), fallet och fångapparaten klipper in direkt
     if (e.snapNext && e.mode === 'normal') {
@@ -121,7 +139,7 @@ function shots() {
         s.ph === 'evac' ? `🧗 Utrymning ur ${e.name}` : s.ph === 'fall' ? `🪢 ${e.name} faller!` : now ? `🪢 Fångapparaten tog i ${e.name}` : `🪢 Linbrott i ${e.name}`, now);
     }
     else if (e.mode === 'broken' && e.fault.cable && e.techId !== null) add(`cable${e.id}`, 22, 'car', e.id, `🔧 Linbyte i ${e.name}`);
-    if ((e.mode === 'broken' || e.mode === 'rescue') && n) add(`broken${e.id}`, 70, 'car', e.id, `🔧 ${e.name} har stannat`);
+    if (e.mode === 'broken' && n) add(`broken${e.id}`, 70, 'car', e.id, `🔧 ${e.name} har stannat`);
     if (e.hot) add(`hot${e.id}`, 45, 'car', e.id, `🌡️ ${e.name} är överhettad`);
     if ((e.overloadFlash || 0) > 1) add(`over${e.id}`, 50, 'car', e.id, `⚖️ Överlast i ${e.name}`);
     if (S.storm && e.facade) add('storm', 55, 'car', e.id, `🌬️ ${e.name} i stormen`);
@@ -203,8 +221,10 @@ export function updateDirector() {
   const age = s ? S.anim - s.t0 : Infinity;
   const y = s ? shotY(s) : null;
   const all = S.paused ? [] : shots();
-  // något som just bryter ut får klippa in direkt (om det inte redan visas något sådant)
-  const urgent = all.some(c => c.urgent && (!s || (c.key !== s.key && !s.urgent)));
+  // något som just bryter ut får klippa in direkt (om det inte redan visas något sådant – en brådskande tagning
+  // som inte längre finns, t.ex. chefens beslut när nödsänkningen börjar, skyddar inte)
+  const live = s && all.some(c => c.key === s.key);
+  const urgent = all.some(c => c.urgent && (!s || (c.key !== s.key && (!s.urgent || !live))));
   if (!S.paused && (y === null || age > MIN_HOLD || urgent)) {
     const cur = s && all.find(c => c.key === s.key);
     let best = null, bv = -Infinity;
@@ -258,6 +278,7 @@ const THOUGHTS = {
   heli: ['Helikoptern! Alltid lika mäktigt.', 'Vem kommer med helikopter en vardag?'],
   call: ['Teknikern ringer jouren – det blir en lång dag.', 'Hissjouren igen…'],
   dark: ['De sitter i mörkret. Stackars dem.', 'Kommer reservkraften snart?'],
+  rescue: ['Krypfart på reservkraft – sakta men säkert.', 'Snart ute nu, håll ut!', 'Där går dörrarna upp. Puh.'],
   snap: ['Linbrott! Fångapparaten måste hålla…', 'Jag vågar knappt titta.', 'Ut genom takluckan – försiktigt nu.'],
   snapwait: ['Det knarrar i linorna… jag håller ett öga på den.', 'Den där hissen skulle jag inte åka med just nu.'],
   cable: ['Linbyte. Det här tar timmar.', 'Teknikern har det tungt i schaktet.'],
