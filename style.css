@@ -330,10 +330,6 @@ body{background:var(--desk);font-family:var(--ui);font-size:12px;color:var(--ink
 .tl-m:active{box-shadow:var(--sunken)}
 .tl-m.warn{background:var(--vga-y);animation:pulse 0.6s infinite alternate}
 
-/* ---------- Minikartan till vänster om bilden ---------- */
-#mini{flex:none;width:96px;margin-right:2px;background:#000;box-shadow:var(--sunken);padding:2px;display:flex}
-#miniCv{flex:1;width:100%;height:100%;display:block;cursor:pointer;image-rendering:pixelated}
-@media (max-width:800px){#mini{display:none}} /* (smalt: allt staplas på höjden – då får bilden platsen) */
 
 /* ---------- Högerklicksmenyn i bilden ---------- */
 .ctx{position:absolute;left:0;top:0;z-index:12;min-width:200px;background:var(--face);box-shadow:var(--raised),3px 3px 0 rgba(0,0,0,.35);padding:2px}
@@ -371,7 +367,7 @@ body{background:var(--desk);font-family:var(--ui);font-size:12px;color:var(--ink
 .lw-show{font-family:'VT323',monospace;font-size:34px;line-height:34px}
 .lw-sub{font-size:13px;font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lw-key{position:absolute;right:10px;top:6px;font-size:10px;opacity:.7}
-body.cinema #topbar,body.cinema #timeline,body.cinema #mini,body.cinema #side,body.cinema #status,body.cinema #drawer,
+body.cinema #topbar,body.cinema #timeline,body.cinema #side,body.cinema #status,body.cinema #drawer,
 body.cinema #incPanel,body.cinema #carPop,body.cinema .dlg{display:none !important}
 /* chefens beslut på incidentkortet; när chefen har det i handen blinkar kortet inte */
 .inc-chief{margin-top:5px;padding:3px 5px;background:var(--note);box-shadow:var(--sunken);font-size:11.5px;line-height:1.35}

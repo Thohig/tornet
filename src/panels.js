@@ -1,18 +1,17 @@
-// Gränssnittets paneler runt bilden: kontrollrummet (bevakaren, driftchefen och driftradion), minikartan
-// över tornet, dygnets tidslinje, högerklicksmenyn i bilden, biografläget, statusraden och styrbordet.
+// Gränssnittets paneler runt bilden: kontrollrummet (bevakaren, driftchefen och driftradion),
+// dygnets tidslinje, högerklicksmenyn i bilden, biografläget, statusraden och styrbordet.
 // Allt här är bara gränssnitt: det läser tillståndet och går via act()/doAction för allt som ändrar något.
 import { esc, fl } from './util.js';
-import { BX0, CAR_H, CAR_W, CONTROL, END_H, FL, FLOOR_H, GROUND_Y, H, INNER_X1, LAND_X0, LOBBY, ROOF, ROOF_Y, START_H, TEMPOS, TOP, W, WAIT_X1, floorY, shaftX, tempoName } from './config.js';
+import { BX0, CONTROL, END_H, FL, FLOOR_H, GROUND_Y, INNER_X1, LOBBY, ROOF, ROOF_Y, START_H, TEMPOS, TOP, WAIT_X1, floorY, tempoName } from './config.js';
 import { S, hour, phaseName } from './state.js';
 import { FIRE_FLOORS } from './incidents.js';
 import { VIEW, cv, resize } from './view.js';
-import { personHead } from './render.js';
 import { crewNow, toggleAuto } from './director.js';
 import { chiefOnDuty } from './chief.js';
 import { $, openCarPop, select, stateLabel } from './hud.js';
 import { stateInfo } from './describe.js';
 import { act } from './actions.js';
-import { doAction, extraActions, hitCar, hitDoor, hitPerson, toWorld } from './input.js';
+import { extraActions, hitCar, hitDoor, hitPerson, toWorld } from './input.js';
 
 // localStorage kan saknas eller kasta (privat fönster): allt fungerar ändå
 const load = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } };
@@ -53,95 +52,9 @@ function updateCtl() {
 }
 extraActions.ctlfold = () => { ctlFold = !ctlFold; save('hiss.ctlFold', ctlFold ? '1' : ''); ctlKey = ''; };
 
-// ---------- Minikartan: hela tornet i en smal remsa, med köer, hissar, incidenter och kamerans ram ----------
-const mini = /** @type {HTMLCanvasElement} */ ($('miniCv')), mctx = mini.getContext('2d');
-const LABEL_W = 16;               // kolumnen med våningsetiketter (css-px)
-const MY0 = Math.max(0, ROOF_Y - FLOOR_H * 0.6); // världens y högst upp i kartan (strax ovanför taket)
-let mw = 0, mh = 0;
-const mx = x => LABEL_W + ((x - LAND_X0) / (W - LAND_X0)) * (mw - LABEL_W - 2);
-const my = y => ((y - MY0) / (H - MY0)) * mh;
-const worldY = py => MY0 + (py / mh) * (H - MY0);
+/** våningen vid världens y (högerklicksmenyn och statusraden) */
 const floorAtY = y => Math.max(0, Math.min(TOP, Math.floor(LOBBY + (GROUND_Y - y) / FLOOR_H)));
 const queueAt = f => (S.wl && S.wl[f] ? S.wl[f].u.length + S.wl[f].d.length : 0);
-export function drawMini() {
-  if (!mctx || !mini.offsetParent) return;
-  const dpr = window.devicePixelRatio || 1, w = mini.clientWidth, h = mini.clientHeight;
-  if (w !== mw || h !== mh) { mw = w; mh = h; mini.width = Math.round(w * dpr); mini.height = Math.round(h * dpr); }
-  const g = mctx;
-  g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  g.fillStyle = '#000'; g.fillRect(0, 0, mw, mh);
-  const blink = Math.floor(S.anim * 3) % 2 === 0;
-  const rowH = FLOOR_H / (H - MY0) * mh;
-  g.font = `${Math.min(8, Math.max(6, rowH - 1))}px monospace`; g.textBaseline = 'middle';
-  const hx1 = mx(Math.min(...S.elevators.map(e => shaftX(e.id))) - 6); // hallen slutar vid första schaktet
-  for (let f = 0; f <= TOP; f++) {
-    const y0 = my(floorY(f) - FLOOR_H), y1 = my(floorY(f)), q = queueAt(f);
-    // våningen: hallen ljusare (varannan lite ljusare än nästa), schaktväggen mörk, golvet som en linje
-    g.fillStyle = f % 2 ? '#46597a' : '#3c4d6a';
-    g.fillRect(LABEL_W, y0, hx1 - LABEL_W, y1 - y0);
-    g.fillStyle = f % 2 ? '#262e3a' : '#212833';
-    g.fillRect(hx1, y0, mw - hx1, y1 - y0);
-    if (S.fire && S.fire.floor === f) { g.fillStyle = blink ? '#ff3b2f' : '#8a1a12'; g.fillRect(LABEL_W, y0, mw - LABEL_W, y1 - y0); }
-    if (!S.power) { g.fillStyle = 'rgba(0,0,0,.45)'; g.fillRect(LABEL_W, y0, mw - LABEL_W, y1 - y0); }
-    g.fillStyle = '#7d8ca3';
-    g.fillRect(LABEL_W, y1 - 1, mw - LABEL_W, 1);
-    // kön: en prick per person (gul, röd när någon är arg), fler än det får plats blir en siffra
-    if (q) {
-      const wl = S.wl[f], angry = [...wl.u, ...wl.d].some(p => p.mood >= 2);
-      const fit = Math.max(1, Math.floor((hx1 - LABEL_W - 4) / 3)), n = Math.min(q, fit);
-      g.fillStyle = angry ? '#ff5555' : '#ffff55';
-      for (let i = 0; i < n; i++) g.fillRect(hx1 - 3 - i * 3, y1 - 5, 2, 3);
-      if (q > fit) { g.fillStyle = '#fff'; g.fillText(String(q), LABEL_W + 1, y1 - 9); }
-    }
-    if (rowH >= 6 && (rowH >= 8 || f % 2 === 0 || f === LOBBY)) {
-      g.fillStyle = f === LOBBY ? '#ffff55' : f === CONTROL ? '#55ffff' : '#a0a0a0';
-      g.fillText(fl(f), 1, (y0 + y1) / 2);
-    }
-  }
-  // hissarna: schaktet som en mörk ränna, korgen som en ruta i hissens färg (blinkar röd när den står trasig)
-  for (const e of S.elevators) {
-    const x = mx(shaftX(e.id) + 4), cw = Math.max(3, mx(shaftX(e.id) + 4 + CAR_W) - x);
-    g.fillStyle = '#0b0f15';
-    g.fillRect(x, my(floorY(e.maxF + (e.deck2 ? 1 : 0)) - FLOOR_H), cw, my(floorY(e.minF)) - my(floorY(e.maxF + (e.deck2 ? 1 : 0)) - FLOOR_H));
-    const top = my(floorY(e.pos + (e.deck2 ? 1 : 0)) - CAR_H), bot = my(floorY(e.pos) - 4);
-    const bad = e.mode === 'broken' || e.mode === 'snapped' || e.mode === 'dead';
-    g.fillStyle = bad && blink ? '#ff3b2f' : e.color;
-    g.fillRect(x, top, cw, Math.max(3, bot - top));
-    if (e.passengers.length) { g.fillStyle = '#fff'; g.fillRect(x + 1, bot - 2, Math.max(1, (cw - 2) * Math.min(1, e.passengers.length / 8)), 1); }
-    if (VIEW.follow === e.id) { g.strokeStyle = '#7dff9a'; g.lineWidth = 1; g.strokeRect(x - 1.5, top - 1.5, cw + 3, Math.max(3, bot - top) + 3); }
-  }
-  // den spårade personen
-  if (S.sel) {
-    const hd = personHead(S.sel);
-    if (hd && !hd.hidden) { g.fillStyle = '#ffff55'; g.fillRect(mx(hd.x) - 1.5, my(hd.y + 20) - 1.5, 3, 3); }
-  }
-  // kamerans ram
-  g.strokeStyle = VIEW.auto ? '#ff5555' : '#ffff55'; g.lineWidth = 1;
-  const ry0 = my(VIEW.camY), ry1 = my(VIEW.camY + VIEW.viewH);
-  g.strokeRect(LABEL_W - 0.5, Math.max(0.5, ry0 + 0.5), mw - LABEL_W, Math.min(mh - 1, ry1) - Math.max(0.5, ry0 + 0.5));
-}
-/** vad som finns under en punkt i minikartan: en hiss eller en våning */
-function miniHit(ev) {
-  const r = mini.getBoundingClientRect(), px = ev.clientX - r.left, py = ev.clientY - r.top;
-  const y = worldY(py);
-  for (const e of S.elevators) {
-    const x = mx(shaftX(e.id) + 4), cw = Math.max(3, mx(shaftX(e.id) + 4 + CAR_W) - x);
-    const top = my(floorY(e.pos + (e.deck2 ? 1 : 0)) - CAR_H), bot = my(floorY(e.pos) - 4);
-    if (px >= x - 3 && px <= x + cw + 3 && py >= top - 4 && py <= bot + 4) return { car: e, f: floorAtY(y) };
-  }
-  return { car: null, f: floorAtY(y) };
-}
-mini.addEventListener('click', ev => {
-  if (!S.started) return;
-  const { car, f } = miniHit(ev);
-  if (car) doAction(`follow:${car.id}`); else doAction(`show:${f}`);
-});
-mini.addEventListener('mousemove', ev => {
-  const { car, f } = miniHit(ev);
-  if (car) status(`<b>Hiss ${esc(car.name)}</b> · ${esc(stateLabel(car))} · ${car.passengers.length} pers · på ${fl(Math.round(car.pos))} – klicka för att följa`, true);
-  else status(`<b>Våning ${fl(f)}</b> · ${esc(FL[f].name)} · ${queueAt(f)} väntar – klicka för att visa`, true);
-});
-mini.addEventListener('mouseleave', () => status('', true));
 
 // ---------- Dygnets tidslinje: banden i den takt dygnet spelas, markören för nu och dagens incidenter ----------
 /** del av dygnet (0–1) i verklig tid vid klockslaget h, med dygnets tempo */
@@ -326,7 +239,7 @@ cv.addEventListener('mousemove', ev => {
 cv.addEventListener('mouseleave', () => status('', true));
 paintStatus();
 
-/** Panelerna uppdateras med HUD:en (några gånger i sekunden); minikartan ritas varje bildruta. */
+/** Panelerna uppdateras med HUD:en (några gånger i sekunden). */
 export function updatePanels() {
   updateCtl();
   updateTimeline();

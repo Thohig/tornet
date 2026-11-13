@@ -199,7 +199,7 @@ export function carActs(e) {
   return b.join('');
 }
 // ---------- Kamerareglaget i topplisten: 📹-knappen visar vad kameran följer och kopplar loss/på (som F).
-// Hissarna följs från minikartan eller hisspopupen. ----------
+// Hissarna följs från hisspopupen. ----------
 let camKey = '';
 function camName(t, short = false) {
   if (t.kind === 'car') return short ? esc(S.elevators[t.id].name) : `hiss ${esc(S.elevators[t.id].name)}`;
@@ -649,7 +649,7 @@ export function showIntro() {
       <li>Bilden visar <b>hallen framför hissarna</b> – rummen ligger bakom korridoren, och folk syns när de kommer ut för att vänta på hissen. Siffran vid korridoren är hur många som är inne.</li>
       <li><b>Klicka på en person</b> för att spåra hen – en lapp följer personen och 👤 visar allt, även när hen är inne i rummen. <b>Klicka på en korridor</b> för att spåra någon som är därinne. <b>Klicka på en hiss</b> för dess plan, last och knappen 📹 Följ.</li>
       <li>Klicka på en tom yta på en våning för att släppa in en besökare. <b>BUSS!</b> (under 🎛️ Styr, eller högerklicka i entrén) släpper in en busslast.</li>
-      <li><b>Scrolla</b> med mushjulet eller piltangenterna. <b>Minikartan</b> till vänster visar hela tornet – klicka på en våning eller en hiss för att hoppa dit. Kameran följer den du spårar.</li>
+      <li><b>Scrolla</b> med mushjulet eller piltangenterna. Kameran följer den du spårar.</li>
       <li>📋 register, 📜 logg och 🏆 resultat öppnas i en låda till höger.</li>
     </ul>
     </details></div>`);

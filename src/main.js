@@ -7,7 +7,7 @@ import { applyTab, buildHud, placeCarPop, showIntro, showSummary, updateHud, upd
 import { syncControls } from './input.js';
 import { updateSound } from './sound.js';
 import { slowmo, updateDirector } from './director.js';
-import { drawMini, updatePanels } from './panels.js';
+import { updatePanels } from './panels.js';
 
 // ---------- Start ----------
 // Fröet kan väljas med ?seed=123 i adressen för att spela om exakt samma dag.
@@ -37,7 +37,6 @@ function frame(now) {
   updateCamera(dt);
   render(dt);
   placeCarPop();
-  drawMini();
   updateSound();
   hudT -= dt; rosterT -= dt;
   if (hudT <= 0) { hudT = 0.15; updateHud(); updatePanels(); updateTracker(); syncControls(); }
