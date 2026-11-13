@@ -16,7 +16,7 @@ export const stage = document.getElementById('stage');
 // Kameran kan vara kopplad till en hiss (follow), till den spårade personen (camSel) eller stå på en våning
 // (camFloor). Manuell scrollning kopplar loss den; lastCam minns vad den senast följde så att den kan kopplas på igen.
 /** @typedef {{ kind: 'car'|'person'|'floor', id: number }} CamTarget */
-export const VIEW = { scale: 1, dpr: 1, camY: 0, viewH: H, x0: LAND_X0, follow: /** @type {number|null} */ (null), carPop: /** @type {number|null} */ (null),
+export const VIEW = { scale: 1, dpr: 1, camY: 0, viewH: H, x0: LAND_X0, follow: /** @type {number|null} */ (null),
   camSel: false, camFloor: /** @type {number|null} */ (null), lastCam: /** @type {CamTarget|null} */ (null),
   // regissören (director.js): automatisk kamera och den tagning den visar just nu
   auto: false, shot: /** @type {(import('./director.js').Shot & { t0: number })|null} */ (null) };

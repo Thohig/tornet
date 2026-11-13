@@ -3,11 +3,10 @@ import { S, hooks } from './state.js';
 import { advance, newSim } from './sim.js';
 import { VIEW, camMax, peekFloor, resize, updateCamera } from './view.js';
 import { render } from './render.js';
-import { applyTab, buildHud, placeCarPop, showIntro, showSummary, updateHud, updateRoster, updateTracker } from './hud.js';
-import { syncControls } from './input.js';
+import { showIntro, showSummary } from './hud.js';
 import { updateSound } from './sound.js';
 import { slowmo, updateDirector } from './director.js';
-import { updatePanels } from './panels.js';
+import { updatePanel } from './panels.js';
 
 // ---------- Start ----------
 // Fröet kan väljas med ?seed=123 i adressen för att spela om exakt samma dag.
@@ -20,14 +19,12 @@ hooks.incident = floor => {
   if (floor !== null) peekFloor(floor);
 };
 hooks.dayEnd = showSummary;
-buildHud();
-applyTab();
 resize();
 VIEW.camY = camMax(); // börja nere vid entrén
 showIntro();
 /** @type {any} */ (window).S = S; // för felsökning i konsolen
 
-let last = performance.now(), hudT = 0, rosterT = 0;
+let last = performance.now(), hudT = 0;
 function frame(now) {
   const dt = Math.min(0.25, (now - last) / 1000); last = now;
   const slow = slowmo(dt);
@@ -36,11 +33,9 @@ function frame(now) {
   updateDirector();
   updateCamera(dt);
   render(dt);
-  placeCarPop();
   updateSound();
-  hudT -= dt; rosterT -= dt;
-  if (hudT <= 0) { hudT = 0.15; updateHud(); updatePanels(); updateTracker(); syncControls(); }
-  if (rosterT <= 0) { rosterT = 0.4; updateRoster(); }
+  hudT -= dt;
+  if (hudT <= 0) { hudT = 0.15; updatePanel(); }
   requestAnimationFrame(frame);
 }
 document.fonts && document.fonts.ready.then(resize);
