@@ -186,7 +186,7 @@ function moveTick(dt) {
   if (vDown(V) && M.hoist && !M.notes.vdown && V && V.mode !== 'normal') { M.notes.vdown = true; log(`🚚 ${V.name} ${OUT_TEXT[V.mode] || 'går inte'} – flyttgubbarna tar allt med hissbalken`, 'alert', V.color); }
   // varuhissen: filtarna hängs upp i början; sedan låser Smart den bara för de stora möblerna,
   // de enkla lägena så länge bärarna jobbar (det som är kvar efter dem går med hissbalken)
-  if (V) {
+  if (V && !V.ffCar) { // (under branden är varuhissen brandkårens)
     const want = !M.crewOut ? M.blankets : M.smart ? heavyOnWay(M, V) : S.people.some(p => p.mover && !p.loader);
     if (want !== V.indep) {
       V.indep = want;

@@ -15,7 +15,8 @@ import { needsFreight, mayUseFreight, legDest } from '../src/people.js';
 import { fl } from '../src/util.js';
 import { assignCalls, antiNuisance } from '../src/buttons.js';
 import { act } from '../src/actions.js';
-import { powerKw, triggerFault, breakDown, tech, techs, techOf, snapCable, EXTRA_QUEUE, CALL_T } from '../src/service.js';
+import { powerKw, triggerFault, breakDown, tech, techs, techOf, snapCable, EXTRA_QUEUE, CALL_T, trapBreak, FAULT_KIND } from '../src/service.js';
+import { WARN_S, FF_ATTACK_S, endOutage } from '../src/incidents.js';
 import { forceMove, BLANKET_T } from '../src/visits.js';
 import { trafficMode, learnBin, peakHold, PEAK_HOLD } from '../src/dispatch.js';
 import { windAt, startStorm } from '../src/weather.js';
@@ -60,7 +61,8 @@ function watcher() {
       if (e.state === 'moving') w.maxKg = Math.max(w.maxKg, kg);
       // en trasig hiss eller en hiss på service rör sig aldrig och har ingen ombord;
       // en hiss som väntar på service tar aldrig nya passagerare
-      if ((e.mode === 'broken' || e.mode === 'service') && (e.passengers.length || e.reserved || Math.abs(e.pos - before[i]) > 1e-9)) w.brokenUse++;
+      // (ett hissfel mellan två våningar har kvar sina instängda – men ingen ny kliver på)
+      if ((e.mode === 'broken' || e.mode === 'service') && ((e.passengers.length && !(e.fault && e.fault.trapped)) || e.reserved || Math.abs(e.pos - before[i]) > 1e-9)) w.brokenUse++;
       // (de som redan var på väg in genom dörren när hissen kallades till service får åka med)
       const aboard = e.passengers.length + e.reserved;
       // (bara om hissen var hållen redan före steget – den som klev på i samma steg som servicen beställdes hann före)
@@ -333,11 +335,12 @@ test('Brand + brandåterkallning: alla hissar till E och avstängda, alla tar tr
   sim(7); runUntil(7.67);
   startFire(idx('7')); run(3); setFireMode('recall'); run(25);
   for (const e of S.elevators) {
+    if (e.ffCar) continue; // (brandhissen kör brandkåren)
     assert(e.mode === 'locked', `hiss ${e.name} är i läge ${e.mode}, inte låst`);
     assert(Math.abs(e.pos - e.home) < 1e-6, `hiss ${e.name} står på ${e.pos.toFixed(2)}, inte på sin hemvåning ${e.home}`);
     assert(e.passengers.length === 0, `hiss ${e.name} har ${e.passengers.length} passagerare kvar`);
   }
-  const waiting = S.people.filter(p => p.state === 'wait').length;
+  const waiting = S.people.filter(p => p.state === 'wait' && !p.ff).length;
   assert(waiting === 0, `${waiting} personer väntar fortfarande på hiss`);
   run(90);
   assert(!S.fire, 'branden släcktes aldrig');
@@ -413,9 +416,111 @@ test('Brand + spärrad zon: dubbeldäckaren släpper av dem som ska till E där 
 });
 test('Brand utan åtgärd: folk åker genom röken', () => {
   sim(9); runUntil(8.08);
-  startFire(idx('4')); run(60);
+  startFire(idx('4'), false); run(60); // (utan larmets automatiska återkallning)
   assert(S.stats.smoked > 0, 'ingen blev rökexponerad trots normal drift');
   return `${S.stats.smoked} rökexponerade`;
+});
+
+test('Brandkåren: larmet återkallar hissarna, brandmännen åker brandhissen upp, de utrymda väntar ute och går in igen', () => {
+  sim(31); runUntil(10.2);
+  const w = watcher(), F0 = idx('10');
+  startFire(F0);
+  assert(S.fire.mode === 'recall', `larmet återkallade inte hissarna (läge ${S.fire.mode})`);
+  let g = 0, rode = false, assembled = 0, firstAt = null;
+  while ((S.fire || S.brigade || S.people.some(p => p.state === 'assembly')) && ++g < 300 / DT) {
+    const b = w.before(); step(DT); w.check(b);
+    const V = S.elevators.find(e => e.freight);
+    if (V.passengers.some(p => p.ff)) rode = true;
+    if (V.ffCar && V.passengers.some(p => !p.ff)) throw new Fail('någon annan än brandmännen åkte brandhissen');
+    assembled = Math.max(assembled, S.people.filter(p => p.state === 'assembly').length);
+    if (S.fire && S.fire.outAt !== null && firstAt === null) firstAt = S.t;
+  }
+  assert(!S.fire && !S.brigade, 'branden släcktes aldrig eller brandkåren åkte aldrig');
+  assert(rode, 'brandmännen åkte aldrig brandhissen');
+  assert(assembled > 3, `bara ${assembled} på återsamlingsplatsen`);
+  assert(!S.people.some(p => p.state === 'assembly' || p.ff), 'någon stod kvar ute eller en brandman blev kvar');
+  assert(S.notices.some(n => n.kind === 'fire'), 'ingen sammanfattning när branden var släckt');
+  assert(w.passes === 0 && w.brokenUse === 0 && w.badLeg === 0, 'regelbrott under branden');
+  return `${assembled} på återsamlingsplatsen · ${S.stats.smoked} rökexponerade · brandmännen åkte brandhissen`;
+});
+test('Brandkåren utan brandhiss (strömavbrott): brandmännen springer i trappan och kåren släcker ändå', () => {
+  sim(32); runUntil(10.2);
+  startFire(idx('12')); startOutage(); S.outage.backAt = S.t + 400;
+  let g = 0;
+  while (S.fire && ++g < 200 / DT) step(DT);
+  assert(!S.fire, 'branden släcktes aldrig');
+  assert(S.stats.smoked >= 0 && S.brigade && S.brigade.car === null, 'brandkåren fick en brandhiss trots strömavbrottet');
+  return `släckt efter ${Math.round(S.t)} s (senast ${FF_ATTACK_S} s efter att kåren kom)`;
+});
+
+// ---------- Tidtabell, förvarningar, kedjor och efterspel ----------
+test('Tidtabellen: 1–3 incidenter per dygn spridda över dagen, ibland en på natten, alltid med förvarning', () => {
+  const hours = [];
+  let nights = 0, days = 0;
+  for (let s = 0; s < 40; s++) {
+    sim(8000 + s, { autoInc: true });
+    const plan = [...S.incPlan];
+    const day = plan.filter(x => !x.night);
+    assert(day.length >= 1 && day.length <= 3, `frö ${8000 + s}: ${day.length} incidenter på dagen`);
+    for (let i = 1; i < plan.length; i++) assert(plan[i].at - plan[i - 1].at >= 1.2 - 1e-9, 'två incidenter för tätt');
+    hours.push(...day.map(x => x.at)); nights += plan.length - day.length; days++;
+  }
+  assert(Math.min(...hours) < 9 && Math.max(...hours) > 16, `incidenterna klumpar sig (${Math.min(...hours).toFixed(1)}–${Math.max(...hours).toFixed(1)})`);
+  assert(nights > 3 && nights < 25, `${nights} nattliga strömavbrott på ${days} dygn`);
+  // förvarningen kommer före incidenten
+  sim(8003, { autoInc: true });
+  let warned = null, broke = null, g = 0;
+  while (!broke && ++g < 900 / DT) {
+    step(DT);
+    if (S.warn && !warned) warned = { ...S.warn };
+    if (warned && !S.warn) broke = S.t;
+  }
+  assert(warned && broke !== null && Math.abs(broke - warned.t0 - WARN_S[warned.type]) < 0.1, `ingen förvarning före incidenten (${JSON.stringify(warned)})`);
+  return `${(hours.length / days).toFixed(1)} incidenter per dygn kl ${Math.min(...hours).toFixed(1)}–${Math.max(...hours).toFixed(1)} · ${nights} nattliga avbrott på ${days} dygn · förvarning (${warned.type})`;
+});
+test('Kedjor: blixten i stormen slår ut strömmen, och hissarna startar om en i taget efteråt', () => {
+  sim(41); runUntil(10);
+  startStorm(); S.storm.strikeAt = S.t + 3;
+  run(4);
+  assert(!S.power && S.outage && S.outage.cause === 'blixt', 'blixten slog inte ut strömmen');
+  endOutage();
+  const order = S.elevators.map(e => e.restartAt);
+  assert(order.every((t, i) => i === 0 || t > order[i - 1]), 'hissarna startade inte om en i taget');
+  const e = S.elevators.at(-1), pos = e.pos;
+  run(0.5);
+  assert(e.pos === pos, 'den sista hissen körde innan den hade startat om');
+  assert(S.notices.some(n => n.kind === 'power'), 'ingen sammanfattning när strömmen kom tillbaka');
+  run(10);
+  assert(S.elevators.every(x => S.t >= x.restartAt), 'alla hissar startade inte om');
+  return 'blixt → strömavbrott → omstart en i taget';
+});
+test('Efterspel: folk pratar om incidenten i hissen efteråt', () => {
+  sim(42); runUntil(8.5);
+  S.lastInc = { id: 999, type: 'fire', t: S.t };
+  let talk = 0;
+  for (let i = 0; i < 120 / DT; i++) { step(DT); for (const p of S.people) if (p.talkedInc === 999 && p.say && /brand|rök|larm|ute/i.test(p.say.text)) talk++; }
+  assert(talk > 0, 'ingen pratade om branden');
+  return 'någon pratar om branden';
+});
+test('Hissfel mellan två våningar: passagerarna sitter kvar tills teknikern har lagat, sedan åker de vidare', () => {
+  sim(43); runUntil(9);
+  const w = watcher();
+  let e = null, g = 0;
+  while (!e && ++g < 60 / DT) { step(DT); e = S.elevators.find(x => x.mode === 'normal' && x.state === 'moving' && x.passengers.length >= 2 && !x.deck2 && !x.facade && x.pos - Math.floor(x.pos) > 0.35 && x.pos - Math.floor(x.pos) < 0.75) || null; }
+  assert(e, 'ingen hiss körde med folk');
+  const who = [...e.passengers];
+  trapBreak(e);
+  assert(e.mode === 'broken' && e.fault.trapped && e.passengers.length === who.length, 'passagerarna kom ut fast hissen stannade mellan våningarna');
+  g = 0;
+  while (e.mode === 'broken' && ++g < 300 / DT) { const b = w.before(); step(DT); w.check(b); }
+  assert(e.mode === 'normal', 'hissen lagades aldrig');
+  g = 0;
+  while (who.some(p => p.state === 'ride' && p.car === e) && ++g < 60 / DT) { const b = w.before(); step(DT); w.check(b); }
+  assert(!who.some(p => p.state === 'ride' && p.car === e), 'passagerarna kom aldrig fram');
+  assert(w.passes === 0 && w.brokenUse === 0, `regelbrott (förbi ${w.passes}, trasig ${w.brokenUse})`);
+  assert(S.notices.some(n => n.kind === 'fault'), 'ingen ruta när de instängda kom loss');
+  assert(Object.values(FAULT_KIND).every(k => k.need[0] < k.need[1]), 'feltyperna saknar lagningstid');
+  return `${who.length} satt fast i ${e.name} · ${Math.round(S.stats.trappedSec)} instängd-sekunder`;
 });
 
 // ---------- Strömavbrott ----------
@@ -626,7 +731,7 @@ test('Extra tekniker: med många hissfel i kö ringer teknikern hissjouren, koll
     const w = watcher();
     // fyra hissar går sönder samtidigt (inte varuhissen, så att teknikern kommer fram fort)
     const cars = S.elevators.filter(e => e.mode === 'normal' && !e.freight).slice(0, EXTRA_QUEUE + 2);
-    for (const e of cars) breakDown(e, 'styrkortet hänger sig');
+    for (const e of cars) breakDown(e, 'bromsen kärvar');
     if (!withExtra) S.extraAt = Infinity; // (jämförelsen: kollegan "är redan på väg" och kommer aldrig, så ingen ringer)
     let g = 0, both = 0, call = null, extra = null;
     while (cars.some(e => e.mode === 'broken') && ++g < 900 / DT) {

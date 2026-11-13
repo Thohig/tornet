@@ -31,6 +31,8 @@ let X0 = 0, CY = 0;
 /** världens x/y → pixel i ritytan */
 const X = x => Math.round((x - X0) / PX);
 const Y = y => Math.round(y / PX) - CY;
+/** så länge det tar för våningarna att tändas igen efter ett strömavbrott (s) */
+const RELIGHT_S = 2.4;
 const R = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(x, y, w, h); };
 // ---------- Statiska lager ----------
 // Det som nästan aldrig ändras (stadssiluetten, tegel, fasadfönster, schakt, garagerampen) ritas en gång
@@ -703,7 +705,7 @@ function floorOverlays(f, h) {
     if (on) R(x1 - 12, top + 1, 9, 9, 'rgba(255,45,85,.3)');
     if (S.fire.mode === 'zone' && !allowed(f)) R(x0, top, x1 - x0, bot - top, 'rgba(255,45,85,.08)');
     if (f === S.fire.floor) {
-      const F = S.fire, prog = F.brigade ? clamp(1 - (F.outAt - S.t) / 28, 0, 1) : 0;
+      const F = S.fire, prog = fireProg(F);
       R(x0, top, x1 - x0, bot - top, `rgba(255,100,20,${(0.2 + 0.08 * Math.sin(S.anim * 7)) * (1 - prog * 0.85)})`);
       if (prog < 0.9) {
         const fr = FLAMES();
@@ -717,7 +719,7 @@ function floorOverlays(f, h) {
 /** korgens läge i lågupplösta pixlar, null om den är utanför bilden */
 function carGeom(e) {
   // nivåfel: korgen står en aning för lågt eller högt när linorna töjer sig (överdrivet så att det syns)
-  const lv = (e.level || 0) * 2.5;
+  const lv = (e.level || 0) * 2.5 + (e.mode === 'broken' && e.fault && e.fault.kind === 'level' ? Math.sin(S.anim * 9) * 0.03 : 0);
   const x = X(shaftX(e.id) + 4), cw = CAR_W / PX, chh = CAR_H / PX;
   const ybOf = k => Y(floorY(e.pos + k + lv) - 4);
   const top = e.deck2 ? 1 : 0, yb = ybOf(0), yt = ybOf(top) - chh; // yt = överkanten på den översta korgen
@@ -747,7 +749,8 @@ function drawRopesPx(e) {
       if (cut < 0.99) for (const dx of [-6, 6]) { R(x + cw / 2 + dx, yt - 7, 1, 3, INK); frayed(x + cw / 2 + dx, yt - 8, -1); }
       return;
     }
-    const amp = exposure(e) * Math.max(0, windAt() - 0.3) * 7;
+    const ropeFault = e.mode === 'broken' && e.fault && e.fault.kind === 'rope';
+    const amp = exposure(e) * Math.max(0, windAt() - 0.3) * 7 + (ropeFault ? 1.5 : 0);
     const sway = y => (amp ? Math.round(Math.sin((y + CY) / 23 + S.anim * 2.3) * amp * Math.sin(Math.PI * (y - st) / Math.max(1, yt - st))) : 0);
     if (amp) for (let y = st; y < cwY; y++) R(cwX + 2 + sway(y), y, 1, 1, INK); else R(cwX + 2, st, 1, cwY - st, INK);
     box(cwX, cwY, 5, cwH, PAL.basement); for (let k = 1; k < 5; k++) R(cwX + 1, cwY + k * 4, 3, 1, '#4a4170');
@@ -756,7 +759,34 @@ function drawRopesPx(e) {
       else R(x + cw / 2 + dx, st, 1, yt - st, INK);
     }
     R(x + cw / 2 - 9, yt - 4, 19, 1, INK); R(x + cw / 2 - 9, yt - 4, 1, 4, INK); R(x + cw / 2 + 9, yt - 4, 1, 4, INK);
+    // linorna slår i schaktväggen i stormen
+    if (amp > 3.5 && Math.sin(S.anim * 3.1 + e.id * 1.3) > 0.85) {
+      const sy = Math.round(st + (yt - st) * 0.45);
+      for (let n = 0; n < 4; n++) R(x - 2 + Math.round(vrand(0, 3)), sy + Math.round(vrand(-4, 4)), 1, 1, vpick(['#ffffff', '#ffd23f']));
+      label('SMACK!', x - 4, sy - 4, '#ffffff', INK);
+    }
+    // förvarning: slitna linor fransar sig och knarrar
+    if (e.creak) {
+      const fy = Math.round(st + (yt - st) * 0.5);
+      for (const dx of [-6, -2, 2, 6]) { R(x + cw / 2 + dx - 1, fy, 3, 1, '#c9a26b'); if (Math.sin(S.anim * 5 + dx) > 0.5) R(x + cw / 2 + dx + 1, fy + 1, 1, 1, '#c9a26b'); }
+      if (Math.sin(S.anim * 2.7) > 0.3) label('KNARR…', x + cw / 2, fy - 10, '#ffe9a8', INK);
+    }
   }
+}
+/** Ett hissfel syns på sitt sätt: rök ur motorn, ERR på styrkortet, gnistor från bromsen, nivåpilar –
+ *  och vid ett fel mellan två våningar sitter folk fast med nödljuset tänt och knackar */
+function faultPx(e, x, cw, chh, yt, yb) {
+  const F = e.fault, kind = F ? F.kind : '';
+  if (F && F.trapped) {
+    R(x + 2, yt + 2, cw - 4, chh - 4, 'rgba(255,214,120,.14)'); R(x + Math.round(cw / 2) - 2, yt + 1, 5, 1, '#ffe9a8');
+    if (Math.sin(S.anim * 4 + e.id) > 0) label('INSTÄNGDA!', x + cw / 2, yt - 11, '#ffffff', '#ff2d55');
+    else if (Math.sin(S.anim * 2.3 + e.id) > 0.4) label('KNACK KNACK', x + cw / 2, yt + chh / 2, '#ffffff', INK);
+    else label('FEL!', x + cw / 2, yt - 11, '#ff2d55', '#ffffff');
+  } else if (Math.sin(S.anim * 6) > -0.4) label('FEL!', x + cw / 2, yt - 11, '#ff2d55', '#ffffff');
+  if (kind === 'motor') for (let i = 0; i < 3; i++) { const k = (S.anim * 0.7 + i / 3) % 1; g.globalAlpha = (1 - k) * 0.6; g.drawImage(PUFF(2 + Math.round(k * 3)), x + cw / 2 - 4 + i * 3, yt - 8 - Math.round(k * 14)); g.globalAlpha = 1; }
+  if (kind === 'board' && Math.sin(S.anim * 8) > 0) label('ERR 0x1F', x + cw / 2, yt + chh / 2 - 4, '#7cf06b', INK);
+  if (kind === 'brake' && Math.sin(S.anim * 9) > 0.2) for (const sx of [x - 2, x + cw + 1]) for (let n = 0; n < 3; n++) R(sx + Math.round(vrand(-1, 1)), yb - Math.round(vrand(2, chh - 2)), 1, 1, vpick(['#ffd23f', '#ffffff', '#ff9f1c']));
+  if (kind === 'level') { const up = Math.sin(S.anim * 3) > 0; text(g, up ? '▲' : '▼', x + cw + 3, yt + chh / 2 - 3, '#ffe14d', 'left', 1, INK); }
 }
 /** Linbrott: hur långt ner i schaktet linorna når (0–1 av vägen till korgen), null = hela linor */
 function ropesCut(e) {
@@ -836,15 +866,22 @@ function drawCarPx(e) {
   if (e.mode === 'locked') label('AVSTÄNGD', x + cw / 2, yt - 11, '#ff2d55', '#ffffff');
   if (e.mode === 'recall') label(`→ TILL ${fl(e.home)}`, x + cw / 2, yt - 11, '#ff8c42');
   if (e.mode === 'rescue') label('NÖDSÄNK', x + cw / 2, yt - 11, '#7dff9a');
+  if (e.mode === 'normal' && S.power && e.restartAt && S.t < e.restartAt) label('OMSTART', x + cw / 2, yt - 11, '#7dff9a');
   if (e.mode === 'lift' || e.liftWant) label(e.mode === 'lift' ? 'FLYTTLASS' : '→ FLYTTLASS', x + cw / 2, yt - 11, '#ff8c42');
   if (e.mode === 'snapped') { if (Math.sin(S.anim * 7) > -0.3) label('LINBROTT!', x + cw / 2, yt + chh / 2 - 4, '#ff2d55', '#ffffff'); }
   if (e.mode === 'broken' && e.fault && e.fault.cable) label('LINBYTE', x + cw / 2, yt + chh / 2 - 4, '#ffd23f');
-  else if (e.mode === 'broken') { if (Math.sin(S.anim * 6) > -0.4) label('FEL!', x + cw / 2, yt - 11, '#ff2d55', '#ffffff'); }
+  else if (e.mode === 'broken') { faultPx(e, x, cw, chh, yt, yb); }
+  // förvarning: det gnisslar och hackar i korgen
+  if (S.warn && S.warn.type === 'fault' && S.warn.car === e.id && e.mode === 'normal') {
+    if (Math.sin(S.anim * 6) > 0) label('GNISSEL…', x + cw / 2, yt - 11, '#ffe9a8', INK);
+    if (Math.sin(S.anim * 13) > 0.6) for (let n = 0; n < 2; n++) R(x - 1 + (n ? cw + 1 : 0), yt + Math.round(vrand(4, chh - 4)), 1, 1, '#ffd23f');
+  }
   if (e.mode === 'service') label(e.serviceAsap ? 'NIVÅJUSTERING' : 'SERVICE', x + cw / 2, yt - 11, '#ffd23f');
   if (e.hold && e.mode === 'normal') label('→ SERVICE', x + cw / 2, yt - 11, '#ffd23f');
   if (e.mode === 'normal' && !e.hold) {
     if (e.hot) { if (Math.sin(S.anim * 5) > -0.3) label('ÖVERHETTAD!', x + cw / 2, yt - 11, '#ff5d52', '#ffffff'); }
     else if (e.windLock) label('STÄNGD – STORM', x + cw / 2, yt - 11, '#5b8fb9', '#ffffff');
+    else if (e.ffCar) label('BRANDHISS', x + cw / 2, yt - 11, '#ffffff', '#c81e3a');
     else if (e.indep) label('FLYTT · NYCKEL', x + cw / 2, yt - 11, '#d4a017');
     else if (e.medicHold) label('AMBULANS · VÄNTAR', x + cw / 2, yt - 11, '#2ec4b6');
     else if (e.heat >= WARM_AT && e.state === 'moving') label('VARM', x + cw / 2, yt - 11, '#ff8c42');
@@ -915,7 +952,9 @@ function cabinPx(e, k, x, yb, body, head) {
   }
   g.restore();
   // dörrarna är av tonat glas, så att man ser vilka som åker med
-  const half = iw / 2, open = Math.round(half * (1 - e.door));
+  // dörrfel: dörrarna slår upp och igen
+  const flap = e.mode === 'broken' && e.fault && e.fault.kind === 'door' && !e.fault.trapped;
+  const half = iw / 2, open = Math.round(half * (1 - (flap ? 0.5 + 0.5 * Math.sin(S.anim * 7) : e.door)));
   if (open > 0) for (const side of [0, 1]) {
     const px = side ? ix + iw - open : ix;
     R(px, iy, open, ih, PAL.doorGlass);
@@ -1158,6 +1197,14 @@ function drawRoofPx() {
       R(X(cx) - 9, Y(cy) + 7, 18, 2, `rgba(255,${Math.round(140 - k * 100)},40,${0.4 + k * 0.5})`);
       for (let i = 0; i < 3; i++) { const t = (S.anim * 0.8 + i / 3) % 1; g.globalAlpha = (1 - t) * (0.4 + k * 0.6); g.drawImage(PUFF(2 + Math.round(t * 2)), X(cx) - 4 + i * 3, Y(cy) - 12 - Math.round(t * 12)); g.globalAlpha = 1; }
     }
+    // överhettad: luften dallrar över maskinen
+    if (e.hot) for (let i = 0; i < 6; i++) { const t = (S.anim * 1.2 + i / 6) % 1; R(X(cx) - 6 + i * 2 + Math.round(Math.sin(S.anim * 6 + i) * 1.5), Y(cy) - 10 - Math.round(t * 10), 1, 2, 'rgba(255,220,160,.45)'); }
+    // förvarning: motorn brummar ansträngt och börjar glöda
+    if (S.warn && S.warn.type === 'heat' && S.warn.car === e.id) {
+      const k = clamp((S.t - S.warn.t0) / (S.warn.until - S.warn.t0), 0, 1);
+      R(X(cx) - 9, Y(cy) + 7, 18, 2, `rgba(255,140,40,${(0.2 + 0.5 * k * (0.6 + 0.4 * Math.sin(S.anim * 9))).toFixed(2)})`);
+      if (Math.sin(S.anim * 5) > 0) label('BRUMMM…', X(cx), Y(cy) - 20, '#ffe9a8', INK);
+    }
     if (e.fan) {
       const fx = X(cx) + 11, fy = Y(cy) - 3, a = S.anim * 14;
       box(fx - 4, fy - 4, 9, 9, PAL.steel);
@@ -1251,9 +1298,23 @@ function drawHeliPx() {
   text(g, 'VIP', x - 2, y - 2, '#ffe14d', 'left', 1, INK);
   if (Hh.state !== 'parked') for (let i = 0; i < 4; i++) { const k = (S.anim * 2 + i / 4) % 1; const r = Math.round(15 + k * 25); R(x - r, Y(bot) - 2 - i, 4, 1, 'rgba(255,255,255,.6)'); R(x + r, Y(bot) - 2 - i, 4, 1, 'rgba(255,255,255,.6)'); }
 }
+/** hur långt släckningen har kommit (0–1): från att brandmännen är framme tills branden är ute */
+const fireProg = F => (F.outAt !== null ? clamp(1 - (F.outAt - S.t) / 28, 0, 1) : 0);
 function drawSmokePx() {
-  const F = S.fire; if (!F) return;
-  const prog = F.brigade ? clamp(1 - (F.outAt - S.t) / 28, 0, 1) : 0;
+  const F = S.fire;
+  // förvarning: det luktar bränt – tunna rökslingor ur korridoren på våningen
+  if (!F) {
+    const W = S.warn;
+    if (!W || W.type !== 'fire') return;
+    const k0 = clamp((S.t - W.t0) / (W.until - W.t0), 0, 1), top = floorY(W.floor + 1) + 4;
+    for (let i = 0; i < 4; i++) {
+      const k = (S.anim * 0.3 + i / 4) % 1, x = DOOR_X + 6 + i * 9 + Math.sin(S.anim * 1.5 + i) * 4;
+      g.globalAlpha = (1 - k) * 0.25 * (0.4 + k0); g.drawImage(PUFF(2 + Math.round(k * 2)), X(x) - 2, Y(top + 40 - k * 40) - 2);
+    }
+    g.globalAlpha = 1;
+    return;
+  }
+  const prog = fireProg(F);
   const top = floorY(F.floor + 1) + 4;
   for (let i = 0; i < 14; i++) {
     const k = (S.anim * 0.35 + i / 14) % 1;
@@ -1266,7 +1327,19 @@ function drawSmokePx() {
   g.globalAlpha = 1;
 }
 function drawOutagePx() {
-  if (S.power) return;
+  // strömmen är tillbaka: våningarna tänds en i taget nerifrån och upp
+  if (S.power) {
+    // förvarning: lamporna flimrar
+    if (S.warn && S.warn.type === 'power' && vrand(0, 1) < 0.3) R(X(LAND_X0 - 20), Y(ROOF_Y - 4), lo.width, Y(BASE_Y) - Y(ROOF_Y - 4), `rgba(8,4,28,${vrand(0.15, 0.45).toFixed(2)})`);
+    const k = S.powerBack === null ? 1 : (S.t - S.powerBack) / RELIGHT_S;
+    if (k >= 1) return;
+    for (let f = Math.floor(k * FLOORS); f < FLOORS; f++) {
+      const top = Y(floorY(f + 1) + 4), bot = Y(floorY(f) + 4);
+      if (bot < 0 || top > lo.height) continue;
+      R(X(LAND_X0 - 20), top, lo.width, bot - top, 'rgba(8,4,28,.55)');
+    }
+    return;
+  }
   const O = S.outage;
   R(X(LAND_X0 - 20), Y(ROOF_Y - 4), lo.width, Y(BASE_Y) - Y(ROOF_Y - 4), `rgba(8,4,28,${O && O.gen ? 0.48 : 0.62})`);
   const on = Math.sin(S.anim * 5) > 0;
@@ -1279,8 +1352,15 @@ function drawOutagePx() {
   }
   for (const e of S.elevators) {
     if (!e.passengers.length || e.mode !== 'normal') continue;
-    const x = X(shaftX(e.id) + 4), yt = Y(floorY(e.pos) - 4 - CAR_H);
-    if (Math.sin(S.anim * 4 + e.id) > 0) label('HJÄLP!', x + CAR_W / PX / 2, yt - 11, '#ffffff', '#ff2d55');
+    const x = X(shaftX(e.id) + 4), yt = Y(floorY(e.pos) - 4 - CAR_H), cw = CAR_W / PX, chh = CAR_H / PX;
+    // nödbelysningen i taket och en ficklampa (mobilskärmen) som sveper i korgen
+    R(x + 2, yt + 2, cw - 4, chh - 4, 'rgba(255,214,120,.16)');
+    R(x + Math.round(cw / 2) - 2, yt + 1, 5, 1, '#ffe9a8');
+    const sx = x + 6 + Math.round((Math.sin(S.anim * 1.3 + e.id) + 1) / 2 * (cw - 14)), sy = yt + 9;
+    for (let i = 0; i < 9; i++) R(sx - Math.floor(i / 3), sy + i, 1 + Math.floor(i / 1.5), 1, 'rgba(255,246,168,.35)');
+    if (Math.sin(S.anim * 4 + e.id) > 0) label('HJÄLP!', x + cw / 2, yt - 11, '#ffffff', '#ff2d55');
+    // någon knackar på dörren
+    else if (Math.sin(S.anim * 2.3 + e.id * 1.7) > 0.6) label('KNACK KNACK', x + cw / 2, yt + chh / 2, '#ffffff', INK);
   }
   if (O && O.gen) {
     const gx = X(UX1 - 40), gy = Y(ROOF_Y - 70);
@@ -1290,7 +1370,7 @@ function drawOutagePx() {
 }
 function drawBannersPx() {
   const list = [];
-  if (S.fire) list.push([`🔥 BRAND PÅ VÅNING ${fl(S.fire.floor)}${S.fire.brigade ? ' – BRANDKÅREN SLÄCKER' : ''}`, '#ff2d55']);
+  if (S.fire) list.push([`🔥 BRAND PÅ VÅNING ${fl(S.fire.floor)}${!S.fire.brigade ? '' : S.fire.outAt === null ? ' – BRANDKÅREN GÅR IN' : ' – BRANDKÅREN SLÄCKER'}`, '#ff2d55']);
   if (!S.power) list.push([`⚡ STRÖMAVBROTT${S.outage && S.outage.gen ? ' – RESERVKRAFT' : ''}`, '#6366f1']);
   if (S.storm) list.push([`🌬️ STORM${S.storm.mode === 'sway' ? ' – SVAJLÄGE' : ''}`, '#2a5db0']);
   list.forEach(([t, c], i) => {
@@ -1327,6 +1407,53 @@ function drawMedicPx() {
   box(x1 - 22, top + 3, 7, 5, on ? '#3f7cff' : '#1b2a6e');
   label('AMBULANS', x1 - 50, top + 12, '#ffffff', '#2ec4b6');
 }
+/** Stormen: mörkare himmel (även som förvarning), regn och blixtar – och blixten som slår ut strömmen */
+function drawWeatherPx() {
+  const St = S.storm, W = S.warn && S.warn.type === 'storm' ? S.warn : null;
+  const dim = St ? 0.18 * clamp(windAt() / 0.8, 0.3, 1) : W ? 0.18 * clamp((S.t - W.t0) / (W.until - W.t0), 0, 1) : 0;
+  if (dim > 0) R(0, 0, lo.width, lo.height, `rgba(20,24,48,${dim.toFixed(3)})`);
+  if (!St) return;
+  // regnet piskar snett i vinden
+  const w = windAt(), n = Math.round(40 + w * 80), slant = Math.round(1 + w * 3);
+  for (let i = 0; i < n; i++) {
+    const rx = ((i * 97 + S.anim * (60 + w * 90)) % (lo.width + 40)) - 20, ry = ((i * 53 + S.anim * 260) % (lo.height + 20)) - 10;
+    R(Math.round(rx), Math.round(ry), 1, 3, 'rgba(180,200,255,.35)'); R(Math.round(rx) + slant, Math.round(ry) + 3, 1, 2, 'rgba(180,200,255,.25)');
+  }
+}
+/** blixten ritas sist (ovanpå strömavbrottets mörker): vitt sken och en blixt ner i taket, eller blixtar långt borta */
+function drawLightningPx() {
+  const St = S.storm;
+  if (!St) return;
+  const since = St.struck !== null ? S.t - St.struck : Infinity;
+  if (since < 0.6) {
+    R(0, 0, lo.width, lo.height, `rgba(255,255,255,${(0.55 * (1 - since / 0.6)).toFixed(2)})`);
+    let bx = X(SHAFT_X0 + 60), by = Y(ROOF_Y - 400);
+    const ty = Y(ROOF_Y - 40);
+    while (by < ty) { const nx = bx + Math.round(vrand(-5, 5)), ny = Math.min(ty, by + Math.round(vrand(4, 9))); line(bx, by, nx, ny, '#ffffff'); bx = nx; by = ny; }
+  } else if (vrand(0, 1) < 0.006) R(0, 0, lo.width, lo.height, 'rgba(255,255,255,.25)'); // blixtar långt borta
+}
+/** Brandkåren: blåljus i entrén och folket på återsamlingsplatsen utanför entrédörren */
+function drawBrigadePx() {
+  const top = Y(floorY(LOBBY + 1) + 4), bot = Y(floorY(LOBBY) - 4);
+  if (bot < 0 || top > lo.height) return;
+  const x0 = X(LAND_X0), x1 = X(INNER_X1);
+  if (S.brigade || (S.fire && S.fire.brigade)) {
+    const on = Math.sin(S.anim * 11) > 0;
+    R(x0, top, x1 - x0, bot - top, on ? 'rgba(255,45,85,.10)' : 'rgba(60,120,255,.10)');
+    box(x1 - 32, top + 3, 7, 5, on ? '#ff2d55' : '#7a2033'); box(x1 - 22, top + 3, 7, 5, on ? '#1b2a6e' : '#3f7cff');
+    label('BRANDKÅREN', x1 - 58, top + 12, '#ffffff', '#c81e3a');
+  }
+  const out = S.people.filter(p => p.state === 'assembly');
+  if (!out.length) return;
+  // utanför glasdörren: en klunga som väntar (de närmast ritas, resten syns i siffran)
+  const fy = Y(surf(LOBBY)) + 1;
+  out.slice(0, 7).forEach((p, i) => {
+    g.globalAlpha = 0.85;
+    g.drawImage(personSprite(p, 'side', 0, 1, { blink: blinkOf(p) }), x0 + 1 + i * 5 - (i % 2), fy - PERSON_H - (i % 2) * 2);
+    g.globalAlpha = 1;
+  });
+  label(`ÅTERSAMLING ${out.length}`, x0 + 2, fy - PERSON_H - 12, '#ffffff', '#c81e3a', 'left');
+}
 /** skylt i entrén och på mellanplanet: övre däcket nås via rulltrappan */
 function deckSign(f) {
   if (MEZZ < 0 || (f !== LOBBY && f !== MEZZ)) return;
@@ -1356,7 +1483,7 @@ export function renderPixel(dt) {
   OCC = new Array(FLOORS).fill(0); OCC_IN = new Array(FLOORS).fill(0);
   for (const p of S.people) {
     if (p.dead) continue;
-    if (p.state !== 'ride' && p.state !== 'away' && p.state !== 'incar') OCC[p.floor]++;
+    if (p.state !== 'ride' && p.state !== 'away' && p.state !== 'incar' && p.state !== 'assembly') OCC[p.floor]++;
     if (p.state === 'office' || p.state === 'instairs') OCC_IN[p.floor]++;
   }
   drawSkyAll(hr);
@@ -1375,9 +1502,12 @@ export function renderPixel(dt) {
   drawHallPeople();
   drawHeliPx();
   drawSnowPx(dt);
+  drawWeatherPx();
   drawMedicPx();
+  drawBrigadePx();
   drawSmokePx();
   drawOutagePx();
+  drawLightningPx();
   drawRoofPx();
   drawCleanerPx();
   drawHoistPx();

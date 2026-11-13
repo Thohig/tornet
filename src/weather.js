@@ -6,8 +6,11 @@
 import { rand, rng } from './rng.js';
 import { clamp, fl } from './util.js';
 import { LOBBY, SKY } from './config.js';
-import { S, log, notice } from './state.js';
+import { S, incidentOver, log, notice } from './state.js';
+import { startOutage } from './incidents.js';
 
+/** hur lätt linorna slår i schaktet i normal drift i storm (vajerlarm per sekund och vindstyrka) */
+export const STORM_FAULT_K = 0.3;
 export const STORM_HINT = {
   none: 'Hissarna kör som vanligt i full fart. Linorna i de höga schakten svänger – risk för vajerlarm och hissfel.',
   sway: 'Svajläge: höga zonen, expressen och varuhissen kör långsammare och panoramahissen parkerar i entrén tills det mojnar. Säkert, men långsammare.',
@@ -39,7 +42,9 @@ export function windMul(e) {
 }
 export function startStorm() {
   if (S.storm) return false;
-  S.storm = { t0: S.t, len: rand(50, 75), peak: rand(0.85, 1), mode: 'none', faults: 0 };
+  const len = rand(50, 75);
+  // ibland slår blixten ner i ställverket mitt i stormen och strömmen går (en kedja av incidenter)
+  S.storm = { t0: S.t, len, peak: rand(0.85, 1), mode: 'none', faults: 0, strikeAt: rng() < 0.35 ? S.t + len * rand(0.35, 0.6) : null, struck: null };
   log('🌬️ STORM! Vinden tar i – de höga schakten och panoramahissen börjar svaja', 'alert');
   return true;
 }
@@ -65,14 +70,25 @@ export function stormTick(dt) {
     // normal drift i storm: linorna slår i schaktet – hissen går sönder vid nästa stopp
     const x = exposure(e);
     if (St.mode === 'none' && x > 0 && w > 0.55 && e.state === 'moving' && e.mode === 'normal' && !e.breakNext && S.power) {
-      if (rng() < 0.05 * x * (w - 0.4) * dt) {
+      if (rng() < STORM_FAULT_K * x * (w - 0.4) * dt) {
         e.breakNext = true; e.stormFault = true; St.faults++; S.stats.stormFaults++;
         log(`🌬️ Linorna i ${e.name}s schakt slår i stormen – vajerlarm, hissen går sönder vid nästa stopp`, 'alert', e.color);
       }
     }
   }
+  if (St.strikeAt !== null && !St.struck && S.t >= St.strikeAt) {
+    St.struck = S.t;
+    if (S.power) {
+      log('⚡ Blixten slår ner i ställverket – strömmen går!', 'alert');
+      startOutage();
+      if (S.outage) S.outage.cause = 'blixt';
+    }
+  }
   if (S.t - St.t0 >= St.len) {
     log(`✅ Stormen har bedarrat${St.faults ? ` · ${St.faults} vajerlarm` : ''}`, 'alert');
+    incidentOver('storm', '✅ Stormen har bedarrat',
+      `Stormen varade ${Math.round(St.len)} s. ${St.faults ? `Linorna slog i schaktet och gav ${St.faults} vajerlarm.` : 'Inga vajerlarm.'}`
+      + (St.mode === 'sway' ? ' Svajläget höll de höga hissarna lugna.' : '') + (St.struck ? ' Blixten slog ut strömmen mitt i ovädret.' : ''));
     for (const e of S.elevators) e.windLock = false;
     S.storm = null;
   }

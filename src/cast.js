@@ -24,7 +24,7 @@ export function say(p, key, vars = {}, later = false) {
 }
 /** säg en sparad replik (anropas när personen ställer sig i kön) */
 export function flushSay(p) { if (p.sayLater) { speak(p, p.sayLater); p.sayLater = null; } }
-function speak(p, text) {
+export function speak(p, text) {
   p.say = { text, until: S.t + 5 };
   pev(p, `Säger: "${text}"`);
   log(`💬 ${p.name}: "${text}"`, 'person', null, p.id);
@@ -126,6 +126,35 @@ export function politeHold(e, f) {
   speak(p, pick(HOLD_LINES));
   return 1.5;
 }
+// ---------- Efterspelet: folk pratar om incidenten efteråt ----------
+/** hur länge efter en incident folk pratar om den (sekunder) */
+export const TALK_S = 150;
+const TALK = {
+  fire: ['Såg du brandbilarna?', 'Jag luktar fortfarande rök.', 'Tur att larmet tog ner hissarna.', 'Vi stod ute i en evighet!'],
+  power: ['Satt du också fast i mörkret?', 'Jag trodde aldrig att strömmen skulle komma tillbaka!', 'Hela huset blev svart!'],
+  storm: ['Kände du hur huset svajade?', 'Panoramahissen är inget för mig i blåst.', 'Vilket oväder!'],
+  heat: ['Det luktade bränt motor förut.', 'Hissen var varm som en bastu!'],
+  cable: ['Hörde du om linbrottet?! Jag tar trappan i morgon.', 'De fick klättra ut genom taket!'],
+  fault: ['Den där hissen krånglade förut – jag satt fast!', 'Teknikern fick bända upp dörrarna.'],
+};
+/** någon i korgen pratar om den senaste incidenten (en gång per person och incident) */
+export function incidentTalk(p, e) {
+  const L = S.lastInc;
+  if (!L || S.t - L.t > TALK_S || p.talkedInc === L.id || e.passengers.length < 2 || p.medic || p.ff) return;
+  if (e.passengers.some(q => q.say && q.say.until > S.t)) return;
+  p.talkedInc = L.id;
+  if (rng() > (p.cast ? 0.6 : 0.15)) return;
+  const c = castDef(p.cast), own = c && c.lines[`after_${L.type}`];
+  speak(p, pick(own || TALK[L.type] || TALK.fault));
+}
+const TRAPPED = ['Hallå?! Hör någon oss?', 'Vi sitter fast!', 'Andas lugnt, det ordnar sig.', 'Har någon täckning?', 'Knacka i väggen!'];
+/** en av de instängda säger något (stamgästerna med egna repliker) */
+export function trappedTalk(e) {
+  if (!e.passengers.length || e.passengers.some(q => q.say && q.say.until > S.t)) return;
+  const p = pick(e.passengers), c = castDef(p.cast);
+  speak(p, pick((c && c.lines.trapped) || TRAPPED));
+}
+
 /** Lill-Olle trycker på alla knappar mycket oftare än andra barn */
 export const kidRate = p => (p.quirk === 'bus' ? 0.6 : 0.15);
 export function kidPressed(p) { if (p.quirk === 'bus') say(p, 'buttons'); }

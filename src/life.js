@@ -33,6 +33,12 @@ export function arriveByCar(p, parked = false) {
 }
 /** Personen lämnar huset: med bil (bilen kör ut), till fots – eller för de boende: är borta en stund */
 export function leaveBuilding(p) {
+  // utrymd vid brand: väntar på återsamlingsplatsen utanför entrén och går in igen när branden är släckt
+  if (p.evac && S.fire && p.floor === LOBBY && !p.role && !p.auto && !p.movedOut && ['emp', 'vis', 'res'].includes(p.kind)) {
+    p.state = 'assembly'; p.backAt = undefined; S.fire.assembled++;
+    pev(p, 'Ute! Väntar på återsamlingsplatsen utanför entrén tills branden är släckt');
+    return;
+  }
   if (p.auto) { p.auto.state = 'out'; p.auto = null; }
   if (p.kind === 'res' && !p.movedOut) {
     const ev = p.sched.find(e => !e.done && e.go === 'home');
@@ -51,6 +57,15 @@ export function leaveBuilding(p) {
   p.dead = true;
   pev(p, p.movedOut ? 'Flyttar härifrån – hejdå huset!' : 'Lämnar huset – hejdå!');
   log(`${pn(p)} lämnar huset${p.exitFloor !== LOBBY ? ` (från ${fl(p.exitFloor)})` : ''}`, 'person', null, p.id);
+}
+/** Branden är släckt: tillbaka in från återsamlingsplatsen – dit man var på väg, eller hem om det har blivit sent */
+export function backFromAssembly(p) {
+  p.evac = false; p.state = 'toQueue'; p.floor = LOBBY; p.x = -30 - rand(0, 30);
+  const h = hour(), to = p.evacFrom;
+  p.evacFrom = undefined;
+  if (to === undefined || to === LOBBY || to === p.exitFloor || h >= 21 || !floorOpen(to, h) && to !== p.home) { leaveBuilding(p); return; }
+  setTrip(p, to, 'Tillbaka in efter branden', false);
+  pev(p, `Branden är släckt – går in igen till ${fl(to)}`);
 }
 function autoTick(dt) {
   for (const a of S.autos) {

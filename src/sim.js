@@ -1,7 +1,7 @@
 // Simuleringssteget, fast tidssteg och nollställning av dagar.
 import { rand, rng, setSeed } from './rng.js';
 import { K, fl } from './util.js';
-import { END_H, FLOORS, MAXP, timeScale, pace, setTempo, REF_SCALE, LOBBY, CAFE, floorWith, floorOpen, EL, ROOF, STATION } from './config.js';
+import { END_H, FLOORS, MAXP, timeScale, pace, setTempo, LOBBY, CAFE, floorWith, floorOpen, EL, ROOF, STATION } from './config.js';
 const SPA = floorWith('spa');
 import { S, hooks, hour, log, newStats } from './state.js';
 import { spawnEmployee, spawnStaff, spawnVisitor, updatePerson, spawnPizza, rerouteStranded, spawnDogOwner } from './people.js';
@@ -10,7 +10,7 @@ import { serviceTick } from './service.js';
 import { castSchedule } from './cast.js';
 import { makeElevator, updateElevator, releaseCalls } from './elevators.js';
 import { buttonsMode, buttonWaitTick, dispatchCalls } from './buttons.js';
-import { incidentTick } from './incidents.js';
+import { incidentTick, planIncidents } from './incidents.js';
 import { lifeTick, lifeReset } from './life.js';
 import { stormTick, weatherReset } from './weather.js';
 import { TRAIN_SHARE, trainReset, trainTick } from './train.js';
@@ -211,9 +211,8 @@ export function resetDay() {
   learnBlend(); S.learnToday = emptyLearn();
   S.t = 0; S.clock = 0; S.sched = makeSchedule(); S.acc = 0; S.summaryShown = false; S.nextId = 1; S.sel = null; S.wl = null; S.reoptT = 0;
   S.people = []; S.stats = newStats(); S.calls = {};
-  S.fire = null; S.power = true; S.outage = null; S.techCallAt = null; S.techCall = null; S.extraAt = null; S.peakMode = null; S.wakeAt = 0;
+  S.fire = null; S.power = true; S.outage = null; S.techCallAt = null; S.techCall = null; S.extraAt = null; S.powerBack = null; S.brigade = null; S.peakMode = null; S.wakeAt = 0;
   S.notices = []; // gårdagens informationsrutor visas inte igen (klockan S.t börjar om från 0)
-  S.nextInc = rand(60, 120) * REF_SCALE; // (i speltid, S.clock – lika många incidenter oavsett dygnets längd)
   S.occ = new Map();
   // slitaget följer med från gårdagen (dag 1: slumpat – huset är inte nytt)
   const carry = S.day > 1 && S.elevators.length === EL.length ? S.elevators.map(e => e.wear) : null;
@@ -224,6 +223,8 @@ export function resetDay() {
   weatherReset();
   visitsReset();
   hoistReset();
+  planIncidents(); // (sist: tidtabellen slumpas när allt annat är på plats)
+  S.lastInc = null;
 }
 export function newSim(seed, opts = {}) {
   S.seed = seed >>> 0; S.day = opts.day || 1; S.log = []; S.fx = []; S.elevators = [];

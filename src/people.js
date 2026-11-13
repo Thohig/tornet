@@ -6,9 +6,10 @@ import { S, clockStr, hour, log, occOf, setOcc } from './state.js';
 import { inFireZone, requestRide, loadKg, personKg, eta, keyed, posOf, costBased, prio, outLong, servesNow } from './dispatch.js';
 import { techNext, maybeStumble } from './service.js';
 import { moverNext, moverTimer, medicNext, moveBoard } from './visits.js';
-import { alwaysStairs, castBoard, castNext, castPizza, castWaitTick, flushSay, say } from './cast.js';
+import { alwaysStairs, castBoard, castNext, castPizza, castWaitTick, flushSay, incidentTalk, say } from './cast.js';
 import { kickOff } from './elevators.js';
-import { arriveByCar, leaveBuilding, resNext, homeSpot } from './life.js';
+import { arriveByCar, backFromAssembly, leaveBuilding, resNext, homeSpot } from './life.js';
+import { ffNext } from './incidents.js';
 import { buttonsMode, carButtonMistakes } from './buttons.js';
 
 // ---------- Människor ----------
@@ -257,7 +258,7 @@ export function updatePerson(p, dt) {
       p.mood = p.waited > 55 ? 2 : p.waited > 28 ? 1 : 0;
       if (p.mood === 2 && !p.angryNoted) { p.angryNoted = true; pev(p, 'Börjar bli riktigt sur… #@%!'); }
       // ambulanspersonalen väntar inte ut ett strömavbrott: de bär båren i trapporna direkt
-      if (p.medic && !S.power) { toStairs(p, `Strömavbrott – bär ${p.cargo ? p.cargo.name : 'utrustningen'} i trapporna`); break; }
+      if ((p.medic || p.ff) && !S.power) { toStairs(p, `Strömavbrott – bär ${p.cargo ? p.cargo.name : 'utrustningen'} i trapporna`); break; }
       // hissteknikern kan inte vänta på hissen hen ska laga: når bara den trasiga hissen jobbet (t.ex. panoramahissen
       // som gick sönder uppe vid takterrassen) tar hen trappan
       if (p.role === 'hisstekniker' && p.goal !== undefined && !workingRoute(p)) { toStairs(p, `Ingen hiss som går når ${fl(p.goal)} – tar trappan till jobbet`); break; }
@@ -267,7 +268,7 @@ export function updatePerson(p, dt) {
         castWaitTick(p);
         break;
       }
-      if (!liftsAvailable() && p.waited > p.patience) { toStairs(p, S.power ? 'Hissarna är avstängda – tar trapporna' : 'Hissarna står still (strömavbrott) – tar trapporna'); break; }
+      if (!liftsAvailable() && p.waited > p.patience && !(p.ff && S.elevators.some(e => e.ffCar && e.mode === 'normal'))) { toStairs(p, S.power ? 'Hissarna är avstängda – tar trapporna' : 'Hissarna står still (strömavbrott) – tar trapporna'); break; }
       // ingen hiss som går hit fungerar (trasig eller på service – sovande hissar vaknar ju): den som kan går
       if (p.waited > p.patience + 15 && S.power && stranded(p) && canWalk(p)) { toStairs(p, 'Ingen hiss går hit just nu (fel eller service) – tar trapporna'); break; }
       if (stairsChoice(p, true)) break;
@@ -294,6 +295,7 @@ export function updatePerson(p, dt) {
       if (p.timer <= 0) stairsDone(p);
       break;
     case 'away': case 'incar': case 'platform': break; // utanför huset / i bilen (life.js) / väntar på tåget (train.js)
+    case 'assembly': if (!S.fire && S.t >= (p.backAt ?? 0)) backFromAssembly(p); break; // återsamlingsplatsen (brand)
     case 'office':
       p.timer -= dt * activityRate(hour()); // vistelsen räknas i speltid
       if (p.timer <= 0) officeDone(p);
@@ -408,6 +410,7 @@ export function boardDone(p) {
   // KNAPPAR: knappanelen i korgen – ibland trycker man fel, och barn trycker gärna på allt
   if (buttonsMode() && !keyed(p)) carButtonMistakes(p, e);
   if (p.cast) castBoard(p, e);
+  incidentTalk(p, e);
 }
 export function exitDone(p) {
   if (p.toTrain && p.leaving && p.floor === STATION && p.floor === p.exitFloor) {
@@ -431,6 +434,7 @@ export function exitDone(p) {
   else if (p.role === 'bud') { p.timer = rand(8, 15); S.stats.deliveries++; }
   else if (p.role === 'flyttgubbe') p.timer = moverTimer(p); // (i lägenheten: packar eller skruvar isär nästa lass)
   else if (p.role === 'ambulans') p.timer = rand(5, 8);
+  else if (p.role === 'brandman') p.timer = S.fire && p.floor >= S.fire.floor ? 1e9 : rand(0.3, 1); // (släcker tills branden är ute)
   else if (p.role === 'hisstekniker') p.timer = p.job !== null && p.job !== undefined ? 1e9 : rand(1, 3); // arbetet sköts av service.js
   else if (p.role) p.timer = { 'väktare': rand(8, 15), 'städare': rand(25, 45), 'vaktmästare': rand(30, 50), 'nattdj': rand(60, 120), 'nattekniker': p.floor === LOBBY ? rand(4, 8) : rand(30, 70) }[p.role];
   else if (p.floor === CAFE) p.timer = rand(25, 60);
@@ -472,7 +476,7 @@ export function capTimer(p) {
 }
 export function decideNext(p) {
   const h = hour();
-  if (inFireZone(p.floor)) { p.evac = true; return [p.exitFloor, 'BRANDLARM – utrymning!']; }
+  if (inFireZone(p.floor) && !p.ff) { p.evac = true; p.evacFrom = p.floor; return [p.exitFloor, 'BRANDLARM – utrymning!']; }
   if (p.role) return roleNext(p, h);
   if (p.collapsed) { p.timer = 1e9; return null; } // ligger kvar tills ambulansen kommer
   if (p.kind === 'res') return resNext(p, h);
@@ -507,6 +511,7 @@ export function officeDone(p) {
   p.x = p.spot ? p.spot.x : p.x;
   releaseSpot(p);
   setTrip(p, r[0], r[1], r[2]);
+  if (p.ffStairs) { p.ffStairs = false; if (p.state === 'toQueue') toStairs(p, r[1]); } // (brandmännen: sista biten i trappan)
   pev(p, `Bestämmer sig: ${r[1]} (${fl(r[0])})`);
   log(`${pn(p)}: ${r[1]} → ${fl(r[0])}`, 'person', null, p.id);
 }
@@ -538,6 +543,7 @@ function roleNext(p, h) {
     case 'hisstekniker': return techNext(p);
     case 'flyttgubbe': return moverNext(p);
     case 'ambulans': return medicNext(p);
+    case 'brandman': return ffNext(p);
     case 'väktare': {
       if (h >= 27) return [p.exitFloor, 'Passet är slut – går hem'];
       for (let i = 0; i < p.route.length; i++) {

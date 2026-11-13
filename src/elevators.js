@@ -6,7 +6,7 @@ import { S, log } from './state.js';
 import { arriveOnFloor, liftsAvailable, pev, pn, setTrip, toStairs, queueSpot } from './people.js';
 import { safeFloor, aheadOf, allowed, allowedDest, allowedPos, assignedTo, isFull, maybePark, rebuildPicks, stopFloors, loadKg, personKg, slotsFull, benched, keyed, posOf, outReason, OUT_TEXT, etaOutcome } from './dispatch.js';
 import { answerCalls, buttonsMode, clearCall } from './buttons.js';
-import { maybeBreak, heatOnStop, heatMul, levelStart, maybeStumble, snapStep, snapDue, snapCable } from './service.js';
+import { maybeBreak, heatOnStop, heatMul, levelStart, maybeStumble, snapStep, snapDue, snapCable, trapDue, trapBreak } from './service.js';
 import { doorHold, politeHold } from './cast.js';
 import { liftStep } from './hoist.js';
 import { windMul } from './weather.js';
@@ -27,7 +27,7 @@ export function makeElevator(i) {
     // linbrott: snapNext = linorna går av vid nästa åktur, snap = förloppet (fall → fast → utrymning)
     snapNext: false, snap: /** @type {{ ph: string, t0: number, stopAt: number, caughtT: number, exitF: number, n: number, out: number, nextOut: number, climb: number }|null} */ (null),
     // drift: slitage 0–1+, fel, hållen för service, tekniker, energi (kW just nu, kWh i dag)
-    wear: 0, wearTrips: 0, wearDist: 0, fault: /** @type {{ what: string, t0: number, need: number, cable?: boolean, exitF?: number, done?: number }|null} */ (null),
+    wear: 0, wearTrips: 0, wearDist: 0, fault: /** @type {{ what: string, t0: number, need: number, kind?: string, tool?: string, cable?: boolean, exitF?: number, done?: number, trapped?: boolean, n?: number, nextTalk?: number }|null} */ (null),
     hold: false, homeT: 0, techId: /** @type {number|null} */ (null), breakNext: false, serviceNeed: 0, kw: 0, kwh: 0,
     cap: d.deck2 ? CAP * 2 : CAP, // platser i korgen (dubbeldäck: CAP per däck)
     // motorvärme (0–1+, överhettad = hot), extrafläkt, nivåfel (våningar, negativt = för lågt), stängd för vinden,
@@ -36,6 +36,8 @@ export function makeElevator(i) {
     medicHold: false, // står kvar låst på patientens våning tills ambulanspersonalen kommer tillbaka (visits.js)
     outWas: '', // senaste orsaken till att hissen var ur trafiken (outReason) – hämtningarna släpps när den ändras
     vipLock: false, sleep: false, zoneLock: false,
+    // incidenter: linorna knarrar (förvarning), omstart efter strömavbrott, brandhissen (brandkåren), när motorn blev het
+    creak: false, restartAt: 0, ffCar: false, hotT0: 0, trapNext: false,
   };
 }
 /** Hinner hissen stanna på våning f? Falskt bara om f ligger framför den, närmare än bromssträckan. */
@@ -93,8 +95,12 @@ export function updateElevator(e, dt) {
   const out = outReason(e);
   if (out && out !== e.outWas) releaseCalls(e, OUT_TEXT[out]);
   e.outWas = out;
+  // efter ett strömavbrott startar hissarna om en i taget
+  if (e.restartAt && S.t < e.restartAt) { if (e.state === 'moving') e.v = 0; return; }
   if (e.state === 'doors') { updateDoors(e, dt); return; }
   if (e.state === 'idle') { idleEval(e, dt); if (e.state !== 'moving') return; }
+  // ett hissfel som stoppar korgen mellan två våningar (folk sitter fast tills teknikern lagat den)
+  if (trapDue(e)) { trapBreak(e); return; }
   moveStep(e, dt);
   // linorna har knarrat (triggerCable): de går av när korgen är mitt emellan två våningar
   if (snapDue(e)) snapCable(e);
@@ -379,7 +385,8 @@ export function restoreElevator(e) {
   }
   else e.state = 'idle';
   // en hiss som kommer tillbaka mitt under en brandåterkallning (lagad, nödsänkt, linbytt) återkallas den också
-  if (S.fire && S.fire.mode === 'recall') recallCar(e);
+  // (utom brandhissen, som kör brandkåren)
+  if (S.fire && S.fire.mode === 'recall' && !e.ffCar) recallCar(e);
 }
 /** Brandåterkallning av en hiss: stäng dörrarna och kör hem utan stopp (recallStep tar över) */
 export function recallCar(e) {

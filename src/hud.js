@@ -400,12 +400,15 @@ export function incidentHtml() {
   }
   if (S.fire) {
     const F = S.fire, zmax = Math.max(0, F.floor - 2);
-    const status = F.brigade ? `Brandkåren släcker – klart om ${cd(F.outAt - S.t)}s` : `Brandkåren är på väg – framme om ${cd(F.brigadeAt - S.t)}s`;
+    const status = !F.brigade ? `Brandkåren är på väg – framme om ${cd(F.brigadeAt - S.t)}s`
+      : F.outAt === null ? `Brandmännen är på väg upp${S.brigade && S.brigade.car !== null ? ` i brandhissen ${esc(S.elevators[S.brigade.car].name)}` : ' i trapphuset'}`
+      : `Brandkåren släcker – klart om ${cd(F.outAt - S.t)}s`;
+    const outside = S.people.filter(p => p.state === 'assembly').length;
     const b = (m, txt) => `<button class="btn sm${F.mode === m ? ' on' : ''}" data-act="fire:${m}">${txt}</button>`;
     parts.push(`<div class="inc fire"><div class="inc-h">🔥 Brand på våning ${fl(F.floor)}</div>
       <div class="inc-s">${status}. Våning ${fl(F.floor - 1)}–${fl(TOP)} utryms.</div>
-      <div class="inc-s">Rökexponerade: <b>${num(F.smoked)}</b> · Utrymda: <b>${num(F.evac)}</b></div>
-      <div class="inc-q">Hur ska hissarna köras?</div>
+      <div class="inc-s">Rökexponerade: <b>${num(F.smoked)}</b> · Utrymda: <b>${num(F.evac)}</b>${outside ? ` · På återsamlingsplatsen: <b>${num(outside)}</b>` : ''}</div>
+      <div class="inc-q">Larmet återkallade hissarna – vill du köra dem annorlunda?</div>
       <div class="inc-acts">${b('recall', '🚒 Brandåterkallning')}${b('zone', `🚧 Bara E–${fl(zmax)}`)}${b('none', 'Normal drift')}</div>
       <div class="inc-hint">${FIRE_HINT[F.mode]}</div>
       <div class="inc-acts"><button class="btn xs" data-act="show:${F.floor}">Visa våningen</button></div></div>`);
@@ -459,6 +462,7 @@ export function updateRoster() {
     let where, t = '';
     if (p.state === 'office') where = `${p.sleeping ? 'sover' : 'inne'} ${fl(p.floor)}`;
     else if (p.state === 'away') where = 'borta';
+    else if (p.state === 'assembly') where = 'ute (brand)';
     else if (p.state === 'incar') where = `bil ${fl(p.floor)}`;
     else if (p.state === 'ride' || p.state === 'boarding') where = `${p.car.name} →${fl(p.dest)}`;
     else if (p.state === 'wait') where = `${fl(p.floor)}→${fl(p.dest)}${p.goal !== p.dest ? '↹' + fl(p.goal) : ''} ${p.assigned !== null ? EL[p.assigned].name : '?'}`;

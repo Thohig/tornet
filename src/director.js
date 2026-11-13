@@ -1,7 +1,7 @@
 // Regissören: automatisk kamera som letar upp det mest sevärda i huset och klipper dit.
 // Rent gränssnitt: läser S, ändrar aldrig simuleringen (slumpen är vrand). Kameran rör sig via S.camTarget
 // precis som när man följer en hiss. Allt manuellt (scrolla, följa, klicka på någon) stänger av regissören.
-import { DOCK, FLOOR_H, LOBBY, ROOF, STATION, floorY } from './config.js';
+import { DOCK, FLOOR_H, LOBBY, ROOF, STATION, TOP, floorY } from './config.js';
 import { S } from './state.js';
 import { fl } from './util.js';
 import { vrand } from './rng.js';
@@ -16,7 +16,7 @@ const MEMORY = 6;    // så många tidigare tagningar som får straff (inte samm
 const BORED = 1.5;   // poängavdrag per sekund som något redan har visats (helikoptern på taket blir tråkig)
 const FORGET = 120;  // sekunder tills det tråkiga är glömt (avtar exponentiellt)
 
-/** @typedef {{ key: string, score: number, kind: 'car'|'person'|'floor'|'cleaner'|'hoist', id: number, why: string }} Shot */
+/** @typedef {{ key: string, score: number, kind: 'car'|'person'|'floor'|'cleaner'|'hoist', id: number, why: string, urgent?: boolean }} Shot */
 
 /** Slår på/av regissören. */
 export function toggleAuto() {
@@ -40,9 +40,29 @@ const visible = p => { const h = personHead(p); return h && !h.hidden; };
 function shots() {
   /** @type {Shot[]} */
   const out = [];
-  const add = (key, score, kind, id, why) => out.push({ key, score, kind, id, why });
+  // urgent: något som just bryter ut (förvarning, blixt) får klippa in direkt, utan att vänta ut MIN_HOLD
+  const add = (key, score, kind, id, why, urgent = false) => out.push({ key, score, kind, id, why, urgent });
   // ---------- incidenter och händelser ----------
-  if (S.fire) add('fire', 100, 'floor', S.fire.floor, `🔥 Brand på ${fl(S.fire.floor)}`);
+  // förvarningar: kameran hinner dit innan det händer
+  const W = S.warn;
+  if (W) {
+    const top = ROOF >= 0 ? ROOF : TOP;
+    if (W.type === 'fire') add('warn', 90, 'floor', W.floor, `👃 Det luktar bränt på ${fl(W.floor)}`, true);
+    else if (W.type === 'power') add('warn', 80, 'floor', LOBBY, '💡 Lamporna flimrar…', true);
+    else if (W.type === 'storm') add('warn', 80, 'floor', top, '🌥️ Ovädret drar in', true);
+    else if (W.type === 'heat') add('warn', 82, 'floor', Math.min(top, S.elevators[W.car].maxF), `🌡️ Motorn i ${S.elevators[W.car].name} brummar`, true);
+    else add('warn', 86, 'car', W.car, W.type === 'cable' ? `🪢 Linorna i ${S.elevators[W.car].name} knarrar` : `🔩 ${S.elevators[W.car].name} gnisslar`, true);
+  }
+  if (S.fire) add('fire', 100, 'floor', S.fire.floor, `🔥 Brand på ${fl(S.fire.floor)}`, S.t - S.fire.t0 < 2);
+  // brandmännen på väg upp (i brandhissen eller trapphuset)
+  const ff = S.people.find(p => p.ff && !p.dead && p.state !== 'office' && visible(p));
+  if (ff && S.fire) add('ff', 92, 'person', ff.id, '🚒 Brandmännen går in');
+  // återsamlingsplatsen och när de utrymda går in igen
+  const outside = S.people.filter(p => p.state === 'assembly').length;
+  if (outside >= 4) add('assembly', 40 + Math.min(outside, 20), 'floor', LOBBY, `🧍 ${outside} på återsamlingsplatsen`);
+  // blixten slår ner, och strömmen kommer tillbaka våning för våning
+  if (S.storm && S.storm.struck !== null && S.t - S.storm.struck < 3) add('strike', 97, 'floor', ROOF >= 0 ? ROOF : TOP, '⚡ Blixten slår ner!', true);
+  if (S.powerBack !== null && S.t - S.powerBack < 4) add('relight', 66, 'floor', LOBBY, '💡 Strömmen är tillbaka');
   if (S.medic && S.medic.state !== 'done') {
     const crew = S.people.filter(p => p.medic && !p.dead && visible(p));
     const amb = crew.find(p => p.cargo && p.cargo.kind.startsWith('bår')) || crew[0];
@@ -141,13 +161,15 @@ export function updateDirector() {
   }
   const age = s ? S.anim - s.t0 : Infinity;
   const y = s ? shotY(s) : null;
-  if (!S.paused && (y === null || age > MIN_HOLD)) {
-    const all = shots();
+  const all = S.paused ? [] : shots();
+  // något som just bryter ut får klippa in direkt (om det inte redan visas något sådant)
+  const urgent = all.some(c => c.urgent && (!s || (c.key !== s.key && !s.urgent)));
+  if (!S.paused && (y === null || age > MIN_HOLD || urgent)) {
     const cur = s && all.find(c => c.key === s.key);
     let best = null, bv = -Infinity;
     for (const c of all) { const v = rate(c); if (v > bv) { bv = v; best = c; } }
     const done = y === null || age > HOLD || !cur;
-    if (best && best.key !== (s && s.key) && (done || rate(best) > rate(cur, true) + CUT_OVER)) {
+    if (best && best.key !== (s && s.key) && (done || (urgent && best.urgent) || rate(best) > rate(cur, true) + CUT_OVER)) {
       if (s && s.key === 'cleaner') cleanerShown = S.anim; // räknas från när kameran lämnar putsaren
       VIEW.shot = s = { ...best, t0: S.anim };
       recent.unshift(best.key); recent.length = Math.min(recent.length, MEMORY);

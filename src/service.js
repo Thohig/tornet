@@ -8,11 +8,12 @@
 import { pick, rand, rng } from './rng.js';
 import { fl } from './util.js';
 import { BALANCE, DOOR_T, FLOOR_M, FLOOR_H, CAR_H, VMAX, floorY, shaftCX, timeScale, tempoWear } from './config.js';
-import { S, hour, log, notice } from './state.js';
+import { S, hour, incidentOver, log, notice } from './state.js';
 import { needsFreight, pev, pn, rerouteStranded, spawnStaff } from './people.js';
 import { rebuildPicks, travel, cabinKg, prio } from './dispatch.js';
 import { bounceBoarders, exitAll, exitOne, restoreElevator, setMode } from './elevators.js';
 import { incidentStarted } from './incidents.js';
+import { trappedTalk } from './cast.js';
 
 // ---------- Energi ----------
 export const MOVE_KW = 3;      // friktion, drivsystem och ventilation när korgen rör sig
@@ -68,11 +69,22 @@ export function maybeBreak(e) {
   e.stormFault = false;
   return true;
 }
+/** Feltyperna: hur de syns (pixel.js) och hur lång tid de tar att laga (s) */
+export const FAULT_KIND = /** @type {Record<string, { kind: string, need: [number, number], tool: string }>} */ ({
+  'dörrfel – dörrarna går inte att stänga': { kind: 'door', need: [10, 16], tool: 'Justerar dörrmaskinen' },
+  'motorn överhettad': { kind: 'motor', need: [18, 26], tool: 'Byter motorns kylfläkt' },
+  'styrkortet hänger sig': { kind: 'board', need: [6, 10], tool: 'Startar om styrkortet' },
+  'nivåfel – korgen stannar ojämnt': { kind: 'level', need: [12, 18], tool: 'Kalibrerar nivågivaren' },
+  'bromsen kärvar': { kind: 'brake', need: [16, 24], tool: 'Slipar och justerar bromsbackarna' },
+  'vajerlarm': { kind: 'rope', need: [14, 20], tool: 'Spänner och kontrollerar linorna' },
+});
+const faultKind = what => FAULT_KIND[what] || (what.startsWith('vajerlarm') ? FAULT_KIND.vajerlarm : { kind: 'board', need: [12, 20], tool: 'Felsöker' });
 export function breakDown(e, what) {
-  e.breakNext = false;
+  e.breakNext = false; e.trapNext = false;
   setMode(e, 'broken'); e.hold = false; e.parkTarget = null; e.dir = 0; e.v = 0;
   e.floor = Math.round(e.pos);
-  e.fault = { what, t0: S.t, need: rand(12, 20) };
+  const K = faultKind(what);
+  e.fault = { what, kind: K.kind, tool: K.tool, t0: S.t, need: rand(K.need[0], K.need[1]) };
   e.state = 'doors'; e.doorPhase = 'open';
   bounceBoarders(e);
   const n = e.passengers.length;
@@ -85,14 +97,41 @@ export function breakDown(e, what) {
   rebuildPicks();
 }
 /** Spelaren utlöser ett hissfel: en hiss som kör eller står öppen går sönder vid nästa stopp */
-export function triggerFault() {
+export function triggerFault(target = null) {
   const ok = S.elevators.filter(e => e.mode === 'normal' && !e.hold && !e.breakNext);
   if (!ok.length) return;
   // helst en hiss med passagerare eller stopp kvar – då händer det snart
   const busy = ok.filter(e => e.passengers.length || e.carCalls.size);
-  const e = pick(busy.length ? busy : ok);
+  const e = target && ok.includes(target) ? target : pick(busy.length ? busy : ok);
+  // ibland stannar korgen tvärt mellan två våningar med folk i (de sitter fast tills teknikern får igång den)
+  if (target && e.passengers.length && rng() < TRAP_CHANCE) { e.trapNext = true; log(`🔧 ${e.name} hackar och gnisslar…`, 'alert', e.color); return; }
   if (e.state === 'doors' && e.door >= 1 && e.stops.has(e.floor)) breakDown(e, pick(FAULTS));
   else { e.breakNext = true; log(`🔧 ${e.name} låter konstigt… den går sönder vid nästa stopp`, 'alert', e.color); }
+}
+/** andelen av de slumpade hissfelen (med folk ombord) där korgen stannar mellan två våningar */
+export const TRAP_CHANCE = 0.45;
+const TRAP_FAULTS = ['styrkortet hänger sig', 'bromsen kärvar', 'dörrfel – dörrarna går inte att stänga'];
+/** ska korgen stanna mellan två våningar nu? */
+export const trapDue = e => e.trapNext && e.mode === 'normal' && e.state === 'moving' && midFloor(e) && e.passengers.length > 0;
+/** Korgen tvärstannar mellan två våningar: passagerarna sitter kvar tills teknikern har lagat hissen. */
+export function trapBreak(e) {
+  e.trapNext = false; e.breakNext = false;
+  const what = pick(TRAP_FAULTS), K = faultKind(what);
+  bounceBoarders(e);
+  setMode(e, 'broken'); e.hold = false; e.parkTarget = null; e.target = null; e.targetKind = null; e.v = 0; e.dir = 0; e.state = 'idle';
+  e.floor = Math.round(e.pos); e.carCalls.clear();
+  e.fault = { what, kind: K.kind, tool: K.tool, t0: S.t, need: rand(K.need[0], K.need[1]), trapped: true, n: e.passengers.length, nextTalk: S.t + rand(2, 4) };
+  S.stats.faults++;
+  for (const p of e.passengers) pev(p, `Hiss ${e.name} tvärstannade mellan två våningar – vi sitter fast! (${what})`);
+  log(`🔧 ${e.name} tvärstannade mellan två våningar: ${what} – ${e.passengers.length} sitter fast`, 'alert', e.color);
+  S.fx.push({ x: shaftCX(e.id), y: floorY(e.pos) - CAR_H - 30, text: 'KLONK!', color: '#ff9f1c', life: 1.6 });
+  rerouteStranded();
+  rebuildPicks();
+}
+/** de som sitter fast i en trasig korg: tiden räknas, humöret sjunker och någon säger något ibland */
+function stuckTick(e, dt) {
+  for (const p of e.passengers) { p.trapT = (p.trapT || 0) + dt; S.stats.trappedSec += dt; p.mood = p.trapT > 25 ? 2 : p.trapT > 8 ? 1 : 0; }
+  if (S.t >= e.fault.nextTalk) { e.fault.nextTalk = S.t + rand(6, 10); trappedTalk(e); }
 }
 
 // ---------- Hisstekniker ----------
@@ -257,9 +296,14 @@ function workTick(t, dt) {
     e.wear = 0.05; // nya linor och en genomgång av hela hissen
     log(`✅ ${e.name} har nya bärlinor efter ${Math.round(e.fault.need * 10) / 10} timmars arbete i schaktet – provkör och går i trafik igen`, 'alert', e.color);
     pev(t, `Nya linor i hiss ${e.name} – provkört och klart`);
+    incidentOver('cable', `✅ Nya bärlinor i ${e.name}`, `Linbytet efter linbrottet tog ${Math.round(e.fault.need * 10) / 10} speltimmar. Hissen är genomgången från topp till botten och går i trafik igen.`, { car: e.id });
     e.fault = null; e.dir = -1; // korgen står mellan två våningar: kör ner till närmaste stopp
   } else if (e.mode === 'broken') {
     const down = S.t - e.fault.t0;
+    if (e.fault.trapped) {
+      for (const p of e.passengers) { pev(p, `Hissen rullar igen – efter ${Math.round(p.trapT || 0)} s mellan två våningar`); p.trapT = 0; }
+      incidentOver('fault', `✅ De instängda i ${e.name} är fria`, `${e.fault.n} satt fast mellan två våningar i ${Math.round(down)} s tills ${t.name} fick igång hissen (${e.fault.what}).`, { car: e.id });
+    }
     S.stats.repairs++; S.stats.downSec += down;
     e.wear = Math.max(0.1, e.wear * 0.8); // lagad, men fortfarande sliten – bara service nollställer
     log(`✅ ${e.name} är lagad efter ${Math.round(down)} s (${e.fault.what})`, 'alert', e.color);
@@ -293,7 +337,8 @@ const midFloor = e => { const fr = e.pos - Math.floor(e.pos); return fr > 0.35 &
 export const snapDue = e => e.snapNext && e.mode === 'normal' && e.state === 'moving' && midFloor(e);
 /** Spelaren eller slumpen: linorna i en hiss i fart går av (helst en med folk i). Står alla still knarrar
  *  linorna i en hiss, och de går av mitt emellan två våningar på dess nästa åktur. */
-export function triggerCable() {
+export function triggerCable(target = null) {
+  if (target) { if (cableCandidate(target)) { target.snapNext = true; log(`🪢 Linorna i ${target.name} fransar sig – de går av på nästa åktur!`, 'alert', target.color); } return; }
   const ok = S.elevators.filter(cableCandidate);
   if (!ok.length) return;
   const now = ok.filter(e => e.state === 'moving' && midFloor(e)), busy = now.filter(e => e.passengers.length);
@@ -421,13 +466,15 @@ export function heatOnStop(e) { e.heat += HEAT_STOP * (0.5 + cabinKg(e) / e.rate
 export const heatMul = e => (e.heat >= WARM_AT ? 0.8 : 1);
 function heatTick(e, dt) {
   e.heat += Math.max(0, e.kw) * dt * 0.0004; // lyfter tungt = värme
-  e.heat -= e.heat * dt / (e.fan ? FAN_TAU : HEAT_TAU);
+  // en varm dag kyler maskinrummet sämre
+  e.heat -= e.heat * dt / (e.fan ? FAN_TAU : HEAT_TAU * (1 + Math.max(0, S.weather.temp - 15) * 0.03));
   if (!e.hot && e.heat >= 1 && e.mode === 'normal') {
-    e.hot = true; S.stats.heatStops++;
+    e.hot = true; e.hotT0 = S.t; S.stats.heatStops++;
     log(`🌡️ ${e.name}: motorn är överhettad – överhettningsskyddet löser ut, hissen tar inga nya resenärer`, 'alert', e.color);
   } else if (e.hot && e.heat < COOL_AT) {
     e.hot = false;
     log(`🌡️ ${e.name}: motorn har svalnat – i trafik igen`, 'alert', e.color);
+    incidentOver('heat', `✅ ${e.name} har svalnat`, `Motorn var överhettad i ${Math.round(S.t - e.hotT0)} s${e.fan ? ' – extrafläkten kylde den fortare' : ''}. Hissen går i trafik igen.`, { car: e.id });
   }
   if (e.fan && !e.hot && e.heat < 0.25) { e.fan = false; log(`🌀 ${e.name}: extrafläkten stängs av`, 'alert', e.color); }
 }
@@ -438,11 +485,11 @@ export function startFan(e) {
   log(`🌀 Extrafläkten startas i ${e.name}s maskinrum – motorn kyls snabbare (drar ${FAN_KW} kW)`, 'alert', e.color);
 }
 /** Slumpad incident: kylfläkten hakar upp sig och motorn i en hiss som kör mycket blir het */
-export function triggerHeat() {
+export function triggerHeat(target = null) {
   const ok = S.elevators.filter(e => e.mode === 'normal' && !e.hot && !e.hold);
   if (!ok.length) return;
   const busy = ok.filter(e => e.passengers.length || e.carCalls.size);
-  const e = pick(busy.length ? busy : ok);
+  const e = target && ok.includes(target) ? target : pick(busy.length ? busy : ok);
   e.heat = Math.max(e.heat, 1.05);
   log(`🌡️ Kylningen i ${e.name}s maskinrum hakar upp sig – motorn blir het`, 'alert', e.color);
 }
@@ -494,7 +541,8 @@ export function serviceTick(dt) {
     // trasiga hissar och hissar i service står med öppna dörrar
     if (e.mode === 'snapped' && e.snap.ph !== 'fall') trappedTick(e, dt);
     // (en hiss med linbrott står mellan två våningar – där finns inga dörrar att öppna)
-    if ((e.mode === 'broken' || e.mode === 'service') && !(e.fault && e.fault.cable) && e.door < 1) e.door = Math.min(1, e.door + dt / DOOR_T);
+    if ((e.mode === 'broken' || e.mode === 'service') && !(e.fault && (e.fault.cable || e.fault.trapped)) && e.door < 1) e.door = Math.min(1, e.door + dt / DOOR_T);
+    if (e.mode === 'broken' && e.fault && e.fault.trapped) stuckTick(e, dt);
     // hiss som väntar på nattservice kör hem tom
     if (e.hold && e.mode === 'normal' && e.state === 'idle' && !e.passengers.length && !e.carCalls.size && Math.round(e.pos) !== e.home) e.parkTarget = e.home;
     // hur länge den har stått stilla hemma (servicen börjar först då)

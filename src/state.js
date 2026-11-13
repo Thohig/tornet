@@ -10,7 +10,10 @@ export const S = {
   sel: null, hover: null, hoverDoor: null, carCycle: 0,
   rosterFilter: 'all', logFilter: 'all',
   // incidenter
-  autoInc: true, nextInc: 0, power: true, fire: null, outage: null,
+  autoInc: true, power: true, fire: null, outage: null,
+  // dygnets tidtabell för slumpade incidenter, förvarningen som pågår och den senaste incidenten (efterspelet)
+  powerBack: /** @type {number|null} */ (null), brigade: /** @type {any} */ (null),
+  incPlan: /** @type {{ at: number, night: boolean }[]} */ ([]), warn: /** @type {any} */ (null), lastInc: /** @type {any} */ (null),
   // KNAPPAR-läget: hallanrop { 'grupp|våning|riktning': anrop } och hur ofta folk trycker fel (av/lite/mycket)
   calls: /** @type {Record<string, import('./buttons.js').HallCall>} */ ({}), mistakes: 'lite',
   // drift: underhåll 'natt' (nattservice) eller 'fel' (bara när något går sönder), när teknikern kommer, rusningsläge
@@ -36,6 +39,11 @@ export const S = {
 export function notice(kind, title, text, opts = {}) {
   S.notices.push({ id: S.noticeId++, kind, title, text, t0: S.t, floor: opts.floor ?? null, car: opts.car ?? null, act: opts.act, actLabel: opts.actLabel });
   if (S.notices.length > 8) S.notices.shift();
+}
+/** en incident är över: en sammanfattning i en informationsruta, och folk pratar om den en stund (cast.js) */
+export function incidentOver(type, title, text, opts = {}) {
+  notice(type, title, text, opts);
+  S.lastInc = { id: S.noticeId, type, t: S.t };
 }
 // Vem som sitter på vilken plats (plats i SPOTS → personens id). Ligger i tillståndet, inte i config,
 // så att config förblir ren data och flera simuleringar i samma process inte delar beläggning.

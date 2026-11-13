@@ -63,13 +63,13 @@ export const isFull = e => slotsFull(e) || loadKg(e) >= e.ratedKg * FULL_LOAD;
 /** Går hissen både till personens våning och till målet (för den här delresan)? */
 // (en hiss i oberoende drift, som varuhissen på flyttdagen, tar bara flyttgubbarna – som annars får åka varuhissen som alla andra;
 // ambulansen har förtur även där)
-export const canTake = (e, p) => e.legs.some(l => l.includes(p.floor) && l.includes(p.dest)) && elevatorAllows(e, p) && (!e.indep || !!(p.mover || p.medic));
+export const canTake = (e, p) => e.legs.some(l => l.includes(p.floor) && l.includes(p.dest)) && elevatorAllows(e, p) && (!e.indep || !!(p.mover || p.medic || p.ff));
 /** Dubbeldäck: korgens läge när den tar folk på våning f (övre däcket står en våning högre). Annars f. */
 export const posOf = (e, f) => (e.deck2 && e.upper.has(f) ? f - 1 : f);
 /** vilket däck den som kliver på på våning f åker (0 = nedre, 1 = övre) */
 export const deckOf = (e, f) => (e.deck2 && e.upper.has(f) ? 1 : 0);
 /** Får hissen stanna med korgen på g? (brandzonen – för dubbeldäck gäller det båda däcken) */
-export const allowedPos = (e, g) => allowed(g) && (!e.deck2 || allowed(g + 1));
+export const allowedPos = (e, g) => (e.ffCar ? ffAllowed(g) : allowed(g)) && (!e.deck2 || allowed(g + 1));
 /** Får hissen släppa av p vid målet? (dubbeldäck: i zonläge kan E vara tillåten men inte mellanplanet ovanför,
  *  och då stannar korgen inte där – målet måste läggas om) */
 export const allowedDest = (e, p) => allowedPos(e, posOf(e, p.dest));
@@ -103,7 +103,7 @@ export const servesNow = (e, p) => !outReason(e) && !(e.vipLock && !prio(p)) && 
 /** hissen är borta en längre stund (fel, service, avstängd, vind, värme) – ruttvalet tar en annan väg */
 export const outLong = e => e.mode === 'broken' || e.mode === 'snapped' || e.mode === 'service' || e.hold || benched(e);
 /** har egen nyckel/prioritet och använder aldrig hallknapparna (VIP-gruppen, ambulansen, flyttgubbarna) */
-export const keyed = p => !!(p.vip || p.medic || p.mover);
+export const keyed = p => !!(p.vip || p.medic || p.mover || p.ff);
 /** får en hiss för sig själva (VIP-läge): VIP-gruppen och ambulanspersonalen */
 export const prio = p => !!(p.vip || p.medic);
 /** strategier som använder kostnadsfunktionen (Smart och dess varianter) */
@@ -170,6 +170,10 @@ export function safeFloor(e) {
   for (const f of e.stops) if (allowedPos(e, f) && (best === null || f > best)) best = f;
   return best;
 }
+/** brandkåren (brandmännen och brandhissen) får köra upp till två våningar under branden, även under återkallningen */
+export const ffAllowed = f => !S.fire || f <= S.fire.floor - 2;
+/** får personen åka hiss mellan våningarna just nu? */
+export const allowedFor = (p, f) => (p.ff ? ffAllowed(f) : allowed(f));
 export const inFireZone = f => !!S.fire && f > LOBBY && f >= S.fire.floor - 1;
 
 // ---------- Lärande parkering ----------
@@ -221,7 +225,7 @@ export function requestRide(p) {
     return;
   }
   const open = S.elevators.find(e => operational(e) && canTake(e, p) && (prio(p) || !e.vipLock) && e.id !== p.avoid && e.state === 'doors' && e.floor === posOf(e, p.floor) && e.doorPhase !== 'closing' && (e.dir === p.dir || e.dir === 0) && !isFull(e));
-  if (open && allowed(p.dest) && allowedDest(open, p)) {
+  if (open && allowedFor(p, p.dest) && allowedDest(open, p)) {
     p.assigned = open.id;
     pev(p, `Hiss ${open.name} står redan öppen här och ska åt rätt håll – får den direkt`);
     log(`${pn(p)} ${fl(p.floor)}→${fl(p.dest)} · ${open.name} står redan här`, 'assign', open.color, p.id);
@@ -319,7 +323,7 @@ export function costLine(p, chosenId) {
   }).join(' · ');
 }
 export function dispatchPerson(p) {
-  if (!allowed(p.floor) || !allowed(p.dest)) {
+  if (!allowedFor(p, p.floor) || !allowedFor(p, p.dest)) {
     toStairs(p, S.fire && S.fire.mode === 'recall' ? 'Brandåterkallning – alla hissar avstängda, tar trapporna' : 'Hissarna kör inte hit pga branden – tar trapporna');
     return;
   }

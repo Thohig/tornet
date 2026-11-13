@@ -154,10 +154,62 @@ function buzzer(vol, pan) {
   for (let i = 0; i < n; i++) tone(g, 'square', 1320, t + i * 0.26, 0.15);
 }
 
+// ---------- Incidenterna: förvarningar, larm, siren, blixt ----------
+/** Lågt muller som rullar in (åska långt borta inför stormen, eller blixtnedslaget på nära håll). */
+function thunder(near) {
+  const dur = near ? 1.6 : 2.6, g = out(near ? 0.9 : 0.45, 0, dur); if (!g) return;
+  const t = ac.currentTime;
+  if (near) sweep(g, 4000, 300, t, 0.35, 1);
+  sweep(g, near ? 220 : 160, 50, t + (near ? 0.05 : 0), dur - 0.1, 1);
+}
+/** Elektriskt surr som hackar (lamporna flimrar). */
+function buzz() {
+  const g = out(0.12, 0, 0.9); if (!g) return;
+  const t = ac.currentTime;
+  for (let i = 0; i < 5; i++) tone(g, 'sawtooth', 100, t + i * 0.17, 0.09, 0.6);
+}
+/** Brandlarmet: en klocka som ringer i två toner. */
+function alarm() {
+  const g = out(0.2, 0, 2.2); if (!g) return;
+  const t = ac.currentTime;
+  for (let i = 0; i < 8; i++) tone(g, 'square', i % 2 ? 660 : 880, t + i * 0.26, 0.2);
+}
+/** Brandbilens siren som sveper upp och ner. */
+function siren() {
+  const g = out(0.14, -0.4, 3); if (!g) return;
+  const t = ac.currentTime, o = ac.createOscillator(), gg = ac.createGain();
+  o.type = 'triangle'; o.frequency.setValueAtTime(600, t);
+  for (let i = 0; i < 6; i++) o.frequency.linearRampToValueAtTime(i % 2 ? 600 : 950, t + 0.45 * (i + 1));
+  gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(1, t + 0.4); gg.gain.linearRampToValueAtTime(0, t + 2.9);
+  o.connect(gg); gg.connect(g); o.start(t); o.stop(t + 3);
+}
+/** Motorn brummar ansträngt / det gnisslar i korgen / linorna knarrar. */
+function strain(kind) {
+  const g = out(0.25, 0, 1.4); if (!g) return;
+  const t = ac.currentTime;
+  if (kind === 'heat') { const o = tone(g, 'sawtooth', 55, t, 1.3, 0.5); o.frequency.linearRampToValueAtTime(70, t + 1.2); }
+  else if (kind === 'fault') sweep(g, 2200, 3400, t, 0.7, 0.8);
+  else for (let i = 0; i < 3; i++) sweep(g, 320, 170, t + i * 0.35, 0.3, 0.9); // knarr
+}
+let heardWarn = -1, heardFire = -1, heardBrigade = -1, heardStrike = -1;
+function incidentSounds() {
+  const W = S.warn;
+  if (W && W.t0 !== heardWarn) {
+    heardWarn = W.t0;
+    if (W.type === 'storm') thunder(false);
+    else if (W.type === 'power') buzz();
+    else if (W.type === 'heat' || W.type === 'fault' || W.type === 'cable') strain(W.type);
+  }
+  if (S.fire && S.fire.t0 !== heardFire) { heardFire = S.fire.t0; alarm(); }
+  if (S.brigade && S.brigade.t0 !== heardBrigade) { heardBrigade = S.brigade.t0; siren(); }
+  if (S.storm && S.storm.struck !== null && S.storm.struck !== heardStrike) { heardStrike = S.storm.struck; thunder(true); }
+}
+
 // ---------- Varje bildruta ----------
 export function updateSound() {
   if (!on || !ac || ac.state !== 'running') return;
   ensureCars();
+  incidentSounds();
   const now = ac.currentTime;
   const still = S.paused || !S.started;
   for (const e of S.elevators) {

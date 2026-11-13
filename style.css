@@ -92,6 +92,12 @@ body{background:var(--desk);font-family:var(--ui);font-size:12px;color:var(--ink
 .inc.info.move .inc-h{background:linear-gradient(90deg,#7a4a00,#d4a017)}
 .inc.info.cold .inc-h{background:linear-gradient(90deg,#1f4e79,#7fb3d5)}
 .inc.info.tech .inc-h{background:linear-gradient(90deg,#804000,#e07b00)}
+.inc.info.fire .inc-h{background:linear-gradient(90deg,#800000,#d0402a)}
+.inc.info.power .inc-h{background:linear-gradient(90deg,#2a2a6e,#6366f1)}
+.inc.info.storm .inc-h{background:linear-gradient(90deg,#1f3a60,#2a5db0)}
+.inc.info.heat .inc-h{background:linear-gradient(90deg,#803000,#ff8c42)}
+.inc.info.cable .inc-h{background:linear-gradient(90deg,#4a3a00,#b08a00)}
+.inc.info.fault .inc-h{background:linear-gradient(90deg,#5a1e2a,#c81e3a)}
 .inc-x{margin-left:auto;background:var(--face);color:#000;border:0;box-shadow:var(--raised);font:inherit;font-size:10px;line-height:1;padding:1px 4px;cursor:pointer}
 .inc-x:active{box-shadow:var(--sunken)}
 .incidents.calm{animation:none}
