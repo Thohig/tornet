@@ -148,11 +148,13 @@ export function endFire() {
 /** så länge brandmännen har på sig att nå branden innan kåren släcker utifrån (s) */
 export const FF_ATTACK_S = 45;
 /** Brandkåren kommer: varuhissen blir brandhiss (om den når upp) och tre brandmän åker upp till två våningar
- *  under branden och springer resten i trappan. Når hissen inte dit (eller strömmen är borta) springer de hela vägen. */
+ *  under branden och springer resten i trappan. Når hissen inte dit (eller strömmen är borta) springer de hela vägen.
+ *  Brinner det högst två våningar över entrén finns inget att åka till: de springer direkt upp till branden
+ *  (annars vore entrén deras mål – de vore "framme" och gick rakt ut igen). */
 function brigadeArrives(F) {
-  const V = S.elevators.find(e => e.freight), tf = Math.max(LOBBY, F.floor - 2);
+  const V = S.elevators.find(e => e.freight), low = F.floor - 2 <= LOBBY, tf = low ? F.floor : F.floor - 2;
   let car = null;
-  if (V && V.stops.has(tf) && V.stops.has(LOBBY) && ['normal', 'recall', 'locked'].includes(V.mode) && !V.hot && S.power) {
+  if (!low && V && V.stops.has(tf) && V.stops.has(LOBBY) && ['normal', 'recall', 'locked'].includes(V.mode) && !V.hot && S.power) {
     V.ffCar = true; // (före återställningen – annars återkallas den direkt igen)
     if (V.mode !== 'normal') restoreElevator(V);
     V.indep = true; V.zoneLock = false; V.parkTarget = null; V.sleep = false;
@@ -168,7 +170,7 @@ function spawnFirefighter(tf, i, walk) {
   p.role = 'brandman'; p.ff = true; p.fit = 1; p.task = 'Släcker branden';
   // mörk utryckningsdräkt och gul hjälm
   p.look.shirt = '#2b2f45'; p.look.pants = '#2b2f45'; p.look.tie = false; p.look.acc = 0; p.look.hair = 1; p.look.hairC = '#ffd23f';
-  setTrip(p, tf, `Brandkåren: upp till ${fl(tf)} med brandhissen`);
+  setTrip(p, tf, walk ? `Brandkåren: springer upp till ${fl(tf)}` : `Brandkåren: upp till ${fl(tf)} med brandhissen`);
   S.people.push(p);
   if (walk && p.state === 'toQueue') toStairs(p, 'Brandkåren: springer upp i trapphuset');
   pev(p, `Springer in i entrén i rökdykarutrustning · ${p.why}`);

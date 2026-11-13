@@ -461,6 +461,24 @@ test('Brandkåren utan brandhiss (strömavbrott): brandmännen springer i trappa
   assert(S.stats.smoked >= 0 && S.brigade && S.brigade.car === null, 'brandkåren fick en brandhiss trots strömavbrottet');
   return `släckt efter ${Math.round(S.t)} s (senast ${FF_ATTACK_S} s efter att kåren kom)`;
 });
+test('Brandkåren: brand strax ovanför entrén – brandmännen springer upp och släcker (går inte rakt ut igen)', () => {
+  const out = [];
+  for (const f of FIRE_FLOORS.filter(f => f - 2 <= LOBBY)) {
+    sim(33); runUntil(10.2);
+    startFire(f);
+    let g = 0, reached = false;
+    while (S.fire && ++g < 200 / DT) {
+      step(DT);
+      if (S.people.some(p => p.ff && p.state === 'office' && p.floor === f)) reached = true;
+    }
+    assert(!S.fire, `branden på ${fl(f)} släcktes aldrig`);
+    assert(reached, `brandmännen kom aldrig fram till branden på ${fl(f)}`);
+    assert(S.brigade && S.brigade.car === null, 'varuhissen blev brandhiss fast det inte fanns något att åka till');
+    out.push(fl(f));
+  }
+  assert(out.length > 0, 'ingen brandvåning strax ovanför entrén');
+  return `framme på ${out.join(', ')}`;
+});
 
 // ---------- Tidtabell, förvarningar, kedjor och efterspel ----------
 test('Tidtabellen: 1–3 incidenter per dygn spridda över dagen, ibland en på natten, alltid med förvarning', () => {
