@@ -210,8 +210,6 @@ export function updateDirector() {
   if (s.kind === 'car' || sy < top || sy > bot || S.anim - s.t0 < 0.1)
     S.camTarget = Math.max(0, Math.min(camMax(), sy - VIEW.viewH * 0.5));
 }
-/** Text till kameraknappen: vad regissören visar. */
-export const autoWhy = () => (VIEW.auto && VIEW.shot ? VIEW.shot.why : '');
 
 // ---------- Bevakningen: personen vid skärmarna i kontrollrummet som klipper bilden ----------
 // Regissören är en person: hen sitter bredvid driftchefen, väljer vad som visas och tänker högt.

@@ -7,18 +7,18 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=35">
+<link rel="stylesheet" href="style.css?v=36">
 </head>
 <body>
 <div id="app">
   <header id="topbar">
-    <div class="logo" data-hint="<b>Hiss-O-Matic 3000:</b> en skyskrapa med åtta hissar. Huset sköter sig självt: driftchefen i kontrollrummet tar besluten och berättar varför. Luta dig tillbaka och titta – eller ta över ett beslut, framkalla incidenter och se hur huset klarar dygnet.">HISS-O-MATIC <span>3000</span></div>
+    <div class="logo" data-hint="<b>Hiss-O-Matic 3000:</b> en skyskrapa med åtta hissar. Huset sköter sig självt: driftchefen i kontrollrummet tar besluten och berättar varför. Luta dig tillbaka och titta – eller ta över ett beslut och framkalla incidenter under 🎛️ Styr.">HISS-O-MATIC <span>3000</span></div>
     <div class="tb-clock">
-      <div class="clock" id="clock" data-hint="<b>Dag eller natt:</b> ☀️ dag, 🌙 natt. Ett dygn tar sex minuter – dagen fyra, kvällen en halv och natten en och en halv.">☀️</div>
-      <div class="tb-sub" data-hint="<b>Just nu:</b> dygnets fas (morgonrusning, lunch, hemgång …) och vädret – kyla gör att dörrarna i entrén tar emot. Under: dygnets nummer, hur många som är i huset och fröet som bestämmer dygnet (<code>?seed=</code>)."><div class="phase" id="phase">Morgonrusning</div><div class="day" id="day">Dag 1</div></div>
+      <div class="clock" id="clock" data-hint="<b>Dag eller natt:</b> ☀️ dag, 🌙 natt. Dygnets rytm syns i tidslinjen under topplisten.">☀️</div>
+      <div class="tb-sub" data-hint="<b>Just nu:</b> dygnets fas och vädret. Under: dygnets nummer, hur många som är i huset och fröet som bestämmer dygnet (<code>?seed=</code>)."><div class="phase" id="phase">Morgonrusning</div><div class="day" id="day">Dag 1</div></div>
     </div>
     <div class="tb-group">
-      <button id="btnPause" class="btn" data-hint="<b>Paus:</b> stoppar tiden. Allt står still tills du trycker igen. (Mellanslag)">❚❚</button>
+      <button id="btnPause" class="btn" data-hint="<b>Paus:</b> stoppar tiden. (Mellanslag)">❚❚</button>
       <div class="speeds" id="speeds" data-hint="<b>Fart:</b> hur fort tiden går. Samma dygn oavsett fart – bara långsammare eller snabbare. (− och +, 1 = 1×)">
         <button data-s="0.25" class="btn">¼×</button>
         <button data-s="0.5" class="btn">½×</button>
@@ -27,78 +27,30 @@
       </div>
     </div>
     <div class="tb-group">
+      <button id="btnAuto" class="btn" data-hint="<b>Regissör:</b> bevakaren i kontrollrummet klipper bilden till det mest sevärda – bränder, ambulansen, tåget, stamgäster som säger något, sura köer. Scrolla eller följ något själv så tar du över. (A)">🎬</button>
+      <div class="tb-group cam" id="camBar" hidden></div>
       <button id="btnTags" class="btn" data-hint="<b>Namnbrickor:</b> visar namnet över varje person i bilden. (T)">ID</button>
-      <button id="btnAuto" class="btn" data-hint="<b>Regissör:</b> kameran letar själv upp det mest sevärda – bränder, ambulansen, tåget, stamgäster som säger något, sura köer – och klipper dit. Perfekt att ha igång i bakgrunden. Scrolla eller följ något själv så tar du över. (A)">🎬</button>
       <button id="btnSound" class="btn" data-hint="<b>Ljud:</b> motorbrum, pling, dörrar och överlastsummer från hissarna i bild. (M)">🔇</button>
+      <button id="btnCinema" class="btn" data-act="cinema" data-hint="<b>Biografläge:</b> döljer allt utom bilden och en textskylt med vad bevakaren visar. Regissören slås på. (H, tillbaka med H eller Esc)">🎞️</button>
     </div>
-    <div class="tb-group cam" id="camBar" hidden></div>
-    <div class="tb-group strat">
-      <div class="strats" id="strats"></div>
-      <div class="pop hint" id="stratHint"></div>
-    </div>
-    <div class="crew" id="crew" data-act="auto" hidden></div>
-    <button id="btnBus" class="btn hot" data-hint="<b>BUSS!</b> En turistbuss stannar utanför och släpper in en hel busslast besökare på en gång. Prova mitt i rusningen. Fungerar inte när huset är stängt eller det brinner.">BUSS!</button>
     <div class="tb-stats" id="tbStats" data-hint="<b>Dagens resultat:</b> betyg (A–F efter snittväntan), antal avklarade resor, hur många som väntar på hiss just nu och snittväntan i sekunder. Mer i 🏆."></div>
+    <button class="btn" id="btnCtl" data-act="ctl" data-hint="<b>Styr:</b> styrlogiken, driftchefen, framkalla incidenter och händelser, BUSS! och inställningar. Högerklicka i bilden för att framkalla något på en viss våning eller hiss.">🎛️ Styr</button>
     <nav class="tabs" id="tabs">
       <button class="btn tab" data-act="tab:track" data-hint="<b>Spårad person:</b> allt om den du klickat på – vart hen ska, hur länge hen väntat och humöret.">👤</button>
       <button class="btn tab" data-act="tab:roster" data-hint="<b>Personregister:</b> alla i huset just nu, med filter. Klicka på ett namn för att följa personen.">📋</button>
       <button class="btn tab" data-act="tab:log" data-hint="<b>Beslutslogg:</b> vad styrsystemet bestämt (vilken hiss som fick vem och varför) och vad som hänt i huset.">📜</button>
       <button class="btn tab" data-act="tab:stats" data-hint="<b>Dagens resultat:</b> väntetider, betyg, energi, trappresor och säkerhet för dygnet så här långt.">🏆</button>
     </nav>
-    <div class="tb-group menu">
-      <button class="btn" data-act="menu" data-hint="<b>Meny:</b> driftchefen, slumpen (hur ofta incidenter kommer av sig själva), framkalla incidenter och händelser, felknappar och underhåll.">⋯</button>
-      <div class="pop" id="menu">
-        <div class="pop-h">Driftchefen</div>
-        <div class="chips" id="chiefChips" title="Driftchefen i kontrollrummet (P1) tar alla beslut och berättar varför – du kan alltid ta över ett beslut på incidentkortet">
-          <button data-f="on" class="chip on">Sköter huset</button>
-          <button data-f="off" class="chip">Rast – jag bestämmer</button>
-        </div>
-        <div class="pop-h">Slumpen</div>
-        <div class="chips" id="levelChips" title="Hur ofta incidenter och hissfel kommer av sig själva under dygnet">
-          <button data-f="av" class="chip">Av</button>
-          <button data-f="lugn" class="chip">Lugnt</button>
-          <button data-f="normal" class="chip on">Normalt</button>
-          <button data-f="kaos" class="chip">Kaos</button>
-        </div>
-        <div class="pop-h">Framkalla nu</div>
-        <div class="inc-trig">
-          <span class="trig-fire"><button class="btn xs" data-act="trig:fire">🔥 Brand</button><select id="fireFloor" title="Våningen som börjar brinna"></select></span>
-          <button class="btn xs" data-act="trig:power">⚡ Ström</button>
-          <button class="btn xs" data-act="trig:fault">🔧 Hissfel</button>
-          <button class="btn xs" data-act="trig:storm">🌬️ Storm</button>
-          <button class="btn xs" data-act="trig:lightning">⛈️ Blixt</button>
-          <button class="btn xs" data-act="trig:heat">🌡️ Het motor</button>
-          <button class="btn xs" data-act="trig:cable">🪢 Linbrott</button>
-        </div>
-        <div class="inc-trig">
-          <button class="btn xs" data-act="trig:medical">🚑 Ambulans</button>
-          <button class="btn xs" data-act="trig:move">🚚 Flyttdag</button>
-          <button class="btn xs" data-act="trig:vip">🚁 VIP</button>
-          <button class="btn xs" data-act="trig:train">🚇 Tågstörning</button>
-          <button class="btn xs" data-act="trig:cold">❄️ Kall dag</button>
-          <button class="btn xs" data-act="trig:heatwave">☀️ Värmebölja</button>
-        </div>
-        <div class="pop-note">Hissfel, het motor och linbrott på en viss hiss: klicka på hissen.</div>
-        <div class="pop-h">Felknappar</div>
-        <div class="chips" id="mistakeChips" title="Hur ofta folk trycker på fel knapp (och barn på alla)">
-          <button data-f="av" class="chip">Av</button>
-          <button data-f="lite" class="chip on">Lite</button>
-          <button data-f="mycket" class="chip">Mycket</button>
-        </div>
-        <div class="pop-h">Underhåll</div>
-        <div class="chips" id="maintChips" title="Nattservice håller nere slitaget – utan den slits hissarna dag för dag och går oftare sönder">
-          <button data-f="natt" class="chip on">Nattservice</button>
-          <button data-f="fel" class="chip">Bara vid fel</button>
-        </div>
-      </div>
-    </div>
-    <div class="pop hint" id="tbHint"></div>
   </header>
+  <div id="timeline" data-hint="<b>Dygnet:</b> från morgon till natt, i den takt det spelas. Banden är rusningarna, lunchen och kvällen; markören är nu. Dagens incidenter dyker upp som ikoner – klicka för att visa platsen."><div class="tl-bands" id="tlBands"></div><div class="tl-marks" id="tlMarks"></div><div class="tl-now" id="tlNow"></div></div>
 
   <div id="main">
+    <aside id="mini" data-hint="<b>Minikarta:</b> hela tornet. Färgen på våningen är kön, hissarna är färgade rutor och ramen är det kameran visar. Klicka på en våning för att visa den, på en hiss för att följa den."><canvas id="miniCv"></canvas></aside>
     <main id="stage">
       <canvas id="game"></canvas>
-      <section class="float feed" id="feed" hidden></section>
+      <section class="float ctl" id="ctl" hidden></section>
+      <section class="float lower" id="lower" hidden></section>
+      <div class="ctx" id="ctx" hidden></div>
       <section class="float incidents" id="incPanel" hidden><div id="incBody"></div></section>
       <section class="float car" id="carPop" hidden></section>
     </main>
@@ -153,7 +105,71 @@
       </section>
     </aside>
   </div>
+  <footer id="status"><span id="statusTxt"></span><span id="statusKeys">högerklick = åtgärder · H biograf · A regissör · mellanslag paus</span></footer>
 </div>
+
+<section class="dlg" id="ctlDlg" hidden>
+  <div class="dlg-t">🎛️ STYRBORDET<button class="pane-x" data-act="ctl" title="Stäng (Esc)">✕</button></div>
+  <div class="dlg-tabs" id="dlgTabs">
+    <button class="btn sm" data-act="dlgtab:strat">Styrning</button>
+    <button class="btn sm" data-act="dlgtab:trig">Framkalla</button>
+    <button class="btn sm" data-act="dlgtab:set">Inställningar</button>
+  </div>
+  <div class="dlg-pane" data-pane="strat">
+    <div class="pop-h">Driftchefen</div>
+    <div class="chips" id="chiefChips" title="Driftchefen i kontrollrummet (P1) tar alla beslut och berättar varför – du kan alltid ta över ett beslut på incidentkortet">
+      <button data-f="on" class="chip on">Sköter huset</button>
+      <button data-f="off" class="chip">Rast – jag bestämmer</button>
+    </div>
+    <div class="pop-h">Styrlogik <span class="dlg-note">(S byter i tur och ordning)</span></div>
+    <div class="strats" id="strats"></div>
+  </div>
+  <div class="dlg-pane" data-pane="trig">
+    <div class="pop-h">Framkalla nu</div>
+    <div class="inc-trig">
+      <button id="btnBus" class="btn hot">👥 BUSS!</button>
+      <span class="dlg-note">En busslast turister väller in i entrén.</span>
+    </div>
+    <div class="inc-trig">
+      <span class="trig-fire"><button class="btn xs" data-act="trig:fire">🔥 Brand</button><select id="fireFloor" title="Våningen som börjar brinna"></select></span>
+      <button class="btn xs" data-act="trig:power">⚡ Ström</button>
+      <button class="btn xs" data-act="trig:fault">🔧 Hissfel</button>
+      <button class="btn xs" data-act="trig:storm">🌬️ Storm</button>
+      <button class="btn xs" data-act="trig:lightning">⛈️ Blixt</button>
+      <button class="btn xs" data-act="trig:heat">🌡️ Het motor</button>
+      <button class="btn xs" data-act="trig:cable">🪢 Linbrott</button>
+    </div>
+    <div class="inc-trig">
+      <button class="btn xs" data-act="trig:medical">🚑 Ambulans</button>
+      <button class="btn xs" data-act="trig:move">🚚 Flyttdag</button>
+      <button class="btn xs" data-act="trig:vip">🚁 VIP</button>
+      <button class="btn xs" data-act="trig:train">🚇 Tågstörning</button>
+      <button class="btn xs" data-act="trig:cold">❄️ Kall dag</button>
+      <button class="btn xs" data-act="trig:heatwave">☀️ Värmebölja</button>
+    </div>
+    <div class="pop-note">Högerklicka på en våning eller en hiss i bilden för att framkalla något just där.</div>
+  </div>
+  <div class="dlg-pane" data-pane="set">
+        <div class="pop-h">Slumpen</div>
+        <div class="chips" id="levelChips" title="Hur ofta incidenter och hissfel kommer av sig själva under dygnet">
+          <button data-f="av" class="chip">Av</button>
+          <button data-f="lugn" class="chip">Lugnt</button>
+          <button data-f="normal" class="chip on">Normalt</button>
+          <button data-f="kaos" class="chip">Kaos</button>
+        </div>
+        <div class="pop-h">Felknappar</div>
+        <div class="chips" id="mistakeChips" title="Hur ofta folk trycker på fel knapp (och barn på alla)">
+          <button data-f="av" class="chip">Av</button>
+          <button data-f="lite" class="chip on">Lite</button>
+          <button data-f="mycket" class="chip">Mycket</button>
+        </div>
+        <div class="pop-h">Underhåll</div>
+        <div class="chips" id="maintChips" title="Nattservice håller nere slitaget – utan den slits hissarna dag för dag och går oftare sönder">
+          <button data-f="natt" class="chip on">Nattservice</button>
+          <button data-f="fel" class="chip">Bara vid fel</button>
+        </div>
+  </div>
+</section>
 
 <div id="overlay" class="overlay"></div>
 

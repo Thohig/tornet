@@ -7,7 +7,6 @@ import { costBased, costLine, eta, isFull, pickTotal, pickersAt, loadKg, cabinKg
 import { canRescue } from './incidents.js';
 import { plannedRoute, resetDay } from './sim.js';
 import { VIEW, camTarget, cv, nightness, pctx, stage } from './view.js';
-import { autoWhy, crewNow } from './director.js';
 import { personSprite } from './pixpeople.js';
 import { PAL } from './pixpal.js';
 import { stateInfo } from './describe.js';
@@ -199,8 +198,8 @@ export function carActs(e) {
   }
   return b.join('');
 }
-// ---------- Kamerareglaget i topplisten: 📹-knappen visar vad kameran följer och kopplar loss/på (som F),
-// en knapp per hiss följer hissen (klick igen kopplar loss) ----------
+// ---------- Kamerareglaget i topplisten: 📹-knappen visar vad kameran följer och kopplar loss/på (som F).
+// Hissarna följs från minikartan eller hisspopupen. ----------
 let camKey = '';
 function camName(t, short = false) {
   if (t.kind === 'car') return short ? esc(S.elevators[t.id].name) : `hiss ${esc(S.elevators[t.id].name)}`;
@@ -210,15 +209,13 @@ function camName(t, short = false) {
 }
 function updateCamBar() {
   const el = $('camBar'), t = camTarget(), last = VIEW.lastCam, lastName = !t && last ? camName(last) : null;
-  const cars = S.elevators.map(e => `<button class="btn xs car-b${VIEW.follow === e.id ? ' on' : ''}" data-act="follow:${e.id}" style="--c:${e.color};--ct:${PAL.on(e.color)}" data-hint="<b>Hiss ${esc(e.name)}:</b> ${VIEW.follow === e.id ? 'kameran följer hissen – klicka för att sluta' : 'klicka så följer kameran hissen'}.">${esc(e.name)}</button>`).join('');
-  const why = autoWhy();
-  const cam = VIEW.auto
-    ? `<button class="btn cam-b on" data-act="cam:off" data-hint="<b>Regissör:</b> visar ${esc(why) || 'snart något'}. Klicka för att koppla loss kameran (A).">🎬 <span>Regissör</span></button>`
+  // med regissören på syns det i kontrollrummet (och på 🎬-knappen) – här visas bara det du själv följer
+  const cam = VIEW.auto ? ''
     : t
     ? `<button class="btn cam-b on" data-act="cam:off" data-hint="<b>Kamera:</b> följer ${camName(t)}. Klicka för att koppla loss (F) – att scrolla gör samma sak.">📹 <span>${camName(t, true)}</span></button>`
     : lastName ? `<button class="btn cam-b" data-act="cam:on" data-hint="<b>Fri kamera:</b> du styr själv med scroll. Klicka för att följa ${lastName} igen (F).">📹 <span>fri</span></button>`
     : '<button class="btn cam-b" disabled data-hint="<b>Fri kamera:</b> du styr själv med scroll. Välj en hiss, en person eller en våning så följer kameran den.">📹 <span>fri</span></button>';
-  const html = !S.started ? '' : `${cam}<div class="cam-cars">${cars}</div>`;
+  const html = !S.started ? '' : cam;
   if (html === camKey) return;
   camKey = html; el.innerHTML = html; el.hidden = !html;
 }
@@ -293,43 +290,6 @@ ${st.extraTechs ? `    <div class="stat">Extra tekniker inringda <b>${st.extraTe
     ${learnMap()}
     <div class="grade">Service: ${st.waitN ? g.letter : '–'} <span class="stars">${st.waitN ? '★'.repeat(g.stars) + '☆'.repeat(5 - g.stars) : ''}</span> · Säkerhet: ${sg}</div>`;
   updateIncidents();
-  updateFeed();
-  updateCrew();
-}
-// ---------- Driftradion: det senaste som hänt och driftchefens beslut, i klartext ----------
-let feedKey = '';
-const FEED_QUIET_S = 25;
-function updateFeed() {
-  const el = $('feed'), F = S.feed.slice(-3);
-  const show = S.started && F.length > 0;
-  if (el.hidden === show) el.hidden = !show;
-  if (!show) return;
-  // lugnt en stund: bara titelraden (radion tar inte plats i bilden i onödan)
-  const quiet = S.t - F[F.length - 1].t > FEED_QUIET_S;
-  const key = `${F.map(f => f.t).join('|')}|${chiefOn()}|${chiefOnDuty().name}|${Math.floor(S.t / 5)}|${quiet}`;
-  if (key === feedKey) return;
-  feedKey = key;
-  const head = chiefOn() ? `🧑‍💼 ${esc(chiefOnDuty().name)} vid kontrollbordet` : '🧑‍💼 driftchefen har rast';
-  el.innerHTML = `<div class="feed-h" data-act="tab:log" title="Hela loggen">📻 DRIFTRADIO <span>${head}</span></div>`
-    + (quiet ? '' : F.map((f, i) => `<div class="fl${i === F.length - 1 ? ' new' : ''}${f.kind === 'chief' ? ' chief' : ''}${S.t - f.t > 60 ? ' old' : ''}">`
-      + `<span class="lt">${f.time}</span>${f.color ? `<span class="ld" style="background:${f.color}"></span>` : ''}<span>${esc(f.text)}</span></div>`).join(''));
-}
-// ---------- Bevakningen i topplisten: vem som klipper bilden, vad hen visar och vad hen tänker ----------
-let crewKey = '';
-function updateCrew() {
-  const el = $('crew'), c = crewNow();
-  if (el.hidden === !!c) el.hidden = !c;
-  if (!c) return;
-  const key = `${c.who.name}|${c.auto}|${c.cut}|${c.doing}|${c.show}|${c.thought}`;
-  if (key === crewKey) return;
-  crewKey = key;
-  el.classList.toggle('on', c.auto); el.classList.toggle('cut', c.cut);
-  el.dataset.hint = c.auto
-    ? `<b>Bevakningen:</b> ${esc(c.who.name)} sitter vid skärmarna i kontrollrummet och klipper bilden till det mest sevärda. Klicka (eller A) för att ta kameran själv.`
-    : `<b>Bevakningen:</b> du har kameran. Klicka (eller A) så tar ${esc(c.who.name)} över och klipper bilden åt dig.`;
-  el.innerHTML = `<div class="crew-h"><span class="crew-rec">${c.auto ? '● REC' : '❚❚ AV'}</span><b>📹 ${esc(c.who.name)}</b> <i>${esc(c.who.title)}</i> · ${esc(c.doing)}</div>`
-    + `<div class="crew-show">${esc(c.show)}</div>`
-    + `<div class="crew-th">💭 ${esc(c.thought)}</div>`;
 }
 /** värmekartan över det styrningen har lärt sig: köer per våning (rader) och timme (kolumner) */
 function learnMap() {
@@ -669,15 +629,15 @@ export function showIntro() {
       <li>Det finns <b>inga knappar</b> på våningarna. Varje person har ett eget mål och får en egen hiss. Tankebubblan visar målet och hissen.</li>
       <li>Hissarna är <b>zonindelade</b>: L1–L2 går i låg zon (TB–5) och H1–H2 i hög zon (6–T) – <b>staplade i samma schakt</b>. Expresshissarna X1–X2 kör E ⇄ 6 utan stopp, och X1 går ända ner till <b>tunnelbanan</b> (TB) – där kommer folk i klump varje gång ett tåg stannar. Den som ska mellan zonerna <b>byter hiss</b> (↹) i entrén och i sky lobbyn. Varuhissen V tar städvagnar och paket, och panoramahissen P åker utanpå fasaden.</li>
       <li>Huset <b>lever</b>: bilar kör in i garaget, leveransbilen lastar av vid kajen, de boende sover, jobbar och går på taket, en fönsterputsare jobbar sig nedåt utanför tornet, hundägare kommer med raggiga pudlar och går hem med nyklippta, och ibland landar en VIP-helikopter på taket.</li>
-      <li>Ett <b>dygn</b> tar ungefär ${Math.round(dayLength() / 60)} minuter – ☀️ dag och 🌙 natt syns uppe till vänster. Trafiken följer dygnet – rusning på morgonen, lunch, hemgång (de får mest tid) – och på natten är det bara väktare, städare och nattugglor. Vissa våningar stänger (caféet, banken …).</li>
-      <li><b>Huset sköter sig självt.</b> I <b>driftcentralen</b> på P1 sitter driftchefen (Gun-Britt på dagen, Rune på natten) och tar alla beslut när något händer – svajläge i stormen, brandzon, reservkraft, extrafläkt, service – och säger varför. Det hörs i <b>driftradion</b> uppe till vänster och syns på rutan som dyker upp. Vill du bestämma själv tar du över beslutet på rutan.</li>
-      <li><b>Incidenter</b> händer av sig själva: brand, strömavbrott, storm och hissfel – då kommer en hisstekniker och lagar. Slitna hissar går oftare sönder, och utan nattservice följer slitaget med till nästa dygn. Under <b>⋯</b> ställer du in hur ofta (<b>slumpen</b>) och <b>framkallar</b> allt själv: brand på en viss våning, blixt, flyttdag, VIP, tågstörning, kyla … Klicka på en hiss för att ge just den ett fel.</li>
+      <li>Ett <b>dygn</b> tar ungefär ${Math.round(dayLength() / 60)} minuter – <b>tidslinjen</b> under topplisten visar var i dygnet vi är och dagens incidenter. Trafiken följer dygnet – rusning på morgonen, lunch, hemgång (de får mest tid) – och på natten är det bara väktare, städare och nattugglor. Vissa våningar stänger (caféet, banken …).</li>
+      <li><b>Huset sköter sig självt.</b> I <b>driftcentralen</b> på P1 sitter driftchefen (Gun-Britt på dagen, Rune på natten) och tar alla beslut när något händer – svajläge i stormen, brandzon, reservkraft, extrafläkt, service – och säger varför. Allt syns i <b>kontrollrummet</b> uppe till vänster i bilden: bevakaren (Ludde, på natten Siv) som klipper bilden när regissören 🎬 är på, chefens beslut och driftradion. Vill du bestämma själv tar du över beslutet på incidentrutan.</li>
+      <li><b>Incidenter</b> händer av sig själva: brand, strömavbrott, storm och hissfel – då kommer en hisstekniker och lagar. Slitna hissar går oftare sönder, och utan nattservice följer slitaget med till nästa dygn. Under <b>🎛️ Styr</b> väljer du styrlogik, ställer in hur ofta (<b>slumpen</b>) och <b>framkallar</b> allt själv: blixt, flyttdag, VIP, tågstörning, kyla … <b>Högerklicka</b> på en våning eller hiss i bilden för att framkalla något just där.</li>
       <li>Bilden visar <b>hallen framför hissarna</b> – rummen ligger bakom korridoren, och folk syns när de kommer ut för att vänta på hissen. Siffran vid korridoren är hur många som är inne.</li>
       <li><b>Klicka på en person</b> för att spåra hen – en lapp följer personen och 👤 visar allt, även när hen är inne i rummen. <b>Klicka på en korridor</b> för att spåra någon som är därinne. <b>Klicka på en hiss</b> för dess plan, last och knappen 📹 Följ.</li>
-      <li>Klicka på en tom yta på en våning för att släppa in en besökare. <b>BUSS!</b> släpper in en busslast.</li>
-      <li><b>Scrolla</b> med mushjulet eller piltangenterna. Kameran följer den du spårar.</li>
+      <li>Klicka på en tom yta på en våning för att släppa in en besökare. <b>BUSS!</b> (under 🎛️ Styr, eller högerklicka i entrén) släpper in en busslast.</li>
+      <li><b>Scrolla</b> med mushjulet eller piltangenterna. <b>Minikartan</b> till vänster visar hela tornet – klicka på en våning eller en hiss för att hoppa dit. Kameran följer den du spårar.</li>
       <li>📋 register, 📜 logg och 🏆 resultat öppnas i en låda till höger.</li>
-      <li><kbd>Mellanslag</kbd> paus · <kbd>1</kbd>/<kbd>2</kbd> hastighet · <kbd>S</kbd> styrlogik · <kbd>T</kbd> namnbrickor · <kbd>F</kbd> koppla loss/på kameran · <kbd>A</kbd> regissör (kameran väljer själv) · <kbd>Esc</kbd> stäng/sluta spåra</li>
+      <li><kbd>Mellanslag</kbd> paus · <kbd>−</kbd>/<kbd>+</kbd> hastighet · <kbd>H</kbd> biografläge · <kbd>S</kbd> styrlogik · <kbd>T</kbd> namnbrickor · <kbd>F</kbd> koppla loss/på kameran · <kbd>A</kbd> regissör (kameran väljer själv) · <kbd>Esc</kbd> stäng/sluta spåra</li>
     </ul>
     <button class="btn" id="go">KÖR!</button></div>`);
   $('go').onclick = () => { hideOverlay(); S.started = true; log('Dag 1 börjar – dörrarna öppnas!', 'sys'); };

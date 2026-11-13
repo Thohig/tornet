@@ -73,8 +73,11 @@ export function chipGroup(id, key, after, sim = false) {
     after();
   });
 }
+/** åtgärder som andra gränssnittsmoduler lägger till (panels.js): namn → (b, c) => void */
+export const extraActions = /** @type {Record<string, (b: string, c: string) => void>} */ ({});
 export function doAction(cmd) {
   const [a, b, c] = cmd.split(':');
+  if (extraActions[a]) { extraActions[a](b, c); S.incHtml = ''; updateHud(); return; }
   if (a === 'trig') {
     if (!S.started) return;
     const sel = /** @type {HTMLSelectElement} */ ($('fireFloor'));
@@ -93,7 +96,6 @@ export function doAction(cmd) {
   else if (a === 'incfold') { foldInc(b); return; }
   else if (a === 'show') scrollToFloor(+b);
   else if (a === 'tab') { setTab(b); return; }
-  else if (a === 'menu') { togglePop('menu'); return; }
   else if (a === 'carpop') { openCarPop(null); return; }
   else if (a === 'follow') { if (VIEW.follow === +b) detachCam(); else followCar(+b); }
   else if (a === 'person') {
@@ -123,40 +125,20 @@ addEventListener('keydown', unlockSound, { once: true });
 // brandvåningen i menyn: slumpad eller en vald våning
 $('fireFloor').innerHTML = '<option value="">slumpad våning</option>' + FIRE_FLOORS.map(f => `<option value="${f}">våning ${fl(f)} · ${FL[f].short}</option>`).join('');
 /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll('#speeds .btn')).forEach(b => (b.onclick = () => setSpeed(+b.dataset.s)));
-// en knapp per styrlogik; förklaringen visas när musen vilar på knappen
+// en rad per styrlogik i styrbordet: knappen och förklaringen bredvid
 {
-  const bar = $('strats'), hint = $('stratHint');
+  const bar = $('strats');
   for (const k of STRATS) {
+    const row = document.createElement('div');
+    row.className = 'strat-row';
     const b = document.createElement('button');
     b.className = 'btn sm'; b.dataset.k = k; b.textContent = STRAT_NAMES[k];
-    b.onclick = () => { setStrategy(k); b.onmouseenter(null); };
-    b.onmouseenter = () => {
-      hint.innerHTML = STRAT_HINT[k] + (k === S.strategy ? '<div class="hint-on">✓ Används nu</div>' : '<div class="hint-on">Klicka för att byta (S byter i tur och ordning)</div>');
-      hint.style.left = `${Math.max(0, b.offsetLeft + b.offsetWidth / 2 - 150)}px`;
-      hint.classList.add('show');
-    };
-    b.onmouseleave = () => hint.classList.remove('show');
-    bar.appendChild(b);
+    b.onclick = () => setStrategy(k);
+    const hint = document.createElement('div');
+    hint.className = 'strat-hint'; hint.innerHTML = STRAT_HINT[k];
+    row.append(b, hint);
+    bar.appendChild(row);
   }
-}
-// förklaringar i topplisten: element med data-hint visar texten i en ruta under sig när musen vilar på dem
-{
-  const bar = $('topbar'), hint = $('tbHint');
-  let cur = /** @type {HTMLElement|null} */ (null);
-  const hide = () => { cur = null; hint.classList.remove('show'); };
-  bar.addEventListener('pointerover', ev => {
-    const t = /** @type {HTMLElement} */ (/** @type {HTMLElement} */ (ev.target).closest('[data-hint]'));
-    if (!t || !bar.contains(t)) { hide(); return; }
-    if (t === cur) return;
-    cur = t; hint.innerHTML = t.dataset.hint;
-    const r = t.getBoundingClientRect(), br = bar.getBoundingClientRect();
-    const w = hint.offsetWidth || 300;
-    hint.style.left = `${Math.max(0, Math.min(br.width - w, r.left - br.left + r.width / 2 - w / 2))}px`;
-    hint.style.top = `${r.bottom - br.top + 4}px`;
-    hint.classList.add('show');
-  });
-  bar.addEventListener('pointerleave', hide);
-  bar.addEventListener('pointerdown', hide);
 }
 chipGroup('rosterChips', 'rosterFilter', updateRoster);
 chipGroup('logChips', 'logFilter', () => { S.logDirty = true; updateHud(); });
@@ -173,7 +155,7 @@ $('tkClose').onclick = () => select(null);
 document.addEventListener('pointerdown', ev => {
   const t = /** @type {HTMLElement} */ (ev.target);
   // klick utanför en öppen popup stänger den
-  if (!t.closest('.pop') && !t.closest('[data-act="menu"]')) document.querySelectorAll('.pop.show').forEach(p => p.classList.remove('show'));
+  if (!t.closest('.pop')) document.querySelectorAll('.pop.show').forEach(p => p.classList.remove('show'));
   const a = /** @type {HTMLButtonElement} */ (t.closest('[data-act]'));
   if (a && !a.disabled) { ev.preventDefault(); doAction(a.dataset.act); }
 });

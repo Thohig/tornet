@@ -21,7 +21,7 @@ body{background:var(--desk);font-family:var(--ui);font-size:12px;color:var(--ink
 
 /* ---------- Topplist (ett fönster med titelrad) ---------- */
 #topbar{
-  flex:none;display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  flex:none;display:flex;align-items:center;gap:6px;flex-wrap:nowrap;min-width:0;
   background:var(--face);box-shadow:var(--raised);padding:4px 8px 4px 4px;position:relative;z-index:7;
 }
 .logo{
@@ -31,16 +31,21 @@ body{background:var(--desk);font-family:var(--ui);font-size:12px;color:var(--ink
 .logo span{color:var(--vga-y)}
 .tb-clock{display:flex;align-items:center;gap:6px}
 .clock{font-size:20px;line-height:26px;width:34px;height:26px;text-align:center;background:var(--dos);box-shadow:var(--sunken)}
-.tb-sub{line-height:1.15}
-.phase{font-weight:700;font-size:12px;white-space:nowrap}
-.day{font-size:11px;white-space:nowrap;color:#404040}
+.tb-sub{line-height:1.15;min-width:0;overflow:hidden}
+.tb-clock{min-width:0;flex:0 1 auto}
+.phase{font-weight:700;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.day{font-size:11px;white-space:nowrap;color:#404040;overflow:hidden;text-overflow:ellipsis}
 .tb-group{display:flex;gap:3px;align-items:center;position:relative}
 .speeds{display:flex;gap:3px}
 .strats{display:flex;gap:2px}
 .pop.hint{pointer-events:none}
 .hint-on{margin-top:5px;font-size:11px;color:#404040}
-.tb-stats{font-family:'VT323',monospace;font-size:17px;background:var(--dos);color:var(--vga-g);box-shadow:var(--sunken);padding:1px 8px;white-space:nowrap;margin-left:auto}
-.tabs{display:flex;gap:3px}
+.tb-stats{font-family:'VT323',monospace;font-size:17px;background:var(--dos);color:var(--vga-g);box-shadow:var(--sunken);padding:1px 8px;white-space:nowrap;margin-left:auto;min-width:0;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto}
+#speeds .btn{padding-left:6px;padding-right:6px}
+#speeds .btn.on{padding-left:7px;padding-right:5px}
+.tb-group{flex:none}
+.tabs{display:flex;gap:3px;flex:none}
+#btnCtl{white-space:nowrap;flex:none}
 .qbtn{font-family:var(--ui);font-weight:700;font-size:12px;width:20px;height:20px;border:0;background:var(--face);box-shadow:var(--raised);cursor:pointer;line-height:1;padding:0}
 .qbtn:active{box-shadow:var(--sunken)}
 
@@ -152,10 +157,6 @@ body{background:var(--desk);font-family:var(--ui);font-size:12px;color:var(--ink
 .btn.cam-b{display:flex;align-items:center;gap:4px;max-width:120px;white-space:nowrap;line-height:1;height:24px}
 .btn.cam-b span{overflow:hidden;text-overflow:ellipsis}
 .btn.cam-b:disabled{text-shadow:none}
-.cam-cars{display:flex;gap:2px}
-.cam-cars .btn.car-b{min-height:23px}
-.btn.car-b{background:var(--c);color:var(--ct);font-weight:700;min-width:26px;padding:1px 4px}
-.btn.car-b.on{box-shadow:var(--sunken);outline:2px solid #7dff9a;outline-offset:-2px}
 
 /* ---------- Lådan (spårad, register, logg, resultat): ett fönster som flyter över spelytan ---------- */
 #drawer{
@@ -266,38 +267,103 @@ body{background:var(--desk);font-family:var(--ui);font-size:12px;color:var(--ink
   #app{height:auto;min-height:100vh}
   body{overflow:auto}
   #main{flex-direction:column}
+  #topbar{flex-wrap:wrap}
   .tb-stats{margin-left:0}
 }
 
-/* ---------- Driftchefen: driftradion, regissörens bildtext, chefens rad på incidentkorten ---------- */
-/* driftradion: en DOS-skärm i övre vänstra hörnet med det senaste som hänt och chefens beslut */
-.feed{left:8px;top:8px;width:min(400px,calc(100% - 16px));background:var(--dos);color:var(--dos-txt);
-  box-shadow:var(--sunken),3px 3px 0 rgba(0,0,0,.35);padding:3px 6px 4px;font-size:11px;line-height:1.3;pointer-events:auto}
-.feed-h{font-family:'VT323',monospace;font-size:15px;color:var(--vga-g);cursor:pointer;display:flex;justify-content:space-between;gap:8px;line-height:1.1}
-.feed-h span{color:var(--vga-c);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.feed .fl{display:flex;gap:5px;align-items:baseline;opacity:.75}
-.feed .fl.new{opacity:1;color:#fff}
-.feed .fl.old{opacity:.45}
-.feed .fl.chief{color:var(--vga-y)}
-.feed .fl .lt{color:var(--shade);flex:none}
-.feed .fl .ld{flex:none;width:7px;height:7px;display:inline-block}
+/* ---------- Driftchefen: chefens rad på incidentkorten ---------- */
 .le.k-chief{color:var(--vga-y)}
-/* bevakningen i topplisten: vem som klipper bilden, vad hen visar (stort) och vad hen tänker */
-.crew{flex:1 1 300px;min-width:240px;max-width:520px;background:var(--dos);color:var(--dos-txt);box-shadow:var(--sunken);
-  padding:2px 8px 3px;line-height:1.2;cursor:pointer;overflow:hidden}
-.crew[hidden]{display:none}
-.crew>div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.crew-h{font-size:11px;color:var(--shade)}
-.crew-h b{color:var(--dos-txt)}
-.crew-h i{font-style:normal}
-.crew-rec{float:right;margin-left:8px;font-weight:700;color:var(--shade)}
-.crew.on .crew-rec{color:var(--vga-r)}
-.crew-show{font-family:'VT323',monospace;font-size:20px;line-height:20px;color:var(--vga-y)}
-.crew:not(.on) .crew-show{color:var(--vga-g)}
-.crew-th{font-size:11px;color:var(--vga-g);font-style:italic}
-/* klipp: rutan blixtrar till en kort stund */
-.crew.cut{box-shadow:var(--sunken),0 0 0 2px var(--vga-y)}
-.crew:hover{filter:brightness(1.15)}
+
+/* ---------- Kontrollrummet: ett fönster uppe till vänster i bilden (bevakaren, driftchefen, driftradion) ---------- */
+.ctl{left:8px;top:8px;width:min(380px,calc(100% - 16px));background:var(--face);
+  box-shadow:var(--raised),3px 3px 0 rgba(0,0,0,.35);padding:2px 3px 3px;font-size:11px;line-height:1.3}
+.ctl-t{display:flex;align-items:center;gap:3px;color:#fff;font-weight:700;font-size:11px;padding:2px 3px 2px 5px;
+  background:linear-gradient(90deg,var(--navy),var(--title2));margin-bottom:2px}
+.ctl-tt{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ctl-cam{background:var(--dos);color:var(--dos-txt);box-shadow:var(--sunken);padding:2px 6px 3px;cursor:pointer}
+.ctl-cam>div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ctl-cam:hover{filter:brightness(1.15)}
+.ctl-cam.cut{box-shadow:var(--sunken),0 0 0 2px var(--vga-y)}
+.ctl-h b{color:#fff}
+.ctl-rec{float:right;margin-left:8px;font-weight:700;color:var(--shade)}
+.ctl-cam.on .ctl-rec{color:var(--vga-r)}
+.ctl-show{font-family:'VT323',monospace;font-size:22px;line-height:22px;color:var(--vga-y)}
+.ctl-cam:not(.on) .ctl-show{color:var(--vga-g)}
+.ctl-th{color:var(--vga-g);font-style:italic}
+.ctl-dim{color:var(--shade)}
+.ctl-cam .ctl-dim{color:#9a9a9a}
+.ctl-chief{background:var(--note);box-shadow:var(--sunken);padding:3px 6px;margin-top:3px}
+.ctl-chief .ctl-dim{color:#606060}
+.ctl-radio{background:var(--dos);color:var(--dos-txt);box-shadow:var(--sunken);padding:2px 6px 3px;margin-top:3px;cursor:pointer}
+.ctl-r{display:flex;gap:5px;align-items:baseline;opacity:.75;white-space:nowrap;overflow:hidden}
+.ctl-r>span:last-child{overflow:hidden;text-overflow:ellipsis}
+.ctl-r.new{opacity:1;color:#fff}
+.ctl-r.old{opacity:.45}
+.ctl-r.chief{color:var(--vga-y)}
+.ctl-r .lt{color:var(--shade);flex:none}
+.ctl-r .ld{flex:none;width:7px;height:7px;display:inline-block}
+/* ihopfällt: titelraden och vad som visas */
+.ctl.fold .ctl-h,.ctl.fold .ctl-th,.ctl.fold .ctl-chief,.ctl.fold .ctl-radio{display:none}
+.ctl.fold .ctl-show{font-size:18px;line-height:18px}
+
+/* ---------- Dygnets tidslinje under topplisten ---------- */
+#timeline{flex:none;position:relative;height:20px;background:var(--dos);box-shadow:var(--sunken);margin:0 0 2px;overflow:hidden}
+.tl-b{position:absolute;top:2px;bottom:2px;overflow:hidden;border-right:1px solid #000}
+.tl-b span{position:absolute;left:4px;top:0;font-size:10px;line-height:16px;white-space:nowrap;color:#fff;opacity:.85}
+.tl-b.night{background:#1a1f4a}
+.tl-b.day{background:#2f6f8f}
+.tl-b.rush{background:#9a6a12}
+.tl-b.eve{background:#5a3a7a}
+.tl-now{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--vga-y);box-shadow:0 0 0 1px #000;pointer-events:none}
+.tl-marks{position:absolute;inset:0}
+.tl-m{position:absolute;top:1px;transform:translateX(-50%);border:0;background:var(--face);box-shadow:var(--raised);
+  font-size:11px;line-height:16px;height:18px;min-width:18px;padding:0 1px;cursor:pointer}
+.tl-m:active{box-shadow:var(--sunken)}
+.tl-m.warn{background:var(--vga-y);animation:pulse 0.6s infinite alternate}
+
+/* ---------- Minikartan till vänster om bilden ---------- */
+#mini{flex:none;width:96px;margin-right:2px;background:#000;box-shadow:var(--sunken);padding:2px;display:flex}
+#miniCv{flex:1;width:100%;height:100%;display:block;cursor:pointer;image-rendering:pixelated}
+@media (max-width:800px){#mini{display:none}} /* (smalt: allt staplas på höjden – då får bilden platsen) */
+
+/* ---------- Högerklicksmenyn i bilden ---------- */
+.ctx{position:absolute;left:0;top:0;z-index:12;min-width:200px;background:var(--face);box-shadow:var(--raised),3px 3px 0 rgba(0,0,0,.35);padding:2px}
+.ctx[hidden]{display:none}
+.ctx-t{font-weight:700;color:#fff;background:linear-gradient(90deg,var(--navy),var(--title2));padding:3px 6px;margin-bottom:2px;white-space:nowrap}
+.ctx-s{font-weight:400;opacity:.8;margin-left:4px}
+.ctx-i{padding:2px 8px 3px 24px;color:#404040;font-size:11px}
+.ctx-b{display:block;width:100%;text-align:left;border:0;background:none;font:inherit;font-size:12px;padding:3px 8px;cursor:pointer;white-space:nowrap}
+.ctx-b:hover:not(:disabled){background:var(--navy);color:#fff}
+.ctx-b:disabled{color:var(--shade);cursor:default}
+
+/* ---------- Statusraden längst ner ---------- */
+#status{flex:none;display:flex;gap:10px;align-items:center;height:22px;margin-top:2px;padding:0 6px;background:var(--face);box-shadow:var(--raised);font-size:11px}
+#statusTxt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:var(--sunken);padding:2px 6px;line-height:14px}
+#statusTxt code{font-size:10px}
+#statusKeys{flex:none;color:#404040;white-space:nowrap}
+@media (max-width:900px){#statusKeys{display:none}}
+
+/* ---------- Styrbordet: ett fönster med flikar under topplisten ---------- */
+.dlg{position:fixed;top:48px;right:10px;z-index:30;width:min(440px,calc(100vw - 20px));max-height:calc(100vh - 70px);overflow-y:auto;
+  background:var(--face);box-shadow:var(--raised),4px 4px 0 rgba(0,0,0,.35);padding:3px 8px 8px;font-size:12px;line-height:1.4}
+.dlg[hidden],.dlg-pane[hidden]{display:none}
+.dlg-t{display:flex;justify-content:space-between;align-items:center;font-weight:700;color:#fff;background:linear-gradient(90deg,var(--navy),var(--title2));margin:0 -5px 6px;padding:3px 6px}
+.dlg-tabs{display:flex;gap:3px;margin-bottom:8px}
+.dlg-note{font-weight:400;font-size:11px;opacity:.85}
+.strats{display:flex;flex-direction:column;gap:5px}
+.strat-row{display:grid;grid-template-columns:96px 1fr;gap:8px;align-items:start}
+.strat-row .btn{width:100%}
+.strat-hint{font-size:11px;line-height:1.3;color:#303030}
+
+/* ---------- Biografläget: bara bilden och en textskylt nertill ---------- */
+.lower{left:50%;bottom:24px;transform:translateX(-50%);width:min(640px,calc(100% - 32px));pointer-events:none;
+  background:linear-gradient(90deg,rgba(0,0,128,.92),rgba(16,132,208,.88));color:#fff;box-shadow:var(--raised),4px 4px 0 rgba(0,0,0,.4);padding:6px 14px 8px}
+.lw-tag{font-size:11px;font-weight:700;color:var(--vga-y);letter-spacing:.5px}
+.lw-show{font-family:'VT323',monospace;font-size:34px;line-height:34px}
+.lw-sub{font-size:13px;font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lw-key{position:absolute;right:10px;top:6px;font-size:10px;opacity:.7}
+body.cinema #topbar,body.cinema #timeline,body.cinema #mini,body.cinema #status,body.cinema #ctl,body.cinema #drawer,
+body.cinema #incPanel,body.cinema #carPop,body.cinema .dlg{display:none !important}
 /* chefens beslut på incidentkortet; när chefen har det i handen blinkar kortet inte */
 .inc-chief{margin-top:5px;padding:3px 5px;background:var(--note);box-shadow:var(--sunken);font-size:11.5px;line-height:1.35}
 .inc-chief.you{background:#e6f0ff}
