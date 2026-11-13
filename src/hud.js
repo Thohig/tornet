@@ -17,6 +17,7 @@ import { STORM_HINT, windMs } from './weather.js';
 import { FAN_KW, jobFloor, tech, techOf, cableStatus } from './service.js';
 import { hoistHalt, hoistStatus } from './hoist.js';
 import { BLANKET_T } from './visits.js';
+import { chiefOnDuty } from './chief.js';
 import { updatePauseBtn } from './input.js';
 
 // ---------- HUD: DOM ----------
@@ -190,6 +191,12 @@ export function carActs(e) {
   if (e.mode === 'normal' && !e.serviceAsap && !e.hold && S.started) b.push(`<button class="btn xs" data-act="level:${e.id}" title="Hissteknikern kommer direkt, även på dagen">🔧 Beställ service</button>`);
   if (!S.power && e.mode === 'normal' && e.passengers.length && !(e.state === 'doors' && e.door >= 0.95))
     b.push(`<button class="btn xs hot2" data-act="pow:rescue:${e.id}" ${canRescue(e) ? '' : 'disabled'}>🔋 Nödsänk (${e.passengers.length})</button>`);
+  // framkalla något i just den här hissen
+  if (S.started && e.mode === 'normal') {
+    b.push(`<span class="trig-car">Framkalla:<button class="btn xs" data-act="trig:fault:${e.id}" title="Hissen går sönder vid nästa stopp (ibland mellan två våningar med folk i)">🔧 Fel</button>`
+      + `<button class="btn xs" data-act="trig:heat:${e.id}" ${e.hot ? 'disabled' : ''} title="Kylningen hakar upp sig och motorn blir het">🌡️ Het</button>`
+      + `${e.facade ? '' : `<button class="btn xs" data-act="trig:cable:${e.id}" ${e.snapNext ? 'disabled' : ''} title="Linorna går av på nästa åktur">🪢 Linbrott</button>`}</span>`);
+  }
   return b.join('');
 }
 // ---------- Kamerareglaget i topplisten: 📹-knappen visar vad kameran följer och kopplar loss/på (som F),
@@ -286,6 +293,39 @@ ${st.extraTechs ? `    <div class="stat">Extra tekniker inringda <b>${st.extraTe
     ${learnMap()}
     <div class="grade">Service: ${st.waitN ? g.letter : '–'} <span class="stars">${st.waitN ? '★'.repeat(g.stars) + '☆'.repeat(5 - g.stars) : ''}</span> · Säkerhet: ${sg}</div>`;
   updateIncidents();
+  updateFeed();
+  updateCaption();
+}
+// ---------- Driftradion: det senaste som hänt och driftchefens beslut, i klartext ----------
+let feedKey = '';
+const FEED_QUIET_S = 25;
+function updateFeed() {
+  const el = $('feed'), F = S.feed.slice(-3);
+  const show = S.started && F.length > 0;
+  if (el.hidden === show) el.hidden = !show;
+  if (!show) return;
+  // lugnt en stund: bara titelraden (radion tar inte plats i bilden i onödan)
+  const quiet = S.t - F[F.length - 1].t > FEED_QUIET_S;
+  const key = `${F.map(f => f.t).join('|')}|${chiefOn()}|${chiefOnDuty().name}|${Math.floor(S.t / 5)}|${quiet}`;
+  if (key === feedKey) return;
+  feedKey = key;
+  const head = chiefOn() ? `🧑‍💼 ${esc(chiefOnDuty().name)} vid kontrollbordet` : '🧑‍💼 driftchefen har rast';
+  el.innerHTML = `<div class="feed-h" data-act="tab:log" title="Hela loggen">📻 DRIFTRADIO <span>${head}</span></div>`
+    + (quiet ? '' : F.map((f, i) => `<div class="fl${i === F.length - 1 ? ' new' : ''}${f.kind === 'chief' ? ' chief' : ''}${S.t - f.t > 60 ? ' old' : ''}">`
+      + `<span class="lt">${f.time}</span>${f.color ? `<span class="ld" style="background:${f.color}"></span>` : ''}<span>${esc(f.text)}</span></div>`).join(''));
+}
+// ---------- Regissörens bildtext: vad kameran klippte till, en stund efter klippet ----------
+const CAPTION_S = 4;
+let capKey = '';
+function updateCaption() {
+  const el = $('caption'), s = VIEW.shot;
+  const on = VIEW.auto && !!s && S.anim - s.t0 < CAPTION_S;
+  if (el.hidden === on) el.hidden = !on;
+  if (!on) return;
+  const key = `${s.key}|${s.t0}|${s.why}`;
+  if (key === capKey) return;
+  capKey = key;
+  el.innerHTML = `<span class="rec">🎬</span>${esc(s.why)}`;
 }
 /** värmekartan över det styrningen har lärt sig: köer per våning (rader) och timme (kolumner) */
 function learnMap() {
@@ -299,6 +339,18 @@ function learnMap() {
   }
   return `<div class="learn"><div class="learn-h">🧠 Inlärd trafik (kö per våning och timme, 07–19)</div>${rows.join('')}</div>`;
 }
+/** Driftchefens rad på ett incidentkort: chefens beslut och varför, eller spelarens val och knappen tillbaka.
+ *  q = frågan till spelaren när chefen inte sköter beslutet. */
+function chiefLine(key, q) {
+  const C = S.chief, d = C && C.dec[key];
+  if (C && C.manual[key]) return `<div class="inc-chief you">👤 <b>Du bestämmer:</b> ${esc(d ? d.text : '')}`
+    + ` <button class="btn xs" data-act="chief:${key}" title="Driftchefen tar över beslutet igen">🧑‍💼 Låt driftchefen bestämma</button></div>`;
+  if (!C || !C.on) return `<div class="inc-q">${q}</div>`;
+  const who = esc(chiefOnDuty().name);
+  return (d ? `<div class="inc-chief">🧑‍💼 <b>${who}:</b> ${esc(d.text)}${d.why ? ` <span class="why">– ${esc(d.why)}</span>` : ''}</div>`
+    : `<div class="inc-chief">🧑‍💼 <b>${who}</b> håller ögonen på skärmarna…</div>`) + '<div class="inc-q">Ta över beslutet:</div>';
+}
+const chiefOn = () => !!(S.chief && S.chief.on);
 export function incidentHtml() {
   const parts = [];
   // ---------- stormen (incident med val, som branden) ----------
@@ -307,7 +359,7 @@ export function incidentHtml() {
     const b = (m, txt) => `<button class="btn sm${St.mode === m ? ' on' : ''}" data-act="storm:${m}">${txt}</button>`;
     parts.push(card('storm', 'storm', `🌬️ Storm – <span class="lv">${windMs()}</span> m/s`, `
       <div class="inc-s">De höga schakten och panoramahissen på fasaden svajar. Bedarrar om ~${cd(St.t0 + St.len - S.t)}s.${St.faults ? ` Vajerlarm: <b>${num(St.faults)}</b>` : ''}</div>
-      <div class="inc-q">Hur ska hissarna köras?</div>
+      ${chiefLine('storm', 'Hur ska hissarna köras?')}
       <div class="inc-acts">${b('sway', '🌬️ Svajläge')}${b('none', 'Kör som vanligt')}</div>
       <div class="inc-hint">${STORM_HINT[St.mode]}</div>
       ${P ? `<div class="inc-acts"><button class="btn xs" data-act="follow:${P.id}">📹 Visa panoramahissen</button></div>` : ''}`, true));
@@ -317,6 +369,7 @@ export function incidentHtml() {
     if (!e.hot) continue;
     parts.push(card(`heat-${e.id}`, 'heat', `🌡️ Motorn i hiss ${esc(e.name)} är överhettad`, `
       <div class="inc-s">Överhettningsskyddet har löst ut (<span class="lv">${motorC(e)}</span> °C): ${esc(e.name)} kör klart sina passagerare men tar inga nya förrän motorn har svalnat.</div>
+      ${chiefLine(`heat${e.id}`, 'Starta extrafläkten?')}
       <div class="inc-acts"><button class="btn sm${e.fan ? ' on' : ''}" data-act="fan:${e.id}" ${e.fan ? 'disabled' : ''}>🌀 ${e.fan ? 'Extrafläkten går' : 'Starta extrafläkt'}</button><button class="btn xs" data-act="follow:${e.id}">📹 Visa hissen</button></div>
       <div class="inc-hint">Fläkten kyler ungefär fyra gånger snabbare men drar ${FAN_KW} kW. Smart och Energisnål undviker varma motorer, Rusning tar risken längre, och Närmast, Kaos och Knappar bryr sig inte alls.</div>`, true));
   }
@@ -365,7 +418,8 @@ export function incidentHtml() {
           + (M.notes.truck ? ' Leveransbilen får vänta på gatan – flyttbilen står vid lastkajen.' : '')
           + (S.power ? '' : ' Strömavbrott: flyttgubbarna väntar ut det med möblerna vid hissen – den som har tomma händer tar trapporna.')
         : `Flytten är klar: ${num(M.loads)} lass på ${Math.round(M.t1 - M.t0)} s${M.hoisted ? ` (${num(M.hoisted)} med hissbalken och panoramahissen)` : ''}, varuhissen var låst i ${Math.round(M.indepSec)} s. Den går i vanlig trafik igen.`;
-    info(`move-${S.day}`, 'move', `🚚 Flyttdag på ${fl(M.floor)}`, body,
+    const mc = M.state === 'done' ? '' : chiefLine('move', 'Välj väg för möblerna:');
+    info(`move-${S.day}`, 'move', `🚚 Flyttdag på ${fl(M.floor)}`, body + mc,
       `${routes}${blank}${wind}${V && M.state !== 'planned' ? `<button class="btn xs" data-act="follow:${V.id}">📹 Följ varuhissen</button>` : ''}<button class="btn xs" data-act="show:${M.floor}">Visa våningen</button><button class="btn xs" data-act="show:${DOCK}">Lastkajen</button>`);
   }
   const A = S.medic;
@@ -407,7 +461,7 @@ export function incidentHtml() {
     parts.push(card('fire', 'fire', `🔥 Brand på våning ${fl(F.floor)}`, `
       <div class="inc-s">${status}. Våning ${fl(F.floor - 1)}–${fl(TOP)} utryms.</div>
       <div class="inc-s">Rökexponerade: <b>${num(F.smoked)}</b> · Utrymda: <b>${num(F.evac)}</b>${outside ? ` · På återsamlingsplatsen: <b>${num(outside)}</b>` : ''}</div>
-      <div class="inc-q">Larmet återkallade hissarna – vill du köra dem annorlunda?</div>
+      ${chiefLine('fire', 'Larmet återkallade hissarna – vill du köra dem annorlunda?')}
       <div class="inc-acts">${b('recall', '🚒 Brandåterkallning')}${b('zone', `🚧 Bara E–${fl(zmax)}`)}${b('none', 'Normal drift')}</div>
       <div class="inc-hint">${FIRE_HINT[F.mode]}</div>
       <div class="inc-acts"><button class="btn xs" data-act="show:${F.floor}">Visa våningen</button></div>`, true));
@@ -421,16 +475,16 @@ export function incidentHtml() {
     const busy = O.busy !== null ? `Nödsänker hiss ${EL[O.busy].name} just nu…` : O.gen ? 'Välj vilken hiss som ska nödsänkas nedan – eller slå på auto.' : '';
     parts.push(card('power', 'power', '⚡ Strömavbrott', `
       <div class="inc-s">Strömmen tillbaka om ~${cd(O.backAt - S.t)}s · Instängda nu: <b>${num(trapped)}</b> · Instängd-sek idag: <b>${num(S.stats.trappedSec)}</b></div>
-      <div class="inc-q">Vad gör du?</div>
+      ${chiefLine('power', 'Vad gör du?')}
       <div class="inc-acts">${gen}<button class="btn sm${O.auto ? ' on' : ''}" data-act="pow:auto" ${O.gen ? '' : 'disabled'}>Auto-räddning: ${O.auto ? 'PÅ' : 'AV'}</button></div>
       <div class="inc-acts">${S.elevators.filter(e => e.mode === 'normal' && e.passengers.length && !(e.state === 'doors' && e.door >= 0.95)).map(e =>
         `<button class="btn xs hot2" data-act="pow:rescue:${e.id}" ${canRescue(e) ? '' : 'disabled'}>Nödsänk ${e.name} (${e.passengers.length} inne)</button>`).join('')}</div>
-      <div class="inc-hint">${busy || 'Utan åtgärd sitter folk fast tills strömmen kommer tillbaka. Reservkraften räcker till EN hiss i taget – välj ordning, t.ex. fullaste först.'}</div>`, true));
+      <div class="inc-hint">${busy || (chiefOn() ? 'Reservkraften räcker till EN hiss i taget – driftchefen nödsänker fullaste hissen först (ambulanspersonalen allra först).' : 'Utan åtgärd sitter folk fast tills strömmen kommer tillbaka. Reservkraften räcker till EN hiss i taget – välj ordning, t.ex. fullaste först.')}</div>`, true));
   }
   return parts;
 }
 /** ett kort i incidentrutan: incidenter (alert) kan åtgärdas, informationsrutor (closable) bara stängas */
-function card(k, cls, head, body, alert = false, closable = false) { return { k, cls, head, body, alert, closable }; }
+function card(k, cls, head, body, alert = false, closable = false) { return { k, cls: cls + (alert && chiefOn() ? ' calm' : ''), head, body, alert, closable }; }
 // Incidentrutan är en list längs spelytans nederkant: korten fälls ut över den och fälls ihop till
 // små flikar, så att bilden inte täcks. Incidenter är utfällda tills spelaren fäller ihop dem;
 // informationsrutor fälls ut en stund när de dyker upp och glider sedan ner i listen. (Bara gränssnittet.)
@@ -612,7 +666,8 @@ export function showIntro() {
       <li>Hissarna är <b>zonindelade</b>: L1–L2 går i låg zon (TB–5) och H1–H2 i hög zon (6–T) – <b>staplade i samma schakt</b>. Expresshissarna X1–X2 kör E ⇄ 6 utan stopp, och X1 går ända ner till <b>tunnelbanan</b> (TB) – där kommer folk i klump varje gång ett tåg stannar. Den som ska mellan zonerna <b>byter hiss</b> (↹) i entrén och i sky lobbyn. Varuhissen V tar städvagnar och paket, och panoramahissen P åker utanpå fasaden.</li>
       <li>Huset <b>lever</b>: bilar kör in i garaget, leveransbilen lastar av vid kajen, de boende sover, jobbar och går på taket, en fönsterputsare jobbar sig nedåt utanför tornet, hundägare kommer med raggiga pudlar och går hem med nyklippta, och ibland landar en VIP-helikopter på taket.</li>
       <li>Ett <b>dygn</b> tar ungefär ${Math.round(dayLength() / 60)} minuter – ☀️ dag och 🌙 natt syns uppe till vänster. Trafiken följer dygnet – rusning på morgonen, lunch, hemgång (de får mest tid) – och på natten är det bara väktare, städare och nattugglor. Vissa våningar stänger (caféet, banken …).</li>
-      <li><b>Incidenter</b> händer: brand, strömavbrott och hissfel – då kommer en hisstekniker och lagar. Slitna hissar går oftare sönder, och utan nattservice följer slitaget med till nästa dygn. Då dyker en ruta upp med dina val. Under <b>⋯</b> kan du utlösa dem själv.</li>
+      <li><b>Huset sköter sig självt.</b> I <b>driftcentralen</b> på P1 sitter driftchefen (Gun-Britt på dagen, Rune på natten) och tar alla beslut när något händer – svajläge i stormen, brandzon, reservkraft, extrafläkt, service – och säger varför. Det hörs i <b>driftradion</b> uppe till vänster och syns på rutan som dyker upp. Vill du bestämma själv tar du över beslutet på rutan.</li>
+      <li><b>Incidenter</b> händer av sig själva: brand, strömavbrott, storm och hissfel – då kommer en hisstekniker och lagar. Slitna hissar går oftare sönder, och utan nattservice följer slitaget med till nästa dygn. Under <b>⋯</b> ställer du in hur ofta (<b>slumpen</b>) och <b>framkallar</b> allt själv: brand på en viss våning, blixt, flyttdag, VIP, tågstörning, kyla … Klicka på en hiss för att ge just den ett fel.</li>
       <li>Bilden visar <b>hallen framför hissarna</b> – rummen ligger bakom korridoren, och folk syns när de kommer ut för att vänta på hissen. Siffran vid korridoren är hur många som är inne.</li>
       <li><b>Klicka på en person</b> för att spåra hen – en lapp följer personen och 👤 visar allt, även när hen är inne i rummen. <b>Klicka på en korridor</b> för att spåra någon som är därinne. <b>Klicka på en hiss</b> för dess plan, last och knappen 📹 Följ.</li>
       <li>Klicka på en tom yta på en våning för att släppa in en besökare. <b>BUSS!</b> släpper in en busslast.</li>
@@ -632,6 +687,16 @@ function moveSummary() {
   return `<div>🚚 Flytten (${esc(M.who)}): <b>${dur}</b> · ${route}</div><div>Via varuhissen <b>${M.viaV}</b> · hissbalken <b>${M.hoisted}</b> lass</div>
       <div>Varuhissen låst: <b>${Math.round(M.indepSec)} s</b>${M.blankets ? ' (med skyddsfiltar)' : ` · repor <b>${M.scratches}</b>`}</div><div>Buden väntade som mest: <b>${Math.round(M.budWait)} s</b>${M.dockWait ? ` · flyttbilen väntade ${Math.round(M.dockWait)} s` : ''}</div>
       <div>Vändes i dörren: <b>${M.pivots}</b>${M.stuck ? ` (fastnade helt ${M.stuck})` : ''}</div><div>Tappat: <b>${M.broken}</b> lass 💥</div>`;
+}
+/** dagens sammanfattning: driftchefens (och spelarens) beslut och hur det gick */
+function chiefSummary() {
+  const C = S.chief;
+  const ds = C ? C.log.filter(d => !d.info) : [];
+  if (!ds.length) return `<div class="chiefsum"><h2>🧑‍💼 Driftchefens dag</h2><p>Ett lugnt dygn – inga beslut behövde tas.</p></div>`;
+  const rows = ds.slice(-14).map(d => `<li><span class="ct">${d.time}</span> ${d.by === 'player' ? '👤 <b>Du:</b>' : '🧑‍💼'} <b>${esc(d.text)}</b>`
+    + `${d.why ? ` <span class="why">– ${esc(d.why)}</span>` : ''}${d.outcome ? `<div class="out">→ ${esc(d.outcome)}</div>` : ''}</li>`).join('');
+  const mine = ds.filter(d => d.by === 'player').length;
+  return `<div class="chiefsum"><h2>🧑‍💼 Driftchefens dag</h2><p>${ds.length - mine} beslut av driftchefen${mine ? `, ${mine} av dig` : ''}${ds.length > 14 ? ' (de senaste 14)' : ''}.</p><ul>${rows}</ul></div>`;
 }
 export function showSummary() {
   S.summaryShown = true; S.paused = true;
@@ -661,6 +726,7 @@ export function showSummary() {
       ${moveSummary()}
       <div>Tog trappan frivilligt: <b>${st.stairsChoice}</b></div><div>Mest sliten: <b>${S.elevators.reduce((a, e) => (e.wear > a.wear ? e : a)).name} ${Math.round(Math.max(...S.elevators.map(e => e.wear)) * 100)} %</b></div>
     </div>
+    ${chiefSummary()}
     <button class="btn" id="next">NÄSTA DAG ▶</button></div>`);
   $('next').onclick = () => { hideOverlay(); newDay(); };
 }

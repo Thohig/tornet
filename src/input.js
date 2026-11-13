@@ -1,7 +1,8 @@
 // Knappar, tangentbord och klick i spelet.
 import { act } from './actions.js';
-import { clamp } from './util.js';
-import { BX0, CAR_H, CAR_W, DOOR_X, FLOOR_H, GROUND_Y, H, INNER_X1, ROOF_Y, STRAT_HINT, STRAT_NAMES, TOP, WAIT_X1, floorY, shaftX, surf, LOBBY } from './config.js';
+import { clamp, fl } from './util.js';
+import { FIRE_FLOORS } from './incidents.js';
+import { FL, BX0, CAR_H, CAR_W, DOOR_X, FLOOR_H, GROUND_Y, H, INNER_X1, ROOF_Y, STRAT_HINT, STRAT_NAMES, TOP, WAIT_X1, floorY, shaftX, surf, LOBBY } from './config.js';
 import { S, log } from './state.js';
 import { VIEW, camTarget, cv, detachCam, followCar, lookAt, scrollBy, scrollToFloor } from './view.js';
 import { personHead, peopleBehindDoor } from './render.js';
@@ -25,15 +26,16 @@ export function setStrategy(k) {
 /** Knapparna visar simuleringens inställningar (de kan ändras av ett nytt dygn) */
 let shown = '';
 export function syncControls() {
-  const key = `${S.strategy}|${S.autoInc}|${S.mistakes}|${S.maint}`;
+  const key = `${S.strategy}|${S.incLevel}|${S.chief && S.chief.on}|${S.mistakes}|${S.maint}`;
   if (key === shown) return;
   shown = key;
   $('strats').querySelectorAll('.btn').forEach(b => b.classList.toggle('on', /** @type {HTMLElement} */ (b).dataset.k === S.strategy));
-  /** @type {HTMLInputElement} */ ($('autoInc')).checked = S.autoInc;
   $('btnAuto').classList.toggle('on', VIEW.auto);
-  for (const [id, key] of [['mistakeChips', 'mistakes'], ['maintChips', 'maint']]) {
+  for (const [id, key] of [['mistakeChips', 'mistakes'], ['maintChips', 'maint'], ['levelChips', 'incLevel']]) {
     $(id).querySelectorAll('.chip').forEach(c => c.classList.toggle('on', /** @type {HTMLElement} */ (c).dataset.f === S[key]));
   }
+  const on = S.chief && S.chief.on ? 'on' : 'off';
+  $('chiefChips').querySelectorAll('.chip').forEach(c => c.classList.toggle('on', /** @type {HTMLElement} */ (c).dataset.f === on));
 }
 export function toggleTags() { S.tags = !S.tags; $('btnTags').classList.toggle('on', S.tags); }
 /** koppla på kameran igen på det den senast följde (hiss, person eller våning) */
@@ -72,7 +74,13 @@ export function chipGroup(id, key, after, sim = false) {
 }
 export function doAction(cmd) {
   const [a, b, c] = cmd.split(':');
-  if (a === 'trig') { if (S.started) act('trigger', b); }
+  if (a === 'trig') {
+    if (!S.started) return;
+    const sel = /** @type {HTMLSelectElement} */ ($('fireFloor'));
+    const target = c !== undefined ? +c : b === 'fire' && sel.value !== '' ? +sel.value : null;
+    act('trigger', b, target);
+  }
+  else if (a === 'chief') act('chiefBack', b);
   else if (a === 'fire') act('fireMode', b);
   else if (a === 'storm') act('stormMode', b);
   else if (a === 'fan') act('fan', +b);
@@ -110,7 +118,8 @@ syncSound();
 // ljudet var påslaget förra gången: webbläsaren släpper fram det först efter ett klick eller en tangent
 addEventListener('pointerdown', unlockSound, { once: true });
 addEventListener('keydown', unlockSound, { once: true });
-$('autoInc').onchange = ev => { act('setting', 'autoInc', /** @type {HTMLInputElement} */ (ev.target).checked); syncControls(); };
+// brandvåningen i menyn: slumpad eller en vald våning
+$('fireFloor').innerHTML = '<option value="">slumpad våning</option>' + FIRE_FLOORS.map(f => `<option value="${f}">våning ${fl(f)} · ${FL[f].short}</option>`).join('');
 /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll('#speeds .btn')).forEach(b => (b.onclick = () => setSpeed(+b.dataset.s)));
 // en knapp per styrlogik; förklaringen visas när musen vilar på knappen
 {
@@ -149,6 +158,12 @@ $('autoInc').onchange = ev => { act('setting', 'autoInc', /** @type {HTMLInputEl
 }
 chipGroup('rosterChips', 'rosterFilter', updateRoster);
 chipGroup('logChips', 'logFilter', () => { S.logDirty = true; updateHud(); });
+for (const [id, apply] of /** @type {[string, (v: string) => void][]} */ ([['levelChips', v => act('incLevel', v)], ['chiefChips', v => act('chief', v === 'on')]])) {
+  $(id).addEventListener('click', ev => {
+    const b = /** @type {HTMLElement} */ (/** @type {HTMLElement} */ (ev.target).closest('.chip')); if (!b) return;
+    apply(b.dataset.f); syncControls(); S.incHtml = ''; updateHud();
+  });
+}
 chipGroup('mistakeChips', 'mistakes', () => { log(`Felknappar: ${S.mistakes}`, 'sys'); syncControls(); }, true);
 chipGroup('maintChips', 'maint', () => { log(S.maint === 'natt' ? '🔧 Underhåll: nattservice av slitna hissar' : '🔧 Underhåll: bara när något går sönder', 'sys'); syncControls(); }, true);
 $('tkClose').onclick = () => select(null);

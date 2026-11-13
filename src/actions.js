@@ -4,10 +4,13 @@ import { STRAT_NAMES } from './config.js';
 import { S, log } from './state.js';
 import { pev, spawnBus, spawnVisitor } from './people.js';
 import { rebuildPicks } from './dispatch.js';
-import { setFireMode, startGenerator, startRescue, toggleAutoRescue, toggleOff, trigger } from './incidents.js';
-import { setStormMode } from './weather.js';
-import { setMoveBlankets, setMoveRoute, setMoveWind } from './visits.js';
+import { setFireMode, setIncLevel, startGenerator, startRescue, toggleAutoRescue, toggleOff, trigger } from './incidents.js';
+import { setStormMode, setWeather, strikeNow } from './weather.js';
+import { moveNow, setMoveBlankets, setMoveRoute, setMoveWind } from './visits.js';
 import { orderService, startFan } from './service.js';
+import { delayTrain } from './train.js';
+import { vipNow } from './life.js';
+import { chiefBack, playerChose, setChief } from './chief.js';
 
 /** Byt styrlogik: hallknapparna nollställs och alla väntande fördelas om. */
 export function changeStrategy(k) {
@@ -21,26 +24,41 @@ export function changeStrategy(k) {
   log(`Styrlogik bytt till ${STRAT_NAMES[k]} – alla väntande fördelas om`, 'sys');
 }
 /** inställningar som spelaren kan ändra under dygnet */
-const SETTINGS = ['autoInc', 'mistakes', 'maint'];
+const SETTINGS = ['mistakes', 'maint'];
+/** Allt spelaren kan framkalla. target = våning (brand) eller hiss (hissfel, het motor, linbrott); utelämnat = slumpen väljer. */
+export const TRIGGERS = ['fire', 'power', 'fault', 'storm', 'heat', 'cable', 'medical', 'move', 'lightning', 'cold', 'heatwave', 'train', 'vip'];
+function triggerAny(type, target = null) {
+  if (type === 'move') return moveNow();
+  if (type === 'lightning') return strikeNow();
+  if (type === 'cold' || type === 'heatwave') return setWeather(type);
+  if (type === 'train') return delayTrain();
+  if (type === 'vip') return vipNow();
+  return trigger(type, target);
+}
+const FIRE_TEXT = { recall: 'Brandåterkallning', zone: 'Brandzon', none: 'Normal drift i branden' };
+const car = id => S.elevators[id];
 
 /** Alla spelaråtgärder. Argumenten är rena data (id, våningsindex, strängar). */
 export const ACTIONS = {
-  trigger: type => trigger(type),
-  fireMode: m => setFireMode(m),
-  generator: () => startGenerator(),
-  autoRescue: () => toggleAutoRescue(),
-  rescue: id => startRescue(S.elevators[id], 'manual'),
-  carOff: id => toggleOff(S.elevators[id]),
-  strategy: k => changeStrategy(k),
+  trigger: (type, target = null) => triggerAny(type, target),
+  fireMode: m => { if (!S.fire) return; setFireMode(m); playerChose('fire', FIRE_TEXT[m], { inc: 'fire' }); },
+  generator: () => { if (!S.outage) return; startGenerator(); playerChose('power', 'Reservkraften startad', { inc: 'power' }); },
+  autoRescue: () => { if (!S.outage) return; toggleAutoRescue(); playerChose('power', `Auto-räddning ${S.outage.auto ? 'på' : 'av'}`, { inc: 'power' }); },
+  rescue: id => { if (!S.outage) return; startRescue(car(id), 'manual'); playerChose('power', `Nödsänk ${car(id).name}`, { inc: 'power', car: id }); },
+  carOff: id => toggleOff(car(id)),
+  strategy: k => { changeStrategy(k); playerChose('strategy', STRAT_NAMES[k]); },
   setting: (key, v) => { if (SETTINGS.includes(key)) S[key] = v; },
-  stormMode: m => setStormMode(m),
-  fan: id => startFan(S.elevators[id]),
-  service: id => orderService(S.elevators[id]),
+  incLevel: v => setIncLevel(v),
+  chief: on => setChief(on),
+  chiefBack: key => chiefBack(key),
+  stormMode: m => { if (!S.storm) return; setStormMode(m); playerChose('storm', m === 'sway' ? 'Svajläge' : 'Kör som vanligt', { inc: 'storm' }); },
+  fan: id => { startFan(car(id)); if (car(id).hot) playerChose(`heat${id}`, `Extrafläkten i ${car(id).name}`, { inc: 'heat', car: id }); },
+  service: id => orderService(car(id)),
   visitor: (f, x) => spawnVisitor(f, x),
   bus: () => spawnBus(),
-  moveRoute: r => setMoveRoute(r),
+  moveRoute: r => { if (!S.move) return; setMoveRoute(r); playerChose('move', `Flytten: ${{ auto: 'låt styrningen planera', varu: 'allt i varuhissen', balk: 'tungt med hissbalken' }[r]}`); },
   moveBlankets: on => setMoveBlankets(on),
-  moveWind: c => setMoveWind(c),
+  moveWind: c => { if (!S.move) return; setMoveWind(c); playerChose('move', c === 'varu' ? 'Lasset vid luckan i varuhissen' : 'Lasset vid luckan väntar'); },
 };
 
 /** Utför en spelaråtgärd. */

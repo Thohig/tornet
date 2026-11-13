@@ -117,7 +117,7 @@ export const BUILDING = {
   floors: [
     { label: 'TB', theme: 'station', tags: ['station', 'basement'] },
     { label: 'P2', theme: 'garage', tags: ['garage', 'basement'] },
-    { label: 'P1', theme: 'dock', tags: ['garage', 'basement', 'dock'] },
+    { label: 'P1', theme: 'dock', tags: ['garage', 'basement', 'dock', 'control'] },
     { label: 'E', theme: 'lobby', tags: ['lobby'] },
     { label: '1', theme: 'dentist', hours: [8, 17], tags: ['office', 'dentist'] },
     { label: '2', theme: 'game', hours: [7, 19], tags: ['office'] },
@@ -171,6 +171,7 @@ export const OFFICE_FLOORS = floorsWith('office');
 export const SKY = floorWith('sky');          // sky lobbyn: här byter man mellan zonerna
 export const ROOF = floorWith('roof');
 export const DOCK = floorWith('dock');
+export const CONTROL = floorWith('control');   // driftcentralen där driftchefen sitter (bara grafik, chief.js)
 export const STATION = floorWith('station'); // tunnelbanan under huset (-1 om huset saknar station)
 export const HOME_FLOORS = floorsWith('home');
 /** bostäder med lastlucka mot fasaden (hissbalken på flyttdagen) */

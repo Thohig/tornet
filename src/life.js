@@ -230,6 +230,14 @@ function heliTick(dt) {
     if (H.y < -300) S.heli = null;
   }
 }
+/** Spelaren: en helikopter med VIP-besök landar nu (om taket är ledigt) */
+export function vipNow() {
+  if (ROOF < 0 || S.heli || S.fire || S.people.some(p => p.vip)) return false;
+  const v = { at: hour(), goal: pick(OFFICE_FLOORS), done: true };
+  S.heli = { state: 'land', y: -260, visit: v };
+  log(`🚁 En helikopter närmar sig takterrassen – oanmält VIP-besök till ${FL[v.goal].short}!`, 'alert');
+  return true;
+}
 function spawnVips(v) {
   const n = 3;
   for (let i = 0; i < n; i++) {

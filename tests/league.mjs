@@ -5,6 +5,8 @@
 //   npm run league -- 8 --save=fore    (sparar resultatet i tests/league-fore.json)
 //   npm run league -- 8 --cmp=fore     (jämför med ett sparat resultat)
 //   npm run league -- 8 --flytt --flyttval=varu  (flyttdag varje dygn, med spelarens vägval)
+//   npm run league -- 8 --utanchef     (driftchefen på rast: incidenterna sköts inte)
+// Driftchefen sköter incidenterna men byter aldrig styrlogik här (chiefStrat: false) – då jämförs styrlogikerna rättvist.
 // Väntetiden mäts utifrån (när en person kliver på), så mätningen påverkar inte simuleringen.
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { S, hooks } from '../src/state.js';
@@ -24,7 +26,7 @@ const mean = xs => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 
 /** ett dygn: alla väntetider (en per påstigning), restider, energi och trappresor */
 function day(seed, strategy) {
-  newSim(seed, { strategy, autoInc: true, mistakes: 'lite', maint: 'natt' });
+  newSim(seed, { strategy, autoInc: true, mistakes: 'lite', maint: 'natt', chief: !args.includes('--utanchef'), chiefStrat: false });
   // --flytt: flyttdag varje dygn (--flyttval=auto|varu|balk väljer vägen för möblerna)
   if (flag('flytt') !== null || args.includes('--flytt')) { forceMove(); if (S.move && flag('flyttval')) act('moveRoute', flag('flyttval')); }
   const waits = new Map(), boarded = new Set(), rides = [];

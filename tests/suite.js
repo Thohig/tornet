@@ -23,6 +23,8 @@ import { windAt, startStorm } from '../src/weather.js';
 import { canBrakeTo } from '../src/elevators.js';
 import { MEZZ, STATION, TRAIN_X0, TRAIN_X1 } from '../src/config.js';
 import { LAST_H } from '../src/train.js';
+import { FIRE_FLOORS, INC_LEVELS } from '../src/incidents.js';
+import { CONTROL } from '../src/config.js';
 
 // ---------- Ramverk ----------
 export const tests = [];
@@ -31,8 +33,9 @@ export class Fail extends Error {}
 function assert(cond, msg) { if (!cond) throw new Fail(msg); }
 
 // ---------- Hjälp ----------
+// (driftchefen är avstängd i testerna om inget annat sägs – de flesta testerna styr incidenterna själva)
 function sim(seed, opts = {}) {
-  newSim(seed, { strategy: 'smart', autoInc: false, mistakes: 'lite', maint: 'natt', tempo: DEFAULT_TEMPO, ...opts });
+  newSim(seed, { strategy: 'smart', autoInc: false, mistakes: 'lite', maint: 'natt', tempo: DEFAULT_TEMPO, chief: false, ...opts });
   S.started = true; S.paused = false;
   hooks.incident = () => {}; hooks.dayEnd = () => {};
 }
@@ -41,9 +44,15 @@ function watcher() {
   const w = { passes: 0, maxRide: 0, maxWait: 0, n: 0, overweight: 0, maxKg: 0, bypassBroken: 0, prev: [],
     outOfRange: 0, wrongDoor: 0, liftPass: 0, railClash: 0, moveBad: 0, badLeg: 0, badFreight: 0, vipMixed: 0, vipSet: [], selfDest: 0, brokenUse: 0, snapUse: 0, prevSnapN: [], holdBoard: 0, prevN: [], prevHold: [],
     jumps: 0, orphanService: 0, techClash: 0, badReserved: 0, dupNames: 0, dupEx: '', idleWait: new Map(), idleWaitMax: 0, badPlatform: 0,
-    deadAssign: new Map(), deadAssignMax: 0, deadAssignEx: '', prevMode: [], late: [] };
+    deadAssign: new Map(), deadAssignMax: 0, deadAssignEx: '', prevMode: [], late: [],
+    // dockhuset: hur länge någon har suttit instängd, och hur länge en incident har pågått
+    maxTrap: 0, maxStorm: 0, maxFire: 0, maxOutage: 0 };
   w.before = () => S.elevators.map(e => e.pos);
   w.check = before => {
+    for (const e of S.elevators) for (const p of e.passengers) if ((p.trapT || 0) > w.maxTrap) w.maxTrap = p.trapT;
+    if (S.storm) w.maxStorm = Math.max(w.maxStorm, S.t - S.storm.t0);
+    if (S.fire) w.maxFire = Math.max(w.maxFire, S.t - S.fire.t0);
+    if (S.outage) w.maxOutage = Math.max(w.maxOutage, S.t - S.outage.t0);
     S.elevators.forEach((e, i) => {
       const kg = loadKg(e);
       // en hiss får aldrig köra iväg överlastad
@@ -1573,7 +1582,7 @@ test(`Invarianter över ${MANY_SEEDS.length} slumpade dygn (alla strategier, med
   let trips = 0, incidents = 0, worstWait = 0, heaviest = 0;
   for (const [i, seed] of MANY_SEEDS.entries()) {
     const strategy = strategies[i % strategies.length];
-    sim(seed, { strategy, autoInc: true });
+    sim(seed, { strategy, autoInc: true, chief: i % 2 === 0 });
     const w = watcher();
     try { runDay(w); } catch (e) { fails.push(`frö ${seed} (${strategy}): kraschade – ${e.message}`); continue; }
     const tag = `frö ${seed} (${strategy})`;
@@ -1631,6 +1640,13 @@ export const PLAYER_ACTIONS = {
   moveRoute: r => act('moveRoute', ['auto', 'varu', 'balk'][Math.floor(r() * 3)]),
   moveBlankets: r => act('moveBlankets', r() < 0.5),
   moveWind: r => act('moveWind', r() < 0.5 ? 'wait' : 'varu'),
+  // framkalla händelser (även på en viss våning eller hiss), slumpen och driftchefen
+  trigger: r => act('trigger', ['move', 'lightning', 'cold', 'heatwave', 'train', 'vip'][Math.floor(r() * 6)]),
+  fireAt: r => act('trigger', 'fire', FIRE_FLOORS[Math.floor(r() * FIRE_FLOORS.length)]),
+  carTrigger: r => act('trigger', ['fault', 'heat', 'cable'][Math.floor(r() * 3)], Math.floor(r() * S.elevators.length)),
+  incLevel: r => act('incLevel', ['av', 'lugn', 'normal', 'kaos'][Math.floor(r() * 4)]),
+  chief: r => act('chief', r() < 0.7),
+  chiefBack: r => act('chiefBack', ['storm', 'fire', 'power', 'strategy', 'move', `heat${Math.floor(r() * S.elevators.length)}`][Math.floor(r() * 6)]),
 };
 const FUZZ_SEEDS = Array.from({ length: 24 }, (_, i) => 5000 + i);
 test(`Spelaråtgärder: invarianter över ${FUZZ_SEEDS.length} dygn med slumpade åtgärder (även på natten)`, () => {
@@ -1639,7 +1655,7 @@ test(`Spelaråtgärder: invarianter över ${FUZZ_SEEDS.length} dygn med slumpade
   let actions = 0;
   for (const [i, seed] of FUZZ_SEEDS.entries()) {
     const strategy = strategies[i % strategies.length], tag = `frö ${seed} (${strategy})`;
-    sim(seed, { strategy, autoInc: i % 2 === 0, maint: 'natt' });
+    sim(seed, { strategy, autoInc: i % 2 === 0, maint: 'natt', chief: i % 3 !== 2 });
     const r = mulberry(seed * 7919), w = watcher();
     let next = 5 + r() * 20, guard = 0, did = [];
     try {
@@ -1675,6 +1691,158 @@ test(`Spelaråtgärder: invarianter över ${FUZZ_SEEDS.length} dygn med slumpade
   return `${actions} spelaråtgärder över ${FUZZ_SEEDS.length} dygn utan fel`;
 });
 
+// ---------- Driftchefen: huset sköter sig självt ----------
+/** kör tills villkoret är sant (eller max sekunder) */
+function runWhile(cond, maxS, w) { const t0 = S.t; while (cond() && S.t - t0 < maxS && !S.summaryShown) { const b = w && w.before(); step(DT); if (w) w.check(b); } }
+const chiefDecs = () => S.chief.log.filter(d => !d.info);
+test('Driftchefen: svajläge när det blåser upp, normal drift när det mojnar – inga vajerlarm', () => {
+  const out = [];
+  for (const seed of [11, 12, 13]) {
+    sim(seed, { chief: true }); runUntil(10);
+    act('trigger', 'storm');
+    assert(S.storm, 'ingen storm');
+    const St = S.storm;
+    runWhile(() => !!S.storm, 120);
+    const ds = chiefDecs().filter(d => d.key === 'storm').map(d => d.text);
+    assert(ds.includes('Svajläge'), `frö ${seed}: chefen valde aldrig svajläge (${ds.join(', ')})`);
+    assert(St.faults === 0, `frö ${seed}: ${St.faults} vajerlarm trots chefen`);
+    const sway = chiefDecs().find(d => d.text === 'Svajläge');
+    assert(sway && sway.outcome && sway.outcome.includes('Stormen varade'), `frö ${seed}: beslutet fick ingen efterspelstext (${sway && sway.outcome})`);
+    out.push(ds.join(' → '));
+  }
+  return out.join(' · ');
+});
+test('Driftchefen: spelaren tar över ett beslut, och lämnar tillbaka det', () => {
+  sim(14, { chief: true }); runUntil(10);
+  act('trigger', 'storm');
+  runWhile(() => S.storm && S.storm.mode !== 'sway', 60);
+  assert(S.storm && S.storm.mode === 'sway', 'chefen valde inte svajläge');
+  act('stormMode', 'none');
+  assert(S.chief.manual.storm && S.chief.dec.storm.by === 'player', 'spelarens val registrerades inte');
+  runWhile(() => !!S.storm && windAt() > 0.5, 20);
+  assert(!S.storm || S.storm.mode === 'none', 'chefen ändrade spelarens val');
+  act('chiefBack', 'storm');
+  assert(!S.chief.manual.storm, 'beslutet lämnades inte tillbaka');
+  runWhile(() => !!S.storm && S.storm.mode === 'none' && windAt() > 0.5, 5);
+  const back = !S.storm || windAt() <= 0.5 || S.storm.mode === 'sway';
+  assert(back, 'chefen tog inte tillbaka beslutet');
+  runWhile(() => !!S.storm, 120);
+  assert(!S.chief.manual.storm && !S.chief.dec.storm, 'beslutet om stormen ligger kvar när stormen är över');
+  return `${chiefDecs().length} beslut av chefen · ${S.chief.log.filter(d => d.by === 'player').length} av spelaren`;
+});
+test('Driftchefen: strömavbrott – reservkraften och auto-räddningen startar av sig själva', () => {
+  sim(15, { chief: true }); runUntil(10.2);
+  startOutage();
+  const O = S.outage, trapped = S.elevators.reduce((a, e) => a + e.passengers.length, 0);
+  runWhile(() => !!S.outage && !(S.outage.gen && S.outage.auto), 20);
+  assert(trapped === 0 || (O.gen && O.auto), `reservkraften (${O.gen}) eller auto-räddningen (${O.auto}) startade inte (${trapped} instängda)`);
+  const w = watcher();
+  runWhile(() => !!S.outage, 80, w);
+  assert(O.rescued > 0 || trapped === 0, 'ingen hiss nödsänktes');
+  return `${trapped} instängda · ${O.rescued} hissar nödsänkta · längst instängd ${Math.round(w.maxTrap)} s`;
+});
+test('Driftchefen: brand högt upp → brandzon, brand lågt → alla hissar återkallas', () => {
+  sim(16, { chief: true }); runUntil(10.5);
+  const hi = Math.max(...FIRE_FLOORS.filter(f => f - 2 - LOBBY >= 3));
+  startFire(hi);
+  runWhile(() => !S.chief.dec.fire, 10);
+  assert(S.fire.mode === 'zone', `brand på ${fl(hi)}: läget blev ${S.fire.mode}`);
+  endFire(); step(DT);
+  const lo = FIRE_FLOORS[0];
+  startFire(lo);
+  runWhile(() => !S.chief.dec.fire, 10);
+  assert(S.fire.mode === 'recall', `brand på ${fl(lo)}: läget blev ${S.fire.mode}`);
+  return `${fl(hi)}: zon · ${fl(lo)}: återkallning`;
+});
+test('Driftchefen: extrafläkten startar när en motor blir överhettad; med chefen på rast händer inget', () => {
+  sim(17, { chief: true }); runUntil(9);
+  const e = S.elevators.find(x => x.mode === 'normal' && !x.facade);
+  act('trigger', 'heat', e.id);
+  runWhile(() => !e.hot, 5); step(DT); step(DT);
+  assert(e.fan, 'fläkten startade inte');
+  sim(17, { chief: false }); runUntil(9);
+  const e2 = S.elevators[e.id];
+  act('trigger', 'heat', e2.id); act('trigger', 'storm'); startOutage();
+  for (let i = 0; i < 20 / DT; i++) step(DT);
+  assert(!e2.fan && S.storm.mode === 'none' && S.outage.genAt === null, 'något startade av sig självt med chefen på rast');
+  assert(S.chief.log.length === 0, `chefen fattade ${S.chief.log.length} beslut på rasten`);
+  return `${e.name}: fläkten på direkt · på rast: inget`;
+});
+test('Slumpen: Av ger inga incidenter, Kaos fler än Normalt; byte mitt på dagen slumpar om resten', () => {
+  const plan = lv => { let n = 0; for (let s = 0; s < 20; s++) { sim(300 + s, { incLevel: lv }); n += S.incPlan.length; } return n / 20; };
+  const av = plan('av'), lugn = plan('lugn'), normal = plan('normal'), kaos = plan('kaos');
+  assert(av === 0 && lugn < normal && normal < kaos, `incidenter per dygn: av ${av}, lugnt ${lugn}, normalt ${normal}, kaos ${kaos}`);
+  sim(320, { incLevel: 'av' });
+  runDay();
+  assert(S.stats.incidents === 0, `${S.stats.incidents} incidenter med slumpen av`);
+  sim(321, { incLevel: 'normal' }); runUntil(13);
+  act('incLevel', 'kaos');
+  assert(S.incLevel === 'kaos' && S.incPlan.every(x => x.at >= 13), `tidtabellen efter bytet: ${S.incPlan.map(x => x.at.toFixed(1)).join(', ')}`);
+  return `per dygn: av ${av} · lugnt ${lugn} · normalt ${normal.toFixed(1)} · kaos ${kaos.toFixed(1)} (${INC_LEVELS.length} lägen)`;
+});
+test('Framkalla: flyttdag, blixt, tågstörning, VIP, väder och incidenter på en viss våning eller hiss', () => {
+  const got = [];
+  sim(18); runUntil(10.2);
+  // brand på en vald våning
+  const f = FIRE_FLOORS[2]; act('trigger', 'fire', f);
+  assert(S.fire && S.fire.floor === f, 'branden startade inte på vald våning'); endFire(); step(DT); got.push(`brand ${fl(f)}`);
+  // hissfel / het motor / linbrott på en vald hiss
+  const e = S.elevators.find(x => x.mode === 'normal' && !x.facade && !x.freight);
+  act('trigger', 'heat', e.id); assert(e.heat >= 1, 'motorn blev inte het');
+  const c = S.elevators.find(x => x !== e && x.mode === 'normal' && !x.facade && !x.hot);
+  act('trigger', 'cable', c.id); assert(c.snapNext, 'linorna knarrar inte i vald hiss');
+  const d = S.elevators.find(x => x !== e && x !== c && x.mode === 'normal' && !x.facade);
+  act('trigger', 'fault', d.id); assert(d.breakNext || d.trapNext || d.mode === 'broken', 'vald hiss fick inget fel');
+  got.push(`fel i ${d.name}, het ${e.name}, linor ${c.name}`);
+  // väder
+  act('trigger', 'cold'); assert(S.weather.temp < -10 && S.weather.cold > 0, 'ingen kyla');
+  act('trigger', 'heatwave'); assert(S.weather.temp > 28, 'ingen värmebölja'); got.push('väder');
+  // tågstörning
+  if (STATION >= 0) { const before = S.trainNext; runWhile(() => !!S.train, 30); act('trigger', 'train'); assert(S.trainNext > Math.max(before, S.t) + 20, 'tåget blev inte försenat'); got.push('tåg'); }
+  // VIP
+  runWhile(() => !!S.heli || S.people.some(p => p.vip), 120);
+  if (floorWith('roof') >= 0 || S.vipVisits.length) { act('trigger', 'vip'); assert(S.heli, 'ingen helikopter'); got.push('VIP'); }
+  // flyttdag
+  // (står leveransbilen vid lastkajen väntar flyttbilen på gatan – lastkajen har plats för en bil)
+  if (!S.move || S.move.state === 'planned') {
+    act('trigger', 'move'); runWhile(() => !S.move || (S.move.state === 'planned' && !S.move.dockWait), 30);
+    assert(S.move && (S.move.state !== 'planned' || S.move.dockWait > 0), 'flytten kom inte igång'); got.push('flytt');
+  }
+  // blixten: strömmen går strax
+  act('trigger', 'lightning');
+  runWhile(() => S.power, 10);
+  assert(!S.power && S.outage && S.outage.cause === 'blixt', 'blixten slog inte ut strömmen');
+  got.push('blixt');
+  return got.join(' · ');
+});
+test(`Dockhuset: utan spelaren tar sig huset igenom kaosdygn – incidenterna tar slut av sig själva`, () => {
+  const fails = [], seeds = Array.from({ length: 8 }, (_, i) => 2200 + i);
+  let decs = 0, inc = 0, trap = 0, storm = 0, fire = 0, out = 0;
+  for (const seed of seeds) {
+    sim(seed, { incLevel: 'kaos', chief: true });
+    const w = watcher();
+    try { runDay(w); } catch (e) { fails.push(`frö ${seed}: kraschade – ${e.message}`); continue; }
+    decs += chiefDecs().length; inc += S.stats.incidents;
+    trap = Math.max(trap, w.maxTrap); storm = Math.max(storm, w.maxStorm); fire = Math.max(fire, w.maxFire); out = Math.max(out, w.maxOutage);
+    if (w.maxStorm > 80) fails.push(`frö ${seed}: stormen pågick ${Math.round(w.maxStorm)} s`);
+    if (w.maxFire > 130) fails.push(`frö ${seed}: branden pågick ${Math.round(w.maxFire)} s`);
+    if (w.maxOutage > 60) fails.push(`frö ${seed}: strömavbrottet pågick ${Math.round(w.maxOutage)} s`);
+    if (w.maxTrap > DOCK_TRAP_S) fails.push(`frö ${seed}: någon satt instängd ${Math.round(w.maxTrap)} s`);
+    const stuck = S.elevators.filter(e => (!S.fire && (e.mode === 'recall' || e.mode === 'locked')) || (!S.outage && (e.mode === 'rescue' || e.mode === 'dead')));
+    if (stuck.length) fails.push(`frö ${seed}: hiss kvar i ${stuck.map(e => `${e.name}:${e.mode}`).join(' ')}`);
+    fails.push(...newInvariantFails(w, `frö ${seed}`));
+  }
+  assert(fails.length === 0, `${fails.length} fel:\n  ${fails.slice(0, 10).join('\n  ')}`);
+  assert(decs > seeds.length, `bara ${decs} beslut av chefen på ${seeds.length} dygn`);
+  return `${inc} incidenter · ${decs} beslut av chefen · längst: instängd ${Math.round(trap)} s, storm ${Math.round(storm)} s, brand ${Math.round(fire)} s, avbrott ${Math.round(out)} s`;
+});
+/** längsta tid någon får sitta instängd när driftchefen sköter huset (linbrott: utrymning genom takluckan) */
+const DOCK_TRAP_S = 150;
+test('Kontrollrummet finns i huset (en våning med taggen control)', () => {
+  assert(CONTROL >= 0 && CONTROL < S.elevators.length + 30, `CONTROL = ${CONTROL}`);
+  return `driftcentralen på ${fl(CONTROL)}`;
+});
+
 // ---------- Determinism med spelaråtgärder ----------
 /** allt som beskriver hur dygnet blev */
 function dayPrint() {
@@ -1684,7 +1852,7 @@ function dayPrint() {
 test('Determinism: samma frö och samma spelaråtgärder ger exakt samma dygn (även dag 2)', () => {
   const run = () => {
     const r = mulberry(4242);
-    sim(77, { autoInc: true });
+    sim(77, { autoInc: true, chief: true });
     runDay(); S.day++; resetDay(); // dag 2: slitaget och minnet från dag 1 följer med
     const names = Object.keys(PLAYER_ACTIONS);
     let next = 3, n = 0;

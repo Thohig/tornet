@@ -7,7 +7,7 @@ import { rand, rng } from './rng.js';
 import { clamp, fl } from './util.js';
 import { LOBBY, SKY } from './config.js';
 import { S, incidentOver, log, notice } from './state.js';
-import { startOutage } from './incidents.js';
+import { incidentStarted, startOutage } from './incidents.js';
 
 /** hur lätt linorna slår i schaktet i normal drift i storm (vajerlarm per sekund och vindstyrka) */
 export const STORM_FAULT_K = 0.3;
@@ -46,6 +46,26 @@ export function startStorm() {
   // ibland slår blixten ner i ställverket mitt i stormen och strömmen går (en kedja av incidenter)
   S.storm = { t0: S.t, len, peak: rand(0.85, 1), mode: 'none', faults: 0, strikeAt: rng() < 0.35 ? S.t + len * rand(0.35, 0.6) : null, struck: null };
   log('🌬️ STORM! Vinden tar i – de höga schakten och panoramahissen börjar svaja', 'alert');
+  return true;
+}
+/** Spelaren: blixten slår ner. Pågår en storm slår den ner direkt, annars drar ett oväder in och slår ner strax. */
+export function strikeNow() {
+  if (!S.storm) { startStorm(); if (!S.storm) return false; incidentStarted(null); S.storm.strikeAt = S.t + 4; }
+  else if (S.storm.struck === null) S.storm.strikeAt = S.t + 0.5;
+  else return false;
+  log('⛈️ Åskan mullrar – blixten är på väg', 'alert');
+  return true;
+}
+/** Spelaren: en kall dag (skorstenseffekten i entrén) eller en värmebölja (motorerna kyls sämre) */
+export function setWeather(kind) {
+  const temp = kind === 'cold' ? Math.round(rand(-22, -14)) : Math.round(rand(29, 34));
+  if (S.weather.temp === temp) return false;
+  S.weather = { temp, cold: clamp((2 - temp) / 18, 0, 1) };
+  if (kind === 'cold') notice('cold', `❄️ Kall dag: ${temp} °C`,
+    'Skorstenseffekten: varm luft stiger i schakten och suger in kall luft genom entrén. Hissdörrarna på E stänger trögt och tar ibland emot.', { floor: LOBBY });
+  else notice('heatwave', `☀️ Värmebölja: ${temp} °C`,
+    'Maskinrummen kyls sämre i värmen – motorerna blir lättare överhettade, och driftchefen startar extrafläktarna tidigare.');
+  log(kind === 'cold' ? `❄️ Kölden slår till: ${temp} °C` : `☀️ Värmebölja: ${temp} °C i skuggan`, 'alert');
   return true;
 }
 export function setStormMode(m) {

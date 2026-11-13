@@ -13,7 +13,7 @@ for (const strategy of strategies) {
   let steps = 0, peak = 0;
   const t0 = performance.now();
   for (let i = 0; i < seeds; i++) {
-    newSim(7000 + i, { strategy, autoInc: true, mistakes: 'lite', maint: 'natt' });
+    newSim(7000 + i, { strategy, autoInc: true, mistakes: 'lite', maint: 'natt', chiefStrat: false });
     while (!S.summaryShown) { step(DT); steps++; peak = Math.max(peak, S.people.length); }
   }
   const ms = performance.now() - t0;

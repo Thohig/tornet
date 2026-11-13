@@ -3,7 +3,7 @@
 // Allt ligger i simuleringen (S.train) – grafiken i pixel.js läser bara läget.
 import { rand, randi, rng } from './rng.js';
 import { CAFE, LOBBY, MAXP, STATION, TRAIN_LEN, TRAIN_X0, TRAIN_X1, floorOpen, timeScale } from './config.js';
-import { S, hour, log } from './state.js';
+import { S, hour, log, notice } from './state.js';
 import { pev, pn, setTrip, spawnEmployee, spawnVisitor } from './people.js';
 import { fl } from './util.js';
 
@@ -147,6 +147,16 @@ function lastTrainGone() {
     pev(p, why);
   }
   log(`🚇 Sista tåget har gått${n ? ` – ${n} får ta sig ut genom entrén` : ''}`, 'sys');
+}
+/** Spelaren: tågstörning – nästa tåg blir försenat och kommer med dubbelt så många (alla som samlats sedan förra) */
+export function delayTrain() {
+  if (STATION < 0 || !trainsRunning() || S.trainDone || (S.train && S.train.state !== 'out')) return false;
+  const d = rand(30, 45);
+  S.trainNext = Math.max(S.trainNext, S.t) + d;
+  S.trainDelay = { t0: S.t, until: S.trainNext };
+  notice('train', '🚇 Tågstörning', `Signalfel i tunneln: nästa tåg är ${Math.round(d)} s försenat. Folk samlas på stationerna längs linjen – när tåget väl kommer kliver dubbelt så många av på perrongen.`, { floor: STATION });
+  log('🚇 Tågstörning: signalfel i tunneln – nästa tåg är försenat', 'alert');
+  return true;
 }
 /** speltid till nästa tåg i minuter (för skylten på perrongen), eller null om inga fler går i dag */
 export function nextTrainMin() {

@@ -4,7 +4,7 @@
 // Bara grafik: läser simuleringens tillstånd men ändrar det aldrig (utom S.fx-listan, som den
 // tecknade grafiken också räknar ner).
 import { ARR, clamp, fl } from './util.js';
-import { BX1, CAR_H, CAR_W, EL, FL, FLOORS, FLOOR_H, FLOOR_HOURS, FULL_LOAD, GARAGE_FLOORS, HATCH_FLOORS, GROUND_Y, H, INNER_X1, LAND_X0, DOOR_X, DOCK, LOBBY, MEZZ, ROOF_Y, SEAM_F, SHAFT_W, SHAFT_X0, STATION, TOP, TOWER_X1, TRAIN_LEN, TRAIN_X0, TRAIN_X1, W, carPos, floorOpen, floorY, shaftCX, shaftX, surf } from './config.js';
+import { BX1, CAR_H, CAR_W, CONTROL, EL, FL, FLOORS, FLOOR_H, FLOOR_HOURS, FULL_LOAD, GARAGE_FLOORS, HATCH_FLOORS, GROUND_Y, H, INNER_X1, LAND_X0, DOOR_X, DOCK, LOBBY, MEZZ, ROOF_Y, SEAM_F, SHAFT_W, SHAFT_X0, STATION, TOP, TOWER_X1, TRAIN_LEN, TRAIN_X0, TRAIN_X1, W, carPos, floorOpen, floorY, shaftCX, shaftX, surf } from './config.js';
 import { exposure, windAt } from './weather.js';
 import { CALL_REPLY, WARM_AT, nextOut, techOf } from './service.js';
 import { HOIST_OK, PARK_Y, TERRACE_Y, cleanerAt } from './hoist.js';
@@ -19,6 +19,7 @@ import { buttonsMode, hallLit } from './buttons.js';
 import { TRAIN_DOORS, nextTrainMin, trainDoors } from './train.js';
 import { PERSON_H, PERSON_W, cargoSprite, personSprite } from './pixpeople.js';
 import { PAL } from './pixpal.js';
+import { CHIEFS, chiefOnDuty } from './chief.js';
 
 const INK = PAL.ink;
 
@@ -821,6 +822,7 @@ function drawHall(f, h) {
     if (FLOOR_HOURS[f] && !floorOpen(f, h)) closedGate(f, cx, cy, cw, ch);
   }
   if (th === 'lobby') lobbyProps(top, bot);
+  else if (f === CONTROL) controlRoom(top, bot, h);
   else hallProps(f, th, top, bot);
   // spårad person därinne / muspekaren över korridoren
   const sel = S.sel && !S.sel.dead && S.sel.floor === f && S.sel.state !== 'ride' && personHead(S.sel)?.hidden;
@@ -839,6 +841,99 @@ function drawHall(f, h) {
   g.restore();
   stairSign(f, false);
   if (f === STATION) drawPlatformPx(top, bot, h);
+}
+// ---------- Driftcentralen: kontrollrummet där driftchefen sitter ----------
+// Ett fönster i hallens bakvägg: en skärm per hiss (korgens läge i schaktet, rött när den är trasig),
+// ett larmljus som snurrar under incidenter, kontrollbordet och driftchefen (Gun-Britt på dagen, Rune på
+// natten). Chefen står upp under larm; har chefen rast står stolen tom. Pratbubblan ritas i drawChiefPx.
+const CHIEF_P = Object.fromEntries(CHIEFS.map((c, i) => [c.name, { id: 9100 + i, mood: 0, child: false, smoked: false, look: c.look }]));
+/** var chefens huvud ritades i den här bildrutan (låg upplösning), null = syns inte */
+let chiefAt = /** @type {{ x: number, y: number }|null} */ (null);
+/** något som chefen är mitt uppe i (larmljuset snurrar) */
+const alarmOn = () => !!(S.fire || S.outage || S.storm || S.warn || S.elevators.some(e => e.mode === 'snapped' || e.hot || (e.mode === 'broken' && e.fault && e.fault.trapped)));
+function controlRoom(top, bot, h) {
+  const wx = X(DOOR_X) + 58, ww = Math.min(108, X(INNER_X1) - 14 - wx), wy = top + 18, wh = bot - 3 - wy;
+  if (ww < 50) return;
+  const power = S.power || (S.outage && S.outage.gen), alarm = alarmOn(), blink = Math.floor(S.anim * 3) % 2 === 0;
+  // ramen och rummet (mörkt, upplyst av skärmarna)
+  box(wx - 2, wy - 2, ww + 4, wh + 3, PAL.steel);
+  R(wx, wy, ww, wh, power ? '#1d2433' : '#0d1018');
+  // skylten i fönstrets överkant: när chefen säger något rullar det som en textremsa
+  const C0 = S.chief, say = C0 && C0.on && C0.say && S.t < C0.say.until ? C0.say : null;
+  R(wx, wy, ww, 7, say ? '#000000' : '#000080');
+  g.save(); g.beginPath(); g.rect(wx + 1, wy, ww - 9, 7); g.clip();
+  if (say) {
+    const str = plain(say.text.toUpperCase()), tw = textW(str), room = ww - 10;
+    const off = tw <= room ? 0 : Math.floor(((S.t - say.t0) * 22) % (tw + 24)) - 12;
+    text(g, str, wx + 2 - Math.max(0, off), wy + 1, say.dec ? '#ffd23f' : '#7dff9a');
+  } else text(g, 'DRIFTCENTRAL', wx + 3, wy + 1, '#ffffff');
+  g.restore();
+  reserve(wx - 2, wy - 2, ww + 4, 9);
+  // larmljuset: snurrar rött under incidenter och färgar rummet
+  const lx = wx + ww - 6;
+  if (alarm) {
+    const sp = Math.sin(S.anim * 9);
+    box(lx, wy + 1, 4, 4, sp > 0 ? '#ff2d55' : '#7a2033');
+    if (sp > 0.2) R(wx, wy + 6, ww, wh - 6, 'rgba(255,45,85,.14)');
+  } else box(lx, wy + 1, 4, 4, '#4a2a33');
+  // en skärm per hiss: korgens läge i schaktet
+  const n = S.elevators.length, mw = Math.max(6, Math.min(12, Math.floor((ww - 6) / n) - 1)), my = wy + 9, mh = 10;
+  const mx0 = wx + Math.round((ww - n * (mw + 1)) / 2);
+  S.elevators.forEach((e, i) => {
+    const x = mx0 + i * (mw + 1);
+    box(x, my, mw, mh, '#3a3f48');
+    const bad = e.mode === 'broken' || e.mode === 'snapped' || e.mode === 'dead';
+    if (!power) { R(x + 1, my + 1, mw - 2, mh - 2, '#15171c'); return; }
+    R(x + 1, my + 1, mw - 2, mh - 2, bad && blink ? '#5a0f1a' : '#0b1a10');
+    R(x + 1, my + 1, mw - 2, 1, e.color); // hissens färg upptill
+    const cx = x + Math.floor(mw / 2);
+    R(cx, my + 2, 1, mh - 3, '#1f3a28');
+    const k = clamp((e.pos - e.minF) / Math.max(1, e.topF - e.minF), 0, 1), dy = my + mh - 2 - Math.round(k * (mh - 4));
+    const dot = bad ? '#ff2d55' : e.hot ? '#ff9f1c' : e.mode === 'service' || e.hold ? '#ffe14d' : e.sleep ? '#2f6b47' : light(e.color, 0.35);
+    R(cx - 1, dy - 1, 3, 2, dot);
+  });
+  // kontrollbordet med knappar som blinkar (och en kaffekopp)
+  const dy = wy + wh - 6;
+  const C = S.chief, on = !!(C && C.on), who = chiefOnDuty(h), P = CHIEF_P[who.name];
+  const px = wx + 22;
+  chiefAt = null;
+  g.save(); g.beginPath(); g.rect(wx, wy + 6, ww, wh - 6); g.clip();
+  // stolen (syns bakom chefen – tom när chefen har rast)
+  R(px + 1, dy - 7, 2, 7, '#3a3f48'); R(px + 1, dy - 1, 9, 1, '#3a3f48');
+  if (on) {
+    // under larm står chefen upp (framifrån) och följer skärmarna, annars sitter hen vid bordet vänd mot skärmen
+    P.mood = alarm ? 1 : 0;
+    const view = alarm ? 'front' : 'side', bob = alarm ? Math.round(Math.sin(S.anim * 3)) : 0;
+    const spr = personSprite(P, view, 0, 1, { blink: Math.sin(S.anim * 0.8 + 1) > 0.97 });
+    const sx = px, sy = dy - (alarm ? PERSON_H - 9 : PERSON_H - 14) + bob;
+    g.drawImage(spr, sx, sy);
+    chiefAt = { x: sx + PERSON_W / 2, y: sy };
+  } else {
+    // rast: stolsryggen och en lapp
+    R(px + 2, dy - 12, 6, 6, '#3a3f48'); R(px + 3, dy - 11, 4, 4, '#5a6070');
+  }
+  g.restore();
+  box(wx + 2, dy, ww - 4, 6, '#8a909a'); R(wx + 3, dy + 1, ww - 6, 1, '#c0c6cc');
+  for (let i = 0; i < 6; i++) if (power) R(wx + 40 + i * 4, dy + 3, 2, 1, (Math.floor(S.anim * 2 + i * 1.7) % 3) ? ['#7cf06b', '#ffe14d', '#ff5d52'][i % 3] : '#3a3f48');
+  // skärmen på bordet: chefens senaste beslut som en blinkande rad (eller RAST)
+  const tx = px + 13, ty = dy - 8;
+  box(tx, ty, 14, 9, '#d4d0c8'); R(tx + 1, ty + 1, 12, 6, power ? '#0b1a10' : '#15171c');
+  if (power) {
+    if (!on) text(g, 'RAST', tx + 7, ty + 1, '#ffd23f', 'center');
+    else if (C.say && S.t < C.say.until && blink) R(tx + 2, ty + 3, 10, 2, '#7dff9a');
+    else { R(tx + 2, ty + 2, 6, 1, '#7dff9a'); R(tx + 2, ty + 4, 8, 1, '#2f6b47'); }
+  }
+  R(tx + 6, ty + 9, 2, 1, INK);
+  R(wx + ww - 12, dy - 3, 3, 3, '#ffffff'); R(wx + ww - 11, dy - 2, 1, 1, '#8a5a2b'); // kaffekoppen
+  // reflex i glaset
+  line(wx + 3, wy + wh - 2, wx + 9, wy + 8, 'rgba(255,255,255,.12)');
+}
+/** driftchefens pratbubbla (efter folket, så att den hamnar överst): ovanför fönstret, och bara de första
+ *  sekunderna – sedan står det kvar i textremsan */
+function drawChiefPx() {
+  const C = S.chief;
+  if (!chiefAt || !C || !C.on || !C.say || S.t - C.say.t0 > 3.5) return;
+  bubble(`${chiefOnDuty().name}: "${C.say.text}"`, chiefAt.x, chiefAt.y - 14, C.say.dec ? '#fff6a8' : '#ffffff');
 }
 // ---------- Flyttdagen ----------
 /** hissbalken: balken på taket med block och talja, kroken (med lasten) och lastluckorna i tornets fasad */
@@ -1802,7 +1897,7 @@ export function renderPixel(dt) {
   if (lo.width !== w || lo.height !== h) { lo.width = w; lo.height = h; }
   X0 = VIEW.x0; CY = Math.floor(VIEW.camY / PX);
   g.setTransform(1, 0, 0, 1, 0, 0); g.imageSmoothingEnabled = false; g.globalAlpha = 1;
-  callAt = null; taken = [];
+  callAt = null; chiefAt = null; taken = [];
   const hr = hour();
   OCC = new Array(FLOORS).fill(0); OCC_IN = new Array(FLOORS).fill(0);
   for (const p of S.people) {
@@ -1838,6 +1933,7 @@ export function renderPixel(dt) {
   drawCleanerPx();
   drawHoistPx();
   drawCallPx();
+  drawChiefPx();
   drawSelectionPx();
   drawHoverPx();
   drawGagsPx(dt);

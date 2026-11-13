@@ -90,6 +90,16 @@ export function forceMove() {
   const smart = costBased();
   S.move = planMove(smart, smart ? 12.6 : 9.5);
 }
+/** Spelaren: flyttbilen kommer nu (ett bokat flyttlass flyttas fram, annars bokar ett hushåll en flytt) */
+export function moveNow() {
+  if (DOCK < 0 || !HOME_FLOORS.length) return false;
+  const M = S.move;
+  if (M && M.state === 'planned') { M.at = Math.min(M.at, hour()); return true; }
+  if (M) return false; // (en flytt per dygn)
+  S.move = planMove(costBased(), hour());
+  if (S.move) log(`🚚 Flyttbilen svänger in mot lastkajen – ${S.move.who} flyttar i dag`, 'alert');
+  return !!S.move;
+}
 /** de som bor i lägenheten som töms */
 const family = M => S.people.filter(p => M.family.includes(p.id) && !p.dead);
 /** finns det kvar något i lägenheten (inte packat och nerburet än)? */

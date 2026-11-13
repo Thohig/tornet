@@ -58,12 +58,14 @@ function wearTick(e) {
   e.wear += (stops * WEAR_STOP + dist * WEAR_FLOOR * (1 + cabinKg(e) / e.ratedKg)) * tempoWear();
   e.wearTrips = e.trips; e.wearDist = e.distance;
 }
+/** slumpens reglage (S.incLevel) gör slitagefelen ovanligare eller vanligare */
+const FAULT_MUL = { lugn: 0.5, normal: 1, kaos: 2 };
 /** Anropas när dörrarna har öppnat helt och folk klivit av: går hissen sönder här? */
 export function maybeBreak(e) {
   if (e.mode !== 'normal' || e.hold) return false;
   if (!e.breakNext) {
-    if (!S.autoInc || !S.power || S.fire) return false;
-    if (rng() >= FAULT_K * tempoWear() * e.wear * e.wear) return false;
+    if (S.incLevel === 'av' || !S.power || S.fire) return false;
+    if (rng() >= FAULT_K * (FAULT_MUL[S.incLevel] ?? 1) * tempoWear() * e.wear * e.wear) return false;
   }
   breakDown(e, e.stormFault ? 'vajerlarm – linorna slog i schaktet i stormen' : pick(FAULTS));
   e.stormFault = false;

@@ -1,7 +1,8 @@
 // Regissören: automatisk kamera som letar upp det mest sevärda i huset och klipper dit.
 // Rent gränssnitt: läser S, ändrar aldrig simuleringen (slumpen är vrand). Kameran rör sig via S.camTarget
 // precis som när man följer en hiss. Allt manuellt (scrolla, följa, klicka på någon) stänger av regissören.
-import { DOCK, FLOOR_H, LOBBY, ROOF, STATION, TOP, floorY } from './config.js';
+import { CONTROL, DOCK, FLOOR_H, LOBBY, ROOF, STATION, TOP, floorY } from './config.js';
+import { chiefOnDuty } from './chief.js';
 import { S } from './state.js';
 import { fl } from './util.js';
 import { vrand } from './rng.js';
@@ -53,6 +54,10 @@ function shots() {
     else if (W.type === 'heat') add('warn', 82, 'floor', Math.min(top, S.elevators[W.car].maxF), `🌡️ Motorn i ${S.elevators[W.car].name} brummar`, true);
     else add('warn', 86, 'car', W.car, W.type === 'cable' ? `🪢 Linorna i ${S.elevators[W.car].name} knarrar` : `🔩 ${S.elevators[W.car].name} gnisslar`, true);
   }
+  // driftchefen fattar ett beslut: kameran klipper till kontrollrummet en stund (och sedan tillbaka)
+  const C = S.chief;
+  if (C && C.on && C.say && C.say.dec && CONTROL >= 0 && S.t - C.say.t0 < 3)
+    add('chief', 88, 'floor', CONTROL, `🧑‍💼 ${chiefOnDuty().name}: ${C.say.text}`, S.t - C.say.t0 < 1);
   if (S.fire) add('fire', 100, 'floor', S.fire.floor, `🔥 Brand på ${fl(S.fire.floor)}`, S.t - S.fire.t0 < 2);
   // brandmännen på väg upp (i brandhissen eller trapphuset)
   const ff = S.people.find(p => p.ff && !p.dead && p.state !== 'office' && visible(p));

@@ -16,6 +16,7 @@ import { stormTick, weatherReset } from './weather.js';
 import { TRAIN_SHARE, trainReset, trainTick } from './train.js';
 import { medicClear, visitsReset, visitsTick } from './visits.js';
 import { hoistReset, hoistTick } from './hoist.js';
+import { chiefReset, chiefTick } from './chief.js';
 
 // ---------- Planerad rutt (för HUD) ----------
 export function plannedRoute(e) {
@@ -143,6 +144,7 @@ export function step(dt) {
   for (const p of S.people) updatePerson(p, dt);
   if (S.people.some(p => p.dead)) S.people = S.people.filter(p => !p.dead);
   incidentTick(dt);
+  chiefTick(dt);
   rebuildPicks();
   const wl = Array.from({ length: FLOORS }, () => ({ u: [], d: [] }));
   for (const p of S.people) {
@@ -212,7 +214,7 @@ export function resetDay() {
   S.t = 0; S.clock = 0; S.sched = makeSchedule(); S.acc = 0; S.summaryShown = false; S.nextId = 1; S.sel = null; S.wl = null; S.reoptT = 0;
   S.people = []; S.stats = newStats(); S.calls = {};
   S.fire = null; S.power = true; S.outage = null; S.techCallAt = null; S.techCall = null; S.extraAt = null; S.powerBack = null; S.brigade = null; S.peakMode = null; S.wakeAt = 0;
-  S.notices = []; // gårdagens informationsrutor visas inte igen (klockan S.t börjar om från 0)
+  S.notices = []; S.feed = []; // gårdagens informationsrutor visas inte igen (klockan S.t börjar om från 0)
   S.occ = new Map();
   // slitaget följer med från gårdagen (dag 1: slumpat – huset är inte nytt)
   const carry = S.day > 1 && S.elevators.length === EL.length ? S.elevators.map(e => e.wear) : null;
@@ -225,12 +227,20 @@ export function resetDay() {
   hoistReset();
   planIncidents(); // (sist: tidtabellen slumpas när allt annat är på plats)
   S.lastInc = null;
+  chiefReset();
 }
 export function newSim(seed, opts = {}) {
   S.seed = seed >>> 0; S.day = opts.day || 1; S.log = []; S.fx = []; S.elevators = [];
   S.learnMem = null; S.learnToday = null; S.notices = []; S.dismissed = new Set();
   if (opts.strategy) S.strategy = opts.strategy;
-  if (opts.autoInc !== undefined) S.autoInc = opts.autoInc;
+  // slumpen: incLevel (av/lugn/normal/kaos), eller autoInc (sant = normal, falskt = av) som förr
+  if (opts.incLevel !== undefined) S.incLevel = opts.incLevel;
+  else if (opts.autoInc !== undefined) S.incLevel = opts.autoInc ? 'normal' : 'av';
+  // driftchefen: på från början (chief: false = allt väntar på spelaren); chiefStrat = får byta styrlogik i rusningen
+  S.chief = null;
+  chiefReset();
+  if (opts.chief !== undefined) S.chief.on = !!opts.chief;
+  if (opts.chiefStrat !== undefined) S.chief.strat = !!opts.chiefStrat;
   if (opts.mistakes !== undefined) S.mistakes = opts.mistakes;
   if (opts.maint !== undefined) S.maint = opts.maint;
   S.tempo = setTempo(opts.tempo ?? S.tempo);

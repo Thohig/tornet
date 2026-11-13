@@ -1,7 +1,7 @@
 // Incidenter: brand och strömavbrott.
 import { pick, rand, rng } from './rng.js';
 import { fl } from './util.js';
-import { LOBBY, OFFICE_FLOORS } from './config.js';
+import { FL, LOBBY, OFFICE_FLOORS, TOP } from './config.js';
 import { S, hooks, hour, incidentOver, log } from './state.js';
 import { trappedTalk } from './cast.js';
 import { arriveOnFloor, makePerson, pev, pn, setTrip, toStairs } from './people.js';
@@ -12,13 +12,17 @@ import { startStorm } from './weather.js';
 import { startMedical } from './visits.js';
 
 // ---------- Incidenter ----------
-export function trigger(type) {
-  if (type === 'fire') startFire();
+/** våningar där spelaren kan starta en brand: allt ovanför entrén utom takterrassen */
+export const FIRE_FLOORS = FL.map((_, f) => f).filter(f => f > LOBBY && f <= TOP && FL[f].theme !== 'roof');
+/** Utlös en incident nu. target: våningen som brinner, eller hissen (id) som går sönder / blir het / får linbrott. */
+export function trigger(type, target = null) {
+  const e = target !== null && target !== undefined && type !== 'fire' ? S.elevators[target] || null : null;
+  if (type === 'fire') startFire(FIRE_FLOORS.includes(target) ? target : undefined);
   if (type === 'power') startOutage();
-  if (type === 'fault') triggerFault();
+  if (type === 'fault') triggerFault(e);
   if (type === 'storm' && startStorm()) incidentStarted(null);
-  if (type === 'heat') triggerHeat();
-  if (type === 'cable') triggerCable();
+  if (type === 'heat') triggerHeat(e);
+  if (type === 'cable') triggerCable(e);
   if (type === 'medical') startMedical(); // (ingen incident – bara en händelse som rutan berättar om)
 }
 export function incidentStarted(floor) {
@@ -271,17 +275,39 @@ export const WARN_S = { fire: 10, power: 6, storm: 14, heat: 10, fault: 8, cable
 /** minsta avstånd mellan två planerade incidenter (speltimmar) */
 const INC_GAP = 1.2;
 /** dygnets tidtabell (anropas av resetDay) */
-export function planIncidents() {
-  const day = () => { for (;;) { const h = rand(7, 22); if (rng() * 1.6 < INC_WEIGHT(h)) return h; } };
-  const n = 1 + (rng() < 0.6 ? 1 : 0) + (rng() < 0.25 ? 1 : 0);
+/** Slumpen: hur ofta incidenterna kommer (spelarens reglage). 'av' = bara det spelaren framkallar. */
+export const INC_LEVELS = ['av', 'lugn', 'normal', 'kaos'];
+export const INC_LEVEL_NAMES = { av: 'Av', lugn: 'Lugnt', normal: 'Normalt', kaos: 'Kaos' };
+/** Dygnets tidtabell (anropas av resetDay, och från klockslaget from när spelaren ändrar slumpen). */
+export function planIncidents(from = 6) {
+  // (Av slumpar fram en vanlig tidtabell och kastar den: dygnets slumpföljd blir densamma som förr)
+  const lv = S.incLevel === 'av' ? 'normal' : S.incLevel;
+  S.warn = null;
+  const h0 = Math.max(7, from), left = Math.max(0, (22 - h0) / 15);
+  const day = () => { for (;;) { const h = rand(h0, 22); if (rng() * 1.6 < INC_WEIGHT(h)) return h; } };
+  // (Normalt drar slumptalen i samma ordning som alltid – facit och ligan påverkas inte)
+  let n = lv === 'normal' ? 1 + (rng() < 0.6 ? 1 : 0) + (rng() < 0.25 ? 1 : 0)
+    : lv === 'lugn' ? (rng() < 0.6 ? 1 : 0) : 3 + (rng() < 0.6 ? 1 : 0) + (rng() < 0.4 ? 1 : 0);
+  if (from > 6) n = Math.round(n * left);
   /** @type {{ at: number, night: boolean }[]} */
   const plan = [];
-  for (let i = 0; i < n; i++) plan.push({ at: day(), night: false });
-  if (rng() < 0.3) plan.push({ at: rand(23.5, 28.5), night: true }); // strömavbrott i mörkret
+  if (h0 < 22) for (let i = 0; i < n; i++) plan.push({ at: day(), night: false });
+  const night = lv === 'normal' ? 0.3 : lv === 'lugn' ? 0.1 : 0.6;
+  if (rng() < night) plan.push({ at: rand(Math.max(23.5, from), 28.5), night: true }); // strömavbrott i mörkret
   plan.sort((a, b) => a.at - b.at);
-  for (let i = 1; i < plan.length; i++) plan[i].at = Math.max(plan[i].at, plan[i - 1].at + INC_GAP);
-  S.incPlan = plan.filter(x => x.at < 29.5);
-  S.warn = null;
+  const gap = lv === 'kaos' ? INC_GAP / 2 : INC_GAP;
+  for (let i = 1; i < plan.length; i++) plan[i].at = Math.max(plan[i].at, plan[i - 1].at + gap);
+  S.incPlan = S.incLevel === 'av' ? [] : plan.filter(x => x.at < 29.5 && x.at >= from);
+}
+/** Spelaren ändrar slumpen: resten av dygnets tidtabell slumpas om (en förvarning som pågår får fortsätta). */
+export function setIncLevel(v) {
+  if (!INC_LEVELS.includes(v) || S.incLevel === v) return;
+  S.incLevel = v;
+  const W = S.warn;
+  planIncidents(hour());
+  if (v !== 'av') S.warn = W;
+  else if (W && W.car !== undefined) S.elevators[W.car].creak = false;
+  log(`🎲 Slumpen: ${INC_LEVEL_NAMES[v]}${v === 'av' ? ' – inga fler incidenter av sig själva i dag' : ` – ${S.incPlan.length} incident${S.incPlan.length === 1 ? '' : 'er'} kvar i dagens tidtabell`}`, 'sys');
 }
 /** linorna i den mest slitna hissen kan gå av (bara om de är rejält slitna) */
 const cableRisk = () => {
@@ -341,7 +367,7 @@ export function incidentTick(dt) {
   if (S.fire) fireTick();
   brigadeTick();
   if (S.outage) outageTick(dt);
-  if (!S.autoInc) { if (S.warn) { const e = S.warn.car !== undefined ? S.elevators[S.warn.car] : null; if (e) e.creak = false; S.warn = null; } return; }
+  if (S.incLevel === 'av') { if (S.warn) { const e = S.warn.car !== undefined ? S.elevators[S.warn.car] : null; if (e) e.creak = false; S.warn = null; } return; }
   if (S.warn) { if (S.t >= S.warn.until) { const W = S.warn; S.warn = null; fireWarn(W); } return; }
   const next = S.incPlan[0];
   if (!next || hour() < next.at) return;

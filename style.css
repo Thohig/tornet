@@ -268,3 +268,42 @@ body{background:var(--desk);font-family:var(--ui);font-size:12px;color:var(--ink
   #main{flex-direction:column}
   .tb-stats{margin-left:0}
 }
+
+/* ---------- Driftchefen: driftradion, regissörens bildtext, chefens rad på incidentkorten ---------- */
+/* driftradion: en DOS-skärm i övre vänstra hörnet med det senaste som hänt och chefens beslut */
+.feed{left:8px;top:8px;width:min(400px,calc(100% - 16px));background:var(--dos);color:var(--dos-txt);
+  box-shadow:var(--sunken),3px 3px 0 rgba(0,0,0,.35);padding:3px 6px 4px;font-size:11px;line-height:1.3;pointer-events:auto}
+.feed-h{font-family:'VT323',monospace;font-size:15px;color:var(--vga-g);cursor:pointer;display:flex;justify-content:space-between;gap:8px;line-height:1.1}
+.feed-h span{color:var(--vga-c);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.feed .fl{display:flex;gap:5px;align-items:baseline;opacity:.75}
+.feed .fl.new{opacity:1;color:#fff}
+.feed .fl.old{opacity:.45}
+.feed .fl.chief{color:var(--vga-y)}
+.feed .fl .lt{color:var(--shade);flex:none}
+.feed .fl .ld{flex:none;width:7px;height:7px;display:inline-block}
+.le.k-chief{color:var(--vga-y)}
+/* bildtexten när regissören klipper: en nyhetsskylt i övre högra hörnet (bannern i bilden ligger i mitten) */
+.caption{position:absolute;z-index:4;top:8px;right:12px;max-width:min(360px,calc(100% - 440px));
+  background:linear-gradient(90deg,var(--navy),var(--title2));color:#fff;font-weight:700;font-size:13px;padding:4px 12px;
+  box-shadow:var(--raised),3px 3px 0 rgba(0,0,0,.35);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+.caption[hidden]{display:none}
+.caption .rec{margin-right:6px}
+@media (max-width:900px){.caption{top:auto;bottom:48px;max-width:calc(100% - 16px)}}
+/* chefens beslut på incidentkortet; när chefen har det i handen blinkar kortet inte */
+.inc-chief{margin-top:5px;padding:3px 5px;background:var(--note);box-shadow:var(--sunken);font-size:11.5px;line-height:1.35}
+.inc-chief.you{background:#e6f0ff}
+.inc-chief .btn{margin-left:2px}
+.inc.alert.calm{animation:none}
+/* menyn: brandvåningen, framkalla i hisspopupen */
+.trig-fire{display:inline-flex;gap:2px;align-items:center}
+.trig-fire select{font:inherit;font-size:11px;max-width:150px}
+.pop-note{font-size:11px;color:#404040;margin:4px 0 8px}
+.trig-car{display:inline-flex;gap:3px;align-items:center;font-size:11px;font-weight:700;margin-top:2px}
+/* dagens sammanfattning: driftchefens beslut */
+.chiefsum{text-align:left}
+.chiefsum h2{font-size:13px;margin:12px 0 4px}
+.chiefsum p{margin:4px 0}
+.chiefsum ul{max-height:220px;overflow-y:auto;margin:4px 0;list-style:none;padding:6px 10px}
+.chiefsum li{margin-bottom:4px}
+.chiefsum .ct{font-family:'VT323',monospace;font-size:15px;color:var(--navy)}
+.chiefsum .out{color:#2f7d4a;font-size:11.5px;margin-left:44px}

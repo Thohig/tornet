@@ -10,7 +10,10 @@ export const S = {
   sel: null, hover: null, hoverDoor: null, carCycle: 0,
   rosterFilter: 'all', logFilter: 'all',
   // incidenter
-  autoInc: true, power: true, fire: null, outage: null,
+  // slumpen: hur ofta incidenterna kommer av sig själva (av/lugn/normal/kaos, se INC_LEVELS i incidents.js)
+  incLevel: 'normal', power: true, fire: null, outage: null,
+  // driftchefen i kontrollrummet (chief.js) och driftradion: det som händer och besluten, i klartext
+  chief: /** @type {any} */ (null), feed: /** @type {{ t: number, time: string, text: string, kind: string, color: string|null }[]} */ ([]),
   // dygnets tidtabell för slumpade incidenter, förvarningen som pågår och den senaste incidenten (efterspelet)
   powerBack: /** @type {number|null} */ (null), brigade: /** @type {any} */ (null),
   incPlan: /** @type {{ at: number, night: boolean }[]} */ ([]), warn: /** @type {any} */ (null), lastInc: /** @type {any} */ (null),
@@ -88,4 +91,9 @@ export function log(text, kind = 'sys', color = null, pid = null) {
   S.log.unshift({ time: clockStr(), text, kind, color, pid });
   if (S.log.length > 300) S.log.pop();
   S.logDirty = true;
+  // driftradion: chefens beslut och husets larm (inte det som bara gäller en person)
+  if (kind === 'chief' || (kind === 'alert' && pid === null)) {
+    S.feed.push({ t: S.t, time: clockStr(), text, kind, color });
+    if (S.feed.length > 40) S.feed.shift();
+  }
 }
