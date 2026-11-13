@@ -300,7 +300,7 @@ const THOUGHTS = {
   storm: ['Panoramahissen svajar i blåsten.', 'Inte för de höjdrädda i dag.'],
   move: ['Flyttgubbarna – bara de inte repar dörren.', 'Soffan går aldrig in. Den går aldrig in.'],
   svc: ['Nattservice. Lugnt och skönt.', 'Teknikern smörjer och skruvar.'],
-  full: ['Fullsatt hiss – trångt där inne.', 'Sardinburk på väg uppåt.'],
+  full: ['Fullsatt hiss – trångt där inne.', 'Sardinburk på väg {dir}.'],
   train: ['Nu väller de in från perrongen.', 'Tunnelbanan i tid, för en gångs skull.'],
   truck: ['Leveransbilen vid lastkajen.', 'Paket till hela huset igen.'],
   cleaner: ['Fönsterputsaren – han är min favorit.', 'Lite lugn och ro där ute på fasaden.'],
@@ -329,7 +329,17 @@ export function crewNow() {
   if (!s) return { who, auto: true, cut: false, doing: 'Letar efter något att visa', show: '🎬 …', thought: 'Skärmarna, skärmarna…' };
   const away = awayFromDesk(who);
   const key = `${s.key}|${s.t0}`;
-  if (key !== crewKey) { crewKey = key; crewThought = vpick(THOUGHTS[s.key.replace(/\d+$/, '')] || ['Hm, vad är det där?']); }
+  if (key !== crewKey) {
+    crewKey = key; crewThought = vpick(THOUGHTS[s.key.replace(/\d+$/, '')] || ['Hm, vad är det där?']);
+    if (s.kind === 'car') crewThought = crewThought.replace('{dir}', S.elevators[s.id].dir < 0 ? 'nedåt' : 'uppåt');
+  }
+  // den fullsatta hissen glesnar medan kameran följer den: texten och tanken följer med (inga sardiner med en passagerare)
+  if (s.key.startsWith('full')) {
+    const e = S.elevators[s.id], n = e.passengers.length;
+    s.why = `🛗 ${e.name} med ${n} pers`;
+    if (n < 4) return { who, auto: true, cut: false, doing: `Följer hiss ${e.name}`, show: s.why,
+      thought: n === 0 ? 'Tom nu – alla klev av.' : n === 1 ? 'Nu är det bara en kvar där inne.' : 'Det glesnade fort.' };
+  }
   const doing = s.kind === 'car' ? `Följer hiss ${S.elevators[s.id].name}`
     : s.kind === 'person' ? `Följer ${(S.people.find(p => p.id === s.id) || { name: 'någon' }).name.split(' ')[0]}`
     : s.kind === 'floor' ? `Visar våning ${fl(s.id)}`

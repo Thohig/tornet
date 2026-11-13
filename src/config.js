@@ -421,37 +421,46 @@ export const CAST = [
 // händelse (lastaren med flyttdagen). breaks: [klockslag, sekunder (verklig tid), rastmål, varför] där rastmålet
 // är break (personalrummet), cafe (Sky Café), roof (takträdgården), kiosk, vending (godisautomaten) eller platform.
 // cover = posten som måste vara bemannad innan man går på rast; urgent = går tillbaka till posten vid larm.
+// lines = vad de säger på posten och på rasten (pratbubblorna i pixel.js – aldrig kontorsrepliker).
 /** @typedef {{ id: string, name: string, role: string, title: string, post: string, from: number, until: number|null,
  *   arrive: number|null|'event', kg: number, fit: number, speed: number, space: number, polite: boolean, icon: string,
- *   breaks: [number, number, string, string][], cover?: string, urgent?: boolean, look: object }} CrewDef */
+ *   breaks: [number, number, string, string][], cover?: string, urgent?: boolean, look: object,
+ *   lines: { post: string[], break: string[] } }} CrewDef */
 /** @type {CrewDef[]} */
 export const CREW = [
   { id: 'gunbritt', name: 'Gun-Britt', role: 'driftchef', icon: '🧑‍💼', title: 'Driftchef · dagskiftet 06–22', post: 'chief', from: 6, until: 22, arrive: null,
     kg: 68, fit: 0.85, speed: 1.1, space: 7, polite: true, urgent: true, cover: 'producer',
     breaks: [[9.7, 25, 'break', 'Förmiddagsfika i personalrummet'], [12.3, 45, 'break', 'Lunch – matlådan i personalrummets mikro'], [14.7, 25, 'break', 'Eftermiddagsfika – lugnt på skärmarna']],
+    lines: { post: ['Allt grönt på skärmarna', 'H1 har varit flitig i dag', 'Någon borde smörja L2', 'Kaffet har kallnat – igen', 'Lugnt. Nästan för lugnt.'], break: ['Fem minuter utan larm, tack', 'Har någon sett min mugg med kattungarna?', 'Köttbullar i matlådan igen', 'Jag hör larmet i sömnen numera'] },
     look: { skin: '#f6c48f', shirt: '#2a5db0', pants: '#2b2f45', hair: 5, hairC: '#b0b0b8', tie: false, tieC: '#ffe14d', stripe: false, acc: 4 } },
   { id: 'rune', name: 'Rune', role: 'driftchef', icon: '🧑‍💼', title: 'Driftchef · nattskiftet 22–06', post: 'chief', from: 22, until: null, arrive: 21.6,
     kg: 92, fit: 0.2, speed: 0.9, space: 9, polite: false, urgent: true, cover: 'producer',
     breaks: [[25.4, 40, 'break', 'Nattfika – mackor och termoskaffe i personalrummet'], [28.3, 30, 'break', 'Sista koppen innan morgonen']],
+    lines: { post: ['Nattskiftet – bästa skiftet', 'Tyst i schakten', 'Var är min termos?', 'V står och sover igen', 'Hörru Siv, vaken?'], break: ['Mackor med leverpastej, minsann', 'Bara en kort tupplur…', 'Tre timmar kvar till Gun-Britt'] },
     look: { skin: '#e0ac7a', shirt: '#6b4a2b', pants: '#3a3a3a', hair: 1, hairC: '#3a2a1a', tie: false, tieC: '#ffe14d', stripe: true, acc: 4 } },
   { id: 'ludde', name: 'Ludde', role: 'bildproducent', icon: '📹', title: 'Bildproducent · dagskiftet 06–22', post: 'producer', from: 6, until: 22, arrive: null,
     kg: 74, fit: 0.6, speed: 1.15, space: 8, polite: false, urgent: true, cover: 'chief',
     breaks: [[11, 20, 'vending', 'Godis ur automaten i entrén – kameran får sköta sig själv'], [13.8, 30, 'break', 'Kaffe i personalrummet']],
+    lines: { post: ['Bra bild, bra bild!', 'Zooma, zooma…', 'Den här ska till kvällsnyheterna', 'Var är action när man behöver den?', 'Kamera två – nu!'], break: ['Ahlgrens bilar eller Kexchoklad?', 'Automaten åt min femkrona!', 'Snabbt nu – kameran sköter sig själv', 'Gun-Britt, du har väl koll?'] },
     look: { skin: '#ffdbb8', shirt: '#38d9a9', pants: '#1f6f8b', hair: 3, hairC: '#d9a441', tie: false, tieC: '#ffe14d', stripe: true, acc: 3 } },
   { id: 'siv', name: 'Siv', role: 'bildproducent', icon: '📹', title: 'Nattbevakare · nattskiftet 22–06', post: 'producer', from: 22, until: null, arrive: 21.65,
     kg: 61, fit: 0.75, speed: 1, space: 6, polite: true, urgent: true, cover: 'chief',
     breaks: [[23.9, 35, 'platform', 'Ut på perrongen – ser sista tåget gå'], [27, 35, 'break', 'Nattmacka i personalrummet']],
+    lines: { post: ['Natten är min', 'Skärm fyra flimrar igen', 'Inget rör sig. Bra.', 'Rune snarkar…', 'Ett ensamt fönster lyser på 13'], break: ['Där går sista tåget', 'Skönt med lite frisk luft', 'Perrongen är så tom på natten', 'En macka och en kopp te'] },
     look: { skin: '#a8693f', shirt: '#5a2a6e', pants: '#2b2d6e', hair: 4, hairC: '#1b1033', tie: false, tieC: '#ffe14d', stripe: false, acc: 0 } },
   { id: 'berit', name: 'Berit', role: 'receptionist', icon: '🛎️', title: 'Receptionist · 07–19', post: 'reception', from: 7, until: 19, arrive: 6.8,
     kg: 64, fit: 0.4, speed: 1, space: 7, polite: true,
     breaks: [[10, 30, 'cafe', 'Förmiddagsfika i Sky Café'], [12.25, 45, 'break', 'Lunch i personalrummet'], [15, 25, 'cafe', 'En latte i Sky Café']],
+    lines: { post: ['Välkommen till Tornet!', 'Hissarna finns till höger', 'Har du bokat tid?', 'Skriv på besökslistan, tack', 'Vem ska du träffa?', 'Tornet, Berit, god dag!'], break: ['En latte med extra skum, tack', 'Äntligen sitta ner', 'Telefonen får ringa en stund', 'Vilken utsikt härifrån!'] },
     look: { skin: '#ffe4c8', shirt: '#c0392b', pants: '#2b2f45', hair: 5, hairC: '#d9a441', tie: false, tieC: '#ffe14d', stripe: false, acc: 2 } },
   { id: 'hasse', name: 'Hasse', role: 'fönsterputsare', icon: '🧽', title: 'Fönsterputsare · Klart Glas', post: 'gondola', from: 7.6, until: 17.6, arrive: 7.4,
     kg: 84, fit: 0.7, speed: 1, space: 9, polite: false,
     breaks: [[10.4, 25, 'roof', 'Termoskaffe i takträdgården'], [12.6, 40, 'kiosk', 'Lunch – korv med bröd i kiosken på stationen'], [14.9, 20, 'roof', 'En cigg och utsikten på taket']],
+    lines: { post: ['Skrubba, skrubba…', 'Fläckfritt!', 'Titta inte ner, Hasse', 'Vem har kladdat på trettonde våningen?', 'Fönster nummer femtusen…'], break: ['Termoskaffe smakar bäst på taket', 'Korv med bröd och senap, tack', 'Blåser det upp får jag gå hem', 'Mina armar, mina armar…'] },
     look: { skin: '#f6c48f', shirt: '#2a5db0', pants: '#2a5db0', hair: 4, hairC: '#5a3a1a', tie: false, tieC: '#ffe14d', stripe: true, acc: 0 } },
   { id: 'mona', name: 'Mona', role: 'lastare', icon: '🏗️', title: 'Lastare på Lyft & Bär · hissbalken', post: 'terrace', from: 0, until: null, arrive: 'event',
     kg: 70, fit: 0.6, speed: 1, space: 8, polite: false, breaks: [],
+    lines: { post: ['Sakta i backarna!', 'Akta pianot!', 'Lite till … STOPP!', 'Rulla, rulla!', 'Hörru balken, mer slack!'], break: [] },
     look: { skin: '#d9a066', shirt: '#ff8c42', pants: '#3a3a3a', hair: 1, hairC: '#2a1d14', tie: false, tieC: '#ffe14d', stripe: false, acc: 0 } },
 ];
 export const STRAT_NAMES = { smart: 'SMART', peak: 'RUSNING', eco: 'ENERGISNÅL', nearest: 'NÄRMAST', random: 'KAOS', buttons: 'KNAPPAR' };

@@ -20,6 +20,7 @@ import { TRAIN_DOORS, nextTrainMin, trainDoors } from './train.js';
 import { PERSON_H, PERSON_W, cargoSprite, personSprite } from './pixpeople.js';
 import { PAL } from './pixpal.js';
 import { CHIEFS, alarm, chiefOnDuty, chiefPerson } from './chief.js';
+import { CREW_BY } from './crew.js';
 import { HAIR_NAT, PANTS, SHIRT, SKIN } from './people.js';
 
 const INK = PAL.ink;
@@ -1657,12 +1658,29 @@ const GAGS = {
   dock: ['Paket till våning 9!', 'Var är följesedeln?'],
   lobby: [],
   garage: ['Var parkerade jag nu?'],
-  win_reception: ['Välkommen till Tornet!', 'Hissarna finns till höger', 'Har du bokat tid?', 'Ta gärna en broschyr!'],
-  win_gondola: ['Skrubba, skrubba…', 'Vilken utsikt!', 'Titta inte ner, Hasse', 'Fläckfritt!'],
-  win_terrace: ['Sakta i backarna!', 'Akta pianot!', 'Lite till … STOPP!'],
-  win_break: ['Vem har tagit min mugg?', 'Kaffet är starkt i dag', 'Lugnt på skärmarna, för en gångs skull', 'Sju bokstäver: lyftdon?', 'Har någon sett walkie-talkien?', 'Mmm, kanelbulle'],
   cafe: [],
 };
+// personalen och de andra som jobbar i huset säger saker som hör till jobbet – aldrig kontorsrepliker
+// (husets personal har sina repliker i CREW i config: lines.post och lines.break)
+const ROLE_GAGS = {
+  'väktare': ['Allt lugnt på min runda', 'Vem lämnade dörren olåst?', 'Ficklampan behöver nya batterier', 'Klockan tre – dags för nästa runda'],
+  'städare': ['Vem har tappat konfetti här?', 'Torka fötterna!', 'Dammsugaren låter konstigt', 'Tre papperskorgar kvar'],
+  'vaktmästare': ['Ett lysrör till…', 'Det knarrar i den här dörren', 'Var är skiftnyckeln?', 'Pannan ska ses över i morgon'],
+  'nattdj': ['Ni lyssnar på Kanal 97!', 'Nästa låt är en riktig dänga!', 'Ring in och önska!', 'Klockan är mycket – stanna kvar!'],
+  'nattekniker': ['Har du testat att starta om?', 'Modemet piper igen', 'Kaffe nummer fem', 'Servern lever – än så länge'],
+  'hisstekniker': ['Den här bromsen har sett bättre dagar', 'Var är tretton-nyckeln?', 'Smörj, smörj', 'Vem har tryckt på alla knappar?!'],
+  'arbetsledare': ['Det här ska rapporteras', 'Vem servade den här senast?', 'Linorna ska bytas var tionde år!', 'Jag vill se loggboken'],
+  'bud': ['Paket till våning nio!', 'Kvittera här, tack', 'Var ligger 402?'],
+  'flyttgubbe': ['PIVOT!', 'Lyft med benen!', 'Vem packar böcker i en enda låda?!', 'Ett, två, tre – LYFT!'],
+  'ambulans': ['Försiktigt med båren', 'Ta det lugnt, vi är här nu', 'Puls och andning – bra'],
+  'brandman': ['Ur vägen!', 'Rökdykare på väg upp', 'Släckt här – vidare!'],
+  'lastare': [],
+};
+/** vad den här personen kan säga i rummet, eller null = kontorets/våningens vanliga repliker */
+function workLines(p) {
+  if (p.crewId) { const L = CREW_BY[p.crewId].lines; return p.onBreak || (p.spot && p.spot.brk) ? L.break : L.post; }
+  return p.role ? ROLE_GAGS[p.role] || [] : null;
+}
 let gags = [], gagT = 2;
 function drawGagsPx(dt) {
   if (S.started && !S.paused) {
@@ -1670,12 +1688,14 @@ function drawGagsPx(dt) {
     if (gagT <= 0) {
       gagT = vrand(1.8, 4);
       const lo2 = VIEW.camY, hi = VIEW.camY + VIEW.viewH;
-      // (vid kontrollbordet pratar chefen själv – S.chief.say)
-      const cands = S.people.filter(p => p.state === 'office' && !p.sleeping && p.spot && p.spot.k !== 'door' && p.spot.win !== 'control' && p.spot.win !== 'hall' && floorY(p.floor) > lo2 + 40 && floorY(p.floor) < hi + 40 && !gags.some(q => q.p.floor === p.floor));
+      // (vid kontrollbordet pratar chefen själv – S.chief.say; personalen och andra i tjänst bara om jobbet)
+      const cands = S.people.filter(p => p.state === 'office' && !p.sleeping && p.spot && p.spot.k !== 'door' && p.spot.post !== 'chief'
+        && (workLines(p) === null || workLines(p).length > 0)
+        && floorY(p.floor) > lo2 + 40 && floorY(p.floor) < hi + 40 && !gags.some(q => q.p.floor === p.floor));
       if (cands.length) {
-        const p = vpick(cands), th = inWindow(p) ? `win_${p.spot.win}` : FL[p.floor].theme;
+        const p = vpick(cands), work = workLines(p), th = FL[p.floor].theme;
         const own = GAGS[th] && GAGS[th].length ? GAGS[th] : null;
-        const list = own && Math.random() < 0.75 ? own : GAGS._;
+        const list = work || (own && vrand(0, 1) < 0.75 ? own : GAGS._);
         if (list.length) gags.push({ p, text: vpick(list), life: 3.2 });
       }
     }
@@ -1683,8 +1703,8 @@ function drawGagsPx(dt) {
   for (const q of gags) {
     q.life -= dt;
     if (q.p.state !== 'office' || q.p.dead) { q.life = 0; continue; }
-    // i personalrummet syns den som pratar: bubblan över huvudet
-    if (inWindow(q.p)) { const hd = personHead(q.p); if (hd) { g.globalAlpha = clamp(q.life * 2, 0, 1); bubble(plain(q.text), X(hd.x), Y(hd.y) - 3); g.globalAlpha = 1; } continue; }
+    // den som syns där hen är (personalrummet, receptionen, gondolen, i hallen): bubblan över huvudet
+    if (inWindow(q.p) || q.p.spot?.win === 'hall') { const hd = personHead(q.p); if (hd) { g.globalAlpha = clamp(q.life * 2, 0, 1); bubble(plain(q.text), X(hd.x), Y(hd.y) - 3); g.globalAlpha = 1; } continue; }
     // repliken hörs från rummen: bubblan sitter till höger om trappskylten med en pil mot korridoren
     const s = plain(q.text), w = textW(s) + 7, x = Math.min(X(DOOR_X) + 56, X(INNER_X1) - w - 1), y0 = Y(floorY(q.p.floor + 1) + 4) + 24;
     const y = place(x, y0, w, 10, [0, 10]);
