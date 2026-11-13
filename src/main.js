@@ -6,7 +6,7 @@ import { render } from './render.js';
 import { applyTab, buildHud, placeCarPop, showIntro, showSummary, updateHud, updateRoster, updateTracker } from './hud.js';
 import { syncControls } from './input.js';
 import { updateSound } from './sound.js';
-import { updateDirector } from './director.js';
+import { slowmo, updateDirector } from './director.js';
 
 // ---------- Start ----------
 // Fröet kan väljas med ?seed=123 i adressen för att spela om exakt samma dag.
@@ -29,7 +29,8 @@ showIntro();
 let last = performance.now(), hudT = 0, rosterT = 0;
 function frame(now) {
   const dt = Math.min(0.25, (now - last) / 1000); last = now;
-  if (S.started && !S.paused) advance(dt, S.speed);
+  const slow = slowmo(dt);
+  if (S.started && !S.paused) advance(dt, S.speed * slow);
   S.anim += dt;
   updateDirector();
   updateCamera(dt);

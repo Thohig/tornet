@@ -12,6 +12,7 @@ import { toggleAuto } from './director.js';
 
 // ---------- Kontroller ----------
 export function updatePauseBtn() { $('btnPause').textContent = S.paused ? '▶' : '❚❚'; $('btnPause').classList.toggle('on', S.paused); }
+const SPEEDS = [0.25, 0.5, 1, 2];
 export function setSpeed(v) {
   S.speed = v;
   /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll('#speeds .btn')).forEach(b => b.classList.toggle('on', +b.dataset.s === v));
@@ -209,6 +210,9 @@ window.addEventListener('keydown', ev => {
   }
   const m = { Digit1: 1, Digit2: 2 }[ev.code];
   if (m) setSpeed(m);
+  // − och + stegar mellan farterna (¼× ½× 1× 2×)
+  const d = { Minus: -1, NumpadSubtract: -1, Equal: 1, NumpadAdd: 1 }[ev.code];
+  if (d) setSpeed(SPEEDS[clamp(SPEEDS.indexOf(S.speed) + d, 0, SPEEDS.length - 1)]);
 });
 export function toWorld(ev) {
   const r = cv.getBoundingClientRect();

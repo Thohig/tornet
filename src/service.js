@@ -156,6 +156,9 @@ export const queuedFaults = () => S.elevators.filter(e => (e.mode === 'broken' |
 export const nightWindow = (h = hour()) => h >= 21 && h < 27;
 /** våningen teknikern ska till för hissen e */
 export const jobFloor = e => (e.mode === 'snapped' ? e.snap.exitF : e.mode === 'broken' ? (e.fault.cable ? e.fault.exitF : e.floor) : e.home);
+/** folk sitter fast i hissen e och väntar på en tekniker (linbrott, eller korgen har stannat mellan två våningar) */
+const trapping = e => e.passengers.length > 0 &&
+  ((e.mode === 'snapped' && e.snap.ph !== 'fall') || (e.mode === 'broken' && !!e.fault && !!e.fault.trapped));
 /** Nästa jobb för teknikern p (null = vem som helst): trasiga hissar först, sedan (på natten, med nattservice)
  *  den mest slitna. En hiss som en annan tekniker redan har tagit hoppas över. Den extra teknikern tar bara fel. */
 function chooseJob(p = null) {
@@ -163,7 +166,8 @@ function chooseJob(p = null) {
   // linbrott med folk instängda går före allt annat (först fångat, först räddat)
   const snapped = S.elevators.filter(e => e.mode === 'snapped' && e.snap.ph !== 'fall' && free(e)).sort((a, b) => a.snap.t0 - b.snap.t0);
   if (snapped.length) return snapped[0];
-  const broken = S.elevators.filter(e => e.mode === 'broken' && free(e)).sort((a, b) => a.fault.t0 - b.fault.t0);
+  // sedan instängda mellan två våningar, sedan övriga fel
+  const broken = S.elevators.filter(e => e.mode === 'broken' && free(e)).sort((a, b) => (trapping(b) ? 1 : 0) - (trapping(a) ? 1 : 0) || a.fault.t0 - b.fault.t0);
   if (broken.length) return broken[0];
   if (p && p.extra) return null;
   // service som spelaren har beställt (t.ex. nivåjustering efter ett snubbel) görs direkt, även på dagen
@@ -225,14 +229,16 @@ function techTick(dt) {
     pev(p, `Sitter själv fast i hiss ${p.car.name} – ringer hissjouren efter en kollega`);
   }
   const crew = techs();
-  // instängda efter ett linbrott går före allt: om ingen tekniker är ledig eller redan på väg lämnar en av dem
-  // det hen håller på med (arbetet sparas) och går dit (före släppet nedan, så att en påbörjad service avbryts i samma steg)
-  if (S.elevators.some(x => x.mode === 'snapped' && x.snap.ph !== 'fall' && x.passengers.length && x.techId === null) && !crew.some(t => !hasJob(t))) {
-    const t = crew.find(q => S.elevators[q.job].mode !== 'snapped');
+  // instängda (linbrott, eller korgen har stannat mellan två våningar) går före allt: om ingen tekniker är ledig
+  // eller redan på väg lämnar en av dem det hen håller på med (arbetet sparas) och går dit
+  // (före släppet nedan, så att en påbörjad service avbryts i samma steg)
+  const waiting = S.elevators.find(x => trapping(x) && x.techId === null);
+  if (waiting && !crew.some(t => !hasJob(t))) {
+    const t = crew.find(q => !trapping(S.elevators[q.job]));
     if (t) {
       const cur = S.elevators[t.job];
       if (cur.fault) cur.fault.done = t.workT;
-      pev(t, `Larm: folk sitter fast i en hiss med linbrott – lämnar ${cur.name} så länge`);
+      pev(t, `Larm: folk sitter fast i hiss ${waiting.name} – lämnar ${cur.name} så länge`);
       t.job = null; t.workT = 0;
       if (t.state === 'office') t.timer = Math.min(t.timer, 0.5);
     }

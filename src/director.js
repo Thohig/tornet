@@ -10,14 +10,36 @@ import { VIEW, camMax, camTarget } from './view.js';
 import { personHead } from './render.js';
 import { cleanerAt } from './hoist.js';
 
-const HOLD = 10;     // sekunder (verklig tid) en vanlig tagning varar
-const MIN_HOLD = 6;  // så kort får en tagning bli innan något viktigare får klippa in
+const HOLD = 16;     // sekunder (verklig tid) en vanlig tagning varar
+const MIN_HOLD = 10; // så kort får en tagning bli innan något viktigare får klippa in
 const CUT_OVER = 25; // så mycket intressantare måste det nya vara för att klippa före tiden
 const MEMORY = 6;    // så många tidigare tagningar som får straff (inte samma sak hela tiden)
 const BORED = 1.5;   // poängavdrag per sekund som något redan har visats (helikoptern på taket blir tråkig)
 const FORGET = 120;  // sekunder tills det tråkiga är glömt (avtar exponentiellt)
 
 /** @typedef {{ key: string, score: number, kind: 'car'|'person'|'floor'|'cleaner'|'hoist', id: number, why: string, urgent?: boolean }} Shot */
+
+// ---------- Slowmotion ----------
+// I de dramatiska ögonblicken går tiden långsammare en kort stund (bara uppspelningen: samma dygn, samma steg).
+// Läser bara tillståndet – ändrar aldrig simuleringen.
+const SLOW_IN = 4, SLOW_OUT = 1.2; // hur fort farten glider ner/upp (per sekund verklig tid)
+let slow = 1;
+/** hur långsamt det dramatiska ögonblicket just nu ska gå (1 = vanlig fart) */
+function slowTarget() {
+  if (!S.started || S.paused) return 1;
+  let m = 1;
+  for (const e of S.elevators) if (e.mode === 'snapped' && e.snap.ph === 'fall') m = Math.min(m, 0.25); // fritt fall
+  if (S.storm && S.storm.struck !== null && S.t - S.storm.struck < 1.5) m = Math.min(m, 0.3); // blixten
+  if (S.fire && S.t - S.fire.t0 < 2.5) m = Math.min(m, 0.4); // branden bryter ut
+  return m;
+}
+/** Uppspelningens faktor för slowmotion; glider mjukt ner och upp igen. Anropas en gång per bildruta. */
+export function slowmo(dt) {
+  const want = slowTarget();
+  const rate = want < slow ? SLOW_IN : SLOW_OUT;
+  slow += Math.sign(want - slow) * Math.min(Math.abs(want - slow), rate * dt);
+  return slow;
+}
 
 /** Slår på/av regissören. */
 export function toggleAuto() {

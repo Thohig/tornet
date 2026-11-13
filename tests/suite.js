@@ -531,6 +531,38 @@ test('Hissfel mellan två våningar: passagerarna sitter kvar tills teknikern ha
   assert(Object.values(FAULT_KIND).every(k => k.need[0] < k.need[1]), 'feltyperna saknar lagningstid');
   return `${who.length} satt fast i ${e.name} · ${Math.round(S.stats.trappedSec)} instängd-sekunder`;
 });
+test('Instängda går före: teknikern lämnar ett långt jobb för folk som sitter fast mellan två våningar', () => {
+  sim(43); runUntil(9);
+  const w = watcher();
+  // ett långt jobb: teknikern lagar en hiss som tar (nästan) hur lång tid som helst
+  const long = S.elevators.find(x => x.mode === 'normal' && !x.passengers.length && !x.deck2 && !x.facade && x.state !== 'moving');
+  assert(long, 'ingen ledig hiss att ha sönder');
+  breakDown(long, 'motorn byts'); long.fault.need = 1e6;
+  let g = 0;
+  while (!(techOf(long) && techOf(long).state === 'office' && techOf(long).workT > 1) && ++g < 200 / DT) { const b = w.before(); step(DT); w.check(b); }
+  const t = techOf(long);
+  assert(t && t.workT > 1, 'teknikern kom aldrig igång med det långa jobbet');
+  // sedan tvärstannar en annan hiss med folk i
+  let e = null; g = 0;
+  while (!e && ++g < 60 / DT) { step(DT); e = S.elevators.find(x => x !== long && x.mode === 'normal' && x.state === 'moving' && x.passengers.length && !x.deck2 && !x.facade && x.pos - Math.floor(x.pos) > 0.35 && x.pos - Math.floor(x.pos) < 0.75) || null; }
+  assert(e, 'ingen hiss körde med folk');
+  const extra = techs().length > 1;
+  trapBreak(e);
+  const t0 = S.t;
+  g = 0;
+  while (t.job !== e.id && ++g < 3 / DT) step(DT);
+  assert(extra || t.job === e.id, `teknikern stannade kvar vid ${long.name} fast folk satt fast i ${e.name}`);
+  g = 0;
+  while (e.mode === 'broken' && ++g < 150 / DT) { const b = w.before(); step(DT); w.check(b); }
+  assert(e.mode === 'normal', `de instängda i ${e.name} blev aldrig fria`);
+  const freed = S.t, saved = long.fault.done || 0;
+  g = 0;
+  while (techOf(long) === null && ++g < 120 / DT) step(DT);
+  assert(techOf(long), `ingen gick tillbaka till ${long.name}`);
+  assert(saved > 1, 'arbetet på det långa jobbet sparades inte');
+  assert(w.passes === 0 && w.brokenUse === 0, `regelbrott (förbi ${w.passes}, trasig ${w.brokenUse})`);
+  return `${t.name}: ${long.name} → ${e.name} (fria efter ${Math.round(freed - t0)} s) → ${long.name} igen`;
+});
 
 // ---------- Strömavbrott ----------
 test('Strömavbrott utan åtgärd: hissarna står still, folk sitter fast, strömmen kommer tillbaka', () => {

@@ -53,7 +53,7 @@ function record(key, text, why, by, o = {}) {
 function decide(key, text, why, o = {}) {
   const C = S.chief, who = chiefOnDuty().name;
   record(key, text, why, 'chief', o);
-  C.say = { text: o.say || text, t0: S.t, until: S.t + 7, dec: !o.info };
+  C.say = { text: o.say || text, t0: S.t, until: S.t + 10, dec: !o.info };
   const color = o.car !== undefined && o.car !== null ? S.elevators[o.car].color : null;
   log(`🧑‍💼 ${who}: ${text}${why ? ` – ${why}` : ''}`, 'chief', color);
 }

@@ -25,7 +25,7 @@ export function say(p, key, vars = {}, later = false) {
 /** säg en sparad replik (anropas när personen ställer sig i kön) */
 export function flushSay(p) { if (p.sayLater) { speak(p, p.sayLater); p.sayLater = null; } }
 export function speak(p, text) {
-  p.say = { text, until: S.t + 5 };
+  p.say = { text, until: S.t + 8 };
   pev(p, `Säger: "${text}"`);
   log(`💬 ${p.name}: "${text}"`, 'person', null, p.id);
 }
