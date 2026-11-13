@@ -79,13 +79,15 @@ body{background:var(--desk);font-family:var(--ui);font-size:12px;color:var(--ink
 /* ---------- Flytande rutor över spelytan ---------- */
 .float{position:absolute;z-index:4}
 .float[hidden]{display:none}
-.incidents{
-  left:8px;bottom:8px;max-width:calc(100% - 16px);max-height:calc(100% - 16px);
-  display:flex;flex-direction:column;align-items:flex-start;gap:4px;pointer-events:none;
-}
-.incidents>*{pointer-events:auto}
+/* ---------- Kolumnen till vänster om bilden: kontrollrummet överst, incidentkorten nertill ----------
+   En egen kolumn (inte flytande över bilden) så att den aldrig täcker hallarna, där det händer. Bredden är
+   fast även när inga incidenter pågår, så att bilden inte skalas om när ett kort dyker upp. */
+#side{flex:none;width:clamp(240px,24vw,320px);margin-right:2px;display:flex;flex-direction:column;gap:4px;min-height:0}
+#side>[hidden]{display:none}
+.incidents{margin-top:auto;min-height:0;display:flex;flex-direction:column;gap:4px}
+#incBody{display:flex;flex-direction:column;gap:4px;min-height:0}
 /* utfällda kort ovanför listen */
-.inc-open{width:min(340px,calc(100vw - 32px));min-height:0;overflow-y:auto;scrollbar-width:thin;
+.inc-open{min-height:0;overflow-y:auto;scrollbar-width:thin;
   background:var(--face);box-shadow:var(--raised),4px 4px 0 rgba(0,0,0,.35);padding:4px}
 /* listen längs nederkanten: ihopfällda kort som små flikar */
 .inc-dock{display:flex;flex-wrap:wrap;gap:4px}
@@ -267,6 +269,7 @@ body{background:var(--desk);font-family:var(--ui);font-size:12px;color:var(--ink
   #app{height:auto;min-height:100vh}
   body{overflow:auto}
   #main{flex-direction:column}
+  #side{width:auto;margin:2px 0 0;order:1} /* (staplat: bilden först, kolumnen under) */
   #topbar{flex-wrap:wrap}
   .tb-stats{margin-left:0}
 }
@@ -274,8 +277,8 @@ body{background:var(--desk);font-family:var(--ui);font-size:12px;color:var(--ink
 /* ---------- Driftchefen: chefens rad på incidentkorten ---------- */
 .le.k-chief{color:var(--vga-y)}
 
-/* ---------- Kontrollrummet: ett fönster uppe till vänster i bilden (bevakaren, driftchefen, driftradion) ---------- */
-.ctl{left:8px;top:8px;width:min(380px,calc(100% - 16px));background:var(--face);
+/* ---------- Kontrollrummet: ett fönster överst i kolumnen till vänster om bilden (bevakaren, driftchefen, driftradion) ---------- */
+.ctl{flex:none;background:var(--face);
   box-shadow:var(--raised),3px 3px 0 rgba(0,0,0,.35);padding:2px 3px 3px;font-size:11px;line-height:1.3}
 .ctl-t{display:flex;align-items:center;gap:3px;color:#fff;font-weight:700;font-size:11px;padding:2px 3px 2px 5px;
   background:linear-gradient(90deg,var(--navy),var(--title2));margin-bottom:2px}
@@ -362,7 +365,7 @@ body{background:var(--desk);font-family:var(--ui);font-size:12px;color:var(--ink
 .lw-show{font-family:'VT323',monospace;font-size:34px;line-height:34px}
 .lw-sub{font-size:13px;font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lw-key{position:absolute;right:10px;top:6px;font-size:10px;opacity:.7}
-body.cinema #topbar,body.cinema #timeline,body.cinema #mini,body.cinema #status,body.cinema #ctl,body.cinema #drawer,
+body.cinema #topbar,body.cinema #timeline,body.cinema #mini,body.cinema #side,body.cinema #status,body.cinema #drawer,
 body.cinema #incPanel,body.cinema #carPop,body.cinema .dlg{display:none !important}
 /* chefens beslut på incidentkortet; när chefen har det i handen blinkar kortet inte */
 .inc-chief{margin-top:5px;padding:3px 5px;background:var(--note);box-shadow:var(--sunken);font-size:11.5px;line-height:1.35}

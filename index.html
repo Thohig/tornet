@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=36">
+<link rel="stylesheet" href="style.css?v=38">
 </head>
 <body>
 <div id="app">
@@ -46,12 +46,15 @@
 
   <div id="main">
     <aside id="mini" data-hint="<b>Minikarta:</b> hela tornet. Färgen på våningen är kön, hissarna är färgade rutor och ramen är det kameran visar. Klicka på en våning för att visa den, på en hiss för att följa den."><canvas id="miniCv"></canvas></aside>
+    <!-- kontrollrummet och incidentkorten i en egen kolumn: de ska aldrig täcka hallarna i bilden -->
+    <aside id="side">
+      <section class="ctl" id="ctl" hidden></section>
+      <section class="incidents" id="incPanel" hidden><div id="incBody"></div></section>
+    </aside>
     <main id="stage">
       <canvas id="game"></canvas>
-      <section class="float ctl" id="ctl" hidden></section>
       <section class="float lower" id="lower" hidden></section>
       <div class="ctx" id="ctx" hidden></div>
-      <section class="float incidents" id="incPanel" hidden><div id="incBody"></div></section>
       <section class="float car" id="carPop" hidden></section>
     </main>
 
