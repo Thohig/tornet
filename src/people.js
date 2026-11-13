@@ -513,12 +513,13 @@ export function officeDone(p) {
 
 // ---------- Kvälls- och nattpersonal ----------
 const JANITOR_TASKS = ['Byter ett lysrör', 'Lagar en knarrande dörr', 'Kollar ventilationen', 'Torkar upp en kaffefläck', 'Smörjer dörrgångjärn'];
-export function spawnStaff(role) {
+/** personal kommer till jobbet; extra = inringd extra hisstekniker (tar bara hissfel, åker hem när kön är tom) */
+export function spawnStaff(role, extra = false) {
   const p = makePerson('staff', LOBBY, -30 - rand(0, 30));
   p.role = role;
   if (role === 'städare') withCargo(p, 'städvagn');
   if (role === 'vaktmästare') withCargo(p, 'verktygslåda');
-  if (role === 'hisstekniker') { withCargo(p, 'servicevaska'); p.job = null; p.workT = 0; }
+  if (role === 'hisstekniker') { withCargo(p, 'servicevaska'); p.job = null; p.workT = 0; p.extra = extra; }
   const floors = OFFICE_FLOORS.concat(CAFE);
   if (role === 'väktare') { p.route = [...floors].reverse().concat(LOBBY); p.ri = -1; }
   if (role === 'städare') p.route = shuffle([...floors]).slice(0, 4); // tre städare delar på huset
@@ -526,8 +527,9 @@ export function spawnStaff(role) {
   const first = roleNext(p, hour()) || [p.exitFloor, 'Inget att göra i kväll – går hem'];
   setTrip(p, first[0], first[1], first[2]);
   S.people.push(p);
-  pev(p, `Kliver in i entrén · ${ROLE_NAMES[role]} · ${p.why}`);
-  log(`${pn(p)} (${ROLE_NAMES[role].toLowerCase()}) kommer till jobbet`, 'person', null, p.id);
+  const title = extra ? 'Extra hisstekniker (inringd)' : ROLE_NAMES[role];
+  pev(p, `Kliver in i entrén · ${title} · ${p.why}`);
+  log(`${pn(p)} (${title.toLowerCase()}) kommer till jobbet`, 'person', null, p.id);
   return p;
 }
 function roleNext(p, h) {

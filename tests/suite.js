@@ -15,7 +15,7 @@ import { needsFreight, mayUseFreight, legDest } from '../src/people.js';
 import { fl } from '../src/util.js';
 import { assignCalls, antiNuisance } from '../src/buttons.js';
 import { act } from '../src/actions.js';
-import { powerKw, triggerFault, breakDown, tech, snapCable } from '../src/service.js';
+import { powerKw, triggerFault, breakDown, tech, techs, techOf, snapCable, EXTRA_QUEUE, CALL_T } from '../src/service.js';
 import { forceMove, BLANKET_T } from '../src/visits.js';
 import { trafficMode, learnBin, peakHold, PEAK_HOLD } from '../src/dispatch.js';
 import { windAt, startStorm } from '../src/weather.js';
@@ -39,7 +39,7 @@ function sim(seed, opts = {}) {
 function watcher() {
   const w = { passes: 0, maxRide: 0, maxWait: 0, n: 0, overweight: 0, maxKg: 0, bypassBroken: 0, prev: [],
     outOfRange: 0, wrongDoor: 0, liftPass: 0, railClash: 0, moveBad: 0, badLeg: 0, badFreight: 0, vipMixed: 0, vipSet: [], selfDest: 0, brokenUse: 0, snapUse: 0, prevSnapN: [], holdBoard: 0, prevN: [], prevHold: [],
-    jumps: 0, orphanService: 0, badReserved: 0, dupNames: 0, dupEx: '', idleWait: new Map(), idleWaitMax: 0, badPlatform: 0,
+    jumps: 0, orphanService: 0, techClash: 0, badReserved: 0, dupNames: 0, dupEx: '', idleWait: new Map(), idleWaitMax: 0, badPlatform: 0,
     deadAssign: new Map(), deadAssignMax: 0, deadAssignEx: '', prevMode: [], late: [] };
   w.before = () => S.elevators.map(e => e.pos);
   w.check = before => {
@@ -77,7 +77,7 @@ function watcher() {
       // en hiss hoppar aldrig: den flyttar sig högst VMAX·DT per steg
       if (Math.abs(b - a) > VMAX * DT + 1e-6) w.jumps++;
       // en hiss på service har alltid en tekniker som jobbar med den
-      if (e.mode === 'service') { const t = tech(); if (!t || t.job !== e.id) w.orphanService++; }
+      if (e.mode === 'service' && !techOf(e)) w.orphanService++;
       // reserverade platser = de som är på väg in genom dörren
       if (e.reserved !== S.people.filter(p => p.state === 'boarding' && p.car === e).length) w.badReserved++;
       // Återgår hissen till normal drift mitt i farten (återkallning/nödsänkning avbruten) hinner den inte bromsa till
@@ -124,6 +124,9 @@ function watcher() {
     } else w.deadAssign.clear();
     // tunnelbanan: på perrongen står bara den som ska med tåget – och efter sista tåget ingen alls
     for (const p of S.people) if (p.state === 'platform' && (p.floor !== STATION || p.exitFloor !== STATION || !p.toTrain || S.trainDone)) w.badPlatform++;
+    // två tekniker har aldrig samma hiss som jobb, och högst en extra tekniker är inringd
+    { const crew = techs(), jobs = crew.filter(t => t.job !== null && t.job !== undefined).map(t => t.job);
+      if (new Set(jobs).size !== jobs.length || crew.filter(t => t.extra).length > 1) w.techClash++; }
     if (++w.n % 30 === 0 && liftsAvailable() && !S.fire) {
       for (const p of S.people) if (p.state === 'wait') w.maxWait = Math.max(w.maxWait, S.t - p.waitStart);
       // ingen ska stå i kön för att åka till våningen hen redan står på
@@ -615,6 +618,41 @@ test('Hissfel: hissen går sönder vid nästa stopp, alla kliver ut och tekniker
   assert(w.brokenUse === 0, `den trasiga hissen användes ${w.brokenUse} steg`);
   assert(w.passes === 0 && w.overweight === 0, 'regelbrott medan hissen var trasig');
   return `${e.name} trasig i ${Math.round(S.stats.downSec)} s, lagad av hissteknikern`;
+});
+test('Extra tekniker: med många hissfel i kö ringer teknikern hissjouren, kollegan lagar kön och åker hem', () => {
+  const lagat = withExtra => {
+    sim(82, { autoInc: false });
+    runUntil(9.5);
+    const w = watcher();
+    // fyra hissar går sönder samtidigt (inte varuhissen, så att teknikern kommer fram fort)
+    const cars = S.elevators.filter(e => e.mode === 'normal' && !e.freight).slice(0, EXTRA_QUEUE + 2);
+    for (const e of cars) breakDown(e, 'styrkortet hänger sig');
+    if (!withExtra) S.extraAt = Infinity; // (jämförelsen: kollegan "är redan på väg" och kommer aldrig, så ingen ringer)
+    let g = 0, both = 0, call = null, extra = null;
+    while (cars.some(e => e.mode === 'broken') && ++g < 900 / DT) {
+      const b = w.before(); step(DT); w.check(b);
+      if (S.techCall && !call) call = { ...S.techCall, queued: S.elevators.filter(e => e.mode === 'broken' && e.techId === null).length };
+      const crew = techs();
+      if (crew.length === 2 && crew.every(t => t.job !== null && t.job !== undefined && t.state === 'office')) both++;
+      extra = extra || crew.find(t => t.extra) || null;
+    }
+    assert(cars.every(e => e.mode === 'normal'), `alla hissar lagades inte (${cars.map(e => `${e.name}:${e.mode}`).join(' ')})`);
+    assert(w.techClash === 0, `två tekniker på samma hiss i ${w.techClash} steg`);
+    return { t: S.t, call, extra, both, w };
+  };
+  const a = lagat(true);
+  assert(a.call && a.call.queued >= EXTRA_QUEUE, `teknikern ringde aldrig (${JSON.stringify(a.call)})`);
+  assert(S.notices.some(n => n.kind === 'tech'), 'ingen informationsruta om samtalet');
+  assert(a.extra && a.extra.extra && a.extra.id !== a.call.by, 'ingen extra tekniker kom');
+  assert(a.both > 30, `teknikerna lagade aldrig samtidigt (${a.both} steg)`);
+  assert(S.stats.extraTechs === 1, `${S.stats.extraTechs} samtal – bara ett ska behövas`);
+  assert(a.call.until - a.call.t0 === CALL_T, 'samtalet hade fel längd');
+  // kollegan åker hem när kön är tom (och tar ingen nattservice)
+  run(200);
+  assert(!techs().some(t => t.extra) && (a.extra.dead || a.extra.goal === a.extra.exitFloor), `kollegan åkte inte hem (${a.extra.why})`);
+  const b = lagat(false);
+  assert(a.t < b.t, `med extra tekniker blev det inte fortare (${a.t.toFixed(0)} s mot ${b.t.toFixed(0)} s)`);
+  return `samtal med ${a.call.queued} hissar i kö · alla lagade efter ${Math.round(a.t)} s mot ${Math.round(b.t)} s med en tekniker`;
 });
 test('Linbrott: korgen faller, fångas mellan två våningar, alla tas ut genom takluckan och linorna byts i timmar', () => {
   sim(83, { autoInc: false });
@@ -1412,6 +1450,7 @@ function newInvariantFails(w, tag) {
   const f = [];
   if (w.jumps) f.push(`${tag}: en hiss hoppade ${w.jumps} gånger (mer än VMAX·DT på ett steg)`);
   if (w.orphanService) f.push(`${tag}: hiss på service utan tekniker i ${w.orphanService} steg`);
+  if (w.techClash) f.push(`${tag}: två tekniker på samma hiss (eller fler än en extra) i ${w.techClash} steg`);
   if (w.liftPass) f.push(`${tag}: panoramahissen tog passagerare i lastläge ${w.liftPass} steg`);
   if (w.railClash) f.push(`${tag}: last i hissbalken medan putsaren var nere ${w.railClash} steg`);
   if (w.moveBad) f.push(`${tag}: ett flyttlass var på två ställen (eller inget) ${w.moveBad} steg`);
@@ -1521,7 +1560,7 @@ test(`Spelaråtgärder: invarianter över ${FUZZ_SEEDS.length} dygn med slumpade
     if (w.selfDest) fails.push(`${tag}: någon väntade på hiss till sin egen våning (${w.selfDest} steg)`);
     // (en brand eller ett strömavbrott som fortfarande pågår när dygnet slutar låser hissarna med rätta)
     // (en service som teknikern utför eller är på väg till när dygnet tar slut är inte fast)
-    const working = e => { const t = tech(); return !!t && t.job === e.id; };
+    const working = e => !!techOf(e);
     const stuckMode = e => (e.mode === 'service' && !working(e)) || (!S.fire && (e.mode === 'recall' || e.mode === 'locked')) || (!S.outage && (e.mode === 'rescue' || e.mode === 'dead'));
     if (S.elevators.some(stuckMode))
       fails.push(`${tag}: hiss kvar i läge ${S.elevators.filter(stuckMode).map(e => `${e.name}:${e.mode}`).join(' ')} när dygnet tog slut`);

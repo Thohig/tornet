@@ -6,7 +6,7 @@
 import { ARR, clamp, fl } from './util.js';
 import { BX1, CAR_H, CAR_W, EL, FL, FLOORS, FLOOR_H, FLOOR_HOURS, FULL_LOAD, GARAGE_FLOORS, HATCH_FLOORS, GROUND_Y, H, INNER_X1, LAND_X0, DOOR_X, DOCK, LOBBY, MEZZ, ROOF_Y, SEAM_F, SHAFT_W, SHAFT_X0, STATION, TOP, TOWER_X1, TRAIN_LEN, TRAIN_X0, TRAIN_X1, W, carPos, floorOpen, floorY, shaftCX, shaftX, surf } from './config.js';
 import { exposure, windAt } from './weather.js';
-import { WARM_AT, nextOut, tech } from './service.js';
+import { CALL_REPLY, WARM_AT, nextOut, techOf } from './service.js';
 import { HOIST_OK, PARK_Y, TERRACE_Y, cleanerAt } from './hoist.js';
 import { S, hour } from './state.js';
 import { allowed, cabinKg, keyed } from './dispatch.js';
@@ -762,7 +762,7 @@ function drawRopesPx(e) {
 function ropesCut(e) {
   if (e.mode === 'snapped') return 0.22;
   if (e.mode !== 'broken' || !e.fault || !e.fault.cable) return null;
-  const t = tech(), on = t && t.job === e.id && t.state === 'office' && t.floor === e.fault.exitF;
+  const t = techOf(e), on = t && t.state === 'office' && t.floor === e.fault.exitF;
   return 0.22 + 0.78 * (on ? Math.min(1, t.workT / e.fault.need) : 0);
 }
 /** en fransig linända (dir = 1 nedåt, -1 uppåt) */
@@ -778,7 +778,7 @@ function drawCableRescue(e, G) {
       R(sx + Math.round(vrand(-2, 2)), yb - Math.round(vrand(0, 10)) - (s.ph === 'fall' ? Math.round(vrand(0, 14)) : 0), 1, 1, vpick(['#ffd23f', '#ffffff', '#ff9f1c', '#ff5d52']));
   }
   const exitF = s ? s.exitF : F.exitF, top = Y(floorY(exitF) - 4);
-  const t = tech(), here = t && t.job === e.id && t.state === 'office' && t.floor === exitF ? t : null;
+  const t = techOf(e), here = t && t.state === 'office' && t.floor === exitF ? t : null;
   // avspärrning vid schaktdörren på våningen ovanför
   if (here || F) for (let k = 0; k < cw; k += 4) R(x + k, top - 18, 2, 2, (k / 4) % 2 ? INK : '#ffd23f');
   const evac = s && s.ph === 'evac';
@@ -798,6 +798,7 @@ function drawCableRescue(e, G) {
     const px = x + Math.round(cw / 2) - PERSON_W / 2 + (evac ? 2 : (Math.sin(S.anim * 2) > 0 ? 1 : 0)), py = yt - 1 - PERSON_H;
     g.drawImage(personSprite(here, 'front', 0, 1, { blink: blinkOf(here) }), px, py);
     R(px + PERSON_W / 2, py + 2, 1, 1, '#fff6a8');
+    phoneOn(here, px, py);
     if (!evac && Math.sin(S.anim * 9 + e.id) > 0.4) for (let n = 0; n < 3; n++) R(px - 2 - Math.round(vrand(0, 3)), py + 6 + Math.round(vrand(0, 5)), 1, 1, vpick(['#ffd23f', '#ffffff']));
   }
   // den som är på väg ut klättrar uppför stegen
@@ -888,6 +889,7 @@ function cabinPx(e, k, x, yb, body, head) {
     g.drawImage(personSprite(p, 'front', 0, 1, { blink: blinkOf(p), hot: hotOf(p) }), px, py);
     if (cg && p.cargo.kind !== 'resväska') g.drawImage(cg.c, cx + cg.dx, cy - cg.c.height + 1 - cg.lift);
     g.filter = 'none';
+    phoneOn(p, px, py);
   }
   // pudlar i korgen sitter längst fram vid matte/husses fötter
   for (const { p, s } of order) {
@@ -907,6 +909,7 @@ function cabinPx(e, k, x, yb, body, head) {
   if (fixer) {
     const px = x + Math.round(cw / 2) - PERSON_W / 2 + (Math.sin(S.anim * 3) > 0 ? 1 : 0), py = yb - 1 - PERSON_H;
     g.drawImage(personSprite(fixer, 'front', 0, 1, { blink: blinkOf(fixer) }), px, py);
+    phoneOn(fixer, px, py);
     // gnistor från verktyget
     if (Math.sin(S.anim * 11 + e.id) > 0.3) for (let n = 0; n < 3; n++) R(px + PERSON_W + 1 + Math.round(vrand(0, 4)), py + 10 + Math.round(vrand(0, 6)), 1, 1, vpick(['#ffd23f', '#ffffff', '#ff9f1c']));
   }
@@ -959,6 +962,7 @@ function drawHallPeople() {
     const cg = dog ? cargoSprite(dog + (walking ? (frame % 2 ? '2' : '') : 'S'), dir) : p.cargo ? cargoSprite(p.cargo.kind, dir) : null;
     if (cg && p.cargo.kind === 'resväska') g.drawImage(cg.c, fx + cg.dx, fy - cg.c.height + 1 - cg.lift);
     g.drawImage(personSprite(p, 'side', frame, dir, { blink: blinkOf(p), hot: hotOf(p) }), fx - PERSON_W / 2, fy - PERSON_H + 1);
+    phoneOn(p, fx - PERSON_W / 2, fy - PERSON_H + 1, dir);
     if (cg && p.cargo.kind !== 'resväska') g.drawImage(cg.c, fx + cg.dx, fy - cg.c.height + 1 - cg.lift);
     if (dog && cg) poodleExtras(p, fx, fy, dir, cg);
     // ånga ur öronen när någon är riktigt sur
@@ -986,10 +990,12 @@ function poodleExtras(p, fx, fy, dir, cg) {
 function bark(cx, y) { text(g, 'VOV!', cx, y - 6, '#ffffff', 'center', 1, INK); }
 const talking = p => !!(p.say && S.t < p.say.until);
 /** pratbubbla med namn och replik, med en liten pil ner mot personen */
-function speech(p, cx, y) {
-  const s = plain(`${p.name}: "${p.say.text}"`);
-  const w = Math.min(textW(s) + 6, 260), x = Math.round(cx - w / 2);
-  pill(x, y, w, 9, '#ffffff');
+function speech(p, cx, y) { bubble(`${p.name}: "${p.say.text}"`, cx, y); }
+function bubble(str, cx, y, fill = '#ffffff') {
+  const s = plain(str);
+  // (bubblan hålls inom bilden – pilen pekar ändå på personen)
+  const w = Math.min(textW(s) + 6, 260), x = clamp(Math.round(cx - w / 2), 1, Math.max(1, lo.width - w - 1));
+  pill(x, y, w, 9, fill);
   g.save(); g.beginPath(); g.rect(x + 1, y, w - 2, 9); g.clip();
   text(g, s, x + 3, y + 1, INK);
   g.restore();
@@ -1007,6 +1013,43 @@ function thought(p, x, y) {
   pill(bx, by, w, h, p === S.sel ? '#ffe14d' : '#ffffff');
   text(g, txt, bx + 3, by + 1, INK);
   if (e) { const cx = bx + tw + 5; R(cx, by + 1, chip, 7, e.color); text(g, e.name, cx + 2, by + 1, PAL.on(e.color)); }
+}
+
+// ---------- Telefonsamtalet: teknikern ringer in en extra tekniker ----------
+/** var den som ringer ritades i den här bildrutan (låg upplösning), null = syns inte */
+let callAt = /** @type {{ x: number, y: number }|null} */ (null);
+const calling = p => !!S.techCall && S.techCall.by === p.id && S.t < S.techCall.until;
+/** mobiltelefonen vid örat; (px, py) = figurens övre vänstra hörn, dir = sidovyns riktning (0 = framifrån) */
+function phoneOn(p, px, py, dir = 0) {
+  if (!calling(p)) return;
+  const hx = dir ? px + PERSON_W / 2 + (dir > 0 ? 1 : -3) : px + PERSON_W - 4, hy = py + 3;
+  R(hx - 1, hy - 1, 4, 8, INK); R(hx, hy, 2, 6, '#3a3f4a'); R(hx, hy + 1, 2, 2, '#7cf06b'); R(hx + 1, hy - 4, 1, 3, INK);
+  callAt = { x: hx + 1, y: hy };
+}
+/** ringvågor från telefonen och samtalet i två pratbubblor: teknikern, sedan hissjourens svar */
+function drawCallPx() {
+  const C = S.techCall;
+  if (!C || S.t >= C.until) return;
+  const p = S.people.find(q => q.id === C.by);
+  if (!p || p.dead) return;
+  let at = callAt;
+  if (!at) {
+    // teknikern syns inte (i ett rum eller i trappan): en telefon vid korridoren på hens våning
+    const h = personHead(p);
+    if (!h) return;
+    at = h.hidden ? { x: X(DOOR_X) + 12, y: Y(floorY(p.floor)) - 30 } : { x: X(h.x) + 3, y: Y(h.y) + 3 };
+    R(at.x - 3, at.y - 1, 6, 9, INK); R(at.x - 2, at.y, 4, 7, '#3a3f4a'); R(at.x - 2, at.y + 1, 4, 2, '#7cf06b'); R(at.x + 1, at.y - 4, 1, 3, INK);
+  }
+  // ringvågorna växer ut från luren
+  const n = Math.floor(S.anim * 5) % 4;
+  for (let k = 1; k <= n; k++) {
+    const x = at.x + 2 + k * 2;
+    R(x, at.y - k + 2, 1, 2 * k - 1, '#ffe14d'); R(x - 1, at.y - k + 1, 1, 1, '#ffe14d'); R(x - 1, at.y + k + 1, 1, 1, '#ffe14d');
+  }
+  const reply = S.t - C.t0 >= CALL_REPLY;
+  const str = reply ? 'Hissjouren: "Uppfattat – vi skickar en kollega direkt!"'
+    : `${p.name}: "Jouren? ${C.n} hissar trasiga i kö – skicka en till!"`;
+  bubble(str, at.x, at.y - 18, reply ? '#fff6a8' : '#ffffff');
 }
 
 // ---------- Spårning, muspekare, pratbubblor ----------
@@ -1308,6 +1351,7 @@ export function renderPixel(dt) {
   if (lo.width !== w || lo.height !== h) { lo.width = w; lo.height = h; }
   X0 = VIEW.x0; CY = Math.floor(VIEW.camY / PX);
   g.setTransform(1, 0, 0, 1, 0, 0); g.imageSmoothingEnabled = false; g.globalAlpha = 1;
+  callAt = null;
   const hr = hour();
   OCC = new Array(FLOORS).fill(0); OCC_IN = new Array(FLOORS).fill(0);
   for (const p of S.people) {
@@ -1337,6 +1381,7 @@ export function renderPixel(dt) {
   drawRoofPx();
   drawCleanerPx();
   drawHoistPx();
+  drawCallPx();
   drawSelectionPx();
   drawHoverPx();
   drawGagsPx(dt);

@@ -14,7 +14,7 @@ import { stateInfo } from './describe.js';
 export { stateInfo };
 import { residentDesc } from './life.js';
 import { STORM_HINT, windMs } from './weather.js';
-import { FAN_KW, jobFloor, tech, cableStatus } from './service.js';
+import { FAN_KW, jobFloor, tech, techOf, cableStatus } from './service.js';
 import { hoistHalt, hoistStatus } from './hoist.js';
 import { BLANKET_T } from './visits.js';
 import { updatePauseBtn } from './input.js';
@@ -168,7 +168,7 @@ export function serviceStatus(e) {
   if (e.mode === 'snapped' || (e.mode === 'broken' && e.fault.cable)) return `🔧 ${cableStatus(e)}`;
   const broken = e.mode === 'broken';
   if (!broken && !e.serviceAsap && !e.hold && e.mode !== 'service') return null;
-  const t = tech(), mine = !!t && t.job === e.id, f = jobFloor(e);
+  const t = techOf(e) || tech(), mine = !!t && t.job === e.id, f = jobFloor(e);
   // arbetstid: känd när den har börjat, annars mitt i intervallet (0,3–0,5 h speltid)
   const work = broken ? e.fault.need : e.mode === 'service' ? e.serviceNeed : 0.4 * 3600 / timeScale(hour());
   const verb = broken ? 'lagar' : 'servar';
@@ -260,6 +260,7 @@ export function updateHud() {
     <div class="stat">★ Majken pratade 💬 <b>${st.chats}</b></div>
     <div class="stat">Hissfel 🔧 <b>${st.faults}</b>${st.cables ? ` (linbrott 🪢 <b>${st.cables}</b>)` : ''}</div>
     <div class="stat">Lagade / servade <b>${st.repairs} / ${st.serviced}</b></div>
+${st.extraTechs ? `    <div class="stat">Extra tekniker inringda <b>${st.extraTechs}</b></div>` : ''}
     <div class="stat">Stillestånd <b>${Math.round(st.downSec)} s</b></div>
     <div class="stat">Överhettade motorer 🌡️ <b>${st.heatStops}</b></div>
     <div class="stat">Vajerlarm i storm 🌬️ <b>${st.stormFaults}</b></div>

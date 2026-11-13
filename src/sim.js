@@ -211,7 +211,7 @@ export function resetDay() {
   learnBlend(); S.learnToday = emptyLearn();
   S.t = 0; S.clock = 0; S.sched = makeSchedule(); S.acc = 0; S.summaryShown = false; S.nextId = 1; S.sel = null; S.wl = null; S.reoptT = 0;
   S.people = []; S.stats = newStats(); S.calls = {};
-  S.fire = null; S.power = true; S.outage = null; S.techCallAt = null; S.peakMode = null; S.wakeAt = 0;
+  S.fire = null; S.power = true; S.outage = null; S.techCallAt = null; S.techCall = null; S.extraAt = null; S.peakMode = null; S.wakeAt = 0;
   S.notices = []; // gårdagens informationsrutor visas inte igen (klockan S.t börjar om från 0)
   S.nextInc = rand(60, 120) * REF_SCALE; // (i speltid, S.clock – lika många incidenter oavsett dygnets längd)
   S.occ = new Map();

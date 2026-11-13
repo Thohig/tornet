@@ -50,6 +50,11 @@ function shots() {
     else add('medicF', 80, 'floor', S.medic.floor, `🚑 ${S.medic.pname} har svimmat`);
   }
   if (S.heli && ROOF >= 0) add('heli', 75, 'floor', ROOF, '🚁 Helikoptern');
+  // teknikern ringer in en extra tekniker: korgen hen lagar eller våningen hen står på
+  if (S.techCall && S.t < S.techCall.until) {
+    const t = S.people.find(p => p.id === S.techCall.by && !p.dead);
+    if (t) add('call', 82, t.state === 'ride' ? 'car' : 'floor', t.state === 'ride' ? t.car.id : t.floor, `📞 ${name1(t)} ringer hissjouren`);
+  }
   for (const e of S.elevators) {
     const n = e.passengers.length;
     if (!S.power && n) add(`dark${e.id}`, 70 + n, 'car', e.id, `⚡ Fast i ${e.name}`);

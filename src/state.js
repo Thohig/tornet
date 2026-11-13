@@ -14,7 +14,9 @@ export const S = {
   // KNAPPAR-läget: hallanrop { 'grupp|våning|riktning': anrop } och hur ofta folk trycker fel (av/lite/mycket)
   calls: /** @type {Record<string, import('./buttons.js').HallCall>} */ ({}), mistakes: 'lite',
   // drift: underhåll 'natt' (nattservice) eller 'fel' (bara när något går sönder), när teknikern kommer, rusningsläge
-  maint: 'natt', techCallAt: /** @type {number|null} */ (null), peakMode: /** @type {string|null} */ (null),
+  maint: 'natt', techCallAt: /** @type {number|null} */ (null),
+  // extra tekniker: samtalet till hissjouren (syns i grafiken) och när kollegan kommer
+  techCall: /** @type {{ by: number, t0: number, until: number, n: number, cars: number[] }|null} */ (null), extraAt: /** @type {number|null} */ (null), peakMode: /** @type {string|null} */ (null),
   // väder (temperatur, stormen som incident), flyttdag, ambulans och informationsrutor (se notice)
   weather: /** @type {{ temp: number, cold: number }} */ ({ temp: 15, cold: 0 }), storm: /** @type {any} */ (null),
   move: /** @type {any} */ (null), medic: /** @type {any} */ (null),
@@ -50,7 +52,7 @@ export function newStats() {
   return { served: 0, waitSum: 0, waitN: 0, waitMax: 0, rideSum: 0, rideN: 0, angry: 0,
     smoked: 0, trappedSec: 0, stairs: 0, evacuated: 0, incidents: 0, overloads: 0, transfers: 0, carsIn: 0, deliveries: 0, vips: 0,
     wrongPress: 0, kidPresses: 0, nuisance: 0, ghostStops: 0,
-    faults: 0, cables: 0, repairs: 0, serviced: 0, downSec: 0, stairsChoice: 0, energy: 0, energyRun: 0, regen: 0,
+    faults: 0, cables: 0, repairs: 0, extraTechs: 0, serviced: 0, downSec: 0, stairsChoice: 0, energy: 0, energyRun: 0, regen: 0,
     gripes: 0, cups: 0, holds: 0, chats: 0,
     crowdSkips: 0, closePresses: 0, heatStops: 0, relevels: 0, stumbles: 0, doorFights: 0,
     medical: 0, medicSec: 0, moveLoads: 0, moves: 0, moveBroken: 0, stormFaults: 0, learnedParks: 0, upperDeck: 0, escalator: 0,

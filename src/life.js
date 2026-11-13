@@ -41,6 +41,13 @@ export function leaveBuilding(p) {
     log(`${pn(p)} går hemifrån · ${p.why}`, 'person', null, p.id);
     return;
   }
+  // en flyttgubbe som går (utrymd vid brand) lämnar det hen packade eller bar i lägenheten – samma steg, så att
+  // lasset aldrig står utan bärare (visits.js hämtar det igen när flyttgubbarna kommer tillbaka)
+  if (p.mover && p.item !== null && p.item !== undefined && S.move) {
+    const it = S.move.items[p.item];
+    if (it && (it.st === 'packing' || it.st === 'carried')) it.st = 'home';
+    p.item = null;
+  }
   p.dead = true;
   pev(p, p.movedOut ? 'Flyttar härifrån – hejdå huset!' : 'Lämnar huset – hejdå!');
   log(`${pn(p)} lämnar huset${p.exitFloor !== LOBBY ? ` (från ${fl(p.exitFloor)})` : ''}`, 'person', null, p.id);
