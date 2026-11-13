@@ -159,9 +159,7 @@ export function updateSound() {
   if (!on || !ac || ac.state !== 'running') return;
   ensureCars();
   const now = ac.currentTime;
-  // i hög fart blir det för tätt: bara motorbrum och pling, och tystare
-  const fast = S.speed >= 4, still = S.paused || !S.started;
-  const hush = fast ? 0.5 : 1;
+  const still = S.paused || !S.started;
   for (const e of S.elevators) {
     const c = cars[e.id];
     const near = nearness(e), pan = panOf(e);
@@ -170,7 +168,7 @@ export function updateSound() {
     const k = pitchOf(e);
     c.osc.frequency.setTargetAtTime((42 + 38 * v) * k, now, 0.08);
     c.sub.frequency.setTargetAtTime((21 + 19 * v) * k, now, 0.08);
-    c.gain.gain.setTargetAtTime(v > 0.01 ? (0.04 + 0.1 * v) * near * hush : 0, now, 0.12);
+    c.gain.gain.setTargetAtTime(v > 0.01 ? (0.04 + 0.1 * v) * near : 0, now, 0.12);
     c.pan.pan.setTargetAtTime(pan, now, 0.1);
 
     // engångsljud: bara vid förändringar sedan förra bildrutan
@@ -182,8 +180,7 @@ export function updateSound() {
     if (flashUp) { buzzer(near, pan); c.last = lastAny = now; continue; }
     if (now - c.last < MIN_GAP || now - lastAny < ALL_GAP) continue;
     let played = true;
-    if (ph === 'opening' && was !== 'opening') { ding(e, near * hush, pan); if (!fast) door(e, true, near, pan); }
-    else if (fast) played = false;
+    if (ph === 'opening' && was !== 'opening') { ding(e, near, pan); door(e, true, near, pan); }
     else if (ph === 'closing' && was !== 'closing') door(e, false, near, pan);
     else if (ph === null && was === 'closing') thud(e, near, pan);
     else played = false;

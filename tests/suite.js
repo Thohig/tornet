@@ -3,18 +3,18 @@
 // Varje test seedar slumpen, så resultaten är exakt reproducerbara.
 import { S, hooks, hour } from '../src/state.js';
 import { floorOpen, FLOOR_HOURS, idx, floorWith, EL, LOBBY, SKY, HOME_FLOORS, OFFICE_FLOORS } from '../src/config.js';
-import { DT, step, advance, newSim, resetDay, startReplay } from '../src/sim.js';
+import { DT, step, advance, newSim, resetDay } from '../src/sim.js';
 import {
   startFire, setFireMode, startOutage, startGenerator, toggleAutoRescue,
   toggleOff, endFire, canRescue,
 } from '../src/incidents.js';
 import { liftsAvailable, spawnBus, pn } from '../src/people.js';
 import { loadKg, allowed, allowedPos, posOf, safeFloor, operational, canTake, stopFloors, isFull, costBased, benched } from '../src/dispatch.js';
-import { RATED_KG, FULL_LOAD, VMAX, DEFAULT_TEMPO, dayLength, tempoName } from '../src/config.js';
+import { RATED_KG, FULL_LOAD, VMAX, DEFAULT_TEMPO, dayLength } from '../src/config.js';
 import { needsFreight, mayUseFreight, legDest } from '../src/people.js';
 import { fl } from '../src/util.js';
 import { assignCalls, antiNuisance } from '../src/buttons.js';
-import { act, recording, encodeReplay, decodeReplay, SIM_VERSION, CHECK_EVERY, stateHash } from '../src/replay.js';
+import { act } from '../src/actions.js';
 import { powerKw, triggerFault, breakDown, tech, snapCable } from '../src/service.js';
 import { forceMove, BLANKET_T } from '../src/visits.js';
 import { trafficMode, learnBin, peakHold, PEAK_HOLD } from '../src/dispatch.js';
@@ -258,20 +258,6 @@ test('Dygnets tempo: det långa dygnet tar ~15 minuter med långa rusningar, det
   }
   S.tempo = DEFAULT_TEMPO;
   return out.join(' · ');
-});
-test('Dygnets tempo följer med i replay-länken (gamla länkar spelas upp med det korta dygnet)', () => {
-  sim(17, { tempo: 'kort' }); runUntil(8);
-  const rec = decodeReplay(encodeReplay(recording()));
-  assert(rec && rec.tempo === 'kort', `länken sparade tempot ${rec && rec.tempo}`);
-  startReplay(rec);
-  assert(S.tempo === 'kort' && tempoName() === 'kort', `uppspelningen fick tempot ${S.tempo}`);
-  const old = { ...rec }; delete old.tempo;
-  startReplay(old);
-  assert(S.tempo === 'kort', 'en länk utan tempo (före tempotabellen) ska spelas med det korta dygnet');
-  assert(decodeReplay(encodeReplay({ ...rec, tempo: 'påhittat' })) === null, 'ett okänt tempo godtogs');
-  sim(17);
-  assert(S.tempo === DEFAULT_TEMPO, 'sim() återgick inte till standardtempot');
-  return 'tempot sparas i länken · gamla länkar → kort dygn';
 });
 test('Natten: låg belastning, nattpersonal och hissar i nattläge', () => {
   sim(25); runUntil(23.5);
@@ -1301,7 +1287,7 @@ test('Flyttdag vid brand: flyttgubbarna utryms, kommer tillbaka efter branden oc
   assert(!S.elevators.find(e => e.freight).indep, 'varuhissen blev kvar i oberoende drift');
   return `frö ${seed} · branden på ${fl(M.floor)} · ${M.loads} lass klara ${Math.round(M.t1 - M.t0)} s efter starten`;
 });
-test('Lärande parkering: minnet byggs upp, följer med till nästa dygn och spelas upp i replay', () => {
+test('Lärande parkering: minnet byggs upp och följer med till nästa dygn', () => {
   sim(78);
   assert(S.learnMem === null, 'minne redan dag 1');
   runDay();
@@ -1311,12 +1297,9 @@ test('Lärande parkering: minnet byggs upp, följer med till nästa dygn och spe
   assert(S.learnMem && S.learnMem[learnBin(8)][LOBBY] > 5, 'minnet säger inte att det brukar bli kö i entrén på morgonen');
   runUntil(15);
   assert(S.stats.learnedParks > 0, 'Smart parkerade aldrig efter det inlärda');
-  const rec = recording(); assert(rec.learn && rec.learn.length === S.learnMem.length, 'minnet saknas i inspelningen');
-  const link = encodeReplay(rec);
-  assert(JSON.stringify(decodeReplay(link).learn) === JSON.stringify(rec.learn), 'minnet överlevde inte länken');
   sim(78, { strategy: 'nearest' }); runDay(); S.day++; resetDay(); runUntil(15);
   assert(S.stats.learnedParks === 0, 'Närmast parkerade efter det inlärda');
-  return `${today} anrop dag 1 · länk ${link.length} tecken`;
+  return `${today} anrop dag 1`;
 });
 test('Dubbeldäck: däcken stannar samtidigt en våning isär, folk åker rätt däck och rulltrappan går till mellanplanet', () => {
   const X = EL.filter(d => d.deck2);
@@ -1413,7 +1396,6 @@ let golden = null;
 export function setGolden(g) { golden = g; }
 test('Regression: samma frön ger samma dygn som facit', () => {
   if (!golden) throw new Fail('facit saknas (tests/golden.json) – skapa det med:  npm run golden');
-  assert(golden._simVersion === SIM_VERSION, `facit gjordes för simuleringsversion ${golden._simVersion}, koden är version ${SIM_VERSION} – kör:  npm run golden`);
   const diffs = [];
   for (const c of GOLDEN_CASES) {
     const key = caseKey(c), want = golden[key], got = dayFingerprint(c);
@@ -1481,7 +1463,7 @@ function mulberry(seed) {
   let a = seed >>> 0;
   return () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), a | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 }
-// Allt går via act() som gränssnittet, så åtgärderna spelas in och kan spelas upp (replay-testet nedan).
+// Allt går via act() som gränssnittet.
 export const PLAYER_ACTIONS = {
   fire: () => act('trigger', 'fire'),
   fireMode: r => act('fireMode', ['recall', 'zone', 'none'][Math.floor(r() * 3)]),
@@ -1549,65 +1531,27 @@ test(`Spelaråtgärder: invarianter över ${FUZZ_SEEDS.length} dygn med slumpade
   return `${actions} spelaråtgärder över ${FUZZ_SEEDS.length} dygn utan fel`;
 });
 
-// ---------- Replay ----------
-/** allt som beskriver hur dygnet blev (loggens längd räknas inte – uppspelningen loggar en rad till) */
-function replayPrint() {
+// ---------- Determinism med spelaråtgärder ----------
+/** allt som beskriver hur dygnet blev */
+function dayPrint() {
   const st = S.stats;
   return JSON.stringify([st, S.nextId, S.people.length, S.elevators.map(e => [e.pos, e.trips, e.distance, e.wear, e.mode, e.kwh])]);
 }
-test('Replay: ett dygn med slumpade spelaråtgärder spelas upp exakt likadant (även dag 2 och via länken)', () => {
-  const r = mulberry(4242);
-  sim(77, { autoInc: true });
-  runDay(); S.day++; resetDay(); // dag 2: slitaget från dag 1 måste följa med i inspelningen
-  const names = Object.keys(PLAYER_ACTIONS);
-  let next = 3;
-  while (!S.summaryShown) {
-    if (S.t >= next) { PLAYER_ACTIONS[names[Math.floor(r() * names.length)]](r); next = S.t + 2 + r() * 12; }
-    step(DT);
-  }
-  const rec = recording(), want = replayPrint();
-  assert(rec.actions.length > 30, `bara ${rec.actions.length} åtgärder spelades in`);
-  const link = encodeReplay(rec), back = decodeReplay(link);
-  assert(back && JSON.stringify(back) === JSON.stringify(rec), 'länken gick inte att läsa tillbaka');
-  assert(decodeReplay('inte-en-replay') === null && decodeReplay(encodeReplay({ ...rec, actions: [{ n: 1, a: 'hacka', args: [] }] })) === null, 'trasiga länkar godtogs');
-  startReplay(back);
-  assert(act('bus') === null && S.actions.length === rec.actions.length, 'spelaren kunde ändra dygnet under uppspelningen');
-  while (!S.summaryShown) step(DT);
-  const got = replayPrint();
-  assert(got === want, `uppspelningen blev ett annat dygn:\n${want.slice(0, 300)}\n${got.slice(0, 300)}`);
-  const R = S.replayCheck;
-  assert(R && R.drift === null && R.ok === rec.checks.length && rec.checks.length >= 10, `kontrollsummorna stämde inte: ${JSON.stringify(R && { ...R, checks: R.checks?.length })}`);
-  return `${rec.actions.length} åtgärder på dag ${rec.day} · länk ${link.length} tecken · identiskt dygn · ${R.ok} kontrollsummor stämde`;
-});
-
-test('Replay: kontrollsummorna upptäcker en avvikelse och gamla länkar (version 1) spelas fortfarande upp', () => {
-  sim(55, { autoInc: true });
-  for (let i = 0; i < CHECK_EVERY * 4; i++) step(DT);
-  const rec = recording();
-  assert(rec.v === 2 && rec.sv === SIM_VERSION && rec.checks.length === 4, `inspelningen saknar kontrollsummor: ${rec.checks?.length}`);
-  // samma tillstånd ⇒ samma summa; ändras ett enda tal en aning ändras summan
-  const h = stateHash(), e = S.elevators[0];
-  assert(stateHash() === h, 'summan är inte stabil');
-  const pos = e.pos; e.pos += 1e-12;
-  assert(stateHash() !== h, 'en liten avrundningsskillnad syntes inte');
-  e.pos = pos;
-  // en manipulerad summa ⇒ avvikelsen hittas vid rätt kontroll, och resten jämförs inte
-  const bad = { ...rec, checks: rec.checks.map((c, i) => (i === 2 ? 'x' + c : c)) };
-  startReplay(decodeReplay(encodeReplay(bad)));
-  for (let i = 0; i < CHECK_EVERY * 4; i++) step(DT);
-  const R = S.replayCheck;
-  assert(R.drift !== null && Math.abs(R.drift - CHECK_EVERY * 3 * DT) < 0.01 && R.ok === 2, `avvikelsen hittades inte rätt: ${JSON.stringify({ drift: R.drift, ok: R.ok })}`);
-  assert(S.log.some(l => /avviker/.test(l.text)), 'avvikelsen loggades inte');
-  // länk från en äldre version
-  startReplay(decodeReplay(encodeReplay({ ...rec, sv: SIM_VERSION + 1 })));
-  assert(S.replayCheck.sv === SIM_VERSION + 1, 'versionen följde inte med');
-  // version 1: utan kontrollsummor och simuleringsversion
-  const { sv, checks, ...v1 } = rec;
-  const back = decodeReplay(encodeReplay({ ...v1, v: 1 }));
-  assert(back && back.v === 1, 'en länk i version 1 godtogs inte');
-  startReplay(back);
-  for (let i = 0; i < CHECK_EVERY * 2; i++) step(DT);
-  assert(S.replayCheck.checks === null && S.replayCheck.drift === null, 'version 1 jämfördes mot summor som inte finns');
-  assert(decodeReplay(encodeReplay(/** @type {any} */ ({ ...rec, checks: [1, 2] }))) === null, 'trasiga kontrollsummor godtogs');
-  return `${rec.checks.length} summor · avvikelse hittad efter ${Math.round(R.drift)} s`;
+test('Determinism: samma frö och samma spelaråtgärder ger exakt samma dygn (även dag 2)', () => {
+  const run = () => {
+    const r = mulberry(4242);
+    sim(77, { autoInc: true });
+    runDay(); S.day++; resetDay(); // dag 2: slitaget och minnet från dag 1 följer med
+    const names = Object.keys(PLAYER_ACTIONS);
+    let next = 3, n = 0;
+    while (!S.summaryShown) {
+      if (S.t >= next) { PLAYER_ACTIONS[names[Math.floor(r() * names.length)]](r); n++; next = S.t + 2 + r() * 12; }
+      step(DT);
+    }
+    return { n, print: dayPrint() };
+  };
+  const a = run(), b = run();
+  assert(a.n > 30, `bara ${a.n} åtgärder`);
+  assert(a.print === b.print, `två körningar blev olika dygn:\n${a.print.slice(0, 300)}\n${b.print.slice(0, 300)}`);
+  return `${a.n} åtgärder på dag 2 · identiskt dygn`;
 });

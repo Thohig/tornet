@@ -1,26 +1,21 @@
 // Start och huvudloop.
 import { S, hooks } from './state.js';
-import { advance, newSim, startReplay } from './sim.js';
-import { decodeReplay } from './replay.js';
+import { advance, newSim } from './sim.js';
 import { VIEW, camMax, peekFloor, resize, updateCamera } from './view.js';
 import { render } from './render.js';
 import { applyTab, buildHud, placeCarPop, showIntro, showSummary, updateHud, updateRoster, updateTracker } from './hud.js';
-import { setSpeed, syncControls } from './input.js';
+import { syncControls } from './input.js';
 import { updateSound } from './sound.js';
 import { updateDirector } from './director.js';
 
 // ---------- Start ----------
 // Fröet kan väljas med ?seed=123 i adressen för att spela om exakt samma dag.
-// ?replay=… spelar upp ett inspelat dygn (frö + spelarens åtgärder), se replay.js.
 const params = new URLSearchParams(location.search);
 const urlSeed = parseInt(params.get('seed'), 10);
 // ?tempo=kort ger det ursprungliga 6-minutersdygnet (TEMPOS i config.js)
 const urlTempo = params.get('tempo');
-const rec = params.get('replay') ? decodeReplay(params.get('replay')) : null;
-if (rec) startReplay(rec);
-else newSim(Number.isFinite(urlSeed) ? urlSeed : Math.floor(Math.random() * 1e6), urlTempo ? { tempo: urlTempo } : {});
+newSim(Number.isFinite(urlSeed) ? urlSeed : Math.floor(Math.random() * 1e6), urlTempo ? { tempo: urlTempo } : {});
 hooks.incident = floor => {
-  if (S.speed > 2) setSpeed(1);
   if (floor !== null) peekFloor(floor);
 };
 hooks.dayEnd = showSummary;

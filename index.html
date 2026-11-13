@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=29">
+<link rel="stylesheet" href="style.css?v=30">
 </head>
 <body>
 <div id="app">
@@ -19,11 +19,9 @@
     </div>
     <div class="tb-group">
       <button id="btnPause" class="btn" data-hint="<b>Paus:</b> stoppar tiden. Allt står still tills du trycker igen. (Mellanslag)">❚❚</button>
-      <div class="speeds" id="speeds" data-hint="<b>Fart:</b> hur fort tiden går. Samma dygn oavsett fart – bara snabbare. I 4× och 8× hörs bara pling och motorbrum.">
+      <div class="speeds" id="speeds" data-hint="<b>Fart:</b> hur fort tiden går. Samma dygn oavsett fart – bara snabbare. (1, 2)">
         <button data-s="1" class="btn on">1×</button>
         <button data-s="2" class="btn">2×</button>
-        <button data-s="4" class="btn">4×</button>
-        <button data-s="8" class="btn">8×</button>
       </div>
     </div>
     <div class="tb-group">
@@ -45,7 +43,7 @@
       <button class="btn tab" data-act="tab:stats" data-hint="<b>Dagens resultat:</b> väntetider, betyg, energi, trappresor och säkerhet för dygnet så här långt.">🏆</button>
     </nav>
     <div class="tb-group menu">
-      <button class="btn" data-act="menu" data-hint="<b>Meny:</b> utlös incidenter (brand, ström, hissfel, storm, het motor, linbrott), ställ in felknappar och underhåll, och kopiera en replay-länk till dygnet.">⋯</button>
+      <button class="btn" data-act="menu" data-hint="<b>Meny:</b> utlös incidenter (brand, ström, hissfel, storm, het motor, linbrott), och ställ in felknappar och underhåll.">⋯</button>
       <div class="pop" id="menu">
         <div class="pop-h">Incidenter</div>
         <label class="auto"><input type="checkbox" id="autoInc" checked> slumpas fram under dagen</label>
@@ -68,8 +66,6 @@
           <button data-f="natt" class="chip on">Nattservice</button>
           <button data-f="fel" class="chip">Bara vid fel</button>
         </div>
-        <div class="pop-h">Replay</div>
-        <button class="btn xs" data-act="replay" title="Kopiera en länk som spelar upp dygnet igen – samma frö och samma åtgärder vid samma tidpunkter">🔁 Kopiera replay-länk</button>
       </div>
     </div>
     <div class="pop hint" id="tbHint"></div>

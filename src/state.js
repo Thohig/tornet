@@ -15,11 +15,6 @@ export const S = {
   calls: /** @type {Record<string, import('./buttons.js').HallCall>} */ ({}), mistakes: 'lite',
   // drift: underhåll 'natt' (nattservice) eller 'fel' (bara när något går sönder), när teknikern kommer, rusningsläge
   maint: 'natt', techCallAt: /** @type {number|null} */ (null), peakMode: /** @type {string|null} */ (null),
-  // replay: antal steg i dygnet, spelarens åtgärder, kön som spelas upp och dygnets startläge (se replay.js)
-  steps: 0, actions: /** @type {import('./replay.js').RecordedAction[]} */ ([]), replayQueue: /** @type {import('./replay.js').RecordedAction[]} */ ([]),
-  replay: false, recStart: /** @type {any} */ (null),
-  // kontrollsummor var 30:e sekund (följer med i länken) och uppspelningens jämförelse mot inspelningens
-  checks: /** @type {string[]} */ ([]), replayCheck: /** @type {import('./replay.js').ReplayCheck|null} */ (null),
   // väder (temperatur, stormen som incident), flyttdag, ambulans och informationsrutor (se notice)
   weather: /** @type {{ temp: number, cold: number }} */ ({ temp: 15, cold: 0 }), storm: /** @type {any} */ (null),
   move: /** @type {any} */ (null), medic: /** @type {any} */ (null),
@@ -35,7 +30,7 @@ export const S = {
  * En händelse som spelaren bara informeras om (snubbel, kall dag …). Ritas som en ruta i incidentpanelen.
  * @typedef {{ id: number, kind: string, title: string, text: string, t0: number, floor: number|null, car: number|null, act?: string, actLabel?: string }} Notice
  */
-/** visa en informationsruta (sparas i tillståndet så att replay ger samma rutor) */
+/** visa en informationsruta (sparas i tillståndet, inte i gränssnittet) */
 export function notice(kind, title, text, opts = {}) {
   S.notices.push({ id: S.noticeId++, kind, title, text, t0: S.t, floor: opts.floor ?? null, car: opts.car ?? null, act: opts.act, actLabel: opts.actLabel });
   if (S.notices.length > 8) S.notices.shift();

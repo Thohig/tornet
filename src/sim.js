@@ -12,7 +12,6 @@ import { makeElevator, updateElevator, releaseCalls } from './elevators.js';
 import { buttonsMode, buttonWaitTick, dispatchCalls } from './buttons.js';
 import { incidentTick } from './incidents.js';
 import { lifeTick, lifeReset } from './life.js';
-import { CHECK_EVERY, checkTick, recordStart, replayTick } from './replay.js';
 import { stormTick, weatherReset } from './weather.js';
 import { TRAIN_SHARE, trainReset, trainTick } from './train.js';
 import { medicClear, visitsReset, visitsTick } from './visits.js';
@@ -132,8 +131,6 @@ function nightModeTick(dt) {
   }
 }
 export function step(dt) {
-  if (S.replay) replayTick(); // inspelade spelaråtgärder före det här steget
-  S.steps++;
   S.t += dt;
   S.clock += dt * timeScale(hour());
   spawnTick(dt);
@@ -195,7 +192,6 @@ export function step(dt) {
     S.reoptT -= dt;
     if (S.reoptT <= 0) { S.reoptT = 1.5; if (buttonsMode()) dispatchCalls(true); else reoptimize(); }
   }
-  if (S.steps % CHECK_EVERY === 0) checkTick(); // kontrollsumma för replay-länken
   if (hour() >= END_H && !S.summaryShown) { S.summaryShown = true; hooks.dayEnd(); }
 }
 // Fast tidssteg: verklig tid samlas på hög och simuleringen tar alltid exakt lika långa steg.
@@ -215,7 +211,6 @@ export function resetDay() {
   learnBlend(); S.learnToday = emptyLearn();
   S.t = 0; S.clock = 0; S.sched = makeSchedule(); S.acc = 0; S.summaryShown = false; S.nextId = 1; S.sel = null; S.wl = null; S.reoptT = 0;
   S.people = []; S.stats = newStats(); S.calls = {};
-  S.steps = 0; S.actions = []; S.replayQueue = []; S.replay = false; S.checks = []; S.replayCheck = null;
   S.fire = null; S.power = true; S.outage = null; S.techCallAt = null; S.peakMode = null; S.wakeAt = 0;
   S.notices = []; // gårdagens informationsrutor visas inte igen (klockan S.t börjar om från 0)
   S.nextInc = rand(60, 120) * REF_SCALE; // (i speltid, S.clock – lika många incidenter oavsett dygnets längd)
@@ -229,7 +224,6 @@ export function resetDay() {
   weatherReset();
   visitsReset();
   hoistReset();
-  recordStart();
 }
 export function newSim(seed, opts = {}) {
   S.seed = seed >>> 0; S.day = opts.day || 1; S.log = []; S.fx = []; S.elevators = [];
@@ -240,21 +234,4 @@ export function newSim(seed, opts = {}) {
   if (opts.maint !== undefined) S.maint = opts.maint;
   S.tempo = setTempo(opts.tempo ?? S.tempo);
   resetDay();
-}
-/** Spela upp en inspelning (se replay.js) från dygnets början. */
-export function startReplay(/** @type {import('./replay.js').Recording} */ rec) {
-  // (länkar från före tempotabellen spelades in med det korta dygnet)
-  newSim(rec.seed, { day: rec.day, strategy: rec.strategy, autoInc: rec.autoInc, mistakes: rec.mistakes, maint: rec.maint, tempo: rec.tempo || 'kort' });
-  // slitaget kom från gårdagen – samma som i inspelningen
-  rec.wear.forEach((w, i) => { if (S.elevators[i]) S.elevators[i].wear = w; });
-  S.recStart.wear = [...rec.wear];
-  // och det styrningen hade lärt sig om trafiken
-  S.learnMem = rec.learn ? rec.learn.map(r => [...r]) : null;
-  S.recStart.learn = S.learnMem && S.learnMem.map(r => [...r]);
-  const copy = () => rec.actions.map(x => ({ ...x, args: [...x.args] }));
-  S.actions = copy();
-  S.replayQueue = copy().sort((a, b) => a.n - b.n);
-  S.replay = true;
-  S.replayCheck = { sv: rec.sv ?? null, checks: rec.checks ? [...rec.checks] : null, drift: null, ok: 0 };
-  log(`▶ Replay: frö ${rec.seed}, dag ${rec.day}, ${rec.actions.length} åtgärder`, 'sys');
 }

@@ -1,5 +1,5 @@
 // Knappar, tangentbord och klick i spelet.
-import { act, encodeReplay } from './replay.js';
+import { act } from './actions.js';
 import { clamp } from './util.js';
 import { BX0, CAR_H, CAR_W, DOOR_X, FLOOR_H, GROUND_Y, H, INNER_X1, ROOF_Y, STRAT_HINT, STRAT_NAMES, TOP, WAIT_X1, floorY, shaftX, surf, LOBBY } from './config.js';
 import { S, log } from './state.js';
@@ -22,7 +22,7 @@ export function setStrategy(k) {
   act('strategy', k);
   syncControls();
 }
-/** Knapparna visar simuleringens inställningar (de kan ändras av en replay eller ett nytt dygn) */
+/** Knapparna visar simuleringens inställningar (de kan ändras av ett nytt dygn) */
 let shown = '';
 export function syncControls() {
   const key = `${S.strategy}|${S.autoInc}|${S.mistakes}|${S.maint}`;
@@ -64,7 +64,7 @@ export function togglePop(id) {
 export function chipGroup(id, key, after, sim = false) {
   $(id).addEventListener('click', ev => {
     const b = /** @type {HTMLElement} */ (/** @type {HTMLElement} */ (ev.target).closest('.chip')); if (!b) return;
-    // inställningar som påverkar simuleringen spelas in (replay), filter i lådan gör det inte
+    // inställningar som påverkar simuleringen går via act(), filter i lådan gör det inte
     if (sim) act('setting', key, b.dataset.f); else S[key] = b.dataset.f;
     $(id).querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c === b));
     after();
@@ -81,7 +81,6 @@ export function doAction(cmd) {
   else if (a === 'moveBlankets') act('moveBlankets', b === '1');
   else if (a === 'moveWind') act('moveWind', b);
   else if (a === 'dismiss') S.dismissed.add(b); // (bara gränssnittet – simuleringen läser det aldrig)
-  else if (a === 'replay') { copyReplayLink(); return; }
   else if (a === 'show') scrollToFloor(+b);
   else if (a === 'tab') { setTab(b); return; }
   else if (a === 'menu') { togglePop('menu'); return; }
@@ -170,7 +169,6 @@ document.addEventListener('click', ev => {
 $('btnBus').onclick = () => {
   if (!S.started || S.fire) return;
   const n = act('bus');
-  if (n === null) return; // replay pågår
   if (!n) { S.fx.push({ x: 140, y: GROUND_Y - 100, text: 'STÄNGT – KOM IMORGON!', color: '#ff5d52', life: 2, size: 26 }); log('Bussen vände – allt i huset är stängt', 'sys'); return; }
   S.fx.push({ x: 140, y: GROUND_Y - 100, text: 'BUSSLAST!', color: '#ff8c42', life: 2, size: 30 });
   log('En busslast turister väller in i entrén!', 'sys');
@@ -193,7 +191,7 @@ window.addEventListener('keydown', ev => {
     else if (S.tab) setTab(S.tab); // stänger fönstret med flikarna
     else { select(null); detachCam(); }
   }
-  const m = { Digit1: 1, Digit2: 2, Digit3: 4, Digit4: 8 }[ev.code];
+  const m = { Digit1: 1, Digit2: 2 }[ev.code];
   if (m) setSpeed(m);
 });
 export function toWorld(ev) {
@@ -251,16 +249,8 @@ cv.addEventListener('click', ev => {
   }
   if (x < BX0 || x > INNER_X1 || y < ROOF_Y || y > GROUND_Y || S.fire) return;
   const f = clamp(LOBBY + Math.floor((GROUND_Y - y) / FLOOR_H), 0, TOP);
-  if (S.replay) { act('visitor'); return; } // (loggar bara att replay pågår)
   const v = act('visitor', f, clamp(x, BX0 + 40, WAIT_X1 - 20));
   if (!v) { S.fx.push({ x, y: surf(f) - 70, text: 'STÄNGT!', color: '#ff5d52', life: 1.2 }); return; }
   S.fx.push({ x, y: surf(f) - 70, text: '+1!', color: '#7cf06b', life: 1.2 });
   select(v);
 });
-
-// Replay-länk: frö + dygnets startläge + spelarens åtgärder hittills. Samma länk ger exakt samma dygn.
-function copyReplayLink() {
-  const url = `${location.origin}${location.pathname}?replay=${encodeReplay()}`;
-  const done = ok => log(ok ? `🔁 Replay-länken är kopierad (${S.actions.length} åtgärder hittills i dag)` : `🔁 Replay-länk: ${url}`, 'sys');
-  try { navigator.clipboard.writeText(url).then(() => done(true), () => done(false)); } catch (e) { done(false); }
-}

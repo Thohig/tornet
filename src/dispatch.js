@@ -181,7 +181,7 @@ export const LEARN_BINS = 24;
 export const learnBin = h => Math.max(0, Math.min(LEARN_BINS - 1, Math.floor(h - 6)));
 export const emptyLearn = () => Array.from({ length: LEARN_BINS }, () => new Array(EL_FLOORS).fill(0));
 const EL_FLOORS = Math.max(...EL.flatMap(d => d.serves)) + 1;
-/** dagens anrop → minnet (anropas av resetDay innan ett nytt dygn börjar); avrundat så att replay-länken blir kort */
+/** dagens anrop → minnet (anropas av resetDay innan ett nytt dygn börjar) */
 export function learnBlend() {
   const t = S.learnToday;
   if (!t) return;

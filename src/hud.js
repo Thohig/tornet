@@ -18,7 +18,6 @@ import { FAN_KW, jobFloor, tech, cableStatus } from './service.js';
 import { hoistHalt, hoistStatus } from './hoist.js';
 import { BLANKET_T } from './visits.js';
 import { updatePauseBtn } from './input.js';
-import { SIM_VERSION } from './replay.js';
 
 // ---------- HUD: DOM ----------
 export function $(id) { return document.getElementById(id); }
@@ -337,19 +336,6 @@ export function incidentHtml() {
     info(`cable-${e.id}-${Math.round(cab.t0)}`, 'cable', `🪢 Linbrott i ${esc(e.name)}`, `${intro}<div class="svc">${esc(cableStatus(e))}</div>`,
       `<button class="btn xs" data-act="follow:${e.id}">📹 Visa hissen</button>`);
   }
-  // replay-länkens kontroll: avviker uppspelningen, eller är länken från en annan version?
-  const R = S.replay ? S.replayCheck : null;
-  if (R) {
-    const other = R.sv !== null && R.sv !== SIM_VERSION;
-    const ver = other ? `Länken gjordes med simuleringsversion ${R.sv}, den här är version ${SIM_VERSION}.` : '';
-    if (R.drift !== null) {
-      info(`drift-${S.day}`, 'drift', '⚠️ Replayen avviker',
-        `Uppspelningen stämmer inte längre med inspelningen (efter ${Math.round(R.drift)} s). `
-        + (other ? ver : 'Länken gjordes med samma version – troligen räknar den här webbläsaren en aning annorlunda än den som spelade in.')
-        + ' Resten av dygnet kan bli annorlunda än när det spelades in.');
-    } else if (other) info(`oldver-${S.day}`, 'drift', '🔁 Replay från en annan version', `${ver} Dygnet kan bli annorlunda än när det spelades in – det märks i så fall här.`);
-    else if (!R.checks) info(`nocheck-${S.day}`, 'drift', '🔁 Äldre replay-länk', 'Länken saknar kontrollsummor, så det går inte att se om uppspelningen blir exakt samma dygn.');
-  }
   const M = S.move;
   // flyttkortet syns en stund innan flytten börjar (då kan spelaren välja väg och skyddsfiltar) och under den
   if (M && ((M.state === 'planned' && hour() >= M.at - 1.5 && !S.fire) || M.state === 'on' || (M.state === 'done' && S.t - M.t1 < 20))) {
@@ -600,7 +586,7 @@ export function showIntro() {
       <li>Klicka på en tom yta på en våning för att släppa in en besökare. <b>BUSS!</b> släpper in en busslast.</li>
       <li><b>Scrolla</b> med mushjulet eller piltangenterna. Kameran följer den du spårar.</li>
       <li>📋 register, 📜 logg och 🏆 resultat öppnas i en låda till höger.</li>
-      <li><kbd>Mellanslag</kbd> paus · <kbd>1</kbd>–<kbd>4</kbd> hastighet · <kbd>S</kbd> styrlogik · <kbd>T</kbd> namnbrickor · <kbd>F</kbd> koppla loss/på kameran · <kbd>A</kbd> regissör (kameran väljer själv) · <kbd>Esc</kbd> stäng/sluta spåra</li>
+      <li><kbd>Mellanslag</kbd> paus · <kbd>1</kbd>/<kbd>2</kbd> hastighet · <kbd>S</kbd> styrlogik · <kbd>T</kbd> namnbrickor · <kbd>F</kbd> koppla loss/på kameran · <kbd>A</kbd> regissör (kameran väljer själv) · <kbd>Esc</kbd> stäng/sluta spåra</li>
     </ul>
     <button class="btn" id="go">KÖR!</button></div>`);
   $('go').onclick = () => { hideOverlay(); S.started = true; log('Dag 1 börjar – dörrarna öppnas!', 'sys'); };

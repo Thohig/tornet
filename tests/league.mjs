@@ -10,7 +10,7 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { S, hooks } from '../src/state.js';
 import { DT, step, newSim } from '../src/sim.js';
 import { forceMove } from '../src/visits.js';
-import { act } from '../src/replay.js';
+import { act } from '../src/actions.js';
 
 const args = process.argv.slice(2);
 const plain = args.filter(a => !a.startsWith('--'));
