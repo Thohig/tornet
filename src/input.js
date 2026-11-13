@@ -5,7 +5,7 @@ import { BX0, CAR_H, CAR_W, DOOR_X, FLOOR_H, GROUND_Y, H, INNER_X1, ROOF_Y, STRA
 import { S, log } from './state.js';
 import { VIEW, camTarget, cv, detachCam, followCar, lookAt, scrollBy, scrollToFloor } from './view.js';
 import { personHead, peopleBehindDoor } from './render.js';
-import { $, openCarPop, select, setTab, updateHud, updateRoster } from './hud.js';
+import { $, foldInc, openCarPop, select, setTab, updateHud, updateRoster } from './hud.js';
 import { soundOn, toggleSound, unlockSound } from './sound.js';
 import { toggleAuto } from './director.js';
 
@@ -81,6 +81,7 @@ export function doAction(cmd) {
   else if (a === 'moveBlankets') act('moveBlankets', b === '1');
   else if (a === 'moveWind') act('moveWind', b);
   else if (a === 'dismiss') S.dismissed.add(b); // (bara gränssnittet – simuleringen läser det aldrig)
+  else if (a === 'incfold') { foldInc(b); return; }
   else if (a === 'show') scrollToFloor(+b);
   else if (a === 'tab') { setTab(b); return; }
   else if (a === 'menu') { togglePop('menu'); return; }

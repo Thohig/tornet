@@ -305,27 +305,26 @@ export function incidentHtml() {
   if (S.storm) {
     const St = S.storm, P = S.elevators.find(e => e.facade);
     const b = (m, txt) => `<button class="btn sm${St.mode === m ? ' on' : ''}" data-act="storm:${m}">${txt}</button>`;
-    parts.push(`<div class="inc storm"><div class="inc-h">🌬️ Storm – <span class="lv">${windMs()}</span> m/s</div>
+    parts.push(card('storm', 'storm', `🌬️ Storm – <span class="lv">${windMs()}</span> m/s`, `
       <div class="inc-s">De höga schakten och panoramahissen på fasaden svajar. Bedarrar om ~${cd(St.t0 + St.len - S.t)}s.${St.faults ? ` Vajerlarm: <b>${num(St.faults)}</b>` : ''}</div>
       <div class="inc-q">Hur ska hissarna köras?</div>
       <div class="inc-acts">${b('sway', '🌬️ Svajläge')}${b('none', 'Kör som vanligt')}</div>
       <div class="inc-hint">${STORM_HINT[St.mode]}</div>
-      ${P ? `<div class="inc-acts"><button class="btn xs" data-act="follow:${P.id}">📹 Visa panoramahissen</button></div>` : ''}</div>`);
+      ${P ? `<div class="inc-acts"><button class="btn xs" data-act="follow:${P.id}">📹 Visa panoramahissen</button></div>` : ''}`, true));
   }
   // ---------- överhettade motorer (incident: extrafläkt) ----------
   for (const e of S.elevators) {
     if (!e.hot) continue;
-    parts.push(`<div class="inc heat"><div class="inc-h">🌡️ Motorn i hiss ${esc(e.name)} är överhettad</div>
+    parts.push(card(`heat-${e.id}`, 'heat', `🌡️ Motorn i hiss ${esc(e.name)} är överhettad`, `
       <div class="inc-s">Överhettningsskyddet har löst ut (<span class="lv">${motorC(e)}</span> °C): ${esc(e.name)} kör klart sina passagerare men tar inga nya förrän motorn har svalnat.</div>
       <div class="inc-acts"><button class="btn sm${e.fan ? ' on' : ''}" data-act="fan:${e.id}" ${e.fan ? 'disabled' : ''}>🌀 ${e.fan ? 'Extrafläkten går' : 'Starta extrafläkt'}</button><button class="btn xs" data-act="follow:${e.id}">📹 Visa hissen</button></div>
-      <div class="inc-hint">Fläkten kyler ungefär fyra gånger snabbare men drar ${FAN_KW} kW. Smart och Energisnål undviker varma motorer, Rusning tar risken längre, och Närmast, Kaos och Knappar bryr sig inte alls.</div></div>`);
+      <div class="inc-hint">Fläkten kyler ungefär fyra gånger snabbare men drar ${FAN_KW} kW. Smart och Energisnål undviker varma motorer, Rusning tar risken längre, och Närmast, Kaos och Knappar bryr sig inte alls.</div>`, true));
   }
   // ---------- händelser som spelaren bara informeras om ----------
   const V = S.elevators.find(e => e.freight);
   const info = (key, cls, title, body, acts) => {
     if (S.dismissed.has(key)) return;
-    parts.push(`<div class="inc info ${cls}"><div class="inc-h">${title}<button class="inc-x" data-act="dismiss:${key}" title="Stäng">✕</button></div>
-      <div class="inc-s">${body}</div>${acts ? `<div class="inc-acts">${acts}</div>` : ''}</div>`);
+    parts.push(card(key, `info ${cls}`, title, `<div class="inc-s">${body}</div>${acts ? `<div class="inc-acts">${acts}</div>` : ''}`, false, true));
   };
   // linbrott: spelaren kan inte göra något – hissjouren räddar de instängda och byter linorna
   for (const e of S.elevators) {
@@ -405,13 +404,13 @@ export function incidentHtml() {
       : `Brandkåren släcker – klart om ${cd(F.outAt - S.t)}s`;
     const outside = S.people.filter(p => p.state === 'assembly').length;
     const b = (m, txt) => `<button class="btn sm${F.mode === m ? ' on' : ''}" data-act="fire:${m}">${txt}</button>`;
-    parts.push(`<div class="inc fire"><div class="inc-h">🔥 Brand på våning ${fl(F.floor)}</div>
+    parts.push(card('fire', 'fire', `🔥 Brand på våning ${fl(F.floor)}`, `
       <div class="inc-s">${status}. Våning ${fl(F.floor - 1)}–${fl(TOP)} utryms.</div>
       <div class="inc-s">Rökexponerade: <b>${num(F.smoked)}</b> · Utrymda: <b>${num(F.evac)}</b>${outside ? ` · På återsamlingsplatsen: <b>${num(outside)}</b>` : ''}</div>
       <div class="inc-q">Larmet återkallade hissarna – vill du köra dem annorlunda?</div>
       <div class="inc-acts">${b('recall', '🚒 Brandåterkallning')}${b('zone', `🚧 Bara E–${fl(zmax)}`)}${b('none', 'Normal drift')}</div>
       <div class="inc-hint">${FIRE_HINT[F.mode]}</div>
-      <div class="inc-acts"><button class="btn xs" data-act="show:${F.floor}">Visa våningen</button></div></div>`);
+      <div class="inc-acts"><button class="btn xs" data-act="show:${F.floor}">Visa våningen</button></div>`, true));
   }
   if (!S.power && S.outage) {
     const O = S.outage;
@@ -420,15 +419,39 @@ export function incidentHtml() {
       : O.genAt !== null ? `<button class="btn sm" disabled>🔋 Startar… ${cd(O.genAt - S.t)}s</button>`
         : `<button class="btn sm" data-act="pow:gen">🔋 Starta reservkraft</button>`;
     const busy = O.busy !== null ? `Nödsänker hiss ${EL[O.busy].name} just nu…` : O.gen ? 'Välj vilken hiss som ska nödsänkas nedan – eller slå på auto.' : '';
-    parts.push(`<div class="inc power"><div class="inc-h">⚡ Strömavbrott</div>
+    parts.push(card('power', 'power', '⚡ Strömavbrott', `
       <div class="inc-s">Strömmen tillbaka om ~${cd(O.backAt - S.t)}s · Instängda nu: <b>${num(trapped)}</b> · Instängd-sek idag: <b>${num(S.stats.trappedSec)}</b></div>
       <div class="inc-q">Vad gör du?</div>
       <div class="inc-acts">${gen}<button class="btn sm${O.auto ? ' on' : ''}" data-act="pow:auto" ${O.gen ? '' : 'disabled'}>Auto-räddning: ${O.auto ? 'PÅ' : 'AV'}</button></div>
       <div class="inc-acts">${S.elevators.filter(e => e.mode === 'normal' && e.passengers.length && !(e.state === 'doors' && e.door >= 0.95)).map(e =>
         `<button class="btn xs hot2" data-act="pow:rescue:${e.id}" ${canRescue(e) ? '' : 'disabled'}>Nödsänk ${e.name} (${e.passengers.length} inne)</button>`).join('')}</div>
-      <div class="inc-hint">${busy || 'Utan åtgärd sitter folk fast tills strömmen kommer tillbaka. Reservkraften räcker till EN hiss i taget – välj ordning, t.ex. fullaste först.'}</div></div>`);
+      <div class="inc-hint">${busy || 'Utan åtgärd sitter folk fast tills strömmen kommer tillbaka. Reservkraften räcker till EN hiss i taget – välj ordning, t.ex. fullaste först.'}</div>`, true));
   }
-  return parts.join('');
+  return parts;
+}
+/** ett kort i incidentrutan: incidenter (alert) kan åtgärdas, informationsrutor (closable) bara stängas */
+function card(k, cls, head, body, alert = false, closable = false) { return { k, cls, head, body, alert, closable }; }
+// Incidentrutan är en list längs spelytans nederkant: korten fälls ut över den och fälls ihop till
+// små flikar, så att bilden inte täcks. Incidenter är utfällda tills spelaren fäller ihop dem;
+// informationsrutor fälls ut en stund när de dyker upp och glider sedan ner i listen. (Bara gränssnittet.)
+const INFO_OPEN_S = 12;
+const incOpened = new Set(), incFolded = new Set(), incSeen = new Map();
+const incIsOpen = c => (incFolded.has(c.k) ? false : incOpened.has(c.k) || c.alert || S.t - (incSeen.get(c.k) ?? S.t) < INFO_OPEN_S);
+let incCards = [];
+/** fäll ut eller ihop ett kort (knappen i rubriken eller fliken i listen) */
+export function foldInc(k) {
+  const c = incCards.find(q => q.k === k);
+  if (c && incIsOpen(c)) { incFolded.add(k); incOpened.delete(k); } else { incOpened.add(k); incFolded.delete(k); }
+  S.incHtml = '';
+  updateIncidents();
+}
+function incPanelHtml(cards) {
+  const open = cards.filter(incIsOpen), shut = cards.filter(c => !incIsOpen(c));
+  const full = c => `<div class="inc ${c.cls}${c.alert ? ' alert' : ''}"><div class="inc-h"><span class="inc-t">${c.head}</span>`
+    + `<button class="inc-x" data-act="incfold:${c.k}" title="Fäll ihop">▁</button>`
+    + `${c.closable ? `<button class="inc-x" data-act="dismiss:${c.k}" title="Stäng">✕</button>` : ''}</div>${c.body}</div>`;
+  const chip = c => `<button class="inc chip ${c.cls}${c.alert ? ' alert' : ''}" data-act="incfold:${c.k}" title="Visa"><span class="inc-h">${c.head}</span></button>`;
+  return `${open.length ? `<div class="inc-open">${open.map(full).join('')}</div>` : ''}${shut.length ? `<div class="inc-dock">${shut.map(chip).join('')}</div>` : ''}`;
 }
 // Siffror som ändras hela tiden (nedräkningar, sekunder) ligger i <span class="lv">. Panelen byggs bara
 // om när något annat ändras – annars uppdateras bara siffrorna, så att knapparna går att klicka på.
@@ -436,18 +459,22 @@ const cd = sec => `<span class="lv">${Math.max(0, Math.ceil(sec))}</span>`;
 const num = n => `<span class="lv">${Math.round(n)}</span>`;
 const LV = /<span class="lv">([^<]*)<\/span>/g;
 export function updateIncidents() {
-  const html = incidentHtml();
+  const cards = incCards = incidentHtml();
+  for (const c of cards) if (!incSeen.has(c.k)) incSeen.set(c.k, S.t);
+  // ett kort som försvunnit glöms (nästa brand ska fällas ut igen, även om den förra fälldes ihop)
+  const live = new Set(cards.map(c => c.k));
+  for (const set of [incOpened, incFolded]) for (const k of set) if (!live.has(k)) set.delete(k);
+  for (const k of incSeen.keys()) if (!live.has(k)) incSeen.delete(k);
+  const html = incPanelHtml(cards);
   const shape = html.replace(LV, '<span class="lv"></span>');
   if (shape !== S.incHtml) { S.incHtml = shape; $('incBody').innerHTML = html; }
   else {
     const vals = [...html.matchAll(LV)].map(m => m[1]);
     $('incBody').querySelectorAll('.lv').forEach((el, i) => { if (el.textContent !== vals[i]) el.textContent = vals[i]; });
   }
-  // rutan syns bara när något händer; den blinkar bara för incidenter (inte för information)
-  const alerting = !!(S.fire || !S.power || S.storm || S.elevators.some(e => e.hot));
-  const shown = alerting || html.includes('class="inc ');
+  // rutan syns bara när något händer; bara incidenterna blinkar (inte informationen)
+  const shown = cards.length > 0;
   if ($('incPanel').hidden === shown) $('incPanel').hidden = !shown;
-  $('incPanel').classList.toggle('calm', !alerting);
 }
 export function updateRoster() {
   if (!isOpen('roster')) return;

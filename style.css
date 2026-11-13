@@ -75,14 +75,24 @@ body{background:var(--desk);font-family:var(--ui);font-size:12px;color:var(--ink
 .float{position:absolute;z-index:4}
 .float[hidden]{display:none}
 .incidents{
-  left:12px;bottom:12px;width:min(360px,calc(100% - 24px));max-height:calc(100% - 24px);overflow-y:auto;
-  background:var(--face);box-shadow:var(--raised),4px 4px 0 rgba(0,0,0,.35);padding:4px;
-  animation:pulse 1s infinite alternate;scrollbar-width:thin;
+  left:8px;bottom:8px;max-width:calc(100% - 16px);max-height:calc(100% - 16px);
+  display:flex;flex-direction:column;align-items:flex-start;gap:4px;pointer-events:none;
 }
+.incidents>*{pointer-events:auto}
+/* utfällda kort ovanför listen */
+.inc-open{width:min(340px,calc(100vw - 32px));min-height:0;overflow-y:auto;scrollbar-width:thin;
+  background:var(--face);box-shadow:var(--raised),4px 4px 0 rgba(0,0,0,.35);padding:4px}
+/* listen längs nederkanten: ihopfällda kort som små flikar */
+.inc-dock{display:flex;flex-wrap:wrap;gap:4px}
+.inc.chip{margin:0;padding:0;border:0;font:inherit;cursor:pointer;background:none;box-shadow:var(--raised),2px 2px 0 rgba(0,0,0,.35)}
+.inc.chip .inc-h{margin:0;padding:3px 8px;font-size:11px;white-space:nowrap}
+.inc.chip:active{box-shadow:var(--sunken)}
+.inc.alert{animation:pulse 1s infinite alternate}
 @keyframes pulse{from{outline:2px solid transparent}to{outline:2px solid #c0392b}}
 .inc{box-shadow:var(--sunken);padding:0 6px 6px;margin-bottom:4px;background:#fff}
 .inc:last-child{margin-bottom:0}
-.inc-h{font-weight:700;font-size:12px;color:#fff;margin:0 -6px 5px;padding:3px 6px;background:linear-gradient(90deg,var(--navy),var(--title2))}
+.inc-h{font-weight:700;font-size:12px;color:#fff;margin:0 -6px 5px;padding:3px 6px;background:linear-gradient(90deg,var(--navy),var(--title2));display:flex;align-items:center;gap:4px}
+.inc-t{flex:1}
 .inc.fire .inc-h{background:linear-gradient(90deg,#800000,#c0392b)}
 .inc.power .inc-h{background:linear-gradient(90deg,var(--navy),var(--title2))}
 .inc.storm .inc-h{background:linear-gradient(90deg,#1f4e79,#5b8fb9)}
@@ -98,9 +108,8 @@ body{background:var(--desk);font-family:var(--ui);font-size:12px;color:var(--ink
 .inc.info.heat .inc-h{background:linear-gradient(90deg,#803000,#ff8c42)}
 .inc.info.cable .inc-h{background:linear-gradient(90deg,#4a3a00,#b08a00)}
 .inc.info.fault .inc-h{background:linear-gradient(90deg,#5a1e2a,#c81e3a)}
-.inc-x{margin-left:auto;background:var(--face);color:#000;border:0;box-shadow:var(--raised);font:inherit;font-size:10px;line-height:1;padding:1px 4px;cursor:pointer}
+.inc-x{background:var(--face);color:#000;border:0;box-shadow:var(--raised);font:inherit;font-size:10px;line-height:1;padding:1px 4px;cursor:pointer}
 .inc-x:active{box-shadow:var(--sunken)}
-.incidents.calm{animation:none}
 .learn{grid-column:1/-1;margin:6px 0;font-size:11px}
 .learn-h{font-weight:700;margin-bottom:3px}
 .learn-e{color:#606060}

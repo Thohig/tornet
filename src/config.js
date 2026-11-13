@@ -238,10 +238,12 @@ export const INNER_X1 = SHAFT_X0 - 5;
 export const WAIT_X1 = SHAFT_X0 - 34;
 export const STAIR_X = BX0 + 6;
 // Bara grafik: bilden börjar här (rummen till vänster syns inte), och våningen visas som en
-// hall framför schakten med en korridor in mot rummen.
-export const LAND_X0 = 370, DOOR_X = LAND_X0 + 32;
+// hall framför schakten med en korridor in mot rummen. Hallen är bred så att köer, terminaler och
+// stamgäster får plats (simuleringen påverkas inte – den räknar med hela våningen 60–619).
+export const LAND_X0 = 250, DOOR_X = LAND_X0 + 32;
 // tunnelbanan: tåget stannar längs perrongens bakvägg mellan TRAIN_X0 och TRAIN_X1 (tunnelmynningar i båda ändar)
-export const TRAIN_X0 = DOOR_X + 104, TRAIN_X1 = SHAFT_X0 - 8, TRAIN_LEN = TRAIN_X1 - TRAIN_X0;
+// (fast läge – simuleringen använder det, så det får inte följa hallens bredd)
+export const TRAIN_X0 = 506, TRAIN_X1 = SHAFT_X0 - 8, TRAIN_LEN = TRAIN_X1 - TRAIN_X0;
 export const CAR_W = SHAFT_W - 8, CAR_H = 84;
 export const floorY = f => GROUND_Y - (f - LOBBY) * FLOOR_H; // golvlinjen för våning f (f får vara ett decimaltal)
 export const surf = f => floorY(f) - 4;

@@ -9,7 +9,7 @@ import { exposure, windAt } from './weather.js';
 import { CALL_REPLY, WARM_AT, nextOut, techOf } from './service.js';
 import { HOIST_OK, PARK_Y, TERRACE_Y, cleanerAt } from './hoist.js';
 import { S, hour } from './state.js';
-import { allowed, cabinKg, keyed } from './dispatch.js';
+import { allowed, assignedTo, cabinKg, keyed } from './dispatch.js';
 import { noteDetail, stateInfo } from './describe.js';
 import { VIEW, clouds, ctx, cv, nightness, skyAt, skyline, stars } from './view.js';
 import { carSlot, carSlotX, landPos, peopleBehindDoor, personHead } from './render.js';
@@ -98,6 +98,20 @@ function label(str, cx, y, fill = '#ffffff', color = INK, align = 'center') {
   pill(x, y, w, 9, fill);
   text(g, s, x + 3, y + 1, color);
   return w;
+}
+
+// ---------- Platsbokning för skyltar och bubblor ----------
+// Varje bildruta bokar skyltarna i hallen först (våningsnamn, trappa, räknare …), sedan bubblorna en i
+// taget. En bubbla som krockar flyttas uppåt/nedåt till närmaste lediga plats – eller ritas inte alls
+// om den bara är utfyllnad (repliker från rummen, grupperade tankebubblor).
+/** @type {{x:number,y:number,w:number,h:number}[]} */
+let taken = [];
+const hits = (x, y, w, h) => taken.some(r => x < r.x + r.w && r.x < x + w && y < r.y + r.h && r.y < y + h);
+function reserve(x, y, w, h) { taken.push({ x, y, w, h }); }
+/** närmaste lediga y för rutan (bokas), eller null om allt är upptaget */
+function place(x, y, w, h, steps = [0, -11, 11, -22]) {
+  for (const d of steps) if (!hits(x, y + d, w, h)) { reserve(x, y + d, w, h); return y + d; }
+  return null;
 }
 
 // ---------- Figurer som byggs en gång ----------
@@ -237,8 +251,56 @@ function drawGroundPx() {
   R(0, gy + 7, lo.width, lo.height, PAL.dirt);
   for (let y = Y(GROUND_Y + 50); y < lo.height; y += 23) R(0, y, lo.width, 5, PAL.dirtStripe);
   for (let i = 0; i < 90; i++) { const wx = (i * 137) % W, wy = GROUND_Y + 24 + (i * 53) % (H - GROUND_Y - 30); R(X(wx), Y(wy), 3, 2, PAL.pebble); }
+  // under gatan: ledningar, ett avloppsrör och tunnelbanans tunnel ut mot stan
+  const ly = Y(GROUND_Y + 22);
+  R(0, ly, lo.width, 1, '#ffd23f'); R(0, ly + 2, lo.width, 1, '#3f7cff'); R(0, ly + 4, lo.width, 1, '#ff5d52');
+  const py = Y(GROUND_Y + 44);
+  R(0, py - 1, lo.width, 9, INK); R(0, py, lo.width, 7, '#7d786d'); R(0, py + 1, lo.width, 1, '#a8a395'); R(0, py + 5, lo.width, 1, '#5b574e');
+  for (let x = -((X0 / PX) % 40); x < lo.width; x += 40) R(x, py - 1, 2, 9, '#5b574e');
+  const t0 = Y(floorY(STATION + 1) + 18), t1 = Y(floorY(STATION) + 2);
+  R(0, t0 - 2, lo.width, t1 - t0 + 4, INK); R(0, t0, lo.width, t1 - t0, '#1e2430');
+  for (let x = -((X0 / PX) % 10); x < lo.width; x += 10) R(x, t0, 1, t1 - t0, '#262d3b');
+  R(0, t1 - 2, lo.width, 1, '#8a909a');
+  // trottoaren och gatan
   R(0, gy, lo.width, 7, PAL.walk); R(0, gy, lo.width, 1, INK); R(0, gy + 7, lo.width, 1, INK);
   for (let x = -((X0 / PX) % 12); x < lo.width; x += 12) R(x, gy + 1, 1, 6, PAL.walkLine);
+}
+/** Gatan utanför (till höger om huset): gatlyktor, busshållplatsen, ett träd och folk som går förbi.
+ *  Bara grafik: fotgängarna lånar utseendet av någon i huset och slumpas med vrand. */
+const walkers = [];
+let walkerT = 0;
+function drawStreetPx(dt, h) {
+  const gy = Y(GROUND_Y), n = nightness(h);
+  if (gy < -40 || gy - 60 > lo.height) return;
+  const sx0 = X(BX1 + 7), sx1 = lo.width;
+  // träd och busskur framför panoramahissens glasrör, gatlykta längst ut
+  const tx = X(BX1 + 136);
+  R(tx, gy - 14, 2, 14, '#6b4a2b');
+  for (const [dx, dy, r] of [[-5, -24, 6], [3, -26, 6], [-1, -31, 5]]) g.drawImage(once('tree' + r, () => ellipseSprite(r * 2, r * 2, '#389a5c', INK, '#2f7d4a')), tx + dx - r + 1, gy + dy - r + 6);
+  const bx = X(BX1 + 34);
+  R(bx, gy - 24, 1, 24, INK); box(bx - 4, gy - 30, 9, 7, '#ffd23f'); text(g, 'B', bx + 1, gy - 29, INK, 'center');
+  R(bx + 4, gy - 6, 14, 2, '#8a6a46'); R(bx + 5, gy - 4, 1, 4, INK); R(bx + 16, gy - 4, 1, 4, INK);
+  const lx = sx1 - 6;
+  R(lx, gy - 34, 2, 34, '#3a3f48'); R(lx - 6, gy - 35, 8, 2, '#3a3f48'); R(lx - 7, gy - 33, 4, 2, S.power && n > 0.3 ? '#ffe14d' : '#9aa3ad');
+  if (S.power && n > 0.3) for (let r = 0; r < 30; r++) { const w = 3 + Math.round(r * 0.6); R(lx - 5 - (w >> 1), gy - 31 + r, w, 1, `rgba(255,236,170,${(0.1 * n).toFixed(3)})`); }
+  // fotgängare: fler i rusningen, nästan inga på natten
+  if (S.started && !S.paused) {
+    walkerT -= dt * S.speed;
+    const rate = n > 0.7 ? 0.1 : (h > 7 && h < 9.5) || (h > 16 && h < 18.5) ? 0.9 : 0.4;
+    if (walkerT <= 0 && walkers.length < 6 && S.people.length) {
+      walkerT = vrand(1, 3) / rate;
+      const dir = vrand(0, 1) < 0.5 ? 1 : -1, who = vpick(S.people);
+      walkers.push({ x: dir > 0 ? BX1 - 10 : W + 10, dir, v: vrand(24, 40), look: who.look, child: who.child, mood: 0, id: who.id + 7000, depth: vrand(0, 3) });
+    }
+    for (const w of walkers) w.x += w.dir * w.v * dt * S.speed;
+  }
+  for (let i = walkers.length - 1; i >= 0; i--) if (walkers[i].x < BX1 - 20 || walkers[i].x > W + 20) walkers.splice(i, 1);
+  g.save(); g.beginPath(); g.rect(sx0, gy - 40, sx1 - sx0, 48); g.clip();
+  for (const w of walkers) {
+    const frame = Math.floor(w.x / 6) % 4 & 3;
+    g.drawImage(personSprite(w, 'side', frame, w.dir), X(w.x) - PERSON_W / 2, gy + 3 + Math.round(w.depth) - PERSON_H);
+  }
+  g.restore();
 }
 
 // ---------- Byggnaden ----------
@@ -303,6 +365,7 @@ function drawShellStatic(nn) {
     }
   }
   drawRampPx();
+  towerFacade();
   // schakten
   for (const e of INSIDE_EL) {
     const x = X(shaftX(e.id)), t = Y(shaftTop(e)), b = Y(shaftBot(e)), w = SHAFT_W / PX;
@@ -323,14 +386,37 @@ function drawShellStatic(nn) {
   // panoramahissens skenor och gångbryggor (bryggorna når tornet, även över terrassen)
   for (const e of EL.filter(e => e.facade)) {
     const x = X(shaftX(e.id)), t = Y(shaftTop(e) - 8), b = Y(shaftBot(e)), w = SHAFT_W / PX;
-    for (const rx of [x + 2, x + w - 4]) { R(rx - 1, t, 4, b - t, INK); R(rx, t, 2, b - t, PAL.steel); }
-    // stag in mot fasaden där tornet går ända fram; ovanför indraget står skenorna fritt med tvärslåar
-    for (let y = t + 10; y < b; y += 20) {
-      if (towerX1At((y + CY) * PX) >= BX1) line(X(BX1 + 7), y, x + 3, y + 5, 'rgba(27,16,51,.6)');
-      else { R(x + 2, y, w - 4, 1, 'rgba(27,16,51,.5)'); line(x + 3, y, x + w - 4, y + 19, 'rgba(27,16,51,.35)'); }
+    // panoramahissens bana: ett glasrör med stålprofiler vid varje våning, som en del av fasaden
+    R(x + 3, t, w - 6, b - t, 'rgba(191,234,255,.22)');
+    for (let f = 0; f <= FLOORS; f++) {
+      const y = Y(floorY(f));
+      if (y <= t || y >= b) continue;
+      R(x + 2, y - 1, w - 4, 2, INK); R(x + 2, y - 1, w - 4, 1, PAL.steel);
+      line(x + 6, y - 4, x + 14, y - 22, 'rgba(255,255,255,.35)'); // reflexer i glaset
+      line(x + 10, y - 4, x + 16, y - 16, 'rgba(255,255,255,.25)');
+      // konsol in mot fasaden
+      const fx = X(towerX1At(floorY(f) - 1) + 7);
+      if (fx < x && (f % 2 === 0 || x - fx < 20)) { R(fx, y - 2, x - fx + 2, 3, INK); R(fx, y - 1, x - fx + 2, 1, PAL.steel); }
     }
+    for (const rx of [x + 2, x + w - 4]) { R(rx - 1, t, 4, b - t, INK); R(rx, t, 2, b - t, PAL.steel); }
+    // glastakets kupol överst
+    R(x + 1, t - 2, w - 2, 3, INK); R(x + 2, t - 1, w - 4, 1, PAL.steel);
     for (const f of e.serves) { const y = Y(floorY(f) - 4), bx = X(TOWER_X1[f] + 7); box(bx, y - 2, x - bx + 1, 4, PAL.steel); }
   }
+}
+/** Tornets utsida: en ljus hörnpilaster längs högerkanten och gesimser som sticker ut vid varje bjälklag,
+ *  så att huset läses som en byggnad även där schakten syns. */
+function towerFacade() {
+  const slabCol = '#c9c3b3', shade = '#8a8475';
+  for (let f = LOBBY; f < FLOORS; f++) {
+    const ex = X(TOWER_X1[f] + 7), yt = Y(floorY(f + 1)), yb = Y(floorY(f));
+    // pilastern: ljus kant med skugga
+    R(ex - 4, yt, 3, yb - yt, slabCol); R(ex - 2, yt, 1, yb - yt, shade);
+    // gesims
+    R(ex - 5, yb - 3, 8, 4, INK); R(ex - 4, yb - 2, 6, 2, slabCol); R(ex - 4, yb - 2, 6, 1, '#ffffff');
+  }
+  // terrassens kant (där tornet blir smalt) får en egen gesims
+  if (UX1 < BX1) { const ys = Y(SEAM_Y); R(X(UX1 + 7) - 1, ys - 4, X(BX1 + 7) - X(UX1 + 7) + 4, 4, INK); R(X(UX1 + 7), ys - 3, X(BX1 + 7) - X(UX1 + 7) + 2, 2, slabCol); }
 }
 /** garagerampen under expresshissarna: in från gatan och i två svängar ner till P1 och P2 */
 /** rampens mått i ritytan */
@@ -432,7 +518,27 @@ function drawSlabsPx() {
 }
 /** våningsdisplayerna sitter på hallväggen framför schakten: ritas efter linorna (som annars skymmer dem) men före korgarna */
 function drawLanternsPx() {
+  drawLandingDoorsPx();
   for (const e of S.elevators) for (const f of e.serves) lantern(e, f);
+}
+/** Landningsdörrarna: stängda skjutdörrar vid varje hållplats, så att schakten ser ut som en vägg med
+ *  dörrar. Korgen ritas ovanpå, och när den står inne syns dess egna dörrar glida upp. */
+function drawLandingDoorsPx() {
+  // på kvällen mörknar dörrarna med hallen
+  const k = nightness(hour()) * 0.5, nt = c => (k > 0.02 ? blend(c, '#1e2440', k) : c);
+  const C0 = nt('#8a909a'), C1 = nt('#a7adb6'), C2 = nt('#c8ccd2'), C3 = nt('#959ba5'), C4 = nt('#5b6370');
+  for (const e of INSIDE_EL) for (const f of e.serves) {
+    const x = X(shaftX(e.id)) + 2, w = SHAFT_W / PX - 4, yb = Y(surf(f)), h = Math.round(CAR_H / PX) - 1, y = yb - h;
+    if (y > lo.height || yb < 0) continue;
+    const half = w >> 1;
+    R(x, y, w, h, C0);
+    for (const dx of [0, half]) {
+      R(x + dx + 1, y + 1, half - 2, h - 2, C1);
+      R(x + dx + 1, y + 1, half - 2, 1, C2); R(x + dx + 1, y + 1, 1, h - 2, C2);
+      R(x + dx + 1, y + h - 6, half - 2, 5, C3);
+    }
+    R(x + half - 1, y, 2, h, C4);
+  }
 }
 /** Våningsdisplay ovanför hissdörren. KNAPPAR: riktning, korgens våning och hallknapparna ▲/▼.
  *  Destinationsstyrning (övriga lägen): det finns inga hallknappar – displayen är bredare och visar i stället
@@ -446,6 +552,13 @@ function lantern(e, f) {
   // dubbeldäck: displayen på övre däckets våningar visar var övre däcket är
   const cp = carPos(e.id, f), up = f - cp;
   const here = Math.abs(e.pos - cp) < 0.05 && e.state === 'doors';
+  // displayen tänds bara där något händer (korgen är nära, någon väntar här, eller den ska stanna här);
+  // på resten av våningarna är den släckt – annars upprepas samma siffra i hela schaktet
+  const waiting = buttons ? (hallLit(e.group, f, 1) || hallLit(e.group, f, -1)) : destsAt(e, f).length > 0;
+  if (!here && !waiting && Math.abs(e.pos - cp) > 1.5 && !e.carCalls.has(cp) && !assignedTo(e, cp, 1) && !assignedTo(e, cp, -1)) {
+    R(x + w / 2 - 1, y + 5, 3, 1, PAL.dim);
+    return;
+  }
   const col = here ? '#7dff9a' : PAL.led;
   led(g, fl(Math.round(e.pos) + up), x + 14, y + 2, col, 'center');
   if (e.dir && (e.state === 'moving' || here)) led(g, e.dir > 0 ? '▲' : '▼', x + 2, y + 2, col);
@@ -482,6 +595,7 @@ function terminal(f) {
   // mellan skylten med antalet inne och entréns däckskylt
   const bot = Y(floorY(f) - 4), x = X(DOOR_X) + 30, y = bot - 18;
   if (y > lo.height || bot < 0) return;
+  reserve(x, y, 11, bot - y);
   // fot och stolpe
   R(x + 1, bot - 4, 9, 1, INK); R(x + 2, bot - 5, 7, 1, '#6b7280');
   R(x + 4, y + 8, 3, bot - 5 - (y + 8), INK); R(x + 5, y + 8, 1, bot - 5 - (y + 8), '#9aa3ad');
@@ -502,6 +616,170 @@ function terminal(f) {
 }
 
 // ---------- Hallen på varje våning ----------
+/** Kvällsljus i hallen: väggarna blir blåare, och där någon är (eller i entrén, hemma, i garaget) lyser
+ *  taklamporna i varma koner. Ritas före folket, så att de står i ljuset. */
+const ALWAYS_LIT = ['lobby', 'apartments', 'garage', 'dock', 'station', 'sky'];
+function nightLight(f, th, x0, x1, top, bot, n) {
+  if (n < 0.05) return;
+  R(x0, top, x1 - x0, bot - top, `rgba(18,22,70,${(0.3 * n).toFixed(3)})`);
+  if (!S.power || !(OCC[f] > 0 || ALWAYS_LIT.includes(th))) return;
+  const warm = th === 'apartments' ? '255,214,140' : '255,240,190', a = 0.11 * n;
+  for (let lx = x0 + 40; lx < x1 - 8; lx += 52) {
+    R(lx - 3, top, 7, 1, INK); R(lx - 2, top + 1, 5, 1, '#fff3b0');
+    for (let r = 0; r < bot - top - 5; r++) {
+      const w = 5 + Math.round(r * 0.7);
+      R(lx - (w >> 1), top + 2 + r, w, 1, `rgba(${warm},${a.toFixed(3)})`);
+    }
+    R(lx - 14, bot - 4, 29, 1, `rgba(${warm},${(a * 2).toFixed(3)})`);
+  }
+}
+/** gallret för en stängd verksamhet och skylten med öppettiden (ritas på korridoren) */
+function closedGate(f, cx, cy, cw, ch) {
+  for (let x = cx + 1; x < cx + cw; x += 3) R(x, cy, 1, ch, '#8a909a');
+  for (let y = cy + 2; y < cy + ch; y += 6) R(cx, y, cw, 1, '#6b7280');
+  const oh = FLOOR_HOURS[f], o = (oh[0] % 1 ? `${Math.floor(oh[0])}:30` : `${oh[0]}:00`).padStart(5, '0');
+  pill(cx - 1, cy + 4, cw + 2, 9, '#ff5d52'); text(g, 'STÄNGT', cx + cw / 2, cy + 5, '#ffffff', 'center');
+  pill(cx + 2, cy + 14, cw - 4, 9, '#ffffff'); text(g, o, cx + cw / 2, cy + 15, '#c81e3a', 'center');
+}
+/** Glimtar av rummen längst in i korridoren: en möbel eller pryl som visar vad som finns där, och ibland
+ *  en skugga som går förbi. Ren grafik ur våningens tema. */
+const GLIMPSE = {
+  dentist: [['......KK', '.....KYK', '......KK', '..TTTTT.', 'TTTTTTT.', '...SS...', '..SSSS..'], { K: INK, Y: '#ffe14d', T: '#409991', S: '#9aa3ad' }],
+  game: [['.KKKKKK.', '.KGGGGK.', '.KGgGGK.', '.KGGGGK.', '.KKKKKK.', '...KK...', '.KKKKKK.'], { K: '#3a3f48', G: '#38d9a9', g: '#ffffff' }],
+  ad: [['RRYYBB..', 'RRYYBB..', 'PPGGOO..', 'PPGGOO..', '.K..K...', 'K....K..'], { R: '#ff5d52', Y: '#ffe14d', B: '#3f7cff', P: '#ff4fa3', G: '#7cf06b', O: '#ff9f1c', K: INK }],
+  law: [['BBBBBBBB', 'RGrBRgGB', 'BBBBBBBB', 'gRBGrRBg', 'BBBBBBBB', 'RrGBgRGr', 'BBBBBBBB'], { B: '#6b4a2b', R: '#8a2a2a', G: '#2f5d3a', r: '#c0392b', g: '#d4a017' }],
+  radio: [['RRRRRR..', 'RWWWWR..', 'RRRRRR..', '........', '...K....', '..KKK...', '...K....', '...K....', '..KKK...'], { R: '#c81e3a', W: '#ffffff', K: INK }],
+  aerobic: [['MMMMMMMM', 'MmMMMMmM', 'MMMMMMMM', 'MMMMMMMM', '........', '.PPPPPP.', '.K....K.'], { M: '#bfeaff', m: '#ffffff', P: '#ff4fa3', K: INK }],
+  server: [['KKKKKKKK', 'KgKrKgKK', 'KKKKKKKK', 'KgKgKrKK', 'KKKKKKKK', 'KrKgKgKK', 'KKKKKKKK'], { K: '#2b2f36', g: '#7cf06b', r: '#ffb000' }],
+  spa: [['..w..w..', '.w..w...', '..BBBB..', '.BBBBBB.', '.BbbbbB.', '.BBBBBB.'], { w: '#ffffff', B: '#a64eb3', b: '#bfeaff' }],
+  bank: [['.YYYY...', 'YKKKKY..', 'YKYYKY..', 'YKKKKY..', '.YYYY...', 'WWWWWWWW', 'BBBBBBBB'], { Y: '#d4a017', K: '#5a4a20', W: '#e8e2d0', B: '#8a6a46' }],
+  lab: [['..KK....', '..GG....', '..GG..K.', '.GgGG.G.', 'GGGGGGGG', 'WWWWWWWW', 'K......K'], { K: INK, G: '#38d9a9', g: '#ffffff', W: '#d4d0c8' }],
+  sky: [['.KKKK...', '.KSSK...', '.KKKK...', '..CC.ww.', '.CCCCw..', '.CCCC...', 'WWWWWWWW'], { K: '#3a3f48', S: '#9aa3ad', C: '#8a5a2b', w: '#ffffff', W: '#bd6659' }],
+  apartments: [['.KKKKK..', '.KTTTK..', '.KTTTK..', '.KKKKK..', '........', 'SSSSSSSS', 'S.SSSS.S'], { K: '#2b2f36', T: '#6fa8ff', S: '#c0392b' }],
+  garage: [['..KKKK..', '.KCCCCK.', 'CCCCCCCC', 'CRCCCCRC', '.K....K.'], { K: INK, C: '#5b8fb9', R: '#ff5d52' }],
+  dock: [['BBB.BBB.', 'BYB.BYB.', 'BBB.BBB.', 'BBBBBBB.', 'BBYBBYB.', 'BBBBBBB.'], { B: '#b07a45', Y: '#e8d27a' }],
+  station: [['YYYYYYYY', 'YKKKKKKY', 'YYYYYYYY', '...KK...', '...KK...'], { Y: '#ffd23f', K: INK }],
+  roof: [['..GG....', '.GGGG...', 'GGGGGG..', '..BB....', '..BB....'], { G: '#389a5c', B: '#8a5a2b' }],
+};
+const glimpseSprite = th => once('glimpse' + th, () => (GLIMPSE[th] ? sprite(GLIMPSE[th][0], GLIMPSE[th][1], null) : null));
+function glimpse(f, th, ix, iy, iw, ih, n) {
+  const sp = glimpseSprite(th);
+  g.save(); g.beginPath(); g.rect(ix, iy, iw, ih); g.clip();
+  if (sp) g.drawImage(sp, ix + Math.round((iw - sp.width) / 2), iy + ih - sp.height);
+  // tv:n hemma och skärmarna i spelstudion flimrar på kvällen
+  if (th === 'apartments' && n > 0.4) R(ix, iy, iw, ih, `rgba(111,168,255,${(0.12 + 0.12 * Math.abs(Math.sin(S.anim * 5.3 + f))).toFixed(3)})`);
+  if (th === 'server' && Math.sin(S.anim * 9 + f) > 0.6) R(ix + 4, iy + ih - 6, 1, 1, '#7cf06b');
+  // en skugga som går förbi längst in (någon är inne)
+  if (OCC_IN[f] > 0) {
+    const per = 7 + (f % 3) * 2, t = (S.anim / per + f * 0.37) % 1;
+    if (t < 0.45) {
+      const k = t / 0.45, dir = f % 2 ? 1 : -1, sx = dir > 0 ? ix - 4 + Math.round(k * (iw + 8)) : ix + iw + 4 - Math.round(k * (iw + 8));
+      const by = iy + ih - 1, bob = Math.floor(S.anim * 8) % 2;
+      R(sx - 1, by - 9 - bob, 3, 3, 'rgba(27,16,51,.55)'); R(sx - 2, by - 6 - bob, 5, 6 + bob, 'rgba(27,16,51,.55)');
+    }
+  }
+  g.restore();
+}
+/** Inredning i hallen (bakom folket): en tavla på väggen, en krukväxt och något som hör till våningen.
+ *  Platserna räknas ut ur våningens nummer, så att varje hall ser lite olika ut men aldrig ändras. */
+const PICS = ['#ff5d52', '#3f7cff', '#ffe14d', '#7cf06b', '#ff4fa3', '#38d9a9'];
+function hallProps(f, th, top, bot) {
+  if (th === 'roof') return;
+  const base = X(DOOR_X) + 60 + (f * 7) % 14;
+  const plantPot = (px, big) => {
+    box(px, bot - 9, 7, 6, '#a65e3a'); R(px + 1, bot - 9, 5, 1, '#c27a54');
+    for (let k = 0; k < (big ? 4 : 3); k++) R(px - 2 + k * 3, bot - 16 - (big ? 4 : 0) + (k % 2) * 3, 3, 8 + (big ? 3 : 0), ['#389a5c', '#2f7d4a', '#4caf6a'][k % 3]);
+  };
+  if (th === 'garage' || th === 'dock' || th === 'station') {
+    // betong: gula stolpar och en skylt
+    for (const px of [base, base + 46]) { R(px, bot - 14, 3, 11, '#ffd23f'); for (let y = bot - 13; y < bot - 3; y += 4) R(px, y, 3, 2, INK); }
+    if (th !== 'station') { box(base + 12, top + 20, 22, 9, PAL.sign); text(g, th === 'dock' ? 'KAJ' : 'P', base + 23, top + 22, '#ffffff', 'center'); }
+    return;
+  }
+  // tavla
+  const pw = 16, py = top + 20, c1 = PICS[f % PICS.length], c2 = PICS[(f + 2) % PICS.length];
+  box(base, py, pw, 11, '#6b4a2b'); R(base + 1, py + 1, pw - 2, 9, '#fff8e0');
+  R(base + 2, py + 6, pw - 4, 3, c1); R(base + 4 + (f % 5), py + 2, 4, 4, c2);
+  if (th === 'apartments') {
+    // postlådor och en dörrmatta
+    for (let k = 0; k < 3; k++) { box(base + 22 + k * 7, py + 2, 6, 5, '#9aa3ad'); R(base + 24 + k * 7, py + 3, 2, 1, INK); }
+    R(base + 2, bot - 4, 18, 1, '#8a2a2a');
+    plantPot(base + 50, false);
+    return;
+  }
+  if (th === 'sky') {
+    // soffa med utsikt
+    box(base + 22, bot - 10, 26, 7, '#4695b8'); R(base + 22, bot - 13, 26, 4, INK); R(base + 23, bot - 12, 24, 2, '#5aa9cc');
+    plantPot(base + 54, true);
+    return;
+  }
+  // kontor: vattenautomat och en växt
+  const wx = base + 26;
+  box(wx, bot - 12, 7, 9, '#d4d0c8'); box(wx + 1, bot - 20, 5, 8, '#bfeaff'); R(wx + 2, bot - 18, 3, 1, '#ffffff'); R(wx + 2, bot - 9, 2, 1, '#3f7cff');
+  plantPot(base + 40, (f % 2) === 0);
+}
+/** entréns golv: rutigt marmorgolv */
+function lobbyFloor(x0, x1, bot) {
+  R(x0, bot - 3, x1 - x0, 3, '#d4d0c8');
+  for (let x = x0; x < x1; x += 4) R(x, bot - 3 + ((x - x0) / 4) % 2, 4, 1, '#8a8475');
+  R(x0, bot - 3, x1 - x0, 1, '#ffffff');
+}
+/** karuselldörren i entrén: gatan syns genom glaset och vingarna snurrar när folk går ut och in */
+function revolvingDoor(cx, cy, cw, ch, h) {
+  const n = nightness(h);
+  R(cx, cy, cw, ch, blend('#bfe3f2', '#26324a', n));
+  // gatan utanför: trottoar, och en gatlykta i mörkret
+  R(cx, cy + ch - 6, cw, 6, blend('#c0c0c0', '#4a5060', n));
+  if (n > 0.4) { R(cx + cw - 6, cy + 4, 1, ch - 10, INK); R(cx + cw - 8, cy + 3, 5, 2, '#ffe14d'); }
+  // vingarna (fyra, sedda från sidan): x = cos(vinkeln)
+  // (inte personHead/landPos här: de räknar gångriktningen och får bara anropas en gång per bildruta och person)
+  const busy = S.people.some(p => p.floor === LOBBY && (p.state === 'exiting' || p.state === 'toQueue'));
+  const a = (busy ? S.anim * 2.2 : 0) % (Math.PI / 2);
+  for (let k = 0; k < 4; k++) {
+    const c = Math.cos(a + k * Math.PI / 2), wx = cx + cw / 2 + Math.round(c * (cw / 2 - 3));
+    if (Math.sin(a + k * Math.PI / 2) < 0) continue; // bara de främre vingarna
+    R(wx, cy + 1, 1, ch - 2, '#606878'); R(wx + 1, cy + 1, 1, ch - 2, 'rgba(255,255,255,.5)');
+  }
+  R(cx + cw / 2, cy, 1, ch, INK); // axeln
+  R(cx, cy, cw, 2, PAL.steel); R(cx, cy + ch - 1, cw, 1, PAL.steel);
+  // reflex i glaset
+  line(cx + 3, cy + ch - 4, cx + 9, cy + 4, 'rgba(255,255,255,.55)');
+}
+/** entréns inredning: receptionsdisken, krukväxter och en lampa i taket (rulltrappan ritas för sig) */
+function lobbyProps(top, bot) {
+  const dx = X(DOOR_X) + 46;
+  // receptionen: disk med dator och klocka, receptionisten bakom
+  R(dx + 4, bot - 21, 3, 3, '#f6c48f'); R(dx + 3, bot - 18, 5, 4, '#2a5db0'); R(dx + 4, bot - 22, 3, 1, '#4a2a1a');
+  box(dx, bot - 14, 20, 11, '#8a6a46'); R(dx + 1, bot - 13, 18, 1, '#b08a5a'); R(dx + 2, bot - 9, 16, 1, '#6b4a2b');
+  box(dx + 12, bot - 19, 6, 5, '#d4d0c8'); R(dx + 13, bot - 18, 4, 3, S.power ? '#38d9a9' : '#2b2f36');
+  R(dx + 3, bot - 16, 3, 2, '#ffe14d');
+  reserve(dx, bot - 22, 20, 19);
+  // krukväxter
+  for (const px of [dx - 10, dx + 24]) {
+    box(px, bot - 9, 7, 6, '#a65e3a');
+    for (let k = 0; k < 3; k++) R(px - 1 + k * 3, bot - 15 + (k % 2) * 2, 3, 6, ['#389a5c', '#2f7d4a', '#4caf6a'][k]);
+  }
+  // ljuskrona i taket
+  const lx = X(DOOR_X) + 56;
+  R(lx, top, 1, 5, INK); R(lx - 5, top + 5, 11, 1, '#d4a017');
+  for (let k = -4; k <= 4; k += 4) R(lx + k, top + 6, 1, 2, S.power ? '#fff3b0' : '#5a5a5a');
+}
+/** rulltrappan från entrén upp till mellanplanet (övre däcket), ritas genom bjälklaget efter hallarna */
+function drawEscalatorPx() {
+  if (MEZZ < 0) return;
+  const xb = X(DOOR_X) + 84, yb = Y(floorY(LOBBY) - 4) - 3, xt = xb + 70, yt = Y(floorY(MEZZ) - 4) - 3;
+  if (yb < -10 || yt > lo.height + 10) return;
+  const L = xt - xb, ph = Math.floor(S.anim * 10) % 4;
+  for (let i = -8; i <= L + 8; i++) {
+    const k = clamp(i / L, 0, 1), x = xb + i, y = Math.round(yb + (yt - yb) * k);
+    R(x, y - 9, 1, 8, 'rgba(191,234,255,.35)'); // glasräcket
+    R(x, y - 10, 1, 1, INK);                     // ledstången
+    R(x, y, 1, 1, '#8a909a');                    // stegen
+    R(x, y + 1, 1, 3, '#5b6b80'); R(x, y + 4, 1, 1, INK); // fackverket under
+    if (i >= 0 && i <= L && (i + ph) % 4 === 0) R(x, y - 1, 1, 1, '#d4d0c8');
+  }
+}
+
 let OCC = [], OCC_IN = [];
 function drawHall(f, h) {
   const top = Y(floorY(f + 1) + 4), bot = Y(floorY(f) - 4), x0 = X(LAND_X0), x1 = X(INNER_X1);
@@ -520,31 +798,41 @@ function drawHall(f, h) {
     R(x0, bot - 14, x1 - x0, 1, light(blend(PAL.wain, acc, 0.28), 0.3));
     for (let x = x0 + 8; x < x1 - 2; x += 16) R(x, bot - 12, Math.min(10, x1 - 2 - x), 8, blend(PAL.panel, acc, 0.3));
   }
-  R(x0, bot - 3, x1 - x0, 3, blend(PAL.floor, acc, 0.25)); R(x0, bot - 3, x1 - x0, 1, light(blend(PAL.floor, acc, 0.25), 0.25));
-  // korridoren in mot rummen (perspektiv: mörk gång, ljus längst in)
-  const cw = 24, ch = 31, cx = X(DOOR_X) - cw / 2, cy = bot - ch;
-  const lit = S.power && (OCC[f] > 0 || nightness(h) < 0.5);
+  if (th === 'lobby') lobbyFloor(x0, x1, bot);
+  else { R(x0, bot - 3, x1 - x0, 3, blend(PAL.floor, acc, 0.25)); R(x0, bot - 3, x1 - x0, 1, light(blend(PAL.floor, acc, 0.25), 0.25)); }
+  // korridoren in mot rummen (perspektiv: mörk gång, ljus längst in) – i entrén en karuselldörr mot gatan
+  const cw = 28, ch = 31, cx = X(DOOR_X) - cw / 2, cy = bot - ch;
+  const n = nightness(h), lit = S.power && (OCC[f] > 0 || n < 0.5);
   R(cx - 4, cy - 4, cw + 8, ch + 4, INK); R(cx - 3, cy - 3, cw + 6, ch + 3, acc); R(cx - 3, cy - 3, cw + 6, 1, light(acc, 0.35));
   R(cx - 1, cy - 1, cw + 2, ch + 1, INK);
-  R(cx, cy, cw, ch, PAL.corridor);
-  const ix = cx + 7, iy = cy + 7, iw = cw - 14, ih = ch - 13;
-  R(ix, iy, iw, ih, lit ? blend(acc, '#fff8d0', 0.55) : PAL.dim);
-  for (let r = 0; r < ch - (iy - cy) - ih; r++) {
-    const yy = iy + ih + r, k = r / (ch - (iy - cy) - ih);
-    const xa = Math.round(ix - k * 7), xb = Math.round(ix + iw + k * 7);
-    R(xa, yy, xb - xa, 1, r % 2 ? PAL.corrA : PAL.corrB);
+  if (th === 'lobby') revolvingDoor(cx, cy, cw, ch, h);
+  else {
+    R(cx, cy, cw, ch, PAL.corridor);
+    const ix = cx + 7, iy = cy + 7, iw = cw - 14, ih = ch - 13;
+    R(ix, iy, iw, ih, lit ? blend(acc, '#fff8d0', 0.55) : PAL.dim);
+    if (lit) glimpse(f, th, ix, iy, iw, ih, n);
+    for (let r = 0; r < ch - (iy - cy) - ih; r++) {
+      const yy = iy + ih + r, k = r / (ch - (iy - cy) - ih);
+      const xa = Math.round(ix - k * 7), xb = Math.round(ix + iw + k * 7);
+      R(xa, yy, xb - xa, 1, r % 2 ? PAL.corrA : PAL.corrB);
+    }
+    line(cx, cy, ix, iy, PAL.corrEdge); line(cx + cw - 1, cy, ix + iw - 1, iy, PAL.corrEdge);
+    // stängt: ett galler för korridoren och skylten på gallret (i stället för en lapp mitt i hallen)
+    if (FLOOR_HOURS[f] && !floorOpen(f, h)) closedGate(f, cx, cy, cw, ch);
   }
-  line(cx, cy, ix, iy, PAL.corrEdge); line(cx + cw - 1, cy, ix + iw - 1, iy, PAL.corrEdge);
+  if (th === 'lobby') lobbyProps(top, bot);
+  else hallProps(f, th, top, bot);
   // spårad person därinne / muspekaren över korridoren
   const sel = S.sel && !S.sel.dead && S.sel.floor === f && S.sel.state !== 'ride' && personHead(S.sel)?.hidden;
   if (sel || S.hoverDoor === f) ants(cx - 6, cy - 6, cw + 12, ch + 6, sel ? '#ffe14d' : '#ffffff');
   // antal inne på våningen
   // antal inne: en liten skylt bredvid korridoren, som ett dörrnummer
-  if (OCC_IN[f]) { const s = String(OCC_IN[f]), w = Math.max(9, textW(s) + 5); pill(cx + cw + 4, bot - 13, w, 9, '#ffffff'); text(g, s, cx + cw + 4 + w / 2, bot - 12, INK, 'center'); }
+  if (OCC_IN[f]) { const s = String(OCC_IN[f]), w = Math.max(9, textW(s) + 5); pill(cx + cw + 4, bot - 13, w, 9, '#ffffff'); text(g, s, cx + cw + 4 + w / 2, bot - 12, INK, 'center'); reserve(cx + cw + 4, bot - 13, w, 9); }
   // våningsnummer och företagsskylt
   const st = starSprite(acc); g.drawImage(st, X(DOOR_X) - 10, top + 1);
   text(g, fl(f), X(DOOR_X) + 1, top + 7, '#ffffff', 'center', 1, INK);
   const name = plain(FL[f].name), nx = X(DOOR_X) + 13, nw = Math.min(x1 - nx - 2, textW(name) + 7);
+  reserve(X(DOOR_X) - 10, top, nw + 23, 17);
   pill(nx, top + 6, nw, 10, acc); R(nx + 1, top + 7, nw - 2, 1, light(acc, 0.35));
   g.save(); g.beginPath(); g.rect(nx + 1, top + 6, nw - 2, 10); g.clip();
   text(g, name, nx + 4, top + 7, '#ffffff', 'left', 1, dark(acc, 0.55));
@@ -679,7 +967,8 @@ function drawPlatformPx(top, bot, h) {
   box(bx, by, bw, 9, '#101418'); text(g, msg, bx + 3, by + 2, m === null ? '#ff5d52' : '#ffd23f');
 }
 function stairSign(f, glow) {
-  const x = X(DOOR_X) + 17, y = Y(floorY(f + 1) + 4) + 24;
+  const x = X(DOOR_X) + 19, y = Y(floorY(f + 1) + 4) + 24;
+  reserve(x, y, 33, 9);
   if (glow) R(x - 2, y - 2, 37, 13, 'rgba(34,197,94,.45)');
   pill(x, y, 33, 9, PAL.green);
   g.drawImage(STAIR_ICON(), x + 2, y + 2);
@@ -688,17 +977,15 @@ function stairSign(f, glow) {
 function floorOverlays(f, h) {
   const top = Y(floorY(f + 1) + 4), bot = Y(floorY(f) - 4), x0 = X(LAND_X0), x1 = X(INNER_X1);
   const NO_DIM = ['lobby', 'apartments', 'roof', 'garage', 'dock', 'station'];
-  if (!NO_DIM.includes(FL[f].theme) && floorOpen(f, h)) {
-    const n = nightness(h);
+  const th = FL[f].theme, n = nightness(h);
+  if (!NO_DIM.includes(th) && floorOpen(f, h)) {
     if (n > 0.05 && !OCC[f]) R(x0, top, x1 - x0, bot - top, `rgba(10,6,34,${0.45 * n})`);
   }
-  if (FL[f].open && !floorOpen(f, h)) label(`STÄNGT – öppnar ${String(FLOOR_HOURS[f][0]).padStart(2, '0')}:00`, X(DOOR_X) + 55, top + 18, '#ff5d52', '#ffffff');
   if (f !== LOBBY && !FL[f].open && !floorOpen(f, h)) {
     const someone = S.people.some(p => p.floor === f && (p.state === 'office' || p.state === 'exiting'));
     R(x0, top, x1 - x0, bot - top, `rgba(10,6,34,${someone ? 0.38 : 0.62})`);
-    const oh = FLOOR_HOURS[f], o = oh[0] % 1 ? `${Math.floor(oh[0])}:30` : `${oh[0]}:00`;
-    label(`STÄNGT · öppnar ${o.padStart(5, '0')}`, X(DOOR_X) + 55, top + 18, '#ff5d52', '#ffffff');
   }
+  if (th !== 'roof') nightLight(f, th, x0, x1, top, bot, n);
   if (S.fire) {
     const on = Math.sin(S.anim * 10) > 0;
     box(x1 - 10, top + 3, 5, 5, on ? '#ff2d55' : '#7a2033');
@@ -1011,11 +1298,27 @@ function drawHallPeople() {
     }
     g.globalAlpha = 1;
   }
-  for (const { p, lp } of list) if (p.state === 'wait') thought(p, X(lp.x) + 3, Y(surf(p.floor) + p.depth * 0.6) - 30);
-  // namnbrickor: alla med ID-knappen, stamgästerna alltid (med en stjärna)
-  for (const { p, lp } of list) if ((S.tags || p.cast) && p.state !== 'wait' && lp.a > 0.5 && !talking(p)) label((p.cast ? '* ' : '') + p.name, X(lp.x), Y(surf(p.floor) + p.depth * 0.6) - 36, p.cast ? '#ffe14d' : '#ffffff');
-  // pratbubblor från stamgästerna
+  // pratbubblor från stamgästerna först (de är viktigast), sedan tankebubblorna och namnbrickorna
   for (const { p, lp } of list) if (talking(p) && lp.a > 0.5) speech(p, X(lp.x), Y(surf(p.floor) + p.depth * 0.6) - 38 - (p.state === 'wait' ? 12 : 0));
+  // tankebubblorna: de som väntar på samma hiss till samma våning delar en bubbla ("→6 L1 ×3"),
+  // utom den som spåras och när namnbrickorna är på
+  const groups = new Map();
+  for (const { p, lp } of list) {
+    if (p.state !== 'wait') continue;
+    const k = S.tags || p === S.sel ? `p${p.id}` : `${p.floor}|${p.dest}|${p.assigned}|${buttonsMode() ? p.dir : ''}|${p.fixAt ? 1 : 0}`;
+    const gr = groups.get(k);
+    if (gr) gr.push({ p, lp }); else groups.set(k, [{ p, lp }]);
+  }
+  for (const gr of groups.values()) {
+    const lead = gr.find(q => q.p === S.sel) || gr.reduce((a, b) => (b.lp.x > a.lp.x ? b : a));
+    thought(lead.p, X(lead.lp.x) + 3, Y(surf(lead.p.floor) + lead.p.depth * 0.6) - 30, gr.length);
+  }
+  // namnbrickor: alla med ID-knappen, stamgästerna alltid (med en stjärna)
+  for (const { p, lp } of list) {
+    if (!(S.tags || p.cast) || p.state === 'wait' || lp.a <= 0.5 || talking(p)) continue;
+    const s = plain((p.cast ? '* ' : '') + p.name), w = textW(s) + 5, cx = X(lp.x), y = place(Math.round(cx - w / 2), Y(surf(p.floor) + p.depth * 0.6) - 36, w, 9, [0, -10]);
+    if (y !== null) label(s, cx, y, p.cast ? '#ffe14d' : '#ffffff');
+  }
 }
 /** hundar i koppel: bagagesorten → figurernas namn (gång, gång2, S = sitter, F = framifrån) */
 const DOGS = { pudel: 'pudel', raggig: 'ragg' };
@@ -1030,28 +1333,35 @@ function bark(cx, y) { text(g, 'VOV!', cx, y - 6, '#ffffff', 'center', 1, INK); 
 const talking = p => !!(p.say && S.t < p.say.until);
 /** pratbubbla med namn och replik, med en liten pil ner mot personen */
 function speech(p, cx, y) { bubble(`${p.name}: "${p.say.text}"`, cx, y); }
-function bubble(str, cx, y, fill = '#ffffff') {
+function bubble(str, cx, y0, fill = '#ffffff') {
   const s = plain(str);
   // (bubblan hålls inom bilden – pilen pekar ändå på personen)
   const w = Math.min(textW(s) + 6, 260), x = clamp(Math.round(cx - w / 2), 1, Math.max(1, lo.width - w - 1));
+  // repliker är viktiga: de flyttas uppåt om platsen är tagen, men ritas alltid
+  const y = place(x, y0, w, 9, [0, -11, -22]) ?? y0;
+  if (y < y0) R(cx, y + 9, 1, y0 - y, INK);
   pill(x, y, w, 9, fill);
   g.save(); g.beginPath(); g.rect(x + 1, y, w - 2, 9); g.clip();
   text(g, s, x + 3, y + 1, INK);
   g.restore();
-  R(cx - 1, y + 9, 3, 1, INK); R(cx, y + 10, 1, 1, INK);
+  R(cx - 1, y0 + 9, 3, 1, INK); R(cx, y0 + 10, 1, 1, INK);
 }
-/** tankebubblan: mål och tilldelad hiss */
-function thought(p, x, y) {
+/** tankebubblan: mål och tilldelad hiss (n = hur många som tänker samma sak) */
+function thought(p, x, y, n = 1) {
   // KNAPPAR: personen vet bara vilken knapp hen tryckt – ingen hiss är "hens"
   const buttons = buttonsMode() && !p.vip;
   const e = !buttons && p.assigned !== null ? S.elevators[p.assigned] : null;
   const txt = plain((S.tags ? p.name + ' ' : '') + (buttons ? (p.fixAt ? '?! ' : ARR(p.dir) + ' ') : '') + '→' + fl(p.dest));
-  const tw = textW(txt), chip = e ? textW(e.name) + 4 : 0;
-  const w = tw + 6 + (e ? chip + 2 : 0), h = 9, bx = x - Math.round(w / 2), by = y - h;
+  const tw = textW(txt), chip = e ? textW(e.name) + 4 : 0, many = n > 1 ? `x${n}` : '', mw = many ? textW(many) + 3 : 0;
+  const w = tw + 6 + (e ? chip + 2 : 0) + mw, h = 9, bx = x - Math.round(w / 2), y0 = y - h;
+  const by = place(bx, y0, w, h, [0, -10, -20]) ?? (p === S.sel ? y0 : null);
+  if (by === null) return; // ingen plats: personen syns ändå i kön, och spåras man syns bubblan alltid
   R(x - 1, y + 2, 2, 2, INK); R(x + 1, y, 2, 2, INK); R(x + 1, y, 1, 1, '#ffffff');
+  if (by < y0) for (let yy = by + h + 1; yy < y; yy += 3) R(x + 1, yy, 1, 1, INK);
   pill(bx, by, w, h, p === S.sel ? '#ffe14d' : '#ffffff');
   text(g, txt, bx + 3, by + 1, INK);
   if (e) { const cx = bx + tw + 5; R(cx, by + 1, chip, 7, e.color); text(g, e.name, cx + 2, by + 1, PAL.on(e.color)); }
+  if (many) text(g, many, bx + w - mw, by + 1, '#606878');
 }
 
 // ---------- Telefonsamtalet: teknikern ringer in en extra tekniker ----------
@@ -1174,10 +1484,13 @@ function drawGagsPx(dt) {
   for (const q of gags) {
     q.life -= dt;
     if (q.p.state !== 'office' || q.p.dead) { q.life = 0; continue; }
-    const s = plain(q.text), w = textW(s) + 7, x = clamp(X(DOOR_X) + 6 - Math.round(w / 2), X(LAND_X0) + 1, X(INNER_X1) - w - 1), y = Y(floorY(q.p.floor) - 50) - 17;
+    // repliken hörs från rummen: bubblan sitter till höger om trappskylten med en pil mot korridoren
+    const s = plain(q.text), w = textW(s) + 7, x = Math.min(X(DOOR_X) + 56, X(INNER_X1) - w - 1), y0 = Y(floorY(q.p.floor + 1) + 4) + 24;
+    const y = place(x, y0, w, 10, [0, 10]);
+    if (y === null) { q.life = Math.min(q.life, 0.3); continue; }
     g.globalAlpha = clamp(q.life * 2, 0, 1);
     pill(x, y, w, 10, '#ffffff'); text(g, s, x + 4, y + 2, INK);
-    R(X(DOOR_X) + 2, y + 10, 3, 1, INK); R(X(DOOR_X) + 3, y + 11, 1, 1, INK); R(X(DOOR_X) + 3, y + 9, 1, 1, '#ffffff');
+    R(x - 2, y + 4, 2, 1, INK); R(x - 3, y + 5, 1, 1, INK);
     g.globalAlpha = 1;
   }
   gags = gags.filter(q => q.life > 0);
@@ -1458,14 +1771,25 @@ function drawBrigadePx() {
 function deckSign(f) {
   if (MEZZ < 0 || (f !== LOBBY && f !== MEZZ)) return;
   const x = X(INNER_X1) - 66, y = Y(floorY(f + 1) + 4) + 34;
-  pill(x, y, 62, 9, PAL.sign);
+  pill(x, y, 62, 9, PAL.sign); reserve(x, y, 62, 9);
   text(g, f === LOBBY ? 'ÖVRE DÄCK: VÅN 1' : 'EXPRESS ÖVRE DÄCK', x + 31, y + 1, '#ffffff', 'center');
 }
+/** Ljudeffekterna ("STÄNG!", "FSSSS!" …): samma effekt på samma våning visas en gång, med "×n" när
+ *  flera hissar säger samma sak – annars staplas de och täcker displayerna. */
 function drawFxPx(dt) {
+  const groups = new Map();
   for (const f of S.fx) {
     f.life -= dt; f.y -= 30 * dt;
+    if (f.band === undefined) f.band = Math.round(f.y / FLOOR_H);
+    const k = `${f.text}|${f.band}`, gr = groups.get(k);
+    if (gr) gr.push(f); else groups.set(k, [f]);
+  }
+  for (const gr of groups.values()) {
+    const f = gr.reduce((a, b) => (b.life > a.life ? b : a));
+    const x = gr.reduce((a, b) => a + b.x, 0) / gr.length;
+    const n = new Set(gr.map(q => Math.round(q.x))).size;
     g.globalAlpha = clamp(f.life, 0, 1);
-    text(g, plain(f.text), X(f.x), Y(f.y) - 6, f.color, 'center', (f.size || 22) > 24 ? 3 : 2, INK);
+    text(g, plain(f.text) + (n > 1 ? ` x${n}` : ''), X(x), Y(f.y) - 6, f.color, 'center', (f.size || 22) > 24 ? 3 : 2, INK);
     g.globalAlpha = 1;
   }
   S.fx = S.fx.filter(f => f.life > 0);
@@ -1478,7 +1802,7 @@ export function renderPixel(dt) {
   if (lo.width !== w || lo.height !== h) { lo.width = w; lo.height = h; }
   X0 = VIEW.x0; CY = Math.floor(VIEW.camY / PX);
   g.setTransform(1, 0, 0, 1, 0, 0); g.imageSmoothingEnabled = false; g.globalAlpha = 1;
-  callAt = null;
+  callAt = null; taken = [];
   const hr = hour();
   OCC = new Array(FLOORS).fill(0); OCC_IN = new Array(FLOORS).fill(0);
   for (const p of S.people) {
@@ -1494,11 +1818,13 @@ export function renderPixel(dt) {
     drawHall(f, hr); terminal(f); floorOverlays(f, hr); deckSign(f);
   }
   drawSlabsPx();
+  drawEscalatorPx();
   drawTerracePx(hr);
   for (const e of S.elevators) drawRopesPx(e);
   drawLanternsPx();
   for (const e of S.elevators) drawCarPx(e);
   drawMovePilesPx();
+  drawStreetPx(dt, hr);
   drawHallPeople();
   drawHeliPx();
   drawSnowPx(dt);
