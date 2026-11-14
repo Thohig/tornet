@@ -21,6 +21,8 @@ import { BLANKET_T } from './visits.js';
 import { chiefOnDuty } from './chief.js';
 import { CREW_BY } from './crew.js';
 import { extraActions } from './input.js';
+import { allStatsHtml, avgWait, grade, lastDay, safetyGrade, saveDay, summaryHtml } from './summary.js';
+export { grade, safetyGrade };
 
 export function $(id) { return document.getElementById(id); }
 // ---------- Hissen man följer: allt om hissen (förr hisspopupen) ----------
@@ -173,57 +175,13 @@ export function dayNumbers() {
   return { letter: st.waitN ? grade(avg).letter : '–', served: st.served, waiting: waitingNow, avg, safety: safetyGrade() };
 }
 export function statsHtml() {
-  const st = S.stats;
-  const avg = st.waitN ? st.waitSum / st.waitN : 0;
-  const ride = st.rideN ? st.rideSum / st.rideN : 0;
-  const waitingNow = dayNumbers().waiting;
-  const g = grade(avg), sg = safetyGrade();
+  const st = S.stats, g = grade(avgWait(st)), D = lastDay();
   return `
-    <div class="stat">Resor klara <b>${st.served}</b></div>
-    <div class="stat">Väntar nu <b>${waitingNow}</b></div>
-    <div class="stat">Snittväntan <b>${avg.toFixed(1)}s</b></div>
-    <div class="stat">Längsta väntan <b>${Math.round(st.waitMax)}s</b></div>
-    <div class="stat">Snitt åktid <b>${ride.toFixed(1)}s</b></div>
-    <div class="stat">Arga resenärer <b>${st.angry}</b></div>
-    <div class="stat">Överlaster <b>${st.overloads}</b></div>
-    <div class="stat">Rökexponerade <b>${st.smoked}</b></div>
-    <div class="stat">Instängd-sek <b>${Math.round(st.trappedSec)}</b></div>
-    <div class="stat">Trapp-resor <b>${st.stairs}</b></div>
-    <div class="stat">…varav frivilliga 🚶 <b>${st.stairsChoice}</b></div>
-    <div class="stat">★ Gunnar gnällde <b>${st.gripes}</b></div>
-    <div class="stat">★ Kurts kaffekoppar ☕ <b>${st.cups}</b></div>
-    <div class="stat">Höll upp dörren <b>${st.holds}</b></div>
-    <div class="stat">Avstod – för trångt <b>${st.crowdSkips}</b></div>
-    <div class="stat">Tryckte på STÄNG <b>${st.closePresses}</b></div>
-    <div class="stat">★ Majken pratade 💬 <b>${st.chats}</b></div>
-    <div class="stat">Hissfel 🔧 <b>${st.faults}</b>${st.cables ? ` (linbrott <b>${st.cables}</b>)` : ''}</div>
-    <div class="stat">Lagade / servade <b>${st.repairs} / ${st.serviced}</b></div>
-${st.extraTechs ? `    <div class="stat">Extra tekniker <b>${st.extraTechs}</b></div>` : ''}
-    <div class="stat">Stillestånd <b>${Math.round(st.downSec)} s</b></div>
-    <div class="stat">Överhettade motorer 🌡️ <b>${st.heatStops}</b></div>
-    <div class="stat">Vajerlarm i storm 🌬️ <b>${st.stormFaults}</b></div>
-    <div class="stat">Nivåjusteringar <b>${st.relevels}</b></div>
-    <div class="stat">Snubblade 🦶 <b>${st.stumbles}</b></div>
-    <div class="stat">Dörren tog emot ❄️ <b>${st.doorFights}</b></div>
-    <div class="stat">Ambulans 🚑 <b>${st.medical}</b></div>
-    <div class="stat">Flyttlass 🚚 <b>${st.moveLoads}</b></div>
-    <div class="stat">Övre däck / rulltrappa <b>${st.upperDeck} / ${st.escalator}</b></div>
-    <div class="stat">Inlärda parkeringar 🧠 <b>${st.learnedParks}</b></div>
-    <div class="stat">Energi ⚡ <b>${st.energy.toFixed(1)} kWh</b></div>
-    <div class="stat">…varav körning <b>${st.energyRun.toFixed(1)} kWh</b></div>
-    <div class="stat">Återmatat ♻ <b>${st.regen.toFixed(1)} kWh</b></div>
-    <div class="stat">Hissbyten <b>${st.transfers}</b></div>
-    <div class="stat">Bilar in i garaget <b>${st.carsIn}</b></div>
-    <div class="stat">Tunnelbanan 🚇 <b>${st.trainIn} av · ${st.trainOut} på</b></div>
-    <div class="stat">Paketleveranser <b>${st.deliveries}</b></div>
-    <div class="stat">VIP-besök 🚁 <b>${st.vips}</b></div>
-    <div class="stat">Felknappar 🙈 <b>${st.wrongPress}</b></div>
-    <div class="stat">Barn på alla knappar <b>${st.kidPresses}</b></div>
-    <div class="stat">Spökstopp 👻 <b>${st.ghostStops}</b></div>
-    <div class="stat">Bus rensat <b>${st.nuisance}</b></div>
+    <div class="stat"><span>Väntar nu</span><b>${dayNumbers().waiting}</b></div>
+    ${allStatsHtml(st)}
     ${learnMap()}
-    <div class="grade">Service: ${st.waitN ? g.letter : '–'} <span class="stars">${st.waitN ? '★'.repeat(g.stars) + '☆'.repeat(5 - g.stars) : ''}</span> · Säkerhet: ${sg}</div>
-${lastSummary ? `    <div class="row"><button class="btn xs" data-act="yesterday">🌅 Gårdagen (dag ${S.day - 1})</button></div>` : ''}`;
+    <div class="grade">Service: ${st.waitN ? g.letter : '–'} <span class="stars">${st.waitN ? '★'.repeat(g.stars) + '☆'.repeat(5 - g.stars) : ''}</span> · Säkerhet: ${safetyGrade()}</div>
+${D ? `    <div class="row"><button class="btn xs" data-act="view:yesterday">🌅 Dag ${D.day} i sammanfattning</button></div>` : ''}`;
 }
 /** värmekartan över det styrningen har lärt sig: köer per våning (rader) och timme (kolumner) */
 function learnMap() {
@@ -524,19 +482,6 @@ export function select(p) {
   if (p) { VIEW.follow = null; VIEW.camFloor = null; VIEW.camSel = true; } else VIEW.camSel = false;
 }
 
-export function grade(avg) {
-  if (avg < 10) return { letter: 'A', stars: 5, msg: 'Hissguru! Ingen hann ens titta på klockan.' };
-  if (avg < 17) return { letter: 'B', stars: 4, msg: 'Snyggt jobbat – nästan inga sura miner.' };
-  if (avg < 26) return { letter: 'C', stars: 3, msg: 'Helt okej, men kaffet hann kallna.' };
-  if (avg < 40) return { letter: 'D', stars: 2, msg: 'Det muttrades i korridorerna…' };
-  return { letter: 'F', stars: 1, msg: 'Folk tar trapporna nu. Alla sjutton våningarna.' };
-}
-export function safetyGrade() {
-  const st = S.stats;
-  const pen = st.smoked * 3 + st.trappedSec / 15;
-  return pen < 4 ? 'A' : pen < 12 ? 'B' : pen < 25 ? 'C' : pen < 45 ? 'D' : 'F';
-}
-
 // ---------- Overlays ----------
 export function showOverlay(html) { const o = $('overlay'); o.innerHTML = html; o.classList.add('show'); }
 export function hideOverlay() { $('overlay').classList.remove('show'); }
@@ -588,74 +533,14 @@ export function showIntro() {
   addEventListener('keydown', introKeys, true);
 }
 extraActions.help = () => { if (!$('overlay').classList.contains('show')) showIntro(); };
-extraActions.yesterday = () => { if (!$('overlay').classList.contains('show')) showYesterday(); };
-/** flyttdagen i resultatet (tom om ingen flyttade i dag) */
-function moveSummary() {
-  const M = S.move;
-  if (!M || M.state === 'planned') return '';
-  const dur = M.state === 'done' ? `${Math.round(M.t1 - M.t0)} s` : 'blev inte klar';
-  const route = { auto: 'styrningen planerade', varu: 'allt i varuhissen', balk: 'tungt utanpå' }[M.route];
-  return `<div>🚚 Flytten (${esc(M.who)}): <b>${dur}</b> · ${route}</div><div>Via varuhissen <b>${M.viaV}</b> · hissbalken <b>${M.hoisted}</b> lass</div>
-      <div>Varuhissen låst: <b>${Math.round(M.indepSec)} s</b>${M.blankets ? ' (med skyddsfiltar)' : ` · repor <b>${M.scratches}</b>`}</div><div>Buden väntade som mest: <b>${Math.round(M.budWait)} s</b>${M.dockWait ? ` · flyttbilen väntade ${Math.round(M.dockWait)} s` : ''}</div>
-      <div>Vändes i dörren: <b>${M.pivots}</b>${M.stuck ? ` (fastnade helt ${M.stuck})` : ''}</div><div>Tappat: <b>${M.broken}</b> lass 💥</div>`;
-}
-/** dagens sammanfattning: driftchefens (och spelarens) beslut och hur det gick */
-function chiefSummary() {
-  const C = S.chief;
-  const ds = C ? C.log.filter(d => !d.info) : [];
-  if (!ds.length) return `<div class="chiefsum"><h2>🧑‍💼 Driftchefens dag</h2><p>Ett lugnt dygn – inga beslut behövde tas.</p></div>`;
-  const rows = ds.slice(-14).map(d => `<li><span class="ct">${d.time}</span> ${d.by === 'player' ? '👤 <b>Du:</b>' : '🧑‍💼'} <b>${esc(d.text)}</b>`
-    + `${d.why ? ` <span class="why">– ${esc(d.why)}</span>` : ''}${d.outcome ? `<div class="out">→ ${esc(d.outcome)}</div>` : ''}</li>`).join('');
-  const mine = ds.filter(d => d.by === 'player').length;
-  return `<div class="chiefsum"><h2>🧑‍💼 Driftchefens dag</h2><p>${ds.length - mine} beslut av driftchefen${mine ? `, ${mine} av dig` : ''}${ds.length > 14 ? ' (de senaste 14)' : ''}.</p><ul>${rows}</ul></div>`;
-}
-/** gårdagens sammanfattning efter ett mjukt dygnsskifte (visas med knappen på informationsrutan) */
-let lastSummary = '';
-/** Dygnet är slut. Mjukt dygnsskifte: sammanfattningen sparas och huset rullar vidare (sim.js rollDay);
- *  annars stannar spelet och NÄSTA DAG börjar om från början. */
+/** Dygnet är slut: det sparas (summary.js). Mjukt dygnsskifte: huset rullar vidare och gårdagen finns som vy i
+ *  panelen; annars stannar spelet för sammanfattningen och NÄSTA DAG börjar om från början. */
 export function showSummary() {
-  if (S.roll === 'mjuk') { lastSummary = summaryHtml(`DAG ${S.day} ÄR SLUT`, '<button class="btn" id="next">FORTSÄTT ▶</button>'); return; }
+  saveDay();
+  if (S.roll === 'mjuk') return;
   S.summaryShown = true; S.paused = true;
-  showOverlay(summaryHtml('DYGNET ÄR SLUT!', '<button class="btn" id="next">NÄSTA DAG ▶</button>'));
+  showOverlay(`<div class="card sumcard"><h1>DAG ${S.day} ÄR SLUT</h1>${summaryHtml()}<button class="btn" id="next">NÄSTA DAG ▶</button></div>`);
   $('next').onclick = () => { hideOverlay(); newDay(); };
-}
-/** visa gårdagens sammanfattning (spelet står still medan den är uppe) */
-export function showYesterday() {
-  if (!lastSummary) return;
-  const was = S.paused;
-  S.paused = true;
-  showOverlay(lastSummary);
-  $('next').onclick = () => { hideOverlay(); S.paused = was; };
-}
-function summaryHtml(title, button) {
-  const st = S.stats, avg = st.waitN ? st.waitSum / st.waitN : 0, g = grade(avg);
-  const names = { smart: 'Smart', peak: 'Rusning', eco: 'Energisnål', nearest: 'Närmast', random: 'Kaos', buttons: 'Knappar' };
-  return `<div class="card"><h1>${title}</h1>
-    <div class="bigGrade">${st.waitN ? g.letter : '–'} <span style="font-size:48px">· säkerhet ${safetyGrade()}</span></div>
-    <p><b>${g.msg}</b></p>
-    <div class="sumgrid">
-      <div>Resor klara: <b>${st.served}</b></div><div>Styrlogik: <b>${names[S.strategy]}</b></div>
-      <div>Snittväntan: <b>${avg.toFixed(1)}s</b></div><div>Längsta väntan: <b>${Math.round(st.waitMax)}s</b></div>
-      <div>Arga resenärer: <b>${st.angry}</b></div><div>Incidenter: <b>${st.incidents}</b></div>
-      <div>Rökexponerade: <b>${st.smoked}</b></div><div>Utrymda: <b>${st.evacuated}</b></div>
-      <div>Instängd-sekunder: <b>${Math.round(st.trappedSec)}</b></div><div>Trapp-resor: <b>${st.stairs}</b></div>
-      <div>Överlaster: <b>${st.overloads}</b></div><div>Hissbyten: <b>${st.transfers}</b></div>
-      <div>Bilar i garaget: <b>${st.carsIn}</b></div><div>Leveranser: <b>${st.deliveries}</b></div>
-      <div>Felknappar: <b>${st.wrongPress}</b> (barn: ${st.kidPresses})</div><div>Spökstopp: <b>${st.ghostStops}</b></div>
-      <div>Hissfel: <b>${st.faults}</b>${st.cables ? `, varav linbrott <b>${st.cables}</b>` : ''} (stillestånd ${Math.round(st.downSec)} s)</div><div>Nattservice: <b>${st.serviced}</b> hissar</div>
-      <div>Energi: <b>${st.energy.toFixed(1)} kWh</b> (körning ${st.energyRun.toFixed(1)})</div><div>Återmatat: <b>${st.regen.toFixed(1)} kWh</b></div>
-      <div>★ Gunnar gnällde: <b>${st.gripes}</b> gånger</div><div>★ Kurts kaffekoppar: <b>${st.cups}</b></div>
-      <div>Höll upp dörren: <b>${st.holds}</b> gånger</div><div>★ Majken pratade: <b>${st.chats}</b> gånger</div>
-      <div>Väder: <b>${S.weather.temp} °C</b>${S.weather.cold > 0 ? ` (dörren tog emot ${st.doorFights} ggr)` : ''}</div><div>Vajerlarm i storm: <b>${st.stormFaults}</b></div>
-      <div>Överhettade motorer: <b>${st.heatStops}</b></div><div>Snubbel på tröskeln: <b>${st.stumbles}</b></div>
-      <div>Ambulans: <b>${st.medical}</b></div><div>Flyttlass: <b>${st.moveLoads}</b></div>
-      <div>Övre däcket: <b>${st.upperDeck}</b> resor</div><div>Inlärda parkeringar: <b>${st.learnedParks}</b></div>
-      <div>Tåg vid perrongen: <b>${st.trains}</b></div><div>Med tunnelbanan: <b>${st.trainIn}</b> in · <b>${st.trainOut}</b> hem</div>
-      ${moveSummary()}
-      <div>Tog trappan frivilligt: <b>${st.stairsChoice}</b></div><div>Mest sliten: <b>${S.elevators.reduce((a, e) => (e.wear > a.wear ? e : a)).name} ${Math.round(Math.max(...S.elevators.map(e => e.wear)) * 100)} %</b></div>
-    </div>
-    ${chiefSummary()}
-    ${button}</div>`;
 }
 export function newDay() {
   S.day++;

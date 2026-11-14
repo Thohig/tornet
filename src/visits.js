@@ -11,7 +11,7 @@ import { stream } from './rng.js';
 const { pick, rand, rng, shuffle } = stream('händelser');
 import { fl } from './util.js';
 import { BOHAG, BOHAG_BY_TYPE, CAR_H, DOCK, DOOR_X, FL, HOME_FLOORS, LOBBY, floorWith, floorY, shaftCX } from './config.js';
-import { S, hour, log } from './state.js';
+import { S, dayEvent, hour, log } from './state.js';
 import { makePerson, needsFreight, pev, pn, releaseSpot, setTrip } from './people.js';
 import { allowedPos, costBased, outReason, OUT_TEXT, prio, posOf } from './dispatch.js';
 import { canBrakeTo, deckFloor, unload, releaseCalls } from './elevators.js';
@@ -232,6 +232,7 @@ function moveTick(dt) {
     M.state = 'done'; M.t1 = S.t;
     if (V) V.indep = false;
     S.stats.moves++;
+    dayEvent('move', `🚚 Flytten från ${fl(M.floor)} är klar`, `${M.who} flyttade: ${M.loads} lass på ${Math.round(S.t - M.t0)} s${M.broken ? `, ${M.broken} tappade` : ''}${!M.blankets && M.scratches ? `, ${M.scratches} repor utan filtar` : ''}${M.pivots ? `, ${M.pivots} ${M.pivots === 1 ? 'möbel' : 'möbler'} fick vändas i dörren` : ''}.`);
     log(`🚚 Flytten från ${fl(M.floor)} är klar – ${M.loads} lass på ${Math.round(S.t - M.t0)} s${M.pivots ? ` (${M.pivots} gånger fick en möbel vändas i hissdörren)` : ''} · ${V ? V.name : 'varuhissen'} går i vanlig trafik igen`, 'alert', V ? V.color : null);
   }
 }
@@ -387,6 +388,7 @@ function medicTick() {
     // personalen har lämnat huset (med patienten, eller utan om hen redan hade gått)
     A.state = 'done'; A.t1 = S.t;
     S.stats.medicSec += S.t - A.t0;
+    dayEvent('medical', '🚑 Ambulansen har kört', `${A.taken ? `${A.pname} fördes till sjukhuset` : 'Ambulansen åkte tom'} – ${Math.round(S.t - A.t0)} s från larm till avfärd.`);
     log(`🚑 Ambulansen kör iväg${A.taken ? ` med ${A.pname}` : ''} – ${Math.round(S.t - A.t0)} s från larm till avfärd`, 'alert');
   }
 }

@@ -17,15 +17,19 @@ import { chiefOnDuty } from './chief.js';
 import { $, carHtml, dayNumbers, drawPortrait, incidentPanel, logHtml, personHtml, rosterHtml, statsHtml } from './hud.js';
 import { peopleBehindDoor } from './render.js';
 import { soundOn } from './sound.js';
+import { lastDay, summaryHtml } from './summary.js';
 import { SPEEDS, extraActions, uiHooks } from './input.js';
 
 const side = $('side'), portrait = $('portrait');
 
 // ---------- Vyer och utfällda länkar (bara gränssnittets tillstånd) ----------
-/** @type {{ view: null|'roster'|'log'|'stats'|'set', open: Set<string>, fireFloor: string, squeezed: Set<string>, key: string }} */
+/** @type {{ view: null|'roster'|'log'|'stats'|'set'|'yesterday', open: Set<string>, fireFloor: string, squeezed: Set<string>, key: string }} */
 const UI = { view: null, open: new Set(), fireFloor: '', squeezed: new Set(), key: '' };
 const VIEWS = { roster: '📋 Register', log: '📜 Logg', set: '⚙️ Inställningar', stats: '🏆 Resultat' };
+/** vyer som inte har en egen länk: gårdagens sammanfattning (öppnas från informationsrutan eller resultatet) */
+const VIEW_TITLE = v => (v === 'yesterday' ? `🌅 Dag ${lastDay()?.day ?? ''}` : VIEWS[v]);
 extraActions.view = b => { UI.view = UI.view === b || b === 'back' ? null : /** @type {any} */ (b); S.logDirty = true; };
+extraActions.yesterday = () => { if (lastDay()) { UI.view = 'yesterday'; S.logDirty = true; } };
 extraActions.open = b => { UI.open.add(b); UI.view = null; };
 extraActions.fold = b => { UI.open.delete(b); UI.squeezed.add(b); };
 extraActions.rf = b => { S.rosterFilter = b; };
@@ -188,6 +192,7 @@ function viewHtml(v) {
   if (v === 'roster') return chips('rf', S.rosterFilter, [['all', 'Alla'], ['wait', 'Väntar'], ['ride', 'Åker'], ['in', 'Inne'], ['crew', 'Personalen']]) + `<div class="roster">${rosterHtml()}</div>`;
   if (v === 'log') return chips('lf', S.logFilter, [['all', 'Allt'], ['lift', 'Hissar'], ['person', 'Personer'], ['button', 'Knappar'], ['sel', 'Följd']]) + `<div class="log">${logHtml()}</div>`;
   if (v === 'stats') return `<div class="stats">${statsHtml()}</div>`;
+  if (v === 'yesterday') return summaryHtml();
   const set = (key, list) => `<div class="row">${list.map(([k, t]) => btn(`setting:${key}:${k}`, t, S[key] === k)).join('')}</div>`;
   return `<div class="lbl">Felknappar</div>${set('mistakes', [['av', 'Av'], ['lite', 'Lite'], ['mycket', 'Mycket']])}`
     + `<div class="hint">Hur ofta folk trycker på fel knapp (och barn på alla) – syns med styrlogiken Knappar.</div>`
@@ -255,7 +260,7 @@ function render(m, F, inc) {
     else if (k === 'trig') html = head(TITLES.trig, fold) + trigHtml();
     else if (k === 'strat') html = head(TITLES.strat, fold) + stratHtml();
     else if (k === 'day') html = dayHtml();
-    else if (k === 'view') html = head(VIEWS[UI.view], `<button class="blk-x" data-act="view:back" data-hint="Tillbaka (Esc)">✕</button>`) + viewHtml(UI.view);
+    else if (k === 'view') html = head(VIEW_TITLE(UI.view), `<button class="blk-x" data-act="view:back" data-hint="Tillbaka (Esc)">✕</button>`) + viewHtml(UI.view);
     else if (k === 'links') {
       const views = Object.entries(VIEWS).map(([v, t]) => btn(`view:${v}`, t, UI.view === v));
       html = `<div class="row">${[...links, ...views].join('')}</div>`; cls += links.length ? ' has-links' : '';

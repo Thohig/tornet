@@ -2231,3 +2231,13 @@ test('Börjar om (resetDay): ett hissfel som inte hann lagas följer med till n�
   assert(!n.fault && n.mode === 'normal', `${n.name} lagades aldrig på morgonen (${n.mode})`);
   return `${n.name}: ${n.fault ? 'trasig' : 'lagad'} på morgonen dag 2`;
 });
+test('Dygnets händelser: incidenter som tar slut sparas i statistiken (dagens sammanfattning)', () => {
+  sim(33, { chief: true });
+  runUntil(10);
+  act('trigger', 'fire', FIRE_FLOORS[0]);
+  runUntil(14);
+  const ev = S.stats.events;
+  assert(ev.some(e => e.type === 'fire'), `branden finns inte bland dygnets händelser (${ev.map(e => e.type).join(', ')})`);
+  assert(ev.every(e => /^\d\d:\d\d$/.test(e.time) && e.title && e.text), 'en händelse saknar tid, rubrik eller text');
+  return ev.map(e => `${e.time} ${e.type}`).join(' · ');
+});

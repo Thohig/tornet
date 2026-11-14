@@ -46,9 +46,14 @@ export function notice(kind, title, text, opts = {}) {
   S.notices.push({ id: S.noticeId++, kind, title, text, t0: S.t, floor: opts.floor ?? null, car: opts.car ?? null, act: opts.act, actLabel: opts.actLabel });
   if (S.notices.length > 8) S.notices.shift();
 }
+/** något som hörde till dygnet (en incident som tog slut, flytten, ambulansen): sparas för dagens sammanfattning */
+export function dayEvent(type, title, text) {
+  S.stats.events.push({ time: clockStr(), type, title, text });
+}
 /** en incident är över: en sammanfattning i en informationsruta, och folk pratar om den en stund (cast.js) */
 export function incidentOver(type, title, text, opts = {}) {
   notice(type, title, text, opts);
+  dayEvent(type, title, text);
   S.lastInc = { id: S.noticeId, type, t: S.t };
 }
 // Vem som sitter på vilken plats (plats i SPOTS → personens id). Ligger i tillståndet, inte i config,
@@ -72,7 +77,9 @@ export function newStats() {
     medical: 0, medicSec: 0, moveLoads: 0, moves: 0, moveBroken: 0, stormFaults: 0, learnedParks: 0, upperDeck: 0, escalator: 0,
     trains: 0, trainIn: 0, trainOut: 0,
     // styrningens förutsagda väntan (vid senaste tilldelningen) mot den faktiska: summa fel, summa |fel|, antal
-    etaErr: 0, etaAbs: 0, etaN: 0 };
+    etaErr: 0, etaAbs: 0, etaN: 0,
+    // dygnets händelser i tidsordning (dayEvent): det sammanfattningen berättar om
+    events: /** @type {{ time: string, type: string, title: string, text: string }[]} */ ([]) };
 }
 // S.clock = spelsekunder sedan 06:00. hour() går från 6 till 30 (06:00 nästa morgon).
 export const hour = () => START_H + S.clock / 3600;
