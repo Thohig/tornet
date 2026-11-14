@@ -146,11 +146,12 @@ function routine(type) {
 }
 const TYPE_NAMES = { worker: 'jobbar inne i stan', child: 'går i skolan', student: 'pluggar', pensioner: 'pensionär', vd: 'VD med långa dagar', artist: 'konstnär – nattuggla' };
 export const residentDesc = p => `Bor på ${fl(p.home)} (${p.apt ? 'höger' : 'vänster'} lägenhet) · ${TYPE_NAMES[p.rtype] || ''}`;
-function makeResidents() {
+/** de boende i husets lägenheter; only(f, apt) = bara de lägenheter där det inte bor någon (dygnsskiftet) */
+function makeResidents(only = (/** @type {number} */ _f, /** @type {number} */ _apt) => true) {
   HOUSEHOLDS.forEach((apts, i) => {
     const f = HOME_FLOORS[i];
     if (f === undefined) return;
-    apts.forEach((members, apt) => members.forEach(m => {
+    apts.forEach((members, apt) => only(f, apt) && members.forEach(m => {
       const [type, bil] = m.split(':');
       const p = makePerson('res', f, 0);
       Object.assign(p, { home: f, apt, rtype: type, child: type === 'child', goal: f, dest: f });
@@ -255,6 +256,27 @@ function spawnVips(v) {
 }
 
 // ---------- Dygnets start och varje steg ----------
+/**
+ * Mjukt dygnsskifte (rollDay i sim.js): bilarna, leveransbilen och helikoptern är kvar, de boende får en ny dag
+ * att leva och tomma lägenheter (hushållet flyttade i går) får nya hyresgäster.
+ */
+export function lifeRoll() {
+  const bank = floorWith('bank'), law = floorWith('law');
+  S.vipVisits = ROOF < 0 ? [] : [{ at: rand(10.8, 11.6), goal: bank >= 0 ? bank : OFFICE_FLOORS[0] }, { at: rand(15, 15.8), goal: law >= 0 ? law : OFFICE_FLOORS[0] }];
+  for (const p of S.people) if (p.kind === 'res' && !p.dead) {
+    const r = routine(p.rtype);
+    p.wake = r.wake; p.sleepAt = r.sleep; p.sched = r.ev.sort((a, b) => a.at - b.at);
+    // ute över natten: kommer hem på gårdagens tid (24 timmar tidigare på den nya klockan), inte på dagens hemkomst
+    if (p.state === 'away') {
+      p.returnAt = Math.max(6, p.returnAt - 24);
+      p.sched.unshift({ at: p.returnAt, go: 'home', why: 'Hem efter natten ute' });
+    }
+  }
+  const lives = (f, apt) => S.people.some(p => p.kind === 'res' && !p.dead && p.home === f && p.apt === apt);
+  const before = S.people.length;
+  makeResidents((f, apt) => !lives(f, apt));
+  if (S.people.length > before) log(`🏠 Nya hyresgäster har flyttat in i den tomma lägenheten`, 'sys');
+}
 export function lifeReset() {
   S.autos = []; S.nextAutoId = 1; S.truck = null; S.heli = null;
   const bank = floorWith('bank'), law = floorWith('law');

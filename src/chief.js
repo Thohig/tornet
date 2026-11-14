@@ -41,6 +41,13 @@ export function chiefReset() {
     seen: /** @type {Record<string, boolean>} */ ({}), incSeen: /** @type {number|null} */ (null) };
 }
 
+/** Mjukt dygnsskifte: en ny beslutslogg (beslut om incidenter som pågår följer med) och nya servicebeställningar */
+export function chiefRoll() {
+  const C = S.chief;
+  C.log = C.log.filter(d => d.inc && !d.outcome && !d.info);
+  C.svcN = 0;
+}
+
 function record(key, text, why, by, o = {}) {
   const C = S.chief;
   /** @type {Decision} */

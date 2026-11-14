@@ -7,6 +7,9 @@ export const S = {
   t: 0, clock: 0, day: 1, anim: 0, tempo: 'lang', // tempo: dygnets längd (TEMPOS i config)
   people: [], elevators: [], log: [], fx: [], wl: null,
   nextId: 1, reoptT: 0, summaryShown: false, stats: null, logDirty: true,
+  // nytt dygn: 'mjuk' = huset rullar vidare kl 06 (rollDay i sim.js), 'ny' = dygnet börjar om från början (resetDay);
+  // yesterday = gårdagens statistik efter ett mjukt dygnsskifte
+  roll: 'ny', yesterday: /** @type {{ day: number, stats: any }|null} */ (null),
   sel: null, hover: null, hoverDoor: null, carCycle: 0,
   rosterFilter: 'all', logFilter: 'all',
   // incidenter

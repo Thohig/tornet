@@ -2179,3 +2179,55 @@ test('Determinism: samma frö och samma spelaråtgärder ger exakt samma dygn (�
   assert(a.print === b.print, `två körningar blev olika dygn:\n${a.print.slice(0, 300)}\n${b.print.slice(0, 300)}`);
   return `${a.n} åtgärder på dag 2 · identiskt dygn`;
 });
+
+// ---------- Dygnsskiftet ----------
+/** kör till klockslaget h på dygn d (det mjuka dygnsskiftet: klockan börjar om, dagen räknas upp) */
+function runTo(d, h, w) {
+  let g = 0;
+  while (S.day < d || hour() < h) { const b = w && w.before(); step(DT); if (w) w.check(b); if (++g > 400000) throw new Fail(`kom aldrig fram till dag ${d} kl ${h}`); }
+}
+test('Mjukt dygnsskifte: huset rullar vidare kl 06 – fel, brand och folk följer med, nattskiftet avlöses', () => {
+  sim(31, { roll: 'mjuk', chief: true, autoInc: true });
+  const w = watcher();
+  runTo(1, 29.97, w);
+  const e = S.elevators.find(x => x.mode === 'normal' && !x.passengers.length && x.state === 'idle');
+  assert(e, 'ingen ledig hiss att ha sönder');
+  breakDown(e, 'motorn överhettad');
+  act('trigger', 'fire', FIRE_FLOORS[0]);
+  const t0 = S.t, ids = new Set(S.people.map(p => p.id)), need = e.fault.need;
+  runTo(2, 6.005, w);
+  assert(S.day === 2 && S.t > t0, 'klockan på simuleringen (S.t) ska löpa vidare över skiftet');
+  assert(e.mode === 'broken' && e.fault && e.fault.need === need, `${e.name} blev hel av dygnsskiftet (${e.mode})`);
+  assert(S.fire, 'branden försvann vid dygnsskiftet');
+  assert(S.people.some(p => ids.has(p.id)), 'folket i huset försvann vid dygnsskiftet');
+  assert(S.stats.served === 0 && S.yesterday && S.yesterday.day === 1, 'dagens statistik ska börja om och gårdagens sparas');
+  assert(S.notices.some(n => n.kind === 'day'), 'ingen informationsruta om det nya dygnet');
+  runTo(2, 10, w);
+  assert(!S.fire, 'branden släcktes aldrig');
+  assert(!e.fault, `${e.name} lagades aldrig efter skiftet`);
+  for (const c of CREW.filter(x => x.until === null)) assert(!crewPerson(c.id), `${c.name} (nattskiftet) gick aldrig hem`);
+  for (const c of CREW.filter(x => x.arrive === null)) assert(atPost(crewPerson(c.id)), `${c.name} (dagskiftet) kom aldrig till sin post`);
+  assert(!S.people.some(p => ['väktare', 'nattdj', 'nattekniker'].includes(p.role)), 'nattpersonalen är kvar på förmiddagen');
+  assert(S.people.filter(p => p.kind === 'emp').length > 20, 'de anställda kom inte till jobbet dag 2');
+  const res = S.people.filter(p => p.kind === 'res');
+  assert(res.every(p => p.sched.length && p.sched.some(x => x.at > 6)), 'de boende fick ingen ny dag att leva');
+  assert(w.passes === 0 && w.brokenUse === 0 && w.badLeg === 0, `regelbrott över dygnsskiftet (förbi ${w.passes}, trasig ${w.brokenUse}, delresa ${w.badLeg})`);
+  runTo(3, 6.01, w);
+  assert(S.day === 3 && w.passes === 0, 'dag 3 rullade inte vidare');
+  return `brand och ${e.name} fortsatte in i dag 2 · nattskiftet avlöst · ${res.length} boende · dag 3 nådd`;
+});
+test('Börjar om (resetDay): ett hissfel som inte hann lagas följer med till nästa dygn – folket gör det inte', () => {
+  sim(32);
+  runDay();
+  const e = S.elevators[1];
+  breakDown(e, 'bromsen kärvar');
+  const need = e.fault.need;
+  S.day++; resetDay();
+  const n = S.elevators[1];
+  assert(n.mode === 'broken' && n.fault && n.fault.what === 'bromsen kärvar' && n.fault.need === need, 'felet följde inte med');
+  assert(n.stops.has(n.floor) && n.pos === n.floor, 'den trasiga korgen ska stå på en hållplats');
+  assert(!n.passengers.length, 'passagerare följde med');
+  runUntil(8);
+  assert(!n.fault && n.mode === 'normal', `${n.name} lagades aldrig på morgonen (${n.mode})`);
+  return `${n.name}: ${n.fault ? 'trasig' : 'lagad'} på morgonen dag 2`;
+});

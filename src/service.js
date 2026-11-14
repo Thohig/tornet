@@ -551,6 +551,32 @@ function cableDown(e, t = null) {
   rebuildPicks();
 }
 
+// ---------- Dygnsskiftet ----------
+/**
+ * Ett hissfel som inte är lagat när dygnet börjar om (resetDay): vad som är trasigt, hur långt teknikern hann
+ * och var korgen står. Folket följer inte med – de instängda räknas som ute. null = inget att föra över.
+ * @returns {{ what: string, kind?: string, tool?: string, need: number, done: number, cable: boolean, exitF?: number, pos: number }|null}
+ */
+export function keptFault(e) {
+  if (e.mode === 'snapped' && e.snap && e.snap.ph !== 'fall')
+    return { what: 'linbrott', need: rand(CABLE_H[0], CABLE_H[1]), done: 0, cable: true, exitF: e.snap.exitF, pos: e.pos };
+  if (e.mode !== 'broken' || !e.fault) return null;
+  const f = e.fault, t = techOf(e);
+  return { what: f.what, kind: f.kind, tool: f.tool, need: f.need, done: t ? t.workT : f.done || 0, cable: !!f.cable, exitF: f.exitF, pos: e.pos };
+}
+/** Felet k från gårdagen läggs på den nya hissen e: linbytet står kvar mellan två våningar, annat står öppet på närmaste stopp */
+export function restoreFault(e, k) {
+  setMode(e, 'broken');
+  e.dir = 0; e.v = 0; e.parkTarget = null;
+  if (k.cable) { e.pos = k.pos; e.floor = Math.round(k.pos); e.state = 'idle'; }
+  else {
+    const f = [...e.stops].reduce((a, b) => (Math.abs(b - k.pos) < Math.abs(a - k.pos) ? b : a));
+    e.pos = e.floor = f; e.state = 'doors'; e.doorPhase = 'open';
+  }
+  e.fault = { what: k.what, kind: k.kind, tool: k.tool, t0: S.t, need: k.need, done: k.done, cable: k.cable, exitF: k.exitF };
+  log(`🔧 ${e.name} är fortfarande ${k.cable ? 'utan bärlinor' : 'trasig'} sedan i går (${k.what})${k.done ? ' – teknikern fortsätter där hen slutade' : ''}`, 'alert', e.color);
+}
+
 // ---------- Motorvärme ----------
 // Varje start och stopp värmer motorn (mer med tung last), och den svalnar långsamt. En varm motor kör
 // långsammare; blir den för het löser överhettningsskyddet ut: hissen kör klart sina passagerare,

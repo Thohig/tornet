@@ -42,6 +42,7 @@ export function castSchedule() {
   return CAST.filter(c => c.kind === 'emp').map(c => ({ at: c.at, run: () => spawnCastEmployee(c) }));
 }
 function spawnCastEmployee(c) {
+  if (S.people.some(q => q.cast === c.id && !q.dead)) return null; // (kvar sedan i går efter ett mjukt dygnsskifte)
   const p = castify(makePerson('emp', LOBBY, -30), c);
   p.home = homeOf(c);
   if (!OFFICE_FLOORS.includes(p.home)) return null;

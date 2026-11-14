@@ -25,7 +25,7 @@ export function changeStrategy(k) {
   log(`Styrlogik bytt till ${STRAT_NAMES[k]} – alla väntande fördelas om`, 'sys');
 }
 /** inställningar som spelaren kan ändra under dygnet */
-const SETTINGS = ['mistakes', 'maint'];
+const SETTINGS = ['mistakes', 'maint', 'roll'];
 /** Allt spelaren kan framkalla. target = våning (brand) eller hiss (hissfel, het motor, linbrott); utelämnat = slumpen väljer. */
 export const TRIGGERS = ['fire', 'power', 'fault', 'storm', 'heat', 'cable', 'pano', 'medical', 'move', 'lightning', 'cold', 'heatwave', 'train', 'vip'];
 function triggerAny(type, target = null) {

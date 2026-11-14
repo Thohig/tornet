@@ -3,7 +3,7 @@
 // ställen (personalrummet, Sky Café, takträdgården, kiosken, godisautomaten, perrongen). Raster tas bara när det är
 // lugnt; den som är "urgent" (kontrollrummet) skyndar tillbaka när larmet går, och den som ska täcka för någon
 // (cover) går inte förrän den andra sitter på sin post. Allt här är simulering och drar inga slumptal.
-import { BREAK, CAFE, CONTROL, CREW, DOCK, LOBBY, ROOF, SPOTS, STATION, TERRACE_F } from './config.js';
+import { BREAK, CAFE, CONTROL, CREW, DOCK, LOBBY, ROOF, SPOTS, START_H, STATION, TERRACE_F } from './config.js';
 import { S, hour, log, occOf } from './state.js';
 import { blankPerson, gotoSpot, pev, pn, releaseSpot, setTrip } from './people.js';
 import { inFireZone } from './dispatch.js';
@@ -108,10 +108,22 @@ function offReason(p, h) {
   if (c.post === 'gondola') return gondolaOff();
   return '';
 }
+/** den som tar över posten när c:s pass är slut (nattskiftet: dagskiftet som börjar kl 06) */
+const relief = c => CREW.find(x => x !== c && x.post === c.post && x.from === (c.until ?? START_H)) || null;
+/**
+ * Mjukt dygnsskifte: nattskiftet går hem när dagskiftet har kommit, och dagskiftet (som annars sitter på posten
+ * när dygnet börjar) kommer in genom entrén.
+ */
+export function crewRoll() {
+  for (const p of S.people) if (p.crewId && CREW_BY[p.crewId].until === null) { p.shiftEnd = true; p.timer = Math.min(p.timer, CREW_LOOK); }
+  for (const c of CREW) if (c.arrive === null && !crewPerson(c.id)) spawnCrew(c.id);
+}
 /** passet är slut? */
 function shiftOver(p, h, busy) {
   const c = CREW_BY[p.crewId];
   if (c.post === 'terrace') return !S.move || S.move.state === 'done' || !S.move.hoist;
+  // nattskiftet efter ett mjukt dygnsskifte: går när avlösaren är i huset (inte mitt i ett larm)
+  if (p.shiftEnd) { const nx = relief(c); return (!nx || !!crewPerson(nx.id)) && !(busy && c.urgent); }
   return c.until !== null && h >= c.until && (!busy || !c.urgent || h >= c.until + 0.5);
 }
 /** får personen lämna posten just nu? fönsterputsaren måste först hissas upp till taket */
@@ -133,7 +145,7 @@ export function crewNext(p, h) {
   const there = (f, why) => (p.floor === f || !ok(f) ? null : [f, why, false]);
   if (shiftOver(p, h, busy)) {
     if (!mayLeave(p)) return null;
-    const next = CREW.find(x => x !== c && x.post === c.post && x.from === c.until);
+    const next = relief(c);
     return [p.exitFloor, c.post === 'terrace' ? 'Flytten är klar – åker med flyttbilen' : `Passet är slut${next ? ` – ${next.name} tar över` : ''}`];
   }
   // rasten är slut (eller larmet går för den som behövs i kontrollrummet)

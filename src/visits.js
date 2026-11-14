@@ -32,6 +32,13 @@ export function visitsReset() {
   // ambulans ungefär vartannat dygn
   S.medicAt = rng() < 0.5 ? rand(9, 17.5) : null;
 }
+/** Mjukt dygnsskifte: en flytt eller ambulans som pågår får fortsätta, annars planeras dagens som vanligt */
+export function visitsRoll() {
+  const M = S.move && S.move.state === 'on' ? S.move : null, med = S.medic;
+  visitsReset();
+  if (M) S.move = M;
+  S.medic = med;
+}
 export function visitsTick(dt) {
   moveTick(dt);
   medicTick();

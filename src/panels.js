@@ -193,6 +193,8 @@ function viewHtml(v) {
     + `<div class="hint">Hur ofta folk trycker på fel knapp (och barn på alla) – syns med styrlogiken Knappar.</div>`
     + `<div class="lbl">Underhåll</div>${set('maint', [['natt', 'Nattservice'], ['fel', 'Bara vid fel']])}`
     + `<div class="hint">Nattservice håller nere slitaget – utan den slits hissarna dag för dag och går oftare sönder.</div>`
+    + `<div class="lbl">Nytt dygn</div>${set('roll', [['mjuk', 'Rullar vidare'], ['ny', 'Börjar om']])}`
+    + `<div class="hint">Rullar vidare: kl 06 fortsätter huset som det är – reparationer, incidenter och folk följer med. Börjar om: spelet stannar för dagens resultat och nästa dygn börjar från början (bara slitage och pågående hissfel följer med).</div>`
     + `<div class="lbl">Visa</div><div class="row">${btn('tags', 'Namnbrickor (T)', S.tags)}${btn('sound', `Ljud (M) ${soundOn() ? '🔊' : '🔇'}`, soundOn())}</div>`;
 }
 const TITLES = { cam: '📹 Kameran', chief: '🧑‍💼 Driftchefen', trig: '⚡ Framkalla', strat: '🎛️ Styrning', day: '🏆 Dagen' };

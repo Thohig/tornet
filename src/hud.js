@@ -222,7 +222,8 @@ ${st.extraTechs ? `    <div class="stat">Extra tekniker <b>${st.extraTechs}</b><
     <div class="stat">Spökstopp 👻 <b>${st.ghostStops}</b></div>
     <div class="stat">Bus rensat <b>${st.nuisance}</b></div>
     ${learnMap()}
-    <div class="grade">Service: ${st.waitN ? g.letter : '–'} <span class="stars">${st.waitN ? '★'.repeat(g.stars) + '☆'.repeat(5 - g.stars) : ''}</span> · Säkerhet: ${sg}</div>`;
+    <div class="grade">Service: ${st.waitN ? g.letter : '–'} <span class="stars">${st.waitN ? '★'.repeat(g.stars) + '☆'.repeat(5 - g.stars) : ''}</span> · Säkerhet: ${sg}</div>
+${lastSummary ? `    <div class="row"><button class="btn xs" data-act="yesterday">🌅 Gårdagen (dag ${S.day - 1})</button></div>` : ''}`;
 }
 /** värmekartan över det styrningen har lärt sig: köer per våning (rader) och timme (kolumner) */
 function learnMap() {
@@ -587,6 +588,7 @@ export function showIntro() {
   addEventListener('keydown', introKeys, true);
 }
 extraActions.help = () => { if (!$('overlay').classList.contains('show')) showIntro(); };
+extraActions.yesterday = () => { if (!$('overlay').classList.contains('show')) showYesterday(); };
 /** flyttdagen i resultatet (tom om ingen flyttade i dag) */
 function moveSummary() {
   const M = S.move;
@@ -607,11 +609,28 @@ function chiefSummary() {
   const mine = ds.filter(d => d.by === 'player').length;
   return `<div class="chiefsum"><h2>🧑‍💼 Driftchefens dag</h2><p>${ds.length - mine} beslut av driftchefen${mine ? `, ${mine} av dig` : ''}${ds.length > 14 ? ' (de senaste 14)' : ''}.</p><ul>${rows}</ul></div>`;
 }
+/** gårdagens sammanfattning efter ett mjukt dygnsskifte (visas med knappen på informationsrutan) */
+let lastSummary = '';
+/** Dygnet är slut. Mjukt dygnsskifte: sammanfattningen sparas och huset rullar vidare (sim.js rollDay);
+ *  annars stannar spelet och NÄSTA DAG börjar om från början. */
 export function showSummary() {
+  if (S.roll === 'mjuk') { lastSummary = summaryHtml(`DAG ${S.day} ÄR SLUT`, '<button class="btn" id="next">FORTSÄTT ▶</button>'); return; }
   S.summaryShown = true; S.paused = true;
+  showOverlay(summaryHtml('DYGNET ÄR SLUT!', '<button class="btn" id="next">NÄSTA DAG ▶</button>'));
+  $('next').onclick = () => { hideOverlay(); newDay(); };
+}
+/** visa gårdagens sammanfattning (spelet står still medan den är uppe) */
+export function showYesterday() {
+  if (!lastSummary) return;
+  const was = S.paused;
+  S.paused = true;
+  showOverlay(lastSummary);
+  $('next').onclick = () => { hideOverlay(); S.paused = was; };
+}
+function summaryHtml(title, button) {
   const st = S.stats, avg = st.waitN ? st.waitSum / st.waitN : 0, g = grade(avg);
   const names = { smart: 'Smart', peak: 'Rusning', eco: 'Energisnål', nearest: 'Närmast', random: 'Kaos', buttons: 'Knappar' };
-  showOverlay(`<div class="card"><h1>DYGNET ÄR SLUT!</h1>
+  return `<div class="card"><h1>${title}</h1>
     <div class="bigGrade">${st.waitN ? g.letter : '–'} <span style="font-size:48px">· säkerhet ${safetyGrade()}</span></div>
     <p><b>${g.msg}</b></p>
     <div class="sumgrid">
@@ -636,8 +655,7 @@ export function showSummary() {
       <div>Tog trappan frivilligt: <b>${st.stairsChoice}</b></div><div>Mest sliten: <b>${S.elevators.reduce((a, e) => (e.wear > a.wear ? e : a)).name} ${Math.round(Math.max(...S.elevators.map(e => e.wear)) * 100)} %</b></div>
     </div>
     ${chiefSummary()}
-    <button class="btn" id="next">NÄSTA DAG ▶</button></div>`);
-  $('next').onclick = () => { hideOverlay(); newDay(); };
+    ${button}</div>`;
 }
 export function newDay() {
   S.day++;

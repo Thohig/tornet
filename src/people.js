@@ -575,7 +575,7 @@ function roleNext(p, h) {
     case 'ambulans': return medicNext(p);
     case 'brandman': return ffNext(p);
     case 'väktare': {
-      if (h >= 27) return [p.exitFloor, 'Passet är slut – går hem'];
+      if (h >= 27 || p.shiftEnd) return [p.exitFloor, 'Passet är slut – går hem'];
       for (let i = 0; i < p.route.length; i++) {
         p.ri = (p.ri + 1) % p.route.length;
         const f = p.route[p.ri];
@@ -592,10 +592,10 @@ function roleNext(p, h) {
       p.task = pick(JANITOR_TASKS);
       return [p.route.shift(), p.task];
     case 'nattdj':
-      if (h >= 27) return [p.exitFloor, 'Nattsändningen är slut – godnatt!'];
+      if (h >= 27 || p.shiftEnd) return [p.exitFloor, 'Nattsändningen är slut – godnatt!'];
       return p.floor === floorWith('radio') ? null : [floorWith('radio'), 'Till studion – nattsändning på Kanal 97'];
     case 'nattekniker':
-      if (h >= 27) return [p.exitFloor, 'Passet är slut – går hem'];
+      if (h >= 27 || p.shiftEnd) return [p.exitFloor, 'Passet är slut – går hem'];
       if (p.floor !== floorWith('server')) return [floorWith('server'), 'Tillbaka till serverhallen'];
       return rng() < 0.5 ? [LOBBY, 'Hämtar kaffe från automaten i entrén'] : null;
   }

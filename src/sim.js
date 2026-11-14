@@ -6,22 +6,22 @@ const WEAR = stream('slitage');
 import { K, fl } from './util.js';
 import { END_H, FLOORS, MAXP, timeScale, pace, setTempo, LOBBY, CAFE, floorWith, floorOpen, EL, ROOF, STATION } from './config.js';
 const SPA = floorWith('spa');
-import { S, hooks, hour, log, newStats } from './state.js';
+import { S, hooks, hour, log, newStats, notice } from './state.js';
 import { spawnEmployee, spawnStaff, spawnVisitor, updatePerson, spawnPizza, rerouteStranded, spawnDogOwner } from './people.js';
 import { canTake, costBased, dispatchPerson, rebuildPicks, reoptimize, stopFloors, trafficMode, keyed, prio, learnBlend, emptyLearn, outReason } from './dispatch.js';
-import { serviceTick } from './service.js';
+import { keptFault, restoreFault, serviceTick } from './service.js';
 import { castSchedule } from './cast.js';
 import { makeElevator, updateElevator, releaseCalls } from './elevators.js';
 import { buttonsMode, buttonWaitTick, dispatchCalls } from './buttons.js';
 import { incidentTick, planIncidents } from './incidents.js';
-import { lifeTick, lifeReset } from './life.js';
+import { lifeRoll, lifeTick, lifeReset } from './life.js';
 import { stormTick, weatherReset } from './weather.js';
 import { TRAIN_SHARE, trainReset, trainTick } from './train.js';
-import { medicClear, visitsReset, visitsTick } from './visits.js';
+import { medicClear, visitsReset, visitsRoll, visitsTick } from './visits.js';
 import { hoistReset, hoistTick } from './hoist.js';
-import { chiefReset, chiefTick } from './chief.js';
+import { chiefReset, chiefRoll, chiefTick } from './chief.js';
 import { panoTick } from './pano.js';
-import { crewArrivals, crewStart, spawnCrew } from './crew.js';
+import { crewArrivals, crewRoll, crewStart, spawnCrew } from './crew.js';
 
 // ---------- Planerad rutt (för HUD) ----------
 export function plannedRoute(e) {
@@ -199,7 +199,11 @@ export function step(dt) {
     S.reoptT -= dt;
     if (S.reoptT <= 0) { S.reoptT = 1.5; if (buttonsMode()) dispatchCalls(true); else reoptimize(); }
   }
-  if (hour() >= END_H && !S.summaryShown) { S.summaryShown = true; hooks.dayEnd(); }
+  if (hour() >= END_H) {
+    // mjukt dygnsskifte: gränssnittet sparar gårdagens sammanfattning, sedan rullar huset vidare
+    if (S.roll === 'mjuk') { hooks.dayEnd(); rollDay(); }
+    else if (!S.summaryShown) { S.summaryShown = true; hooks.dayEnd(); }
+  }
 }
 // Fast tidssteg: verklig tid samlas på hög och simuleringen tar alltid exakt lika långa steg.
 // Då beter sig spelet likadant oavsett bildfrekvens och hastighet.
@@ -210,10 +214,13 @@ export function advance(realDt, speed) {
   while (S.acc >= DT) { step(DT); S.acc -= DT; n++; }
   return n;
 }
-// En ny dag: allt nollställs och slumpen seedas om, så att varje dag är reproducerbar.
+// En ny dag: allt nollställs och slumpen seedas om, så att varje dag är reproducerbar (resetDay), eller så
+// rullar huset vidare in i nästa dygn (rollDay). Fröet är detsamma i båda: dygnets nummer.
 export const daySeed = () => (Math.imul(S.seed >>> 0, 1000003) + S.day) >>> 0;
 export function resetDay() {
   setSeed(daySeed());
+  // hissfel och linbyten som inte hann bli klara följer med (som slitaget) – men inte folket i dem
+  const kept = S.day > 1 && S.elevators.length === EL.length ? S.elevators.map(keptFault) : null;
   // lärande parkering: gårdagens anrop vägs in i minnet (följer med till nästa dygn, som slitaget)
   learnBlend(); S.learnToday = emptyLearn();
   S.t = 0; S.clock = 0; S.sched = makeSchedule(); S.acc = 0; S.summaryShown = false; S.nextId = 1; S.sel = null; S.wl = null; S.reoptT = 0;
@@ -225,6 +232,7 @@ export function resetDay() {
   const carry = S.day > 1 && S.elevators.length === EL.length ? S.elevators.map(e => e.wear) : null;
   S.elevators = EL.map((_, i) => makeElevator(i));
   for (const e of S.elevators) { const w0 = WEAR.rand(0.1, 0.5); e.wear = carry ? carry[e.id] : w0; }
+  if (kept) for (const e of S.elevators) if (kept[e.id]) restoreFault(e, kept[e.id]);
   lifeReset();
   trainReset();
   weatherReset();
@@ -234,6 +242,41 @@ export function resetDay() {
   S.lastInc = null;
   chiefReset();
   crewStart(); // (dagens driftchef och bildproducent sitter redan på sina platser)
+}
+/** Nattpersonal som går hem när dygnet rullar över (deras pass slutar annars kl 03 på gårdagens klocka) */
+const NIGHT_ROLES = ['väktare', 'nattdj', 'nattekniker'];
+/**
+ * Mjukt dygnsskifte kl 06: klockan börjar om och dygnets planer (ankomster, incidenter, besök, väder, tåg)
+ * görs på nytt, men huset fortsätter som det är – hissarna, folket, fel och reparationer, incidenter som
+ * pågår och driftchefens beslut om dem. S.t löper vidare, så alla timrar fortsätter. Slumpen seedas om ur
+ * dygnets frö som i resetDay, så samma frö ger fortfarande samma förlopp.
+ */
+export function rollDay() {
+  S.yesterday = { day: S.day, stats: S.stats };
+  S.day++;
+  setSeed(daySeed());
+  learnBlend(); S.learnToday = emptyLearn();
+  S.clock = 0; S.sched = makeSchedule(); S.summaryShown = false;
+  S.stats = newStats();
+  for (const e of S.elevators) e.kwh = 0;
+  for (const p of S.people) {
+    // anställda som är kvar sedan i går går hem nu (de har redan ätit lunch); nattpersonalen är klar
+    if (p.kind === 'emp') { p.leaveAt = 0; p.lunched = true; }
+    if (NIGHT_ROLES.includes(p.role)) p.shiftEnd = true;
+  }
+  lifeRoll();
+  if (!S.train) trainReset();
+  const storm = S.storm;
+  weatherReset(); S.storm = storm;
+  visitsRoll();
+  const W = S.warn;
+  planIncidents(); S.warn = W; // (en förvarning som pågår bryter ut som planerat)
+  chiefRoll();
+  crewRoll();
+  const y = S.yesterday.stats, avg = y.waitN ? y.waitSum / y.waitN : 0;
+  notice('day', `🌅 Dag ${S.day} börjar`, `I går: ${y.served} resor, snittväntan ${avg.toFixed(1)} s, ${y.incidents} incident${y.incidents === 1 ? '' : 'er'}. Huset rullar vidare – det som pågick fortsätter.`,
+    { act: 'yesterday', actLabel: 'Gårdagen' });
+  log(`🌅 Dag ${S.day} börjar – huset rullar vidare`, 'sys');
 }
 export function newSim(seed, opts = {}) {
   S.seed = seed >>> 0; S.day = opts.day || 1; S.log = []; S.fx = []; S.elevators = [];
@@ -249,6 +292,8 @@ export function newSim(seed, opts = {}) {
   if (opts.chiefStrat !== undefined) S.chief.strat = !!opts.chiefStrat;
   if (opts.mistakes !== undefined) S.mistakes = opts.mistakes;
   if (opts.maint !== undefined) S.maint = opts.maint;
+  S.roll = opts.roll ?? 'ny'; // (testerna och ligan kör ett dygn i taget; spelet rullar vidare, se main.js)
+  S.yesterday = null;
   S.tempo = setTempo(opts.tempo ?? S.tempo);
   resetDay();
 }
