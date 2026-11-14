@@ -34,6 +34,9 @@ export function resize() {
   cv.width = Math.round(cssW * dpr); cv.height = Math.round(cssH * dpr);
   VIEW.scale = s; VIEW.dpr = dpr; VIEW.viewH = cssH / s;
   VIEW.camY = clamp(VIEW.camY, 0, H - VIEW.viewH);
+  // går det att scrolla i bilden tar den ett finger själv (två fingrar zoomar sidan som vanligt);
+  // syns hela huset får ett finger scrolla sidan i stället
+  cv.style.touchAction = camMax() > 0 ? 'pinch-zoom' : 'auto';
   portrait.width = 64 * dpr; portrait.height = 76 * dpr;
   S.trackDirty = true;
 }
@@ -97,6 +100,34 @@ cv.addEventListener('wheel', ev => {
   ev.preventDefault();
   scrollBy(ev.deltaY / VIEW.scale);
 }, { passive: false });
+// Dra i bilden (finger eller mus) för att scrolla. Först när fingret flyttats en bit räknas det som
+// ett drag – ett tryck utan rörelse är fortfarande ett klick (följ person/hiss/våning).
+const DRAG_PX = 8;
+/** @type {{ id: number, y: number, moved: boolean }|null} */
+let drag = null, dragEnded = 0;
+cv.addEventListener('pointerdown', ev => {
+  if (ev.button !== 0 || camMax() <= 0) return;
+  drag = { id: ev.pointerId, y: ev.clientY, moved: false };
+});
+cv.addEventListener('pointermove', ev => {
+  if (!drag || ev.pointerId !== drag.id) return;
+  const dy = ev.clientY - drag.y;
+  if (!drag.moved && Math.abs(dy) < DRAG_PX) return;
+  if (!drag.moved) { drag.moved = true; cv.setPointerCapture(ev.pointerId); }
+  scrollBy(-dy / VIEW.scale);
+  drag.y = ev.clientY;
+});
+const endDrag = (/** @type {PointerEvent} */ ev) => {
+  if (!drag || ev.pointerId !== drag.id) return;
+  if (drag.moved) dragEnded = performance.now();
+  drag = null;
+};
+cv.addEventListener('pointerup', endDrag);
+cv.addEventListener('pointercancel', endDrag);
+// klicket som följer direkt på ett drag ska inte välja det som råkar ligga under fingret
+cv.addEventListener('click', ev => {
+  if (performance.now() - dragEnded < 300) ev.stopImmediatePropagation();
+}, true);
 export const clouds = Array.from({ length: 6 }, (_, i) => ({ x: i * 190 + vrand(0, 80), y: vrand(16, 110), s: vrand(0.7, 1.2), v: vrand(4, 9) }));
 export const stars = Array.from({ length: 50 }, () => ({ x: vrand(0, W), y: vrand(0, 130), r: vrand(0.8, 2) }));
 export const skyline = [];
