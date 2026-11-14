@@ -17,8 +17,6 @@ import { setFireMode, startGenerator, toggleAutoRescue } from './incidents.js';
 import { orderService, startFan, WARM_AT } from './service.js';
 import { setMoveWind } from './visits.js';
 import { hoistHalt } from './hoist.js';
-import { setCoasterHow, stairsWindy } from './coaster.js';
-import { callSune, sune } from './mess.js';
 import { changeStrategy } from './actions.js';
 import { STRAT_NAMES } from './config.js';
 
@@ -115,8 +113,6 @@ export function chiefTick(dt) {
   for (const e of S.elevators) if (!e.hot && !e.fan && (C.dec[`heat${e.id}`] || C.manual[`heat${e.id}`])) clear(`heat${e.id}`);
   if (!S.move || S.move.state === 'done') clear('move');
   if (!S.pano || S.pano.ph === 'done') clear('pano');
-  if (!S.coaster || !S.coaster.stuck) clear('coaster');
-  if (!S.messes.length) clear('clean');
   if (!C.on) return;
   stormTick();
   fireTick();
@@ -126,8 +122,6 @@ export function chiefTick(dt) {
   strategyTick(dt);
   moveTick();
   panoChiefTick();
-  coasterChiefTick();
-  cleanTick();
   watchTick();
 }
 
@@ -267,33 +261,6 @@ function panoChiefTick() {
   if (how === 'ladder') decide('pano', 'Stegbilen från gatan', `${windMs()} m/s är för blåsigt för repet, och stegen når upp till ${e.name}`, { inc: 'pano', car: e.id, say: 'Stegbilen – det blåser för mycket för rep!' });
   else if (windy) decide('pano', 'Firas ner – när vinden mojnar', `stegbilen når inte upp till ${e.name}, och i ${windMs()} m/s kan räddarna inte fira någon – de väntar på taket`, { inc: 'pano', car: e.id, say: 'Vi får vänta ut vinden…' });
   else decide('pano', 'Firas ner med rep från taket', `hydrauliken går inte att veva – räddningstjänsten firar ner dem en i taget ${where}`, { inc: 'pano', car: e.id, say: `Fira ner dem från taket!` });
-}
-
-// --- Svindeln sitter fast i kedjebacken: vänta på banmästaren eller gå ner för servicetrappan ---
-function coasterChiefTick() {
-  const St = S.coaster && S.coaster.stuck, C = S.chief;
-  if (!St || !free('coaster')) return;
-  if (S.t - St.t0 < 2) return; // (chefen hinner se det på skärmen)
-  const windy = stairsWindy(), n = S.coaster.train.riders.length;
-  // byter till trappan om det mojnar och det fortfarande dröjer länge; annars bara ett beslut
-  if (C.dec.coaster && !(St.how === 'wait' && !windy && St.kind !== 'givare' && St.fixAt - S.t > 25 && n)) return;
-  let how, why, say;
-  if (St.kind === 'givare') { how = 'wait'; why = 'det är en givare som har löst ut – banmästaren återställer den på en kvart, säkrare att sitta kvar'; say = 'Sitt kvar – det är bara en givare.'; }
-  else if (windy) { how = 'wait'; why = `${windMs()} m/s är för blåsigt för servicetrappan – de sitter fastspända och säkra i vagnen`; say = 'För blåsigt för trappan – sitt kvar!'; }
-  else if (St.kind === 'ström') { how = 'walk'; why = 'ingen vet när strömmen kommer tillbaka – åkarna går ner för servicetrappan en i taget'; say = 'Ner för servicetrappan, en i taget!'; }
-  else { how = 'walk'; why = 'kedjan har hoppat av – det tar en god stund att lägga på den, åkarna går ner för servicetrappan en i taget'; say = 'Kedjan av – servicetrappan!'; }
-  if (!setCoasterHow(how, 'chief')) return;
-  decide('coaster', how === 'wait' ? 'Sitt kvar – vänta på banmästaren' : 'Ner för servicetrappan', why, { inc: 'coaster', say });
-}
-
-// --- Städningen: någon har kräkts eller spillt – ring in Sune ---
-function cleanTick() {
-  const m = S.messes[0];
-  if (!m || sune() || S.fire || !free('clean') || S.t - m.t0 < 3) return;
-  const cars = S.messes.filter(x => x.kind === 'car').map(x => S.elevators[x.car].name), floors = S.messes.filter(x => x.kind === 'floor').length;
-  if (!callSune()) return;
-  const what = [cars.length ? `någon har kräkts i ${cars.join(' och ')}` : '', floors ? `${floors} fläck${floors > 1 ? 'ar' : ''} på golvet` : ''].filter(Boolean).join(', ');
-  decide('clean', 'Ringer in städaren Sune', `${what} – ${cars.length ? 'folk vill inte kliva på en skitig hiss' : 'någon halkar snart'}`, { say: 'Ring Sune – det behövs en mopp!', car: m.kind === 'car' ? m.car : null });
 }
 
 // --- Det chefen ser på skärmarna och berättar (inga beslut) ---

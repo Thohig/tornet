@@ -15,8 +15,6 @@ import { arriveByCar, backFromAssembly, leaveBuilding, resNext, homeSpot } from 
 import { ffNext } from './incidents.js';
 import { CREW_LOOK, crewNext, crewSpot } from './crew.js';
 import { rescueNext } from './pano.js';
-import { suneNext } from './mess.js';
-import { joinCoaster } from './coaster.js';
 import { buttonsMode, carButtonMistakes } from './buttons.js';
 
 // ---------- Människor ----------
@@ -98,8 +96,7 @@ export const needsFreight = p => !!(p.cargo && p.cargo.kg >= 22);
 export const mayUseFreight = p => needsFreight(p) || p.kind === 'staff';
 /** får personen åka den här hisstypen? */
 // (ambulanspersonalen med båren och flyttgubbarna åker bara varuhiss)
-// (bostadshissen B har nyckelläsare: bara de boende – utom Majken, som hellre åker de stora hissarna där det finns folk att prata med)
-export const elevatorAllows = (d, p) => (p.medic || p.mover ? !!d.freight : d.freight ? mayUseFreight(p) : !needsFreight(p) && (!d.residents || (p.kind === 'res' && p.quirk !== 'pratig')));
+export const elevatorAllows = (d, p) => (p.medic || p.mover ? !!d.freight : d.freight ? mayUseFreight(p) : !needsFreight(p));
 /**
  * Nästa delmål på vägen mot goal: direkt om någon hiss går hela vägen, annars dit där man byter hiss
  * (t.ex. låg zon → entrén → expressen → sky lobbyn → hög zon). Söker resvägen med minst antal byten
@@ -189,7 +186,6 @@ const ROLE_SPOT_DESC = {
 export function pickSpot(p, f) {
   const list = SPOTS[f];
   if (p.crewId) return crewSpot(p, f);
-  if (p.sune && p.suneSpot) return p.suneSpot; // (städaren vid fläcken eller hissen han städar – mess.js)
   // nattpersonal: egna platser
   if (p.kind === 'res' && f === p.home) return homeSpot(p);
   const own = p.role && list.find(s => s.role === p.role);
@@ -314,7 +310,7 @@ export function updatePerson(p, dt) {
       p.timer -= dt;
       if (p.timer <= 0) stairsDone(p);
       break;
-    case 'away': case 'incar': case 'platform': case 'coaster': break; // (… eller åker Svindeln – coaster.js) // utanför huset / i bilen (life.js) / väntar på tåget (train.js)
+    case 'away': case 'incar': case 'platform': break; // utanför huset / i bilen (life.js) / väntar på tåget (train.js)
     case 'assembly': if (!S.fire && S.t >= (p.backAt ?? 0)) backFromAssembly(p); break; // återsamlingsplatsen (brand)
     case 'office':
       p.timer -= dt * activityRate(hour()); // vistelsen räknas i speltid
@@ -393,8 +389,6 @@ function turnBack(p) {
 const closedFor = (p, f) => !p.role && p.kind !== 'res' && !p.vip && f !== p.home && f !== p.exitFloor && !!FLOOR_HOURS[f] && !floorOpen(f, hour());
 export function arriveOnFloor(p) {
   // personen har kommit fram till sin våning (med hiss eller trappa)
-  // (till Svindeln på taket: ställer sig i kön – coaster.js)
-  if (p.coaster && p.goal === p.floor && joinCoaster(p)) return;
   // på väg genom huset till en våning som hann stänga under resan: vänd vid hissbytet
   if (p.goal !== undefined && p.floor !== p.goal && closedFor(p, p.goal)) { turnBack(p); return; }
   if (p.goal !== undefined && p.floor !== p.goal) {
@@ -458,7 +452,6 @@ export function exitDone(p) {
   else if (p.role === 'ambulans') p.timer = rand(5, 8);
   else if (p.role === 'brandman') p.timer = S.fire && p.floor >= S.fire.floor ? 1e9 : rand(0.3, 1); // (släcker tills branden är ute)
   else if (p.role === 'hisstekniker') p.timer = p.job !== null && p.job !== undefined ? 1e9 : rand(1, 3); // arbetet sköts av service.js
-  else if (p.sune) p.timer = 1e9; // (städningen sköts av mess.js)
   else if (p.crewId) p.timer = CREW_LOOK; // (personalen tittar ofta upp: rast, larm, skiftbyte – crew.js)
   else if (p.role === 'arbetsledare') p.timer = 6; // (tittar till hissen, se foremanNext i service.js)
   else if (p.role === 'räddare') p.timer = 4; // (räddningstjänsten vid panoramahissen, pano.js)
@@ -571,12 +564,6 @@ export function spawnStaff(role, extra = false, o = null) {
   log(`${pn(p)} (${title.toLowerCase()}) kommer till jobbet`, 'person', null, p.id);
   return p;
 }
-/** städaren: nästa jobb – på samma våning flyttar han bara till fläcken (mess.js) */
-function suneMove(p) {
-  const r = suneNext(p);
-  if (r === null && p.suneSpot && p.spot !== p.suneSpot) { releaseSpot(p); p.state = 'exiting'; gotoSpot(p, p.floor); pev(p, p.spot.desc); }
-  return r;
-}
 function roleNext(p, h) {
   if (p.crewId) return crewNext(p, h);
   switch (p.role) {
@@ -597,7 +584,6 @@ function roleNext(p, h) {
       return null;
     }
     case 'städare':
-      if (p.sune) return suneMove(p);
       while (p.route.length && p.route[0] === p.floor) p.route.shift();
       return p.route.length ? [p.route.shift(), 'Städar nästa våning'] : [p.exitFloor, 'Klar med städningen – går hem'];
     case 'vaktmästare':

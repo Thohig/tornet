@@ -1,8 +1,7 @@
 // Grafikens ingång och logiken för VAR folk syns i bilden (hallen framför hissarna).
 // Själva ritandet sker i pixel.js. Allt här är bara grafik: simuleringens p.x ändras aldrig.
 import { clamp } from './util.js';
-import { BX1, CAR_W, DOOR_X, EL, TOP, TOWER_X1, W, WAIT_X1, carX, floorY, surf } from './config.js';
-import { coasterPos } from './coaster.js';
+import { BX1, CAR_W, DOOR_X, TOP, TOWER_X1, W, WAIT_X1, floorY, shaftX, surf } from './config.js';
 import { TERRACE_Y } from './hoist.js';
 import { riderPos } from './pano.js';
 import { S } from './state.js';
@@ -13,9 +12,7 @@ import { PERSON_H, PERSON_W } from './pixpeople.js';
 import { windAt } from './weather.js';
 
 /** platser i korgen: bakre raden (0–3) och främre raden (4–7), utspridda över korgens bredd */
-export function carSlotX(i, w = CAR_W) { return i < 4 ? 12 + i * (w - 24) / 3 : 16 + (i - 4) * (w - 32) / 3; }
-/** de små hissarna: hissvärdinnan står längst in till vänster, passagerarna till höger om henne */
-export const carSlotXOf = (e, s) => (e.attendant ? 22 + (s % 2) * 20 : carSlotX(s, EL[e.id].carW));
+export function carSlotX(i) { return i < 4 ? 12 + i * (CAR_W - 24) / 3 : 16 + (i - 4) * (CAR_W - 32) / 3; }
 /** hissetikett: den i:te som kliver på ställer sig i ett ledigt hörn först, sedan i mitten (platsens index) */
 const CORNERS = [0, 3, 1, 2, 4, 7, 5, 6];
 export const carSlot = i => CORNERS[i % 8];
@@ -30,15 +27,8 @@ export function winPos(p) {
     case 'gondola': return { x: TOWER_X1[TOP] + 7 + PX * 7 + PERSON_W, y: (S.cleaner ? S.cleaner.y : surf(p.floor)) - PX * (PERSON_H - 1) };
     case 'terrace': return { x: BX1 - PX * 22 + PERSON_W, y: TERRACE_Y - PX * (PERSON_H + 1) };
     case 'reception': return { x: s.x, y: surf(p.floor) - PX * 24 };
-    // hissvärdinnan i sin korg, städaren i korgen han städar
-    case 'grind': case 'clean': {
-      const e = s.win === 'grind' ? S.elevators.find(x => x.attendant === p.crewId) : S.elevators[s.car];
-      if (!e) break;
-      // (pixel.js ritar henne 3 px in i korgen, honom mitt i korgen)
-      return { x: s.win === 'grind' ? carX(e.id) + PX * (3 + PERSON_W / 2) : carX(e.id) + EL[e.id].carW / 2, y: floorY(e.pos) - 4 - PX * (PERSON_H + 1) };
-    }
+    default: return { x: s.x, y: surf(p.floor) - PX * (PERSON_H + (s.k === 'stand' ? 4 : s.win === 'control' ? -5 : -1)) };
   }
-  return { x: s.x, y: surf(p.floor) - PX * (PERSON_H + (s.k === 'stand' ? 4 : s.win === 'control' ? -5 : -1)) };
 }
 export function personHead(p) {
   // var personens huvud syns just nu (för markörer & träffytor)
@@ -46,12 +36,10 @@ export function personHead(p) {
   if (inWindow(p)) { const w = winPos(p); return { x: w.x, y: w.y - 22 }; }
   // firas ner längs fasaden (eller klättrar nerför stegbilens stege) – pano.js
   if (p.state === 'rope') { const r = riderPos(p); if (r) return { x: r.x, y: r.y - 22 }; }
-  // i Svindeln på taket (kön, Banhissen, plattformen, tåget)
-  if (p.state === 'coaster') { const c = coasterPos(p); return c ? { x: c.x, y: c.y - (c.where === 'train' ? 30 : 70) } : null; }
   if (p.state === 'ride') {
     const e = p.car, k = e.deck2 ? p.deck || 0 : 0;
     const i = e.passengers.filter(q => !e.deck2 || (q.deck || 0) === k).indexOf(p);
-    return { x: carX(e.id) + carSlotXOf(e, carSlot(i)), y: floorY(e.pos + k + (e.level || 0) * 2.5) - 4 - 62, inCar: e };
+    return { x: shaftX(e.id) + 4 + carSlotX(carSlot(i)), y: floorY(e.pos + k + (e.level || 0) * 2.5) - 4 - 62, inCar: e };
   }
   // i hallen där personen syns, annars "bakom" korridoren på sin våning
   const lp = landPos(p);

@@ -144,8 +144,6 @@ const SHAGGY = { W: '#b9a27e', w: '#8f7a58', K: INK, N: '#2a1d3a', P: '#3f7cff' 
 const CARGO_ROWS = {
   resväska: { rows: ['.KK..', 'BBBBBB', 'BBBBBB', 'YYYYYY', 'BBBBBB', 'BBBBBB', 'BBBBBB', 'K....K'], pal: { B: '#3f7cff', Y: '#ffe14d', K: INK }, dx: -12 },
   städvagn: { rows: ['......M', '......M', '......M', '.....M.', '.YYYYY.', 'CCCCCCC', 'CCCCCCC', 'CCCCCCC', 'CCCCCCC', 'K.....K'], pal: { C: '#36c5d6', Y: '#ffe14d', M: '#ffffff', K: INK }, dx: 8 },
-  // städarens mopp och balja (Sune, mess.js)
-  balja: { rows: ['.W.....', '.W.....', '.W.....', '.W.....', '.W.....', '.W.....', '.W.KKKK', 'MMMBBBB', 'MMMBBBB', '.M.BBBB'], pal: { W: '#c8a27a', M: '#e8e8e8', B: '#3f7cff', K: INK }, dx: 5 },
   verktygslåda: { rows: ['.KKK.', 'RRRRR', 'RRRRR', 'RRRRR'], pal: { R: '#ff5d52', K: INK }, dx: 4 },
   pizza: { rows: ['PPPPPPP', 'PPPRPPP', 'PPPPPPP', 'PPPPPPP'], pal: { P: '#f5deb3', R: '#ff5d52' }, dx: -1 },
   // budets paketkärra: två kartonger med tejp på en säckkärra

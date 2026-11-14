@@ -82,7 +82,6 @@ function shots() {
     if (W.type === 'fire') add('warn', 90, 'floor', W.floor, `👃 Det luktar bränt på ${fl(W.floor)}`, true);
     else if (W.type === 'power') add('warn', 80, 'floor', LOBBY, '💡 Lamporna flimrar…', true);
     else if (W.type === 'storm') add('warn', 80, 'floor', top, '🌥️ Ovädret drar in', true);
-    else if (W.type === 'coaster') add('warn', 82, 'floor', top, '🎢 Det gnisslar i Svindelns kedja', true);
     else if (W.type === 'heat') add('warn', 82, 'floor', Math.min(top, S.elevators[W.car].maxF), `🌡️ Motorn i ${S.elevators[W.car].name} brummar`, true);
     else add('warn', 86, 'car', W.car, W.type === 'cable' ? `🪢 Linorna i ${S.elevators[W.car].name} knarrar`
       : W.type === 'pano' ? `🔩 ${S.elevators[W.car].name} hackar på fasaden` : `🔩 ${S.elevators[W.car].name} gnisslar`, true);
@@ -120,23 +119,6 @@ function shots() {
     if (rider) add('pano', 94, 'person', rider.id, `🧗 ${rider.name} ${Pn.setup === 'rope' ? 'firas ner längs fasaden' : 'klättrar nerför stegen'} (${Pn.out + 1}/${Pn.n})`, S.t - Pn.rider.t0 < 0.6);
     else add('pano', Pn.ph === 'stuck' ? 86 : 84, 'car', pe.id, Pn.ph === 'rig' ? (Pn.how === 'rope' ? `🧗 Räddarna riggar repet ovanför ${pe.name}` : `🚒 Stegbilen reser stegen mot ${pe.name}`)
       : `🛗 ${pe.name} sitter fast på fasaden · ${pe.passengers.length} instängda`, S.t - Pn.t0 < 2);
-  }
-  // Svindeln på taket: tåget sitter fast, någon går ner för servicetrappan, och fallet från toppen (coaster.js)
-  const Co = S.coaster;
-  if (Co) {
-    const walker = Co.walker ? S.people.find(p => p.id === Co.walker.id) : null;
-    if (walker) add('coaster', 92, 'person', walker.id, `🪜 ${walker.name} går ner för Svindelns servicetrappa`, S.t - Co.walker.t0 < 0.6);
-    else if (Co.stuck) add('coaster', 86, 'floor', ROOF, `🎢 Svindeln sitter fast i kedjebacken · ${Co.train.riders.length} åkare`, S.t - Co.stuck.t0 < 2);
-    else if (Co.train.ph === 'climb' && Co.train.riders.length && Co.train.prog > 0.6) add('coasterUp', 55 + Co.train.riders.length * 2, 'floor', ROOF, `🎢 Svindeln närmar sig toppen med ${Co.train.riders.length} åkare`);
-    else if (Co.train.ph === 'ride' && Co.train.riders.length && S.t - Co.train.t < 6) add('coasterUp', 62 + Co.train.riders.length * 2, 'floor', ROOF, '🎢 AAAAAH! Svindeln störtdyker');
-    else if (Co.queue.length >= 6) add('coasterQ', 30 + Co.queue.length, 'floor', ROOF, `🎢 ${Co.queue.length} köar till Svindeln`);
-  }
-  // städaren moppar (mess.js)
-  const su = S.people.find(p => p.sune && !p.dead);
-  if (su && su.state === 'office' && su.job) {
-    const m = (S.messes || []).find(x => x.id === su.job);
-    if (m && m.kind === 'car' && S.elevators[m.car].cleaning) add('mop', 38, 'car', m.car, `🧽 ${su.name} moppar ur ${S.elevators[m.car].name}`);
-    else if (m && m.kind === 'floor') add('mop', 34, 'person', su.id, `🧽 ${su.name} moppar upp ${m.what === 'spya' ? 'spyan' : 'kaffet'}`);
   }
   // husets personal (crew.js): skyndar tillbaka till kontrollrummet när larmet går, byter skift och tar rast
   for (const p of S.people) {

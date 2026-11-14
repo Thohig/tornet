@@ -3,8 +3,6 @@ import { setSeed, stream } from './rng.js';
 // ankomsterna har en ström per sort, så att t.ex. fler besökare inte flyttar när de anställda kommer
 const EMP = stream('anställda'), VIS = stream('besökare'), DOG = stream('hundägare'), TOUR = stream('turister'), GYM = stream('kvällspass');
 const WEAR = stream('slitage');
-// de som kommer för att åka Svindeln på taket (coaster.js)
-const RIDERS = stream('svindeln');
 import { K, fl } from './util.js';
 import { END_H, FLOORS, MAXP, timeScale, pace, setTempo, LOBBY, CAFE, floorWith, floorOpen, EL, ROOF, STATION } from './config.js';
 const SPA = floorWith('spa');
@@ -23,9 +21,7 @@ import { medicClear, visitsReset, visitsRoll, visitsTick } from './visits.js';
 import { hoistReset, hoistTick } from './hoist.js';
 import { chiefReset, chiefRoll, chiefTick } from './chief.js';
 import { panoTick } from './pano.js';
-import { coasterHours, coasterReset, coasterTick } from './coaster.js';
-import { messReset, messTick } from './mess.js';
-import { attendTick, crewArrivals, crewRoll, crewStart, spawnCrew } from './crew.js';
+import { crewArrivals, crewRoll, crewStart, spawnCrew } from './crew.js';
 
 // ---------- Planerad rutt (för HUD) ----------
 export function plannedRoute(e) {
@@ -99,8 +95,6 @@ export function spawnTick(dt) {
   // turister åker panoramahissen upp till takterrassen
   if (ROOF >= 0 && h >= 9.5 && h < 19 && TOUR.rng() < 0.02 * pc * dt) spawnVisitor(LOBBY, -30, ROOF, 'Utsikt från takterrassen');
   if (h >= 17 && h < 20.5 && GYM.rng() < 0.03 * pc * dt) spawnVisitor(LOBBY, -30, floorWith('aerobic'), 'Kvällspass på Svettis');
-  // Svindeln på taket: åkarna åker upp till takterrassen och ställer sig i kön (stängt i blåst märker de först där uppe)
-  if (coasterHours(h) && RIDERS.rng() < 0.2 * pc * dt) { const p = spawnVisitor(LOBBY, -30, ROOF, 'Ska åka Svindeln på taket'); if (p) p.coaster = true; }
 }
 // Nattläge (Smart, Rusning, Energisnål): överflödiga hissar somnar i entrén för att spara energi och vaknar vid kö.
 // Energisnål låter dessutom lediga hissar sova dygnet runt, där de står.
@@ -149,8 +143,6 @@ export function step(dt) {
   trainTick(dt, arrivalRate);
   visitsTick(dt);
   hoistTick(dt);
-  coasterTick(dt);
-  messTick(dt);
   stormTick(dt);
   nightModeTick(dt);
   for (const p of S.people) updatePerson(p, dt);
@@ -192,7 +184,6 @@ export function step(dt) {
     }
     e.vipLock = lock;
   }
-  attendTick();
   for (const e of S.elevators) updateElevator(e, dt);
   serviceTick(dt);
   if (S.strategy === 'peak') {
@@ -247,8 +238,6 @@ export function resetDay() {
   weatherReset();
   visitsReset();
   hoistReset();
-  coasterReset();
-  messReset();
   planIncidents(); // (sist: tidtabellen slumpas när allt annat är på plats)
   S.lastInc = null;
   chiefReset();

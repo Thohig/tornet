@@ -11,10 +11,6 @@
 
 // Märklast för vanliga hissar (varuhissen har egen) – används när byggnaden läses in nedan
 export const RATED_KG = 800, FULL_LOAD = 0.8;
-// Märklast: korgen rymmer 8 personer (platser) och 800 kg. Över 80 % räknas hissen som "full last"
-// och passerar nya hämtningar – den stannar bara för att släppa av. (Hissar kan ha egna värden i BUILDING.)
-export const CAP = 8, VMAX = 2.6, ACC = 1.9, DOOR_T = 0.55, DWELL = 1.3, WALK = 150;
-export const SHAFT_W = 104, SHAFT_GAP = 12, CAR_W = SHAFT_W - 8, CAR_H = 84;
 
 // ---------- Våningsteman ----------
 // Färgerna (acc) är dämpade mot grått i pixelgrafikens palett "Kontor 95" (se pixpal.js).
@@ -146,24 +142,17 @@ export const BUILDING = {
   // Kolumnerna ligger så att tornet blir smalare ovanför sky lobbyn: expresshissarna ytterst, och
   // ovanpå dem en takterrass. Den som ska från låga till höga zonen åker via entrén och expressen.
   elevators: [
-    // De två små hissarna närmast hallen (kolumn 0 och 1). Smala korgar (carW), få platser (cap), egen fart (vmax)
-    // och dörrtid (doorT). residents = bara de boende (nyckel till bostadsvåningarna); attendant = hissvärdinnan i
-    // CREW som kör hissen (utan henne står den still); gate = saxgrind i stället för skjutdörrar; faults = egna hissfel.
-    { name: 'B', color: '#8a5a2b', group: 'bostad', col: 0, start: 'E', serves: ['P2', 'E', '12', '13', '14', 'T'], residents: true,
-      cap: 3, ratedKg: 300, vmax: 1.7, carW: 60, faults: ['nyckelläsaren krånglar'] },
-    { name: 'G', color: '#3a7d44', group: 'grind', col: 1, start: 'E', serves: ['E', '5', '6'], attendant: 'margit', gate: true,
-      cap: 2, ratedKg: 240, vmax: 0.9, doorT: 1.5, carW: 68, faults: ['grinden har hakat upp sig'] },
-    { name: 'L1', color: '#c0392b', group: 'låg', col: 2, start: 'E', serves: ['TB', 'P2', 'P1', 'E', '1', '2', '3', '4', '5'], park: { day: 'E', lunch: '5', evening: '4' } },
-    { name: 'L2', color: '#d35400', group: 'låg', col: 3, start: 'P1', serves: ['TB', 'P2', 'P1', 'E', '1', '2', '3', '4', '5'], park: { day: '3', lunch: 'E', evening: 'E' } },
+    { name: 'L1', color: '#c0392b', group: 'låg', col: 0, start: 'E', serves: ['TB', 'P2', 'P1', 'E', '1', '2', '3', '4', '5'], park: { day: 'E', lunch: '5', evening: '4' } },
+    { name: 'L2', color: '#d35400', group: 'låg', col: 1, start: 'P1', serves: ['TB', 'P2', 'P1', 'E', '1', '2', '3', '4', '5'], park: { day: '3', lunch: 'E', evening: 'E' } },
     // dubbeldäck: nedre däcket stannar på serves, övre däcket samtidigt på våningen ovanför (upper).
     // Till övre däcket i entrén tar man rulltrappan upp till mellanplanet (1).
     // X1 går ända ner till tunnelbanan (övre däcket öppnar då mot garaget på P2); under X2 går garagerampen.
     // Den har en egen grupp (egna hallknappar), eftersom den når våningar som X2 inte når.
-    { name: 'X1', color: '#d4a017', group: 'tbana', col: 5, start: 'E', serves: ['TB', 'E', '6'], upper: ['P2', '1', '7'], express: true },
-    { name: 'X2', color: '#b8860b', group: 'express', col: 6, start: '6', serves: ['E', '6'], upper: ['1', '7'], express: true },
-    { name: 'H1', color: '#008080', group: 'hög', col: 2, start: '6', serves: ['6', '7', '8', '9', '10', '11', '12', '13', '14', 'T'], park: { day: '6', lunch: '6', evening: '11' } },
-    { name: 'H2', color: '#2a5db0', group: 'hög', col: 3, start: '10', serves: ['6', '7', '8', '9', '10', '11', '12', '13', '14', 'T'], park: { day: '10', lunch: '6', evening: '13' } },
-    { name: 'V', color: '#808080', group: 'varu', col: 4, start: 'P1', home: 'P1', freight: true, ratedKg: 1600 },
+    { name: 'X1', color: '#d4a017', group: 'tbana', col: 3, start: 'E', serves: ['TB', 'E', '6'], upper: ['P2', '1', '7'], express: true },
+    { name: 'X2', color: '#b8860b', group: 'express', col: 4, start: '6', serves: ['E', '6'], upper: ['1', '7'], express: true },
+    { name: 'H1', color: '#008080', group: 'hög', col: 0, start: '6', serves: ['6', '7', '8', '9', '10', '11', '12', '13', '14', 'T'], park: { day: '6', lunch: '6', evening: '11' } },
+    { name: 'H2', color: '#2a5db0', group: 'hög', col: 1, start: '10', serves: ['6', '7', '8', '9', '10', '11', '12', '13', '14', 'T'], park: { day: '10', lunch: '6', evening: '13' } },
+    { name: 'V', color: '#808080', group: 'varu', col: 2, start: 'P1', home: 'P1', freight: true, ratedKg: 1600 },
     // terrace: våningen där panoramahissen har en lastdörr mot takterrassen – bara för hissbalkens flyttlass (hoist.js)
     { name: 'P', color: '#93379e', group: 'panorama', start: 'E', serves: ['E', '6', 'T'], facade: true, terrace: '8' },
   ],
@@ -209,8 +198,6 @@ crewSpot(CONTROL, { x: 452, k: 'desk', face: 1, post: 'chief', win: 'control', d
 crewSpot(CONTROL, { x: 540, k: 'desk', face: -1, post: 'producer', win: 'control', desc: 'Klipper bilden vid bevakningsskärmen' });
 crewSpot(LOBBY, { x: 386, k: 'desk', face: 1, post: 'reception', win: 'reception', desc: 'Sitter i receptionen: "Välkommen till Tornet!"' });
 crewSpot(LOBBY, { x: 450, k: 'stand', face: -1, where: 'vending', win: 'hall', desc: 'Väljer godis ur automaten i entrén' });
-// hissvärdinnan står i Grinden (attendant i BUILDING) och följer med korgen – syns i korgen, inte i hallen
-crewSpot(LOBBY, { x: INNER_X1_C - 14, k: 'stand', face: 1, post: 'grind', win: 'grind', desc: 'Kör Grinden: "Vilken våning får det lov att vara?"' });
 crewSpot(ROOF, { x: INNER_X1_C - 12, k: 'stand', face: 1, post: 'gondola', win: 'gondola', desc: 'Putsar tornets fönster från gondolen' });
 crewSpot(ROOF, { x: 300, k: 'chair', face: 1, where: 'roof', desc: 'Dricker termoskaffe på en bänk i takträdgården' });
 crewSpot(TERRACE_F, { x: INNER_X1_C - 12, k: 'stand', face: 1, post: 'terrace', win: 'terrace', desc: 'Tar emot möblerna från hissbalken på takterrassen' });
@@ -243,9 +230,7 @@ export const EL = BUILDING.elevators.map((e, i) => {
   // hem = där hissen vilar på natten och dit den kör vid brandåterkallning (entrén om den går dit)
   const home = e.home ? idx(e.home) : stops.includes(LOBBY) ? LOBBY : minF;
   return { ...e, id: i, serves, stops, upper, legs, deck2: upper.length > 0, minF, maxF, topF, startF: idx(e.start), home,
-    group: e.group || 'alla', ratedKg: e.ratedKg || RATED_KG * (upper.length ? 2 : 1), terraceF: e.terrace ? idx(e.terrace) : -1,
-    cap: e.cap || (upper.length ? CAP * 2 : CAP), vmax: e.vmax || VMAX, doorT: e.doorT || DOOR_T, carW: e.carW || CAR_W,
-    residents: !!e.residents, attendant: e.attendant || null, gate: !!e.gate, faults: e.faults || [] };
+    group: e.group || 'alla', ratedKg: e.ratedKg || RATED_KG * (upper.length ? 2 : 1), terraceF: e.terrace ? idx(e.terrace) : -1 };
 });
 /** korgens läge (nedre däckets våning) när den tar folk på våning f: en våning lägre för övre däcket */
 export const carPos = (id, f) => (EL[id].upper.includes(f) ? f - 1 : f);
@@ -256,6 +241,7 @@ export const MEZZ = EL.some(d => d.upper.includes(LOBBY + 1) && d.stops.includes
 export const FLOOR_H = 112;
 export const ROOF_Y = 140, GROUND_Y = ROOF_Y + (FLOORS - LOBBY) * FLOOR_H; // GROUND_Y = entréns golv (gatan)
 // schakten är medvetet breda: hissarna är husets huvudpersoner och tar mer plats än rummen
+export const SHAFT_W = 104, SHAFT_GAP = 12;
 const INSIDE = EL.filter(e => !e.facade);
 const HAS_FACADE = EL.some(e => e.facade);
 // schaktkolumnen för varje hiss: col i BUILDING (hissar i olika zoner kan dela kolumn), annars i tur och ordning
@@ -287,19 +273,21 @@ export const LAND_X0 = 250, DOOR_X = LAND_X0 + 32;
 // tunnelbanan: tåget stannar längs perrongens bakvägg mellan TRAIN_X0 och TRAIN_X1 (tunnelmynningar i båda ändar)
 // (fast läge – simuleringen använder det, så det får inte följa hallens bredd)
 export const TRAIN_X0 = 506, TRAIN_X1 = SHAFT_X0 - 8, TRAIN_LEN = TRAIN_X1 - TRAIN_X0;
+export const CAR_W = SHAFT_W - 8, CAR_H = 84;
 export const floorY = f => GROUND_Y - (f - LOBBY) * FLOOR_H; // golvlinjen för våning f (f får vara ett decimaltal)
 export const surf = f => floorY(f) - 4;
 /** vänsterkant för hiss i:s schakt (panoramahissen sitter utanpå fasaden) */
 export const shaftX = i => (EL[i].facade ? BX1 + 22 : colX(COL[i]));
 export const shaftCX = i => shaftX(i) + SHAFT_W / 2;
-/** korgens vänsterkant och bredd (de små hissarna har smalare korgar mitt i schaktet) */
-export const carX = i => shaftX(i) + (SHAFT_W - EL[i].carW) / 2;
 
 // ---------- Regler ----------
+// Märklast: korgen rymmer 8 personer (platser) och 800 kg. Över 80 % räknas hissen som "full last"
+// och passerar nya hämtningar – den stannar bara för att släppa av.
+export const CAP = 8, VMAX = 2.6, ACC = 1.9, DOOR_T = 0.55, DWELL = 1.3, WALK = 150;
 export const STOP_COST = 2 * DOOR_T + DWELL + VMAX / ACC;
 // Energi: motvikten väger korgen + BALANCE × märklasten, och en våning är FLOOR_M meter hög (se service.js)
 export const BALANCE = 0.45, FLOOR_M = 3.5;
-export const MAXP = 280;
+export const MAXP = 240;
 // Ett dygn går från 06:00 till 06:00 (timmarna räknas 6…30). Tiden går fortare på kvällen och natten.
 export const START_H = 6, END_H = 30;
 // ---------- Dygnets tempo ----------
@@ -394,11 +382,7 @@ export const BOHAG_BY_TYPE = {
   pensioner: ['sang', 'soffa', 'byra', 'piano'], vd: ['sang', 'soffa', 'kassaskap', 'hylla'], artist: ['sang', 'hylla', 'piano'],
 };
 export const ROLE_NAMES = { 'väktare': 'Väktare', 'städare': 'Städare', 'vaktmästare': 'Vaktmästare', 'nattdj': 'Natt-DJ på Kanal 97', 'nattekniker': 'Nattekniker på Modemkungen', 'bud': 'Bud', 'hisstekniker': 'Hisstekniker', 'flyttgubbe': 'Flyttgubbe på Lyft & Bär', 'ambulans': 'Ambulanssjukvårdare', 'driftchef': 'Driftchef',
-  'bildproducent': 'Bildproducent', 'receptionist': 'Receptionist', 'fönsterputsare': 'Fönsterputsare', 'lastare': 'Lastare på Lyft & Bär', 'arbetsledare': 'Arbetsledare på hissjouren', 'hissvärdinna': 'Hissvärdinna' };
-// Städaren som driftchefen ringer in när någon har kräkts i en hiss eller spillt (people.js, mess.js): samma person varje gång.
-export const SUNE = { name: 'Sune', title: 'Städare på jouren · mopp och balja', kg: 78, fit: 0.45, speed: 0.95, space: 8,
-  look: { skin: '#f6c48f', shirt: '#4dd2ff', pants: '#1f6f8b', hair: 2, hairC: '#8a8f99', tie: false, tieC: '#4dd2ff', stripe: true, acc: 0 },
-  lines: { work: ['Torka, torka…', 'Vem har ätit korv före Svindeln?', 'Det här är ingen barnlek', 'Mopp och balja – det räcker långt', 'Blankt som en spegel!'] } };
+  'bildproducent': 'Bildproducent', 'receptionist': 'Receptionist', 'fönsterputsare': 'Fönsterputsare', 'lastare': 'Lastare på Lyft & Bär', 'arbetsledare': 'Arbetsledare på hissjouren' };
 
 // ---------- Stamgästerna ----------
 // Återkommande karaktärer: samma namn, utseende och egenheter varje dag (logiken finns i cast.js).
@@ -474,11 +458,6 @@ export const CREW = [
     breaks: [[10.4, 25, 'roof', 'Termoskaffe i takträdgården'], [12.6, 40, 'kiosk', 'Lunch – korv med bröd i kiosken på stationen'], [14.9, 20, 'roof', 'En cigg och utsikten på taket']],
     lines: { post: ['Skrubba, skrubba…', 'Fläckfritt!', 'Titta inte ner, Hasse', 'Vem har kladdat på trettonde våningen?', 'Fönster nummer femtusen…'], break: ['Termoskaffe smakar bäst på taket', 'Korv med bröd och senap, tack', 'Blåser det upp får jag gå hem', 'Mina armar, mina armar…'] },
     look: { skin: '#f6c48f', shirt: '#2a5db0', pants: '#2a5db0', hair: 4, hairC: '#5a3a1a', tie: false, tieC: '#ffe14d', stripe: true, acc: 0 } },
-  { id: 'margit', name: 'Margit', role: 'hissvärdinna', icon: '🛗', title: 'Hissvärdinna i Grinden · 08–18', post: 'grind', from: 8, until: 18, arrive: 7.6,
-    kg: 58, fit: 0.5, speed: 0.95, space: 8, polite: true,
-    breaks: [[10.3, 25, 'cafe', 'Kaffe i Sky Café – Grinden får vila en stund'], [12.6, 40, 'break', 'Lunch i personalrummet'], [15.2, 20, 'vending', 'En chokladbit ur automaten']],
-    lines: { post: ['Vilken våning får det lov att vara?', 'Akta grinden, tack!', 'Uppåt, mina damer och herrar', 'Femte – Guldbanken', 'Sky lobbyn, slutstation!', 'Sedan 1938 och inte en repa'], break: ['Fötterna, fötterna…', 'Ingen kör Grinden som jag', 'En kopp kaffe, svart', 'De nya hissarna har ingen själ'] },
-    look: { skin: '#ffe4c8', shirt: '#3a7d44', pants: '#2b2f45', hair: 5, hairC: '#e8e8e8', tie: true, tieC: '#ffd23f', stripe: false, acc: 2 } },
   { id: 'mona', name: 'Mona', role: 'lastare', icon: '🏗️', title: 'Lastare på Lyft & Bär · hissbalken', post: 'terrace', from: 0, until: null, arrive: 'event',
     kg: 70, fit: 0.6, speed: 1, space: 8, polite: false, breaks: [],
     lines: { post: ['Sakta i backarna!', 'Akta pianot!', 'Lite till … STOPP!', 'Rulla, rulla!', 'Hörru balken, mer slack!'], break: [] },

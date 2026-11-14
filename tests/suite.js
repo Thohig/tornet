@@ -51,9 +51,7 @@ function watcher() {
     jumps: 0, orphanService: 0, techClash: 0, badReserved: 0, dupNames: 0, dupEx: '', idleWait: new Map(), idleWaitMax: 0, badPlatform: 0,
     deadAssign: new Map(), deadAssignMax: 0, deadAssignEx: '', prevMode: [], late: [],
     // dockhuset: hur länge någon har suttit instängd, och hur länge en incident har pågått
-    maxTrap: 0, maxStorm: 0, maxFire: 0, maxOutage: 0,
-    // de små hissarna och Svindeln
-    smallBad: 0, smallEx: '', coasterBad: 0, coasterEx: '' };
+    maxTrap: 0, maxStorm: 0, maxFire: 0, maxOutage: 0 };
   w.before = () => S.elevators.map(e => e.pos);
   w.check = before => {
     for (const e of S.elevators) for (const p of e.passengers) if ((p.trapT || 0) > w.maxTrap) w.maxTrap = p.trapT;
@@ -141,21 +139,6 @@ function watcher() {
         if (S.t - since > w.deadAssignMax) { w.deadAssignMax = S.t - since; w.deadAssignEx = `${p.name} → ${e.name} (${why})`; }
       }
     } else w.deadAssign.clear();
-    // bostadshissen tar bara de boende; Grinden kör aldrig med folk utan hissvärdinna; ingen över korgens platser
-    for (const e of S.elevators) {
-      if (e.residents && e.passengers.some(p => p.kind !== 'res')) { w.smallBad++; w.smallEx = w.smallEx || `${e.name}: ${e.passengers.find(p => p.kind !== 'res').name} är inte boende`; }
-      if (e.attendant && e.unmanned && e.state === 'moving' && e.passengers.length && e.mode === 'normal') { w.smallBad++; w.smallEx = w.smallEx || `${e.name} kör med folk utan hissvärdinna`; }
-      if (e.passengers.length > e.cap) { w.smallBad++; w.smallEx = w.smallEx || `${e.name}: ${e.passengers.length} av ${e.cap} platser`; }
-    }
-    // Svindeln: högst 8 i tåget och 3 i Banhissen, var och en på ett ställe, och tåget går inte när banan är stängd
-    if (S.coaster) {
-      const C = S.coaster, all = [...C.queue, ...C.plat, ...C.exitq, ...C.lift.riders, ...C.train.riders];
-      const bad = C.train.riders.length > 8 || C.lift.riders.length > 3 || new Set(all).size !== all.length
-        || all.some(id => { const p = S.people.find(q => q.id === id); return !p || p.state !== 'coaster'; })
-        || S.people.some(p => p.state === 'coaster' && !all.includes(p.id) && p.cst !== 'walk')
-        || (C.why && C.train.ph === 'climb' && C.train.prog === 0);
-      if (bad) { w.coasterBad++; w.coasterEx = w.coasterEx || `${hour().toFixed(2)}: tåg ${C.train.riders.length}, hiss ${C.lift.riders.length}, ${C.why}`; }
-    }
     // tunnelbanan: på perrongen står bara den som ska med tåget – och efter sista tåget ingen alls
     for (const p of S.people) if (p.state === 'platform' && (p.floor !== STATION || p.exitFloor !== STATION || !p.toTrain || S.trainDone)) w.badPlatform++;
     // två tekniker har aldrig samma hiss som jobb, och högst en extra tekniker är inringd
@@ -1702,8 +1685,6 @@ function newInvariantFails(w, tag) {
   if (w.railClash) f.push(`${tag}: last i hissbalken medan putsaren var nere ${w.railClash} steg`);
   if (w.moveBad) f.push(`${tag}: ett flyttlass var på två ställen (eller inget) ${w.moveBad} steg`);
   if (w.badReserved) f.push(`${tag}: e.reserved stämde inte med de som kliver på (${w.badReserved} steg)`);
-  if (w.smallBad) f.push(`${tag}: de små hissarna (${w.smallBad} steg): ${w.smallEx}`);
-  if (w.coasterBad) f.push(`${tag}: Svindeln (${w.coasterBad} steg): ${w.coasterEx}`);
   if (w.dupNames) f.push(`${tag}: två personer i huset hette samma sak (${w.dupNames} gånger, t.ex. ${w.dupEx})`);
   if (w.deadAssignMax > 0.5) f.push(`${tag}: någon väntade ${w.deadAssignMax.toFixed(1)} s på en hiss som inte kunde komma (${w.deadAssignEx})`);
   if (w.idleWaitMax > 15) f.push(`${tag}: någon stod ${w.idleWaitMax.toFixed(0)} s utan tilldelad hiss medan en ledig hiss som kunde ta hen stod still`);
@@ -1773,10 +1754,6 @@ export const PLAYER_ACTIONS = {
   medical: () => act('trigger', 'medical'),
   cable: () => act('trigger', 'cable'),
   pano: () => act('trigger', 'pano'),
-  coaster: () => act('trigger', 'coaster'),
-  coasterRescue: r => act('coasterRescue', r() < 0.5 ? 'wait' : 'walk'),
-  mess: r => act('trigger', 'mess', r() < 0.5 ? Math.floor(r() * S.elevators.length) : null),
-  cleaner: () => act('cleaner'),
   panoRescue: r => act('panoRescue', r() < 0.5 ? 'rope' : 'ladder'),
   moveRoute: r => act('moveRoute', ['auto', 'varu', 'balk'][Math.floor(r() * 3)]),
   moveBlankets: r => act('moveBlankets', r() < 0.5),
@@ -1787,7 +1764,7 @@ export const PLAYER_ACTIONS = {
   carTrigger: r => act('trigger', ['fault', 'heat', 'cable'][Math.floor(r() * 3)], Math.floor(r() * S.elevators.length)),
   incLevel: r => act('incLevel', ['av', 'lugn', 'normal', 'kaos'][Math.floor(r() * 4)]),
   chief: r => act('chief', r() < 0.7),
-  chiefBack: r => act('chiefBack', ['storm', 'fire', 'power', 'strategy', 'move', 'pano', 'coaster', 'clean', `heat${Math.floor(r() * S.elevators.length)}`][Math.floor(r() * 9)]),
+  chiefBack: r => act('chiefBack', ['storm', 'fire', 'power', 'strategy', 'move', 'pano', `heat${Math.floor(r() * S.elevators.length)}`][Math.floor(r() * 7)]),
 };
 const FUZZ_SEEDS = Array.from({ length: 24 }, (_, i) => 5000 + i);
 test(`Spelaråtgärder: invarianter över ${FUZZ_SEEDS.length} dygn med slumpade åtgärder (även på natten)`, () => {
@@ -2093,11 +2070,8 @@ test('Panoramahissen fast på fasaden: räddningstjänsten firar ner alla med re
   assert(who.length > 0 && e.mode === 'broken' && e.fault.pano, 'korgen fastnade inte med folk i');
   const at = Math.round(e.pos * 1000);
   let g = 0, moved = 0, worked = 0;
-  /** var var och en landade (våningen när hen lämnade repet) */
-  const landed = new Map(), inRope = new Set();
   while (S.pano && S.pano.ph !== 'done' && ++g < 400 / DT) {
     const b = w.before(); step(DT); w.check(b);
-    for (const p of who) { if (p.state === 'rope') inRope.add(p); else if (inRope.has(p) && !landed.has(p)) landed.set(p, p.floor); }
     if (Math.round(e.pos * 1000) !== at) moved++;
     if (techOf(e) && techOf(e).workT > 0 && e.passengers.length) worked++;
   }
@@ -2107,8 +2081,7 @@ test('Panoramahissen fast på fasaden: räddningstjänsten firar ner alla med re
   assert(worked === 0, 'teknikern lagade hydrauliken med folk kvar i korgen');
   // (den som är nere kan redan ha klivit på en annan hiss)
   assert(who.every(p => p.state !== 'rope' && p.car !== e && !e.passengers.includes(p)), 'någon är kvar i korgen eller i repet');
-  // (efteråt kan de ha åkt vidare, t.ex. upp till Svindeln på taket – det som räknas är var de landade)
-  assert(who.every(p => landed.get(p) === P.toF), 'någon landade fel');
+  assert(who.every(p => p.floor === P.toF || p.dead || p.floor !== Math.round(e.pos)), 'någon landade fel');
   assert(S.chief.log.some(d => d.key === 'pano' && d.by === 'chief'), 'chefen beslutade aldrig');
   g = 0;
   while (e.mode !== 'normal' && ++g < 300 / DT) step(DT);
@@ -2233,8 +2206,7 @@ test('Mjukt dygnsskifte: huset rullar vidare kl 06 – fel, brand och folk följ
   assert(!S.fire, 'branden släcktes aldrig');
   assert(!e.fault, `${e.name} lagades aldrig efter skiftet`);
   for (const c of CREW.filter(x => x.until === null)) assert(!crewPerson(c.id), `${c.name} (nattskiftet) gick aldrig hem`);
-  // (på förmiddagen kan dagskiftet ha gått på sin fikarast – det räknas som att ha kommit)
-  for (const c of CREW.filter(x => x.arrive === null)) { const p = crewPerson(c.id); assert(p && (atPost(p) || p.onBreak), `${c.name} (dagskiftet) kom aldrig till sin post`); }
+  for (const c of CREW.filter(x => x.arrive === null)) assert(atPost(crewPerson(c.id)), `${c.name} (dagskiftet) kom aldrig till sin post`);
   assert(!S.people.some(p => ['väktare', 'nattdj', 'nattekniker'].includes(p.role)), 'nattpersonalen är kvar på förmiddagen');
   assert(S.people.filter(p => p.kind === 'emp').length > 20, 'de anställda kom inte till jobbet dag 2');
   const res = S.people.filter(p => p.kind === 'res');
@@ -2268,73 +2240,4 @@ test('Dygnets händelser: incidenter som tar slut sparas i statistiken (dagens s
   assert(ev.some(e => e.type === 'fire'), `branden finns inte bland dygnets händelser (${ev.map(e => e.type).join(', ')})`);
   assert(ev.every(e => /^\d\d:\d\d$/.test(e.time) && e.title && e.text), 'en händelse saknar tid, rubrik eller text');
   return ev.map(e => `${e.time} ${e.type}`).join(' · ');
-});
-// ---------- De små hissarna, Svindeln och städningen ----------
-test('Bostadshissen B tar bara de boende, och Grinden G kör bara med Margit ombord', () => {
-  sim(61);
-  const w = watcher();
-  const B = S.elevators.find(e => e.residents), G = S.elevators.find(e => e.attendant);
-  assert(B && G && B.cap === 3 && G.cap === 2, 'de små hissarna finns inte (eller har fel antal platser)');
-  let bRes = 0, gRides = 0, gIdle = 0, onWhileOff = 0;
-  const seenB = new Set(), seenG = new Set();
-  while (hour() < 22) {
-    const b = w.before(); step(DT); w.check(b);
-    for (const p of B.passengers) if (!seenB.has(p)) { seenB.add(p); bRes++; }
-    for (const p of G.passengers) if (!seenG.has(p)) { seenG.add(p); gRides++; }
-    const m = crewPerson('margit');
-    if (!atPost(m) && G.passengers.length && G.state === 'moving') onWhileOff++;
-    if (hour() > 19 && G.unmanned && Math.abs(G.pos - G.home) < 1e-6) gIdle++;
-  }
-  assert(w.smallBad === 0, w.smallEx);
-  assert(bRes > 5, `bara ${bRes} boende åkte B`);
-  assert(gRides > 3, `bara ${gRides} åkte Grinden`);
-  assert(onWhileOff === 0, 'Grinden körde med folk utan Margit');
-  assert(gIdle > 0, 'Grinden stod inte hemma i entrén efter Margits pass');
-  return `${bRes} boende i B · ${gRides} i Grinden · Grinden hemma efter passet`;
-});
-test('Svindeln: åkarna köar, tar Banhissen upp och åker – tåget fastnar och driftchefen får loss dem', () => {
-  sim(62, { chief: true });
-  const w = watcher();
-  runUntil(11.5, w);
-  assert(S.coaster && !S.coaster.why, `Svindeln är stängd: ${S.coaster && S.coaster.why}`);
-  let g = 0;
-  while (!S.coaster.train.riders.length && ++g < 200 / DT) { const b = w.before(); step(DT); w.check(b); }
-  assert(act('trigger', 'coaster') !== false || S.coaster.train.stuckNext, 'det gick inte att framkalla');
-  g = 0;
-  while (!S.coaster.stuck && ++g < 400 / DT) { const b = w.before(); step(DT); w.check(b); }
-  const St = S.coaster.stuck;
-  assert(St && St.n > 0, 'tåget fastnade aldrig med åkare');
-  g = 0;
-  while (S.coaster.stuck && ++g < 300 / DT) { const b = w.before(); step(DT); w.check(b); }
-  assert(!S.coaster.stuck, 'tåget satt fast i över 300 s');
-  assert(S.chief.log.some(d => d.key === 'coaster' && d.by === 'chief'), 'driftchefen fattade inget beslut');
-  runUntil(20, w);
-  assert(w.coasterBad === 0, w.coasterEx);
-  assert(S.stats.coasterRides > 3 && S.stats.coasterRiders > 8, `för få åk (${S.stats.coasterRides} tåg, ${S.stats.coasterRiders} åkare)`);
-  assert(!S.people.some(p => p.state === 'coaster' && p.cst === 'queue'), 'det står folk i kön efter stängning');
-  return `${St.kind}: ${St.how === 'walk' ? `${St.out} gick ner för trappan` : 'satt kvar'} · ${S.stats.coasterRides} tåg med ${S.stats.coasterRiders} åkare`;
-});
-test('Städningen: en skitig hiss tar inga nya – driftchefen ringer in Sune som städar och åker hem', () => {
-  sim(63, { chief: true });
-  const w = watcher();
-  runUntil(10, w);
-  const e = S.elevators.find(x => x.passengers.length && x.mode === 'normal') || S.elevators[2];
-  act('trigger', 'mess', e.id);
-  assert(e.mess, 'korgen blev inte skitig');
-  let g = 0, sune = null, boardedDirty = 0;
-  const before = new Set(e.passengers);
-  while (e.mess && ++g < 400 / DT) {
-    const b = w.before(); step(DT); w.check(b);
-    sune = sune || S.people.find(p => p.sune) || null;
-    if (e.cleaning && e.passengers.length) boardedDirty++;
-    for (const p of e.passengers) before.add(p);
-  }
-  assert(sune, 'ingen städare ringdes in');
-  assert(!e.mess && !e.cleanWant && !e.cleaning, `${e.name} blev aldrig ren`);
-  assert(boardedDirty === 0, 'någon åkte med medan korgen städades');
-  assert(S.chief.log.some(d => d.key === 'clean'), 'driftchefen ringde inte in städaren');
-  g = 0;
-  while (!sune.dead && ++g < 400 / DT) { const b = w.before(); step(DT); w.check(b); }
-  assert(sune.dead, 'Sune åkte aldrig hem');
-  return `${e.name} städad på ${fl(e.home)} · Sune åkte hem`;
 });

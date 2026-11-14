@@ -3,7 +3,7 @@
 // eller en våning. Det finns ingen högerklicksmeny – det som går att göra med det man följer står i panelen.
 import { act } from './actions.js';
 import { clamp } from './util.js';
-import { BX0, CAR_H, DOOR_X, EL, carX, FLOOR_H, GROUND_Y, H, INNER_X1, LOBBY, ROOF_Y, STRAT_NAMES, TOP, WAIT_X1, floorY, surf } from './config.js';
+import { BX0, CAR_H, CAR_W, DOOR_X, FLOOR_H, GROUND_Y, H, INNER_X1, LOBBY, ROOF_Y, STRAT_NAMES, TOP, WAIT_X1, floorY, shaftX, surf } from './config.js';
 import { S, log } from './state.js';
 import { VIEW, camTarget, cv, detachCam, followCar, lookAt, scrollBy, scrollToFloor } from './view.js';
 import { personHead, peopleBehindDoor } from './render.js';
@@ -93,8 +93,6 @@ export function doAction(cmd) {
   else if (a === 'moveBlankets') act('moveBlankets', b === '1');
   else if (a === 'moveWind') act('moveWind', b);
   else if (a === 'pano') act('panoRescue', b);
-  else if (a === 'coaster') act('coasterRescue', b);
-  else if (a === 'cleaner') act('cleaner');
   else if (a === 'dismiss') S.dismissed.add(b); // (bara gränssnittet – simuleringen läser det aldrig)
   else if (a === 'incfold') foldInc(b);
   else if (a === 'show') followFloor(+b);
@@ -202,8 +200,8 @@ export function hitPerson(x, y) {
 }
 export function hitCar(x, y) {
   for (const e of S.elevators) {
-    const cx = carX(e.id), yb = floorY(e.pos) - 4;
-    if (x >= cx && x <= cx + EL[e.id].carW && y >= yb - CAR_H && y <= yb) return e;
+    const cx = shaftX(e.id) + 4, yb = floorY(e.pos) - 4;
+    if (x >= cx && x <= cx + CAR_W && y >= yb - CAR_H && y <= yb) return e;
   }
   return null;
 }
