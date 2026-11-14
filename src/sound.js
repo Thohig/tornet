@@ -33,8 +33,9 @@ export function toggleSound() {
   if (on) { init(); ac.resume(); } else if (ac) ac.suspend();
   return on;
 }
-/** Väcker ljudet efter en omladdning om det var påslaget (anropas vid första klicket). */
-export function unlockSound() { if (on) { init(); if (ac.state !== 'running') ac.resume(); } }
+/** Väcker ljudet om det är påslaget men står still: efter en omladdning, eller när det slogs på med ett
+ *  pekfinger (anropas vid varje tryck – billigt när ljudet redan går). */
+export function unlockSound() { if (on && !document.hidden) { init(); if (ac.state !== 'running') ac.resume(); } }
 
 function init() {
   if (ac) return;

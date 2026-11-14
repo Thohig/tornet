@@ -1,13 +1,13 @@
 // Regissören: automatisk kamera som letar upp det mest sevärda i huset och klipper dit.
 // Rent gränssnitt: läser S, ändrar aldrig simuleringen (slumpen är vrand). Kameran rör sig via S.camTarget
 // precis som när man följer en hiss. Allt manuellt (scrolla, följa, klicka på någon) stänger av regissören.
-import { BREAK, CONTROL, CREW, DOCK, FLOOR_H, LOBBY, ROOF, STATION, TOP, floorY } from './config.js';
+import { BREAK, CONTROL, CREW, DOCK, FLOOR_H, LOBBY, ROOF, STATION, TOP, floorY, shaftCX } from './config.js';
 import { alarm, chiefOnDuty } from './chief.js';
 import { CREW_BY, atPost, crewPerson, postFloor } from './crew.js';
 import { S, hour } from './state.js';
 import { fl } from './util.js';
 import { vpick, vrand } from './rng.js';
-import { VIEW, camMax, camTarget } from './view.js';
+import { VIEW, camMax, camTarget, keepX } from './view.js';
 import { personHead } from './render.js';
 import { cleanerAt } from './hoist.js';
 
@@ -234,6 +234,16 @@ function shotY(s) {
   return h && !h.hidden ? h.y + 40 : null;
 }
 
+/** tagningens x i världen (för sidledsscroll på smal skärm), null = låt den stå */
+function shotX(s) {
+  if (s.kind === 'floor') return VIEW.x0;
+  if (s.kind === 'car') return S.elevators[s.id] ? shaftCX(s.id) : null;
+  if (s.kind !== 'person') return null;
+  const p = S.people.find(q => q.id === s.id);
+  const h = p && !p.dead ? personHead(p) : null;
+  return h && !h.hidden ? h.x : null;
+}
+
 /** Varje bildruta: byt tagning vid behov och styr kameran. */
 export function updateDirector() {
   if (!VIEW.auto) return;
@@ -294,6 +304,7 @@ export function updateDirector() {
   const top = VIEW.camY + VIEW.viewH * 0.3, bot = VIEW.camY + VIEW.viewH * 0.7;
   if (s.kind === 'car' || sy < top || sy > bot || S.anim - s.t0 < 0.1)
     S.camTarget = Math.max(0, Math.min(camMax(), sy - VIEW.viewH * 0.5));
+  keepX(shotX(s));
 }
 
 // ---------- Bevakningen: personen vid skärmarna i kontrollrummet som klipper bilden ----------

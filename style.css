@@ -12,7 +12,7 @@
 *{box-sizing:border-box}
 html,body{margin:0;height:100%}
 body{background:var(--desk);font-family:var(--ui);font-size:12px;color:var(--ink);overflow:hidden}
-#game{display:block;border:2px solid;border-color:var(--shade) var(--hi) var(--hi) var(--shade);background:#000;cursor:crosshair;image-rendering:pixelated}
+#game{display:block;flex:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;border:2px solid;border-color:var(--shade) var(--hi) var(--hi) var(--shade);background:#000;cursor:crosshair;image-rendering:pixelated}
 
 /* ---------- Layout: kontrollpanelen till vänster, bilden till höger ---------- */
 #app{display:flex;height:100vh}
@@ -266,9 +266,10 @@ body{background:var(--desk);font-family:var(--ui);font-size:12px;color:var(--ink
 .le.k-alert{color:var(--vga-r)}
 
 @media (max-width: 800px){
-  #app{height:auto;min-height:100vh}
+  #app{height:auto;min-height:100vh;min-height:100svh}
   body{overflow:auto}
   #app{flex-direction:column}
+  #stage{flex:none} /* (höjden sätts i resize i view.js) */
   #side{width:auto;margin:2px 0 0;order:1;overflow:visible} /* (staplat: bilden först, panelen under) */
 }
 
@@ -282,6 +283,7 @@ body{background:var(--desk);font-family:var(--ui);font-size:12px;color:var(--ink
 .lw-show{font-family:'VT323',monospace;font-size:34px;line-height:34px}
 .lw-sub{font-size:13px;font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lw-key{position:absolute;right:10px;top:6px;font-size:10px;opacity:.7}
+.lw-x{pointer-events:auto;opacity:1;top:4px;right:4px;font-size:12px;min-height:30px} /* (pekskärm: enda vägen ut ur biografläget) */
 body.cinema #side{display:none !important}
 /* chefens beslut på incidentkortet; när chefen har det i handen blinkar kortet inte */
 .inc-chief{margin-top:5px;padding:3px 5px;background:var(--note);box-shadow:var(--sunken);font-size:11.5px;line-height:1.35}
@@ -316,3 +318,9 @@ body.cinema #side{display:none !important}
 .sdet .stats{margin-top:3px}
 .card.sumcard{max-width:560px}
 .card.sumcard .summary{margin:8px 0 12px}
+
+/* ---------- Pekskärm: större knappar och inga dubbeltryck som zoomar ---------- */
+@media (pointer: coarse){
+  .btn,button,select,summary,[data-act]{touch-action:manipulation}
+  .btn{min-height:32px}
+}

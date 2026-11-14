@@ -318,7 +318,7 @@ function updateLower() {
   if (!c) return;
   const C = S.chief, say = C && C.on && C.say && S.t < C.say.until ? `🧑‍💼 ${esc(chiefOnDuty().name)}: ${esc(C.say.text)}` : '';
   const html = `<div class="lw-tag">${c.auto ? '● LIVE' : '📹'} · ${esc(c.who.name)}</div><div class="lw-show">${esc(c.show)}</div>`
-    + `<div class="lw-sub">${say || `💭 ${esc(c.thought)}`}</div><div class="lw-key">H / Esc = tillbaka</div>`;
+    + `<div class="lw-sub">${say || `💭 ${esc(c.thought)}`}</div>${matchMedia('(pointer: coarse)').matches ? '<button class="lw-key lw-x btn" data-act="cinema">✕ Tillbaka</button>' : '<div class="lw-key">H / Esc = tillbaka</div>'}`;
   if (html !== lowerKey) { lowerKey = html; e.innerHTML = html; }
 }
 // H slår av/på biografläget; Esc lämnar biografläget eller vyn (fångas före input.js, som annars slutar följa)

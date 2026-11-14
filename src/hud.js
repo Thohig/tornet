@@ -491,14 +491,16 @@ export function hideOverlay() { $('overlay').classList.remove('show'); }
 let introKeys = /** @type {((ev: KeyboardEvent) => void)|null} */ (null);
 export function showIntro() {
   const help = !!S.started, wasPaused = S.paused;
+  // pekskärm (telefon, surfplatta): inga tangenter och ingen mus att hålla över
+  const touch = matchMedia('(pointer: coarse)').matches;
   if (help) S.paused = true;
   showOverlay(`<div class="card intro"><h1>TORNET${help ? ' · HJÄLP' : ''}</h1>
     <p>Välkommen till <b>Tornet</b> – åtta hissar styrda av <b>Hiss-O-Matic 3000</b>, ${FL.length} våningar och en massa folk med bråttom. <b>Huset sköter sig självt:</b> driftchefen tar besluten och berättar varför, och regissören 🎬 klipper bilden till det som händer. Luta dig tillbaka och titta.</p>
     <ul class="intro-short">
-      <li><b>Klicka</b> på en person, en hiss eller en våning för att följa den – allt om den syns i kontrollpanelen till vänster.</li>
+      <li><b>${touch ? 'Tryck' : 'Klicka'}</b> på en person, en hiss eller en våning för att följa den – allt om den syns i kontrollpanelen ${innerWidth <= 800 ? 'under bilden' : 'till vänster'}.</li>
       <li><b>Kontrollpanelen</b> anpassar sig efter vad som händer: när det är lugnt kan du framkalla incidenter och byta styrlogik, när något händer visar den bara det.</li>
       <li>Hissen eller våningen du följer har egna knappar: framkalla ett hissfel, en brand eller släpp in besökare just där.</li>
-      <li class="intro-keys"><kbd>Mellanslag</kbd> paus · <kbd>−</kbd>/<kbd>+</kbd> hastighet · <kbd>H</kbd> biografläge · <kbd>S</kbd> styrlogik · <kbd>T</kbd> namnbrickor · <kbd>F</kbd> koppla loss/på kameran · <kbd>A</kbd> regissör (kameran väljer själv) · <kbd>Esc</kbd> sluta följa/tillbaka</li>
+      ${touch ? '<li><b>Dra</b> i bilden med ett finger för att se resten av huset; två fingrar zoomar.</li>' : `<li class="intro-keys"><kbd>Mellanslag</kbd> paus · <kbd>−</kbd>/<kbd>+</kbd> hastighet · <kbd>H</kbd> biografläge · <kbd>S</kbd> styrlogik · <kbd>T</kbd> namnbrickor · <kbd>F</kbd> koppla loss/på kameran · <kbd>A</kbd> regissör (kameran väljer själv) · <kbd>Esc</kbd> sluta följa/tillbaka</li>`}
     </ul>
     <button class="btn" id="go">${help ? 'TILLBAKA' : 'KÖR!'}</button>
     <details class="intro-more"><summary>Mer om huset</summary>
@@ -511,7 +513,7 @@ export function showIntro() {
       <li><b>Incidenter</b> händer av sig själva: brand, strömavbrott, storm och hissfel – då kommer en hisstekniker och lagar. Slitna hissar går oftare sönder, och utan nattservice följer slitaget med till nästa dygn. När det är lugnt väljer du i kontrollpanelen styrlogik, hur ofta incidenter kommer (<b>slumpen</b>) och <b>framkallar</b> allt själv: blixt, flyttdag, VIP, tågstörning, kyla …</li>
       <li>Bilden visar <b>hallen framför hissarna</b> – rummen ligger bakom korridoren, och folk syns när de kommer ut för att vänta på hissen. Siffran vid korridoren är hur många som är inne.</li>
       <li><b>Klicka på en person</b> för att följa hen – kameran följer med och panelen visar vart hen ska och varför, även när hen är inne i rummen. <b>Klicka på en korridor</b> för att följa någon som är därinne, <b>på en hiss</b> för dess plan och last, och <b>på en våning</b> för att framkalla något där.</li>
-      <li><b>Scrolla</b> med mushjulet eller piltangenterna – då kopplas kameran loss, och <kbd>F</kbd> kopplar på den igen.</li>
+      <li>${touch ? '<b>Dra</b> i bilden' : '<b>Scrolla</b> med mushjulet eller piltangenterna'} – då kopplas kameran loss, och ${touch ? 'kamerablocket' : '<kbd>F</kbd>'} kopplar på den igen.</li>
       <li>Register, logg, inställningar och dagens resultat ligger längst ner i kontrollpanelen.</li>
     </ul>
     </details></div>`);

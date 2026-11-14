@@ -124,9 +124,10 @@ document.addEventListener('pointerdown', ev => {
     if (p) { ev.preventDefault(); followPerson(p); uiHooks.repaint(); }
   }
 });
-// ljudet var påslaget förra gången: webbläsaren släpper fram det först efter ett klick eller en tangent
-addEventListener('pointerdown', unlockSound, { once: true });
-addEventListener('keydown', unlockSound, { once: true });
+// ljudet släpps fram först efter ett klick eller en tangent. Safari på iPhone räknar bara med fingret när
+// det lyfts (pointerup/touchend), inte pointerdown – därför lyssnar vi på dem, vid varje tryck: knappen som
+// slår på ljudet reagerar på pointerdown, och då väcks ljudet när fingret släpper.
+for (const t of ['pointerup', 'touchend', 'keydown']) addEventListener(t, unlockSound, { passive: true });
 
 // ---------- Tangentbordet ----------
 window.addEventListener('keydown', ev => {
