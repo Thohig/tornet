@@ -146,17 +146,22 @@ export function serviceStatus(e) {
   else return `🔧 Väntar på hissteknikern${!S.power ? ' (strömavbrott)' : S.fire ? ' (brand)' : ''}`;
   return `🔧 ${who} · framme om ~${secs(arrive)} · klar om ~${secs(arrive + work)}`;
 }
+/** En ikonknapp: bara ikonen syns; namnet och förklaringen står i verktygstipset (panels.js) och namnet
+ *  läses upp av skärmläsare. extra = fler attribut (t.ex. ' disabled'). */
+export const ikon = (act, icon, name, hint = '', isOn = false, extra = '') =>
+  `<button class="btn ico${isOn ? ' on' : ''}" data-act="${act}" aria-label="${name}" data-hint="<b>${name}</b>${hint ? `<br>${hint}` : ''}"${extra}>${icon}</button>`;
 export function carActs(e) {
   const b = [];
-  b.push(`<button class="btn xs" data-act="car:off:${e.id}">${e.off ? '▶ Sätt i drift' : '⏸ Ta ur drift'}</button>`);
-  if (e.mode === 'normal' && !e.serviceAsap && !e.hold && S.started) b.push(`<button class="btn xs" data-act="level:${e.id}" data-hint="Hissteknikern kommer direkt, även på dagen">🔧 Beställ service</button>`);
+  b.push(e.off ? ikon(`car:off:${e.id}`, '▶', 'Sätt i drift', `${e.name} tar nya resenärer igen`) : ikon(`car:off:${e.id}`, '⏸', 'Ta ur drift', `${e.name} lämnar av dem som är ombord och tar inga nya`));
+  if (e.mode === 'normal' && !e.serviceAsap && !e.hold && S.started) b.push(ikon(`level:${e.id}`, '🛠️', 'Beställ service', 'Hissteknikern kommer direkt, även på dagen'));
   if (!S.power && e.mode === 'normal' && e.passengers.length && !(e.state === 'doors' && e.door >= 0.95))
     b.push(`<button class="btn xs hot2" data-act="pow:rescue:${e.id}" ${canRescue(e) ? '' : 'disabled'}>🔋 Nödsänk (${e.passengers.length})</button>`);
   // framkalla något i just den här hissen
   if (S.started && e.mode === 'normal') {
-    b.push(`<span class="trig-car">Framkalla:<button class="btn xs" data-act="trig:fault:${e.id}" data-hint="Hissen går sönder vid nästa stopp (ibland mellan två våningar med folk i)">🔧 Fel</button>`
-      + `<button class="btn xs" data-act="trig:heat:${e.id}" ${e.hot ? 'disabled' : ''} data-hint="Kylningen hakar upp sig och motorn blir het">🌡️ Het</button>`
-      + `${e.facade ? `<button class="btn xs" data-act="trig:pano" ${e.panoNext || S.pano ? 'disabled' : ''} data-hint="Hydrauliken låser sig nästa gång den kör med folk – korgen fastnar utanpå huset">🧗 Fast</button>` : `<button class="btn xs" data-act="trig:cable:${e.id}" ${e.snapNext ? 'disabled' : ''} data-hint="Linorna går av på nästa åktur">🪢 Linbrott</button>`}</span>`);
+    b.push(`<span class="trig-car">Framkalla:${ikon(`trig:fault:${e.id}`, '🔧', 'Hissfel', 'Hissen går sönder vid nästa stopp (ibland mellan två våningar med folk i)')}`
+      + ikon(`trig:heat:${e.id}`, '🌡️', 'Het motor', 'Kylningen hakar upp sig och motorn blir het', false, e.hot ? ' disabled' : '')
+      + `${e.facade ? ikon('trig:pano', '🧗', 'Fast på fasaden', 'Hydrauliken låser sig nästa gång den kör med folk – korgen fastnar utanpå huset', false, e.panoNext || S.pano ? ' disabled' : '')
+        : ikon(`trig:cable:${e.id}`, '🪢', 'Linbrott', 'Linorna går av på nästa åktur', false, e.snapNext ? ' disabled' : '')}</span>`);
   }
   return b.join('');
 }
@@ -200,7 +205,7 @@ function learnMap() {
 function chiefLine(key, q) {
   const C = S.chief, d = C && C.dec[key];
   if (C && C.manual[key]) return `<div class="inc-chief you">👤 <b>Du bestämmer:</b> ${esc(d ? d.text : '')}`
-    + ` <button class="btn xs" data-act="chief:${key}" title="Driftchefen tar över beslutet igen">🧑‍💼 Låt driftchefen bestämma</button></div>`;
+    + ` <button class="btn xs" data-act="chief:${key}" data-hint="Driftchefen tar över beslutet igen">🧑‍💼 Låt driftchefen bestämma</button></div>`;
   if (!C || !C.on) return `<div class="inc-q">${q}</div>`;
   const who = esc(chiefOnDuty().name);
   return (d ? `<div class="inc-chief">🧑‍💼 <b>${who}:</b> ${esc(d.text)}${d.why ? ` <span class="why">– ${esc(d.why)}</span>` : ''}</div>`
@@ -218,7 +223,7 @@ export function incidentHtml() {
       ${chiefLine('storm', 'Hur ska hissarna köras?')}
       <div class="inc-acts">${b('sway', '🌬️ Svajläge')}${b('none', 'Kör som vanligt')}</div>
       <div class="inc-hint">${STORM_HINT[St.mode]}</div>
-      ${P ? `<div class="inc-acts"><button class="btn xs" data-act="follow:${P.id}">📹 Visa panoramahissen</button></div>` : ''}`, true));
+      ${P ? `<div class="inc-acts">${ikon(`follow:${P.id}`, '📹', 'Visa panoramahissen', 'Kameran följer hissen')}</div>` : ''}`, true));
   }
   // ---------- överhettade motorer (incident: extrafläkt) ----------
   for (const e of S.elevators) {
@@ -226,7 +231,7 @@ export function incidentHtml() {
     parts.push(card(`heat-${e.id}`, 'heat', `🌡️ Motorn i hiss ${esc(e.name)} är överhettad`, `
       <div class="inc-s">Överhettningsskyddet har löst ut (<span class="lv">${motorC(e)}</span> °C): ${esc(e.name)} kör klart sina passagerare men tar inga nya förrän motorn har svalnat.</div>
       ${chiefLine(`heat${e.id}`, 'Starta extrafläkten?')}
-      <div class="inc-acts"><button class="btn sm${e.fan ? ' on' : ''}" data-act="fan:${e.id}" ${e.fan ? 'disabled' : ''}>🌀 ${e.fan ? 'Extrafläkten går' : 'Starta extrafläkt'}</button><button class="btn xs" data-act="follow:${e.id}">📹 Visa hissen</button></div>
+      <div class="inc-acts"><button class="btn sm${e.fan ? ' on' : ''}" data-act="fan:${e.id}" ${e.fan ? 'disabled' : ''}>🌀 ${e.fan ? 'Extrafläkten går' : 'Starta extrafläkt'}</button>${ikon(`follow:${e.id}`, '📹', 'Visa hissen', 'Kameran följer hissen')}</div>
       <div class="inc-hint">Fläkten kyler ungefär fyra gånger snabbare men drar ${FAN_KW} kW. Smart och Energisnål undviker varma motorer, Rusning tar risken längre, och Närmast, Kaos och Knappar bryr sig inte alls.</div>`, true));
   }
   // ---------- panoramahissen sitter fast på fasaden (incident med val: rep eller stegbil) ----------
@@ -243,7 +248,7 @@ export function incidentHtml() {
     parts.push(card('pano', 'pano', `🧗 ${esc(e.name)} sitter fast på fasaden`, `
       <div class="inc-s">Hydrauliken har låst sig och korgen hänger utanpå huset med <span class="lv">${e.passengers.length + (Pn.rider ? 1 : 0)}</span> instängda. Den går inte att veva ner – de måste ut utanpå huset. ${status}</div>
       ${chiefLine('pano', 'Hur ska de instängda ut?')}
-      <div class="inc-acts">${b('rope', '🧗 Rep från taket', true, `Räddarna firar ner en i taget ${Pn.toF === LOBBY ? 'till gatan' : 'till takterrassen'} – stannar i hård vind`)}${b('ladder', '🚒 Stegbilen', reach, reach ? 'Stegen från gatan – fungerar i blåst' : `Stegen når bara ${LADDER_MAX} våningar upp`)}<button class="btn xs" data-act="follow:${e.id}">📹 Visa hissen</button></div>
+      <div class="inc-acts">${b('rope', '🧗 Rep från taket', true, `Räddarna firar ner en i taget ${Pn.toF === LOBBY ? 'till gatan' : 'till takterrassen'} – stannar i hård vind`)}${b('ladder', '🚒 Stegbilen', reach, reach ? 'Stegen från gatan – fungerar i blåst' : `Stegen når bara ${LADDER_MAX} våningar upp`)}${ikon(`follow:${e.id}`, '📹', 'Visa hissen', 'Kameran följer hissen')}</div>
       <div class="inc-hint">Repet går fortare när det är lugnt; stegbilen klarar blåsten men når inte högt. Teknikern kan inte laga hydrauliken förrän alla är ute.</div>`, true));
   }
   // ---------- händelser som spelaren bara informeras om ----------
@@ -260,7 +265,7 @@ export function incidentHtml() {
       : e.mode === 'snapped' ? 'Bärlinorna gick av och fångapparaten stoppade fallet. Korgen står fast mellan två våningar.'
       : `Alla är ute. Hissen står avstängd medan nya bärlinor dras i schaktet – det tar några timmar.`;
     info(`cable-${e.id}-${Math.round(cab.t0)}`, 'cable', `🪢 Linbrott i ${esc(e.name)}`, `${intro}<div class="svc">${esc(cableStatus(e))}</div>`,
-      `<button class="btn xs" data-act="follow:${e.id}">📹 Visa hissen</button>`);
+      `${ikon(`follow:${e.id}`, '📹', 'Visa hissen', 'Kameran följer hissen')}`);
   }
   const M = S.move;
   // flyttkortet syns en stund innan flytten börjar (då kan spelaren välja väg och skyddsfiltar) och under den
@@ -282,7 +287,7 @@ export function incidentHtml() {
         + (M.dockWait > 0 ? ' Flyttbilen väntar på gatan – leveransbilen står vid lastkajen.' : '')
       : M.state === 'on'
         ? `<b>${esc(M.who)}</b> flyttar från ${fl(M.floor)} med Flyttfirman Lyft & Bär. Bohaget: <b>${num(M.loads)}</b> lass – ${num(flat)} kvar i lägenheten, ${num(out)} nere vid flyttbilen, ${num(M.truck)} inlastade.`
-          + `<div class="svc" title="▓ i flyttbilen · ▒ på lastkajen · ░ på väg · · i lägenheten">${bar}</div>`
+          + `<div class="svc" data-hint="▓ i flyttbilen · ▒ på lastkajen · ░ på väg · · i lägenheten">${bar}</div>`
           + (S.t < M.crewAt ? `Flyttgubbarna klär ${V ? esc(V.name) : 'varuhissen'} med skyddsfiltar. ` : '') + `${routeTxt} ${lock}`
           + (hoistStatus(M) ? ` <b>Hissbalken:</b> ${esc(hoistStatus(M))}` : '')
           + (windy ? ' <b>Blåsten stoppar hissbalken</b> – vänta ut den, eller bär ner det som står vid lastluckan i varuhissen?' : '')
@@ -293,7 +298,7 @@ export function incidentHtml() {
         : `Flytten är klar: ${num(M.loads)} lass på ${Math.round(M.t1 - M.t0)} s${M.hoisted ? ` (${num(M.hoisted)} med hissbalken och panoramahissen)` : ''}, varuhissen var låst i ${Math.round(M.indepSec)} s. Den går i vanlig trafik igen.`;
     const mc = M.state === 'done' ? '' : chiefLine('move', 'Välj väg för möblerna:');
     info(`move-${S.day}`, 'move', `🚚 Flyttdag på ${fl(M.floor)}`, body + mc,
-      `${routes}${blank}${wind}${V && M.state !== 'planned' ? `<button class="btn xs" data-act="follow:${V.id}">📹 Följ varuhissen</button>` : ''}<button class="btn xs" data-act="show:${M.floor}">Visa våningen</button><button class="btn xs" data-act="show:${DOCK}">Lastkajen</button>`);
+      `${routes}${blank}${wind}${V && M.state !== 'planned' ? `${ikon(`follow:${V.id}`, '📦', 'Följ varuhissen', 'Kameran följer varuhissen')}` : ''}${ikon(`show:${M.floor}`, '📍', 'Visa våningen', 'Kameran går till våningen där flytten är')}${ikon(`show:${DOCK}`, '🚛', 'Lastkajen', 'Kameran går till lastkajen')}`);
   }
   const A = S.medic;
   if (A && (A.state !== 'done' || S.t - A.t1 < 20)) {
@@ -313,14 +318,14 @@ export function incidentHtml() {
     const amb = crew.find(p => p.cargo && p.cargo.kind.startsWith('bår')) || crew[0];
     const on = amb && VIEW.camSel && S.sel === amb;
     info(`medic-${Math.round(A.t0)}`, 'medic', '🚑 Ambulans', what + how,
-      (amb ? `<button class="btn xs${on ? ' on' : ''}" data-act="person:${amb.id}" title="${on ? 'Sluta följa' : 'Följ'} ${esc(amb.name)} med båren">📹 ${on ? 'Följer ambulansen' : 'Följ ambulansen'}</button>` : '')
-      + `<button class="btn xs" data-act="show:${A.floor}">Visa våningen</button>${V ? `<button class="btn xs" data-act="follow:${V.id}">📹 Följ varuhissen</button>` : ''}`);
+      (amb ? `<button class="btn xs${on ? ' on' : ''}" data-act="person:${amb.id}" aria-label="Följ ambulansen" data-hint="<b>${on ? 'Följer ambulansen' : 'Följ ambulansen'}</b><br>${on ? 'Sluta följa' : 'Följ'} ${esc(amb.name)} med båren">📹</button>` : '')
+      + `${ikon(`show:${A.floor}`, '📍', 'Visa våningen', 'Kameran går dit ambulansen ska')}${V ? `${ikon(`follow:${V.id}`, '📦', 'Följ varuhissen', 'Kameran följer varuhissen')}` : ''}`);
   }
   for (const n of S.notices) {
     if (S.t - n.t0 > 30) continue;
     const svcCar = n.act && n.act.startsWith('level:') ? S.elevators[+n.act.split(':')[1]] : null;
     const svc = svcCar ? serviceStatus(svcCar) : null;
-    const acts = (n.car !== null ? `<button class="btn xs" data-act="follow:${n.car}">📹 Visa hissen</button>` : n.floor !== null ? `<button class="btn xs" data-act="show:${n.floor}">Visa våningen</button>` : '')
+    const acts = (n.car !== null ? `${ikon(`follow:${n.car}`, '📹', 'Visa hissen', 'Kameran följer hissen')}` : n.floor !== null ? `${ikon(`show:${n.floor}`, '📍', 'Visa våningen', 'Kameran går till våningen')}` : '')
       + (n.act && !svc ? `<button class="btn xs" data-act="${n.act}">${n.actLabel}</button>` : '');
     info(`n${n.id}`, n.kind, esc(n.title), esc(n.text) + (svc ? `<div class="svc">${esc(svc)}</div>` : ''), acts);
   }
@@ -337,7 +342,7 @@ export function incidentHtml() {
       ${chiefLine('fire', 'Larmet återkallade hissarna – vill du köra dem annorlunda?')}
       <div class="inc-acts">${b('recall', '🚒 Brandåterkallning')}${b('zone', `🚧 Bara E–${fl(zmax)}`)}${b('none', 'Normal drift')}</div>
       <div class="inc-hint">${FIRE_HINT[F.mode]}</div>
-      <div class="inc-acts"><button class="btn xs" data-act="show:${F.floor}">Visa våningen</button></div>`, true));
+      <div class="inc-acts">${ikon(`show:${F.floor}`, '📍', 'Visa våningen', 'Kameran går till våningen som brinner')}</div>`, true));
   }
   if (!S.power && S.outage) {
     const O = S.outage;
@@ -500,6 +505,7 @@ export function showIntro() {
       <li><b>${touch ? 'Tryck' : 'Klicka'}</b> på en person, en hiss eller en våning för att följa den – allt om den syns i kontrollpanelen ${innerWidth <= 800 ? 'under bilden' : 'till vänster'}.</li>
       <li><b>Kontrollpanelen</b> anpassar sig efter vad som händer: när det är lugnt kan du framkalla incidenter och byta styrlogik, när något händer visar den bara det.</li>
       <li>Hissen eller våningen du följer har egna knappar: framkalla ett hissfel, en brand eller släpp in besökare just där.</li>
+      <li>Knapparna är <b>ikoner</b> – ${touch ? 'håll fingret på en' : 'vila musen på en'} så står det vad den gör.</li>
       ${touch ? '<li><b>Dra</b> i bilden med ett finger för att se resten av huset; två fingrar zoomar.</li>' : `<li class="intro-keys"><kbd>Mellanslag</kbd> paus · <kbd>−</kbd>/<kbd>+</kbd> hastighet · <kbd>H</kbd> biografläge · <kbd>S</kbd> styrlogik · <kbd>T</kbd> namnbrickor · <kbd>F</kbd> koppla loss/på kameran · <kbd>A</kbd> regissör (kameran väljer själv) · <kbd>Esc</kbd> sluta följa/tillbaka</li>`}
     </ul>
     <button class="btn" id="go">${help ? 'TILLBAKA' : 'KÖR!'}</button>
@@ -509,12 +515,12 @@ export function showIntro() {
       <li>Hissarna är <b>zonindelade</b>: L1–L2 går i låg zon (TB–5) och H1–H2 i hög zon (6–T) – <b>staplade i samma schakt</b>. Expresshissarna X1–X2 kör E ⇄ 6 utan stopp, och X1 går ända ner till <b>tunnelbanan</b> (TB) – där kommer folk i klump varje gång ett tåg stannar. Den som ska mellan zonerna <b>byter hiss</b> (↹) i entrén och i sky lobbyn. Varuhissen V tar städvagnar och paket, och panoramahissen P åker utanpå fasaden.</li>
       <li>Huset <b>lever</b>: bilar kör in i garaget, leveransbilen lastar av vid kajen, de boende sover, jobbar och går på taket, en fönsterputsare jobbar sig nedåt utanför tornet, hundägare kommer med raggiga pudlar och går hem med nyklippta, och ibland landar en VIP-helikopter på taket.</li>
       <li>Ett <b>dygn</b> tar ungefär ${Math.round(dayLength() / 60)} minuter – stapeln överst i kontrollpanelen visar var i dygnet vi är och dagens incidenter. Trafiken följer dygnet – rusning på morgonen, lunch, hemgång (de får mest tid) – och på natten är det bara väktare, städare och nattugglor. Vissa våningar stänger (caféet, banken …).</li>
-      <li><b>Huset sköter sig självt.</b> I <b>driftcentralen</b> på P1 sitter driftchefen (Gun-Britt på dagen, Rune på natten) och tar alla beslut när något händer – svajläge i stormen, brandzon, reservkraft, extrafläkt, service – och säger varför. Kontrollpanelen visar bevakaren (Ludde, på natten Siv) som klipper bilden när regissören är på, chefens beslut och driftradion. Vill du bestämma själv tar du över beslutet på incidentkortet.</li>
+      <li><b>Huset sköter sig självt.</b> I <b>driftcentralen</b> på P1 sitter driftchefen (Gun-Britt på dagen, Rune på natten) och tar alla beslut när något händer – svajläge i stormen, brandzon, reservkraft, extrafläkt, service – och säger varför. Textskylten längst ner i bilden visar vad bevakaren (Ludde, på natten Siv) klipper till när regissören är på, och chefens beslut; driftradion står i kontrollpanelen. Vill du bestämma själv tar du över beslutet på incidentkortet.</li>
       <li><b>Incidenter</b> händer av sig själva: brand, strömavbrott, storm och hissfel – då kommer en hisstekniker och lagar. Slitna hissar går oftare sönder, och utan nattservice följer slitaget med till nästa dygn. När det är lugnt väljer du i kontrollpanelen styrlogik, hur ofta incidenter kommer (<b>slumpen</b>) och <b>framkallar</b> allt själv: blixt, flyttdag, VIP, tågstörning, kyla …</li>
       <li>Bilden visar <b>hallen framför hissarna</b> – rummen ligger bakom korridoren, och folk syns när de kommer ut för att vänta på hissen. Siffran vid korridoren är hur många som är inne.</li>
       <li><b>Klicka på en person</b> för att följa hen – kameran följer med och panelen visar vart hen ska och varför, även när hen är inne i rummen. <b>Klicka på en korridor</b> för att följa någon som är därinne, <b>på en hiss</b> för dess plan och last, och <b>på en våning</b> för att framkalla något där.</li>
-      <li>${touch ? '<b>Dra</b> i bilden' : '<b>Scrolla</b> med mushjulet eller piltangenterna'} – då kopplas kameran loss, och ${touch ? 'kamerablocket' : '<kbd>F</kbd>'} kopplar på den igen.</li>
-      <li>Register, logg, inställningar och dagens resultat ligger längst ner i kontrollpanelen.</li>
+      <li>${touch ? '<b>Dra</b> i bilden' : '<b>Scrolla</b> med mushjulet eller piltangenterna'} – då kopplas kameran loss, och ${touch ? 'regissören 🎬' : '<kbd>F</kbd>'} kopplar på den igen.</li>
+      <li>Register 📋, logg 📜, inställningar ⚙️ och dagens resultat 🏆 ligger längst ner i kontrollpanelen.</li>
     </ul>
     </details></div>`);
   const go = () => {

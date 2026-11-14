@@ -30,6 +30,8 @@ body{background:var(--desk);font-family:var(--ui);font-size:12px;color:var(--ink
 .btn.hot:hover{background:#e0b030}
 .btn.sm{font-size:12px;padding:3px 8px}
 .btn.xs{font-size:11px;padding:2px 6px;min-height:19px}
+.btn.ico{font-size:14px;line-height:1;min-width:26px;min-height:24px;padding:3px 4px;text-align:center}
+.btn.ico.on{padding:4px 3px 2px 5px}
 .btn:disabled{color:var(--shade);text-shadow:1px 1px 0 var(--hi);cursor:not-allowed}
 .panel{background:var(--face);box-shadow:var(--raised);padding:3px 8px 8px}
 .label{font-weight:700;font-size:12px;color:#fff;background:linear-gradient(90deg,var(--navy),var(--title2));margin:0 -5px 6px;padding:3px 6px}
@@ -62,7 +64,8 @@ body{background:var(--desk);font-family:var(--ui);font-size:12px;color:var(--ink
 .pl-logo b{color:var(--vga-y)}
 .pl-sun{font-size:16px;line-height:22px;width:26px;text-align:center;background:var(--dos);box-shadow:var(--sunken)}
 .pl-ph{flex:1;min-width:0;font-size:11px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.pl-ctl{display:flex;gap:2px;align-items:center}
+.pl-ctl{display:flex;gap:2px;align-items:center;flex-wrap:wrap}
+.pl-ctl .btn.ico{font-size:12px;font-weight:700}
 .tl{position:relative;height:18px;background:var(--dos);box-shadow:var(--sunken);margin-top:4px;overflow:hidden}
 .tl-b{position:absolute;top:2px;bottom:2px;border-right:1px solid #000}
 .tl-b.night{background:#1a1f4a}
@@ -77,25 +80,9 @@ body{background:var(--desk);font-family:var(--ui);font-size:12px;color:var(--ink
 .warnrow{display:flex;justify-content:space-between;gap:6px;width:100%;border:0;font:inherit;font-weight:700;font-size:12px;text-align:left;cursor:pointer;
   padding:4px 7px;background:var(--vga-y);box-shadow:var(--raised);animation:pulse .6s infinite alternate}
 .warnrow span{font-weight:400;text-decoration:underline}
-/* kameran */
-.cam{background:var(--dos);color:var(--dos-txt);box-shadow:var(--sunken);padding:2px 6px 3px;cursor:pointer}
-.cam>div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cam:hover,.cam-line:hover{filter:brightness(1.15)}
-.cam.cut{box-shadow:var(--sunken),0 0 0 2px var(--vga-y)}
-.blk .cam .dim,.blk .cam .dim *{color:#9a9a9a}
-.cam-h b{color:#fff}
-.rec{float:right;margin-left:8px;font-weight:700;color:var(--shade)}
-.cam.on .rec,.rec.on{color:var(--vga-r)}
-.cam-show{font-family:'VT323',monospace;font-size:21px;line-height:21px;color:var(--vga-y)}
-.cam:not(.on) .cam-show{color:var(--vga-g)}
-.cam-th{color:var(--vga-g);font-style:italic}
-.cam-line{background:var(--dos);color:var(--dos-txt);box-shadow:var(--sunken);padding:2px 6px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cam-line b{color:var(--vga-y);font-weight:400}
-.cam-line .rec{float:none;margin:0}
-/* driftchefen och driftradion */
-.chief{background:var(--note);box-shadow:var(--sunken);padding:3px 6px}
-.chief.one{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.radio{background:var(--dos);color:var(--dos-txt);box-shadow:var(--sunken);padding:2px 6px 3px;margin-top:3px;cursor:pointer}
+/* driftradion (driftchefens beslut och vad regissören visar står på textskylten i bilden) */
+.radio{background:var(--dos);color:var(--dos-txt);box-shadow:var(--sunken);padding:2px 6px 3px;cursor:pointer}
+.radio.one .r{opacity:1}
 .radio .r{display:flex;gap:5px;align-items:baseline;opacity:.75;white-space:nowrap;overflow:hidden}
 .radio .r>span:last-child{overflow:hidden;text-overflow:ellipsis}
 .radio .r.new{opacity:1;color:#fff}
@@ -276,14 +263,26 @@ body{background:var(--desk);font-family:var(--ui);font-size:12px;color:var(--ink
 /* ---------- Driftchefen: chefens rad på incidentkorten ---------- */
 .le.k-chief{color:var(--vga-y)}
 
-/* ---------- Biografläget: bara bilden och en textskylt nertill ---------- */
-.lower{left:50%;bottom:24px;transform:translateX(-50%);width:min(640px,calc(100% - 32px));pointer-events:none;
-  background:linear-gradient(90deg,rgba(0,0,128,.92),rgba(16,132,208,.88));color:#fff;box-shadow:var(--raised),4px 4px 0 rgba(0,0,0,.4);padding:6px 14px 8px}
-.lw-tag{font-size:11px;font-weight:700;color:var(--vga-y);letter-spacing:.5px}
-.lw-show{font-family:'VT323',monospace;font-size:34px;line-height:34px}
-.lw-sub{font-size:13px;font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* ---------- Textskylten längst ner i bilden: vad regissören visar och driftchefens beslut.
+   Halvgenomskinlig, släpper igenom klick; kameran håller det den följer ovanför den (VIEW.padB i view.js). ---------- */
+.lower{left:50%;transform:translateX(-50%);bottom:6px;width:min(720px,calc(100% - 24px));pointer-events:none;
+  background:rgba(0,0,0,.62);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);padding:3px 10px 4px;transition:opacity .6s}
+.lower.quiet{opacity:.55}
+.lw-tag{font-family:var(--ui);font-size:10px;font-weight:700;color:var(--vga-y);letter-spacing:.5px;margin-right:6px;vertical-align:middle}
+.lw-show{font-family:'VT323',monospace;font-size:22px;line-height:24px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lw-sub{font-size:12px;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--note)}
+.lw-sub b{color:var(--vga-y)}
 .lw-key{position:absolute;right:10px;top:6px;font-size:10px;opacity:.7}
 .lw-x{pointer-events:auto;opacity:1;top:4px;right:4px;font-size:12px;min-height:30px} /* (pekskärm: enda vägen ut ur biografläget) */
+/* biografläget (H): bara bilden och en större skylt */
+body.cinema .lower{bottom:24px;width:min(640px,calc(100% - 32px));background:linear-gradient(90deg,rgba(0,0,128,.85),rgba(16,132,208,.8));padding:6px 14px 8px}
+body.cinema .lw-show{font-size:34px;line-height:36px;white-space:normal}
+body.cinema .lw-tag{display:block;font-size:11px;margin:0}
+body.cinema .lw-sub{font-size:13px}
+/* verktygstipset (panels.js): gult som i Kontor 95 */
+.tip{position:fixed;z-index:20;max-width:240px;pointer-events:none;background:var(--note);color:var(--ink);border:1px solid var(--dark);
+  box-shadow:2px 2px 0 rgba(0,0,0,.35);padding:3px 6px 4px;font-size:11.5px;line-height:1.35}
+.tip[hidden]{display:none}
 body.cinema #side{display:none !important}
 /* chefens beslut på incidentkortet; när chefen har det i handen blinkar kortet inte */
 .inc-chief{margin-top:5px;padding:3px 5px;background:var(--note);box-shadow:var(--sunken);font-size:11.5px;line-height:1.35}

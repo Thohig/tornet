@@ -21,7 +21,12 @@ export const VIEW = { scale: 1, dpr: 1, camY: 0, viewH: H, x0: LAND_X0, follow: 
   // regissören (director.js): automatisk kamera och den tagning den visar just nu
   auto: false, shot: /** @type {(import('./director.js').Shot & { t0: number })|null} */ (null),
   // sidled (smal skärm): bilden är bredare än spelytan och flyttas panX css-pixlar åt vänster; panTo = dit den glider
-  panX: 0, panW: 0, panTo: /** @type {number|null} */ (null) };
+  panX: 0, panW: 0, panTo: /** @type {number|null} */ (null),
+  // textskylten längst ner i bilden (#lower) täcker padB världsenheter: kameran räknar med att bara
+  // viewH − padB syns, och kan scrolla padB längre ner så att även stationen hamnar ovanför skylten
+  padB: 0 };
+/** css-pixlar som textskylten tar längst ner i bilden (vanligt läge / biografläget) */
+const LOWER_PX = { std: 62, cinema: 118 };
 // Minsta skala: på en telefon blir huset annars så litet att folk är prickar och skyltarna oläsliga.
 // Är spelytan smalare scrollar bilden i sidled. Skalan avrundas så att en pixel i pixelgrafiken (PX = 2
 // världsenheter) blir ett helt antal skärmpixlar.
@@ -41,14 +46,16 @@ export function resize() {
   const dpr = window.devicePixelRatio || 1;
   const fit = innerW / VW;
   const s = fit >= MIN_SCALE ? fit : Math.max(fit, Math.round(MIN_SCALE * 2 * dpr) / (2 * dpr));
-  const cssW = VW * s, cssH = Math.min(H * s, innerH);
+  const padB = (cinema ? LOWER_PX.cinema : LOWER_PX.std) / s;
+  const cssW = VW * s, cssH = Math.min((H + padB) * s, innerH);
   // samma storlek som förut (Safari skickar resize när adressfältet fälls in): rita inte om canvasen
-  if (cv.width === Math.round(cssW * dpr) && cv.height === Math.round(cssH * dpr) && VIEW.dpr === dpr && VIEW.panW === innerW) return;
+  if (cv.width === Math.round(cssW * dpr) && cv.height === Math.round(cssH * dpr) && VIEW.dpr === dpr && VIEW.panW === innerW && VIEW.padB === padB) return;
+  VIEW.padB = padB;
   VIEW.panW = innerW;
   cv.style.width = cssW + 'px'; cv.style.height = cssH + 'px';
   cv.width = Math.round(cssW * dpr); cv.height = Math.round(cssH * dpr);
   VIEW.scale = s; VIEW.dpr = dpr; VIEW.viewH = cssH / s;
-  VIEW.camY = clamp(VIEW.camY, 0, H - VIEW.viewH);
+  VIEW.camY = clamp(VIEW.camY, 0, camMax());
   // går det att scrolla i bilden tar den ett finger själv (två fingrar zoomar sidan som vanligt);
   // syns hela huset får ett finger scrolla sidan i stället
   cv.style.touchAction = camMax() > 0 ? 'pinch-zoom' : 'auto';
@@ -57,7 +64,9 @@ export function resize() {
 }
 window.addEventListener('resize', resize);
 // ---------- Kamera ----------
-export const camMax = () => Math.max(0, H - VIEW.viewH);
+export const camMax = () => Math.max(0, H + VIEW.padB - VIEW.viewH);
+/** hur mycket av bilden som syns ovanför textskylten (världsenheter) */
+export const seeH = () => VIEW.viewH - VIEW.padB;
 /** hur långt bilden kan flyttas i sidled (css-pixlar) */
 export const panMax = () => Math.max(0, parseFloat(cv.style.width || '0') - VIEW.panW);
 function setPan(x) {
@@ -72,7 +81,7 @@ export function keepX(wx) {
 }
 export function lookAt(worldY, hold = 4) {
   // centrera kameran på en punkt; pausa följ-läget en stund så att den inte drar iväg direkt
-  S.camTarget = clamp(worldY - VIEW.viewH / 2, 0, camMax());
+  S.camTarget = clamp(worldY - seeH() / 2, 0, camMax());
   S.followHold = S.anim + hold;
 }
 export function scrollToFloor(f) {
@@ -105,14 +114,14 @@ export function updateCamera(dt) {
   if (VIEW.follow !== null && S.anim > (S.followHold || 0)) {
     // följ en hiss: håll korgen mitt i bild
     const y = floorY(S.elevators[VIEW.follow].pos) - FLOOR_H / 2;
-    S.camTarget = clamp(y - VIEW.viewH * 0.5, 0, camMax());
+    S.camTarget = clamp(y - seeH() * 0.5, 0, camMax());
     keepX(shaftCX(VIEW.follow));
   } else if (VIEW.camSel && p && S.anim > (S.followHold || 0)) {
     const h = personHead(p);
     if (h) {
       keepX(h.x);
-      const y = h.y + 40, top = VIEW.camY + VIEW.viewH * 0.22, bot = VIEW.camY + VIEW.viewH * 0.78;
-      if (y < top || y > bot) S.camTarget = clamp(y - VIEW.viewH * 0.5, 0, camMax());
+      const y = h.y + 40, top = VIEW.camY + seeH() * 0.22, bot = VIEW.camY + seeH() * 0.78;
+      if (y < top || y > bot) S.camTarget = clamp(y - seeH() * 0.5, 0, camMax());
     }
   }
   if (S.camTarget != null) {

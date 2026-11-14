@@ -69,7 +69,7 @@ function visitor(f, x = BX0 + 60) {
 /** åtgärder som andra gränssnittsmoduler lägger till (panels.js, hud.js): namn → (b, c) => void */
 export const extraActions = /** @type {Record<string, (b: string, c: string) => void>} */ ({});
 /** panelen ritas om direkt efter en åtgärd (sätts av panels.js) */
-export const uiHooks = { repaint: () => {} };
+export const uiHooks = { repaint: () => {}, /** visa verktygstipset för knappen vid (x, y) (panels.js) */ tip: (/** @type {number} */ _x, /** @type {number} */ _y) => {} };
 export function doAction(cmd) {
   const [a, b, c] = cmd.split(':');
   if (extraActions[a]) extraActions[a](b, c);
@@ -113,10 +113,20 @@ export function doAction(cmd) {
   uiHooks.repaint();
 }
 // pointerdown i stället för click: panelen ritas om flera gånger i sekunden (nedräkningar, hissens läge)
+// Med fingret: knappen trycks först när fingret släpps, och ett långt tryck visar förklaringen i stället
+// (det finns ingen hovring på en pekskärm). Flyttas fingret (panelen scrollas) blir det inget tryck.
+const LONG_MS = 450, SLOP_PX = 10;
+/** @type {{ act: string, x: number, y: number, timer: number }|null} */
+let press = null;
 document.addEventListener('pointerdown', ev => {
   if (ev.button !== 0) return;
   const t = /** @type {HTMLElement} */ (ev.target);
   const a = /** @type {HTMLButtonElement} */ (t.closest('[data-act]'));
+  if (a && ev.pointerType === 'touch' && a.dataset.hint) {
+    clearTimeout(press?.timer);
+    press = { act: a.disabled ? '' : a.dataset.act, x: ev.clientX, y: ev.clientY, timer: setTimeout(() => { const p = press; press = null; if (p) uiHooks.tip(p.x, p.y); }, LONG_MS) };
+    return;
+  }
   if (a && !a.disabled) { ev.preventDefault(); doAction(a.dataset.act); return; }
   const pe = /** @type {HTMLElement} */ (t.closest('[data-pid]'));
   if (pe) {
@@ -124,6 +134,17 @@ document.addEventListener('pointerdown', ev => {
     if (p) { ev.preventDefault(); followPerson(p); uiHooks.repaint(); }
   }
 });
+document.addEventListener('pointerup', () => {
+  if (!press) return;
+  clearTimeout(press.timer);
+  const a = press.act;
+  press = null;
+  if (a) doAction(a);
+});
+document.addEventListener('pointermove', ev => {
+  if (press && Math.hypot(ev.clientX - press.x, ev.clientY - press.y) > SLOP_PX) { clearTimeout(press.timer); press = null; }
+});
+document.addEventListener('pointercancel', () => { if (press) { clearTimeout(press.timer); press = null; } });
 // ljudet släpps fram först efter ett klick eller en tangent. Safari på iPhone räknar bara med fingret när
 // det lyfts (pointerup/touchend), inte pointerdown – därför lyssnar vi på dem, vid varje tryck: knappen som
 // slår på ljudet reagerar på pointerdown, och då väcks ljudet när fingret släpper.

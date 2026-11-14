@@ -14,7 +14,7 @@ import { FIRE_FLOORS, INC_LEVELS, INC_LEVEL_NAMES } from './incidents.js';
 import { VIEW, nightness, resize } from './view.js';
 import { crewNow, toggleAuto } from './director.js';
 import { chiefOnDuty } from './chief.js';
-import { $, carHtml, dayNumbers, drawPortrait, incidentPanel, logHtml, personHtml, rosterHtml, statsHtml } from './hud.js';
+import { $, ikon, carHtml, dayNumbers, drawPortrait, incidentPanel, logHtml, personHtml, rosterHtml, statsHtml } from './hud.js';
 import { peopleBehindDoor } from './render.js';
 import { soundOn } from './sound.js';
 import { lastDay, summaryHtml } from './summary.js';
@@ -25,9 +25,11 @@ const side = $('side'), portrait = $('portrait');
 // ---------- Vyer och utfällda länkar (bara gränssnittets tillstånd) ----------
 /** @type {{ view: null|'roster'|'log'|'stats'|'set'|'yesterday', open: Set<string>, fireFloor: string, squeezed: Set<string>, key: string }} */
 const UI = { view: null, open: new Set(), fireFloor: '', squeezed: new Set(), key: '' };
-const VIEWS = { roster: '📋 Register', log: '📜 Logg', set: '⚙️ Inställningar', stats: '🏆 Resultat' };
+/** vyerna: ikon, namn och förklaring (länkarna längst ner är ikoner) */
+const VIEWS = { roster: ['📋', 'Register', 'Alla i huset just nu – klicka på någon för att följa hen'], log: ['📜', 'Logg', 'Allt som har hänt, med filter'],
+  set: ['⚙️', 'Inställningar', 'Felknappar, underhåll och vad som händer när dygnet tar slut'], stats: ['🏆', 'Resultat', 'Dagens siffror och betyg'] };
 /** vyer som inte har en egen länk: gårdagens sammanfattning (öppnas från informationsrutan eller resultatet) */
-const VIEW_TITLE = v => (v === 'yesterday' ? `🌅 Dag ${lastDay()?.day ?? ''}` : VIEWS[v]);
+const VIEW_TITLE = v => (v === 'yesterday' ? `🌅 Dag ${lastDay()?.day ?? ''}` : VIEWS[v].slice(0, 2).join(' '));
 extraActions.view = b => { UI.view = UI.view === b || b === 'back' ? null : /** @type {any} */ (b); S.logDirty = true; };
 extraActions.yesterday = () => { if (lastDay()) { UI.view = 'yesterday'; S.logDirty = true; } };
 extraActions.open = b => { UI.open.add(b); UI.view = null; };
@@ -116,65 +118,57 @@ function followed() {
 function playHtml() {
   const h = hour(), night = nightness(h) > 0.5;
   const wx = `${S.weather.cold > 0 ? '❄️ ' : S.weather.temp >= 20 ? '🌤️ ' : ''}${S.weather.temp} °C${S.storm ? ' · 🌬️ storm' : ''}`;
-  const speeds = SPEEDS.map(v => btn(`spd:${v}`, { 0.25: '¼×', 0.5: '½×', 1: '1×', 2: '2×' }[v], S.speed === v, 'Fart (− och +)')).join('');
+  const speeds = SPEEDS.map(v => { const t = { 0.25: '¼×', 0.5: '½×', 1: '1×', 2: '2×' }[v]; return ikon(`spd:${v}`, t, `Fart ${t}`, 'Snabbare och långsammare med + och −', S.speed === v); }).join('');
   return `<div class="pl-top"><span class="pl-logo" data-hint="Hissarna styrs av Hiss-O-Matic 3000">TORNET</span><span class="pl-sun">${night ? '🌙' : '☀️'}</span>`
     + `<span class="pl-ph"><b>${phaseName(h)}</b> · ${wx}<br><span class="dim">Dag ${S.day} · ${S.people.length} i huset · frö ${S.seed}</span></span></div>`
-    + `<div class="pl-ctl">${btn('pause', S.paused ? '▶' : '❚❚', S.paused, '<b>Paus</b> (mellanslag)')}${speeds}<span class="sp"></span>`
-    + `${btn('help', '?', false, '<b>Hjälp:</b> handgreppen, tangenterna och mer om huset')}</div>${timelineHtml()}`;
+    + `<div class="pl-ctl">${ikon('pause', S.paused ? '▶' : '❚❚', S.paused ? 'Spela' : 'Paus', 'Mellanslag', S.paused)}${speeds}<span class="sp"></span>${camTools()}`
+    + `${ikon('help', '?', 'Hjälp', 'Handgreppen, tangenterna och mer om huset')}</div>${timelineHtml()}`;
 }
-function camHtml(mode) {
-  const c = crewNow();
-  const tools = btn('auto', '🎬 Regissör', VIEW.auto, '<b>Regissören</b> klipper bilden till det mest sevärda (A)')
-    + btn('cinema', '🎞️ Biograf', false, '<b>Biografläget:</b> bara bilden och en textskylt (H)')
-    + btn('tags', 'ID', S.tags, '<b>Namnbrickor</b> över alla (T)') + btn('sound', soundOn() ? '🔊' : '🔇', soundOn(), '<b>Ljud</b> (M)');
-  if (!c) return `<div class="row">${tools}</div>`;
-  if (mode === 'row') return `<div class="cam-line" data-act="auto" data-hint="${c.auto ? 'Klicka (A) för att ta kameran själv' : 'Klicka (A) så klipper bevakaren bilden åt dig'}"><span class="rec${on(c.auto)}">${c.auto ? '●' : '❚❚'}</span> 📹 ${esc(c.who.name)}: <b>${esc(c.show)}</b></div>`;
-  return `<div class="cam${on(c.auto)}${c.cut ? ' cut' : ''}" data-act="auto" data-hint="${c.auto ? `<b>${esc(c.who.name)}</b> klipper bilden. Klicka (A) för att ta kameran själv.` : `Du har kameran. Klicka (A) så klipper <b>${esc(c.who.name)}</b> bilden åt dig.`}">`
-    + `<div class="cam-h"><span class="rec">${c.auto ? '● REC' : '❚❚ AV'}</span>📹 <b>${esc(c.who.name)}</b> <span class="dim">${esc(c.who.title)} · ${esc(c.doing)}</span></div>`
-    + `<div class="cam-show">${esc(c.show)}</div><div class="cam-th">💭 ${esc(c.thought)}</div></div><div class="row">${tools}</div>`;
-}
-function chiefText() {
-  const C = S.chief, who = esc(chiefOnDuty().name);
-  if (!C || !C.on) return `🧑‍💼 <b>Driftchefen har rast</b> – alla beslut är dina.`;
-  if (C.say && S.t < C.say.until) return `🧑‍💼 <b>${who}:</b> ${esc(C.say.text)}`;
-  const d = C.log.length ? C.log[C.log.length - 1] : null;
-  return d ? `🧑‍💼 <b>${who}</b> <span class="dim">senast:</span> ${esc(d.text)}${d.why ? ` <span class="dim">– ${esc(d.why)}</span>` : ''}`
-    : `🧑‍💼 <b>${who}</b> håller ögonen på skärmarna …`;
+/** kamerans verktyg: ikoner i uppspelningsraden (vad regissören visar står på textskylten i bilden) */
+function camTools() {
+  const c = crewNow(), who = c ? esc(c.who.name) : 'Regissören';
+  return ikon('auto', '🎬', 'Regissören', VIEW.auto ? `${who} klipper bilden till det mest sevärda. Klicka (A) för att ta kameran själv.` : `Du har kameran. Klicka (A) så klipper ${who} bilden åt dig.`, VIEW.auto)
+    + ikon('cinema', '🎞️', 'Biografläget', 'Bara bilden och textskylten (H)')
+    + ikon('tags', '🏷️', 'Namnbrickor', 'Namnen över alla i bild (T)', S.tags)
+    + ikon('sound', soundOn() ? '🔊' : '🔇', 'Ljud', soundOn() ? 'Ljudet är på (M)' : 'Ljudet är av (M)', soundOn());
 }
 const RADIO_N = 3, RADIO_QUIET_S = 25;
-function chiefHtml(mode) {
-  if (mode === 'row') return `<div class="chief one">${chiefText()}</div>`;
-  const F = S.feed.slice(-RADIO_N);
+/** driftradion: det senaste som hänt (driftchefens beslut står på textskylten i bilden) */
+function radioHtml(mode) {
+  const F = S.feed.slice(mode === 'row' ? -1 : -RADIO_N);
   const quiet = !F.length || S.t - F[F.length - 1].t > RADIO_QUIET_S;
   const radio = quiet ? '<div class="r dim">📻 Lugnt på radion.</div>'
     : F.map((f, i) => `<div class="r${i === F.length - 1 ? ' new' : ''}${f.kind === 'chief' ? ' chief' : ''}${S.t - f.t > 60 ? ' old' : ''}"><span class="lt">${f.time}</span>${f.color ? `<span class="ld" style="background:${f.color}"></span>` : ''}<span>${esc(f.text)}</span></div>`).join('');
-  return `<div class="chief">${chiefText()}</div><div class="radio" data-act="view:log" data-hint="<b>Driftradion:</b> det senaste som hänt. Klicka för hela loggen.">${radio}</div>`;
+  return `<div class="radio${mode === 'row' ? ' one' : ''}" data-act="view:log" data-hint="<b>Driftradion:</b> det senaste som hänt. Klicka för hela loggen.">${radio}</div>`;
 }
 function followHtml(F) {
   if (F.kind === 'car') return { head: `📹 Följer hiss ${esc(F.e.name)}`, body: carHtml(F.e) };
   if (F.kind === 'floor') {
     const f = F.f, w = S.wl && S.wl[f] ? S.wl[f].u.length + S.wl[f].d.length : 0, inside = peopleBehindDoor(f).length;
     const acts = [
-      inside ? btn(`inside:${f}`, `👤 Följ någon därinne (${inside})`) : '',
-      FIRE_FLOORS.includes(f) ? btn(`trig:fire:${f}`, '🔥 Brand här', false, '', S.fire ? ' disabled' : '') : '',
-      btn(`visit:${f}`, '🚶 Släpp in en besökare', false, 'En besökare kommer till våningen', S.fire ? ' disabled' : ''),
-      f === LOBBY ? btn('bus', '👥 BUSS!', false, 'En busslast turister väller in i entrén', S.fire ? ' disabled' : '') : '',
+      inside ? ikon(`inside:${f}`, '👤', 'Följ någon därinne', `${inside} är inne på våningen – klicka igen för nästa`) : '',
+      FIRE_FLOORS.includes(f) ? ikon(`trig:fire:${f}`, '🔥', 'Brand här', 'Det börjar brinna på den här våningen', false, S.fire ? ' disabled' : '') : '',
+      ikon(`visit:${f}`, '🚶', 'Släpp in en besökare', 'En besökare kommer till våningen', false, S.fire ? ' disabled' : ''),
+      f === LOBBY ? ikon('bus', '👥', 'Buss!', 'En busslast turister väller in i entrén', false, S.fire ? ' disabled' : '') : '',
     ].join('');
     return { head: `📹 Våning ${fl(f)} · ${esc(FL[f].name)}`, body: `<div class="fl-info">${w} väntar på hiss · ${inside} inne${f === CONTROL ? ' · driftcentralen' : ''}</div><div class="row">${acts}</div>` };
   }
   const p = F.p, cam = VIEW.camSel;
   return { head: `${cam ? '📹 Följer' : '🔎 Spårar'} ${esc(p.name)}`,
-    body: personHtml(p) + (cam ? '' : `<div class="row">${btn(`person:${p.id}`, '📹 Följ med kameran (F)')}</div>`) };
+    body: personHtml(p) + (cam ? '' : `<div class="row">${ikon(`person:${p.id}`, '📹', 'Följ med kameran', 'Kameran håller personen i bild (F)')}</div>`) };
 }
 function trigHtml() {
-  const fire = `<select name="fireFloor" data-hint="Våningen som börjar brinna"><option value="">slumpad</option>${FIRE_FLOORS.map(f => `<option value="${f}"${String(f) === UI.fireFloor ? ' selected' : ''}>${fl(f)} · ${esc(FL[f].short)}</option>`).join('')}</select>`;
-  const t = (k, label, hint) => btn(`trig:${k}`, label, false, hint);
-  return `<div class="row"><span class="trig-fire">${btn(`trig:fire:${UI.fireFloor}`, '🔥 Brand', false, 'Det börjar brinna – på vald våning eller en slumpad', S.fire ? ' disabled' : '')}${fire}</span>`
-    + `${t('power', '⚡ Ström', 'Strömavbrott i hela huset')}${t('storm', '🌬️ Storm', 'Ett oväder: de höga schakten svajar')}${t('lightning', '⛈️ Blixt', 'Blixten slår ner (och ibland ut strömmen)')}</div>`
-    + `<div class="row">${t('fault', '🔧 Hissfel', 'En slumpad hiss går sönder')}${t('heat', '🌡️ Het motor', 'En motor överhettas')}${t('cable', '🪢 Linbrott', 'Linorna går av i en hiss')}${t('pano', '🧗 Fast på fasaden', 'Panoramahissen fastnar utanför huset – de instängda måste firas ner')}</div>`
-    + `<div class="row">${t('medical', '🚑 Ambulans', 'Någon svimmar')}${t('move', '🚚 Flytt', 'Ett hushåll flyttar')}${t('vip', '🚁 VIP', 'VIP-helikoptern landar')}${t('train', '🚇 Tågstörning', 'Tåget blir försenat')}</div>`
-    + `<div class="row">${t('cold', '❄️ Kyla', 'En kall dag: dörrarna i entrén tar emot')}${t('heatwave', '☀️ Värme', 'Värmebölja: motorerna kyls sämre')}${btn('bus', '👥 BUSS!', false, 'En busslast turister väller in i entrén', S.fire ? ' disabled' : '')}</div>`
-    + `<div class="dim small">Följ en hiss eller våning för att framkalla något just där.</div>`;
+  const fire = `<select name="fireFloor" data-hint="<b>Brandvåning</b><br>Våningen som börjar brinna"><option value="">slumpad</option>${FIRE_FLOORS.map(f => `<option value="${f}"${String(f) === UI.fireFloor ? ' selected' : ''}>${fl(f)} · ${esc(FL[f].short)}</option>`).join('')}</select>`;
+  const t = (k, icon, name, hint) => ikon(`trig:${k}`, icon, name, hint);
+  return `<div class="row ico-grid"><span class="trig-fire">${ikon(`trig:fire:${UI.fireFloor}`, '🔥', 'Brand', 'Det börjar brinna – på vald våning eller en slumpad', false, S.fire ? ' disabled' : '')}${fire}</span>`
+    + t('power', '⚡', 'Strömavbrott', 'Strömmen går i hela huset') + t('storm', '🌬️', 'Storm', 'Ett oväder: de höga schakten svajar')
+    + t('lightning', '⛈️', 'Blixt', 'Blixten slår ner (och ibland ut strömmen)')
+    + t('fault', '🔧', 'Hissfel', 'En slumpad hiss går sönder') + t('heat', '🌡️', 'Het motor', 'En motor överhettas')
+    + t('cable', '🪢', 'Linbrott', 'Linorna går av i en hiss') + t('pano', '🧗', 'Fast på fasaden', 'Panoramahissen fastnar utanför huset – de instängda måste firas ner')
+    + t('medical', '🚑', 'Ambulans', 'Någon svimmar') + t('move', '🚚', 'Flytt', 'Ett hushåll flyttar') + t('vip', '🚁', 'VIP', 'VIP-helikoptern landar')
+    + t('train', '🚇', 'Tågstörning', 'Tåget blir försenat') + t('cold', '❄️', 'Kyla', 'En kall dag: dörrarna i entrén tar emot')
+    + t('heatwave', '☀️', 'Värmebölja', 'Motorerna kyls sämre') + ikon('bus', '👥', 'Buss!', 'En busslast turister väller in i entrén', false, S.fire ? ' disabled' : '')
+    + `</div><div class="dim small">Följ en hiss eller våning för att framkalla något just där.</div>`;
 }
 function stratHtml() {
   const chief = S.chief && S.chief.on;
@@ -202,22 +196,25 @@ function viewHtml(v) {
     + `<div class="hint">Rullar vidare: kl 06 fortsätter huset som det är – reparationer, incidenter och folk följer med. Börjar om: spelet stannar för dagens resultat och nästa dygn börjar från början (bara slitage och pågående hissfel följer med).</div>`
     + `<div class="lbl">Visa</div><div class="row">${btn('tags', 'Namnbrickor (T)', S.tags)}${btn('sound', `Ljud (M) ${soundOn() ? '🔊' : '🔇'}`, soundOn())}</div>`;
 }
-const TITLES = { cam: '📹 Kameran', chief: '🧑‍💼 Driftchefen', trig: '⚡ Framkalla', strat: '🎛️ Styrning', day: '🏆 Dagen' };
+/** blocken som kan bli länkar: ikon, namn och förklaring */
+const BLOCKS = { chief: ['📻', 'Driftradion', 'Det senaste som hänt i huset'], trig: ['⚡', 'Framkalla', 'Brand, strömavbrott, storm, hissfel …'],
+  strat: ['🎛️', 'Styrning', 'Driftchefen, styrlogiken och slumpen'], day: ['📊', 'Dagen', 'Dagens siffror i korthet'] };
+const TITLES = Object.fromEntries(Object.entries(BLOCKS).map(([k, v]) => [k, `${v[0]} ${v[1]}`]));
 
 // ---------- Layouten: vilket läge varje block får just nu ----------
 // ordning uppifrån och ner; de som krymper först när det inte får plats står sist i SQUEEZE
-const ORDER = ['play', 'events', 'follow', 'cam', 'chief', 'trig', 'strat', 'day', 'view', 'links'];
-const SQUEEZE = ['strat', 'trig', 'day', 'chief', 'cam'];
+const ORDER = ['play', 'events', 'follow', 'chief', 'trig', 'strat', 'day', 'view', 'links'];
+const SQUEEZE = ['strat', 'trig', 'day', 'chief'];
 function layout(busy, F, inc) {
   const calm = !busy && !F;
   /** @type {Record<string, string|null>} */
   const m = { play: 'full', events: null, follow: F ? 'full' : null, view: UI.view ? 'full' : null, links: 'full',
-    cam: calm ? 'full' : 'row', chief: calm ? 'full' : 'row', trig: calm ? 'full' : 'link', strat: calm ? 'full' : 'link', day: busy ? 'link' : 'row' };
+    chief: calm ? 'full' : 'row', trig: calm ? 'full' : 'link', strat: calm ? 'full' : 'link', day: busy ? 'link' : 'row' };
   if (S.started && (inc.n || S.warn)) m.events = 'full';
   for (const k of UI.open) if (m[k] === 'link' || m[k] === 'row') m[k] = 'full';
-  for (const k of UI.squeezed) if (!UI.open.has(k) && m[k]) m[k] = k === 'cam' || k === 'chief' ? 'row' : 'link';
+  for (const k of UI.squeezed) if (!UI.open.has(k) && m[k]) m[k] = k === 'chief' ? 'row' : 'link';
   // en vy (register, logg …) tar platsen under händelserna: verktygen blir länkar
-  if (UI.view) for (const k of ['follow', 'cam', 'chief', 'trig', 'strat', 'day']) if (m[k]) m[k] = k === 'follow' ? 'row' : 'link';
+  if (UI.view) for (const k of ['follow', 'chief', 'trig', 'strat', 'day']) if (m[k]) m[k] = k === 'follow' ? 'row' : 'link';
   if (!S.started) for (const k of ['trig', 'strat', 'day']) m[k] = null;
   return m;
 }
@@ -246,7 +243,7 @@ function render(m, F, inc) {
   for (const k of ORDER) {
     const mode = m[k];
     if (!mode) continue;
-    if (mode === 'link') { links.push(btn(`open:${k}`, TITLES[k] || k, false, 'Fäll ut')); continue; }
+    if (mode === 'link') { const [i, n, h] = BLOCKS[k]; links.push(ikon(`open:${k}`, i, n, `${h} – klicka för att fälla ut`)); continue; }
     let html = '', cls = `blk b-${k} m-${mode}`;
     const fold = k in TITLES && mode === 'full' && (UI.open.has(k) || k === 'trig' || k === 'strat') ? `<button class="blk-x" data-act="fold:${k}" data-hint="Fäll ihop">▁</button>` : '';
     if (k === 'play') html = playHtml();
@@ -255,14 +252,13 @@ function render(m, F, inc) {
       const f = followHtml(F);
       html = head(f.head, `<button class="blk-x" data-act="unfollow" data-hint="Sluta följa (Esc)">✕</button>`) + (mode === 'full' ? f.body : '');
     }
-    else if (k === 'cam') html = (mode === 'full' ? head(TITLES.cam) : '') + camHtml(mode);
-    else if (k === 'chief') html = (mode === 'full' ? head(TITLES.chief) : '') + chiefHtml(mode);
+    else if (k === 'chief') html = (mode === 'full' ? head(TITLES.chief) : '') + radioHtml(mode);
     else if (k === 'trig') html = head(TITLES.trig, fold) + trigHtml();
     else if (k === 'strat') html = head(TITLES.strat, fold) + stratHtml();
     else if (k === 'day') html = dayHtml();
     else if (k === 'view') html = head(VIEW_TITLE(UI.view), `<button class="blk-x" data-act="view:back" data-hint="Tillbaka (Esc)">✕</button>`) + viewHtml(UI.view);
     else if (k === 'links') {
-      const views = Object.entries(VIEWS).map(([v, t]) => btn(`view:${v}`, t, UI.view === v));
+      const views = Object.entries(VIEWS).map(([v, [i, n, h]]) => ikon(`view:${v}`, i, n, h, UI.view === v));
       html = `<div class="row">${[...links, ...views].join('')}</div>`; cls += links.length ? ' has-links' : '';
     }
     if (paint(k, cls, html) && k === 'follow' && F && F.kind === 'person') el(k).querySelector('.pic')?.appendChild(portrait);
@@ -286,7 +282,7 @@ export function updatePanel() {
   for (let i = 0; i <= SQUEEZE.length; i++) {
     render(layout(busy, F, inc), F, inc);
     if (side.scrollHeight <= side.clientHeight + 1) break;
-    const next = SQUEEZE.find(k => { const m = layout(busy, F, inc)[k]; return m && m !== 'link' && !(m === 'row' && (k === 'cam' || k === 'chief')) && !UI.open.has(k) && !UI.squeezed.has(k); });
+    const next = SQUEEZE.find(k => { const m = layout(busy, F, inc)[k]; return m && m !== 'link' && !(m === 'row' && k === 'chief') && !UI.open.has(k) && !UI.squeezed.has(k); });
     if (!next) break;
     UI.squeezed.add(next);
   }
@@ -294,14 +290,45 @@ export function updatePanel() {
 function repaint() { updatePanel(); }
 uiHooks.repaint = repaint;
 
-// ---------- Förklaringar: data-hint blir en vanlig verktygstips (ingen statusrad) ----------
-const plain = h => h.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&');
-document.addEventListener('pointerover', ev => {
-  const t = /** @type {HTMLElement} */ (/** @type {HTMLElement} */ (ev.target).closest('[data-hint]'));
-  if (t && t.title !== plain(t.dataset.hint)) t.title = plain(t.dataset.hint);
+// ---------- Verktygstips: data-hint visas i en gul ruta vid det man pekar på (ingen statusrad) ----------
+// Med mus: efter en kort stund när pekaren vilar på knappen. Med finger: ett långt tryck (input.js låter då
+// bli att trycka på knappen) – rutan står kvar en stund och försvinner vid nästa tryck.
+const tip = document.createElement('div');
+tip.className = 'tip'; tip.hidden = true; tip.setAttribute('role', 'tooltip');
+document.body.appendChild(tip);
+const TIP_MS = 250, TIP_TOUCH_S = 3000;
+// Panelen byggs om flera gånger i sekunden, så knappen under pekaren kan ha bytts ut: tipset gäller platsen
+// (och knappens förklaring), inte själva elementet.
+let tipKey = '', tipTimer = 0, px = 0, py = 0;
+const hintAt = () => /** @type {HTMLElement|null} */ (document.elementFromPoint(px, py)?.closest('[data-hint]') ?? null);
+function showTip() {
+  const t = hintAt();
+  if (!t) { hideTip(); return; }
+  tip.innerHTML = t.dataset.hint; tip.hidden = false;
+  const r = t.getBoundingClientRect(), w = tip.offsetWidth, hh = tip.offsetHeight;
+  const x = Math.max(4, Math.min(window.innerWidth - w - 4, r.left + r.width / 2 - w / 2));
+  const y = r.bottom + 6 + hh <= window.innerHeight ? r.bottom + 6 : Math.max(4, r.top - hh - 6);
+  tip.style.left = `${x}px`; tip.style.top = `${y}px`;
+}
+function hideTip() { clearTimeout(tipTimer); tipKey = ''; tip.hidden = true; }
+document.addEventListener('pointermove', ev => {
+  if (ev.pointerType === 'touch') return;
+  px = ev.clientX; py = ev.clientY;
+  const t = hintAt(), key = t ? `${t.dataset.act ?? ''}|${t.dataset.hint}` : '';
+  if (key === tipKey) return;
+  hideTip();
+  if (!t) return;
+  tipKey = key;
+  tipTimer = setTimeout(showTip, TIP_MS);
 });
+document.addEventListener('pointerleave', hideTip);
+document.addEventListener('pointerdown', ev => { if (ev.pointerType !== 'touch' || !tip.hidden) hideTip(); }, true);
+/** långt tryck med fingret på en knapp (input.js) */
+uiHooks.tip = (x, y) => { hideTip(); px = x; py = y; showTip(); tipTimer = setTimeout(hideTip, TIP_TOUCH_S); };
 
-// ---------- Biografläget: bara bilden och en textskylt med vad bevakaren visar ----------
+// ---------- Textskylten längst ner i bilden: vad regissören visar och driftchefens beslut ----------
+// Syns alltid när spelet är igång (kameran räknar med den: VIEW.padB i view.js). Biografläget (H) döljer
+// panelen och gör skylten större.
 let cinema = false;
 export function setCinema(v) {
   cinema = v;
@@ -313,12 +340,17 @@ export function setCinema(v) {
 extraActions.cinema = () => setCinema(!cinema);
 let lowerKey = '';
 function updateLower() {
-  const e = $('lower'), c = cinema ? crewNow() : null;
+  const e = $('lower'), c = S.started && !S.summaryShown ? crewNow() : null;
   if (e.hidden === !!c) e.hidden = !c;
   if (!c) return;
-  const C = S.chief, say = C && C.on && C.say && S.t < C.say.until ? `🧑‍💼 ${esc(chiefOnDuty().name)}: ${esc(C.say.text)}` : '';
-  const html = `<div class="lw-tag">${c.auto ? '● LIVE' : '📹'} · ${esc(c.who.name)}</div><div class="lw-show">${esc(c.show)}</div>`
-    + `<div class="lw-sub">${say || `💭 ${esc(c.thought)}`}</div>${matchMedia('(pointer: coarse)').matches ? '<button class="lw-key lw-x btn" data-act="cinema">✕ Tillbaka</button>' : '<div class="lw-key">H / Esc = tillbaka</div>'}`;
+  const C = S.chief, dec = C && C.on && C.say && C.say.dec && S.t < C.say.until;
+  const chief = dec ? `<div class="lw-sub">🧑‍💼 <b>${esc(chiefOnDuty().name)}:</b> ${esc(C.say.text)}</div>` : '';
+  const close = !cinema ? '' : matchMedia('(pointer: coarse)').matches ? '<button class="lw-key lw-x btn" data-act="cinema">✕ Tillbaka</button>' : '<div class="lw-key">H / Esc = tillbaka</div>';
+  const html = `<div class="lw-show"><span class="lw-tag">${c.auto ? '● LIVE' : '❚❚'} ${esc(c.who.name)}</span> ${esc(c.show)}</div>${chief}${close}`;
+  e.classList.toggle('quiet', !c.auto && !dec);
+  // nertill i bilden (syns hela huset är bilden lägre än spelytan)
+  const cv = $('game'), gap = Math.max(0, cv.parentElement.clientHeight - cv.offsetTop - cv.offsetHeight), b = `${gap + (cinema ? 24 : 6)}px`;
+  if (e.style.bottom !== b) e.style.bottom = b;
   if (html !== lowerKey) { lowerKey = html; e.innerHTML = html; }
 }
 // H slår av/på biografläget; Esc lämnar biografläget eller vyn (fångas före input.js, som annars slutar följa)

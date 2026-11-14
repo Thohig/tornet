@@ -7,7 +7,7 @@ import { CREW_BY, atPost, crewPerson, postFloor } from './crew.js';
 import { S, hour } from './state.js';
 import { fl } from './util.js';
 import { vpick, vrand } from './rng.js';
-import { VIEW, camMax, camTarget, keepX } from './view.js';
+import { VIEW, camMax, camTarget, keepX, seeH } from './view.js';
 import { personHead } from './render.js';
 import { cleanerAt } from './hoist.js';
 
@@ -301,9 +301,9 @@ export function updateDirector() {
   const sy = shotY(s);
   if (sy === null) return;
   // hissar hålls mitt i bild; folk och våningar får röra sig lite innan kameran följer efter
-  const top = VIEW.camY + VIEW.viewH * 0.3, bot = VIEW.camY + VIEW.viewH * 0.7;
+  const top = VIEW.camY + seeH() * 0.3, bot = VIEW.camY + seeH() * 0.7;
   if (s.kind === 'car' || sy < top || sy > bot || S.anim - s.t0 < 0.1)
-    S.camTarget = Math.max(0, Math.min(camMax(), sy - VIEW.viewH * 0.5));
+    S.camTarget = Math.max(0, Math.min(camMax(), sy - seeH() * 0.5));
   keepX(shotX(s));
 }
 
