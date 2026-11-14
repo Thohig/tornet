@@ -492,8 +492,8 @@ let introKeys = /** @type {((ev: KeyboardEvent) => void)|null} */ (null);
 export function showIntro() {
   const help = !!S.started, wasPaused = S.paused;
   if (help) S.paused = true;
-  showOverlay(`<div class="card intro"><h1>HISS-O-MATIC 3000${help ? ' · HJÄLP' : ''}</h1>
-    <p>Välkommen till <b>Skyskrapan</b> – åtta hissar, ${FL.length} våningar och en massa folk med bråttom. <b>Huset sköter sig självt:</b> driftchefen tar besluten och berättar varför, och regissören 🎬 klipper bilden till det som händer. Luta dig tillbaka och titta.</p>
+  showOverlay(`<div class="card intro"><h1>TORNET${help ? ' · HJÄLP' : ''}</h1>
+    <p>Välkommen till <b>Tornet</b> – åtta hissar styrda av <b>Hiss-O-Matic 3000</b>, ${FL.length} våningar och en massa folk med bråttom. <b>Huset sköter sig självt:</b> driftchefen tar besluten och berättar varför, och regissören 🎬 klipper bilden till det som händer. Luta dig tillbaka och titta.</p>
     <ul class="intro-short">
       <li><b>Klicka</b> på en person, en hiss eller en våning för att följa den – allt om den syns i kontrollpanelen till vänster.</li>
       <li><b>Kontrollpanelen</b> anpassar sig efter vad som händer: när det är lugnt kan du framkalla incidenter och byta styrlogik, när något händer visar den bara det.</li>

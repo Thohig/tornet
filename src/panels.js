@@ -117,7 +117,7 @@ function playHtml() {
   const h = hour(), night = nightness(h) > 0.5;
   const wx = `${S.weather.cold > 0 ? '❄️ ' : S.weather.temp >= 20 ? '🌤️ ' : ''}${S.weather.temp} °C${S.storm ? ' · 🌬️ storm' : ''}`;
   const speeds = SPEEDS.map(v => btn(`spd:${v}`, { 0.25: '¼×', 0.5: '½×', 1: '1×', 2: '2×' }[v], S.speed === v, 'Fart (− och +)')).join('');
-  return `<div class="pl-top"><span class="pl-logo">HISS-O-MATIC <b>3000</b></span><span class="pl-sun">${night ? '🌙' : '☀️'}</span>`
+  return `<div class="pl-top"><span class="pl-logo" data-hint="Hissarna styrs av Hiss-O-Matic 3000">TORNET</span><span class="pl-sun">${night ? '🌙' : '☀️'}</span>`
     + `<span class="pl-ph"><b>${phaseName(h)}</b> · ${wx}<br><span class="dim">Dag ${S.day} · ${S.people.length} i huset · frö ${S.seed}</span></span></div>`
     + `<div class="pl-ctl">${btn('pause', S.paused ? '▶' : '❚❚', S.paused, '<b>Paus</b> (mellanslag)')}${speeds}<span class="sp"></span>`
     + `${btn('help', '?', false, '<b>Hjälp:</b> handgreppen, tangenterna och mer om huset')}</div>${timelineHtml()}`;

@@ -1,5 +1,5 @@
 {
-  "name": "hiss-o-matic-3000",
+  "name": "tornet",
   "private": true,
   "type": "module",
   "description": "Hissimulering i pixelgrafik – åtta hissar i en skyskrapa",

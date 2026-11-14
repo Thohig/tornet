@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Enkel webbserver för Hiss-O-Matic 3000.
+"""Enkel webbserver för Tornet.
 
 Som `python3 -m http.server`, men säger åt webbläsaren att aldrig cacha filerna,
 så att en vanlig omladdning alltid ger senaste versionen av spelet.
@@ -34,7 +34,7 @@ class DualStackServer(http.server.ThreadingHTTPServer):
 
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8123
-    print(f"Hiss-O-Matic 3000 körs på http://localhost:{port}  (Ctrl+C för att stoppa)")
+    print(f"Tornet körs på http://localhost:{port}  (Ctrl+C för att stoppa)")
     try:
         server = DualStackServer(("::", port), NoCacheHandler)
     except OSError:
