@@ -75,7 +75,8 @@ export const allowedPos = (e, g) => (e.ffCar ? ffAllowed(g) : allowed(g)) && (!e
  *  och då stannar korgen inte där – målet måste läggas om) */
 export const allowedDest = (e, p) => allowedPos(e, posOf(e, p.dest));
 /** hissen tar inga nya resenärer: ur drift (spelaren), stängd för vinden eller överhettad motor */
-export const benched = e => !!(e.off || e.windLock || e.hot);
+// (också: Grinden utan hissvärdinna, och en korg som väntar på städaren)
+export const benched = e => !!(e.off || e.windLock || e.hot || (e.attendant && (e.unmanned || e.attLeave)) || e.cleanWant || e.cleaning);
 // ---------- Tillgänglighet ----------
 // Alla frågor om en hiss kan ta folk utgår från outReason. Undantagen är uttalade:
 //   operational – styrningen: även strömmen och nattvilan (en sovande hiss väcks, den tilldelas inte)
@@ -87,6 +88,8 @@ export function outReason(e) {
   if (e.hot) return 'hot';
   if (e.windLock) return 'wind';
   if (e.off) return 'off';
+  if (e.attendant && (e.unmanned || e.attLeave)) return 'unmanned';
+  if (e.cleanWant || e.cleaning) return 'clean';
   if (e.hold) return 'hold';
   if (e.liftWant) return 'liftwant';
   if (e.zoneLock) return 'zone';
@@ -94,6 +97,7 @@ export function outReason(e) {
 }
 /** hur orsaken skrivs i loggen och i personernas dagbok ("Hiss L1 …") */
 export const OUT_TEXT = /** @type {Record<string, string>} */ ({
+  unmanned: 'står utan hissvärdinna', clean: 'ska städas',
   hot: 'har överhettad motor', wind: 'stängs för vinden', off: 'är ur drift', hold: 'ska på service', zone: 'spärras av branden',
   broken: 'gick sönder', service: 'är på service', recall: 'kallas ner av brandlarmet', locked: 'är låst (brand)',
   rescue: 'nödsänks', dead: 'är strömlös', snapped: 'fick linbrott', lift: 'kör ett flyttlass', liftwant: 'ska köra ett flyttlass',
@@ -102,7 +106,7 @@ export const operational = e => S.power && !outReason(e) && !e.sleep;
 /** kan p få hissen just nu (bortsett från strömmen och nattvilan)? */
 export const servesNow = (e, p) => !outReason(e) && !(e.vipLock && !prio(p)) && canTake(e, p);
 /** hissen är borta en längre stund (fel, service, avstängd, vind, värme) – ruttvalet tar en annan väg */
-export const outLong = e => e.mode === 'broken' || e.mode === 'snapped' || e.mode === 'service' || e.hold || benched(e);
+export const outLong = e => e.mode === 'broken' || e.mode === 'snapped' || e.mode === 'service' || e.hold || benched(e) || (!!e.attendant && e.unmanned);
 /** har egen nyckel/prioritet och använder aldrig hallknapparna (VIP-gruppen, ambulansen, flyttgubbarna) */
 export const keyed = p => !!(p.vip || p.medic || p.mover || p.ff || p.rescue);
 /** får en hiss för sig själva (VIP-läge): VIP-gruppen och ambulanspersonalen */
@@ -249,7 +253,7 @@ export function etaOutcome(p) {
 const travelV = (dist, v) => (dist <= 0.001 ? 0 : dist / v + (v / ACC) * 0.5);
 export function travel(dist, v = VMAX) { return dist <= 0.001 ? 0 : dist / v + (v / ACC) * 0.5; }
 /** Toppfarten som kostnadsstyrningen räknar med: den vet om svajläget och varma motorer – de enkla lägena gör det inte */
-export const etaV = e => (costBased() ? VMAX * windMul(e) * heatMul(e) : VMAX);
+export const etaV = e => (costBased() ? e.vmax * windMul(e) * heatMul(e) : e.vmax);
 // Ett stopp tar längre tid ju fler som kliver på och av (uppmätt: ≈ 0,6 s per påstigande, 0,25 s per avstigande
 // utöver dörrarna). Styrningen vet hur många den ska hämta (e.pick) och vart passagerarna ska.
 export const BOARD_S = 0.6, ALIGHT_S = 0.25;
@@ -264,14 +268,14 @@ function stopLoad(e) {
 export function eta(e, f, d) {
   f = posOf(e, f); // (dubbeldäck: personens våning → korgens läge)
   const stops = stopFloors(e);
-  const load = stopLoad(e), sc = (/** @type {number} */ g) => STOP_COST + (load.get(g) || 0);
+  const load = stopLoad(e), sc = (/** @type {number} */ g) => STOP_COST + 2 * (e.doorT - DOOR_T) + (load.get(g) || 0);
   const pos = e.pos, v = etaV(e);
   const travel = dist => travelV(dist, v);
   let t = 0;
   if (e.state === 'doors') {
     if (e.floor === f && e.doorPhase !== 'closing' && (e.dir === d || e.dir === 0)) return 0;
-    t += e.doorPhase === 'closing' ? e.door * DOOR_T
-      : (e.doorPhase === 'opening' ? (1 - e.door) * DOOR_T : 0) + Math.max(0, e.dwellNeed - e.dwell) + e.reserved * BOARD_S + DOOR_T;
+    t += e.doorPhase === 'closing' ? e.door * e.doorT
+      : (e.doorPhase === 'opening' ? (1 - e.door) * e.doorT : 0) + Math.max(0, e.dwellNeed - e.dwell) + e.reserved * BOARD_S + e.doorT;
   }
   const dir = e.dir;
   if (dir === 0 || stops.length === 0) return t + travel(Math.abs(f - pos));

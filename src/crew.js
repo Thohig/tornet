@@ -6,7 +6,7 @@
 import { BREAK, CAFE, CONTROL, CREW, DOCK, LOBBY, ROOF, SPOTS, START_H, STATION, TERRACE_F } from './config.js';
 import { S, hour, log, occOf } from './state.js';
 import { blankPerson, gotoSpot, pev, pn, releaseSpot, setTrip } from './people.js';
-import { inFireZone } from './dispatch.js';
+import { inFireZone, stopFloors } from './dispatch.js';
 import { windAt } from './weather.js';
 import { WIND_STOP } from './hoist.js';
 
@@ -16,7 +16,7 @@ export const CREW_LOOK = 3;
 /** personalens data efter id */
 export const CREW_BY = Object.fromEntries(CREW.map(c => [c.id, c]));
 /** postens våning */
-const POST_F = { chief: CONTROL, producer: CONTROL, reception: LOBBY, gondola: ROOF, terrace: TERRACE_F };
+const POST_F = { chief: CONTROL, producer: CONTROL, reception: LOBBY, gondola: ROOF, terrace: TERRACE_F, grind: LOBBY };
 /** rastmålens våningar */
 const WHERE_F = { break: BREAK, cafe: CAFE, roof: ROOF, kiosk: STATION, vending: LOBBY, platform: STATION, dock: DOCK };
 export const postFloor = post => POST_F[post] ?? -1;
@@ -92,6 +92,35 @@ export function crewSpot(p, f) {
     desc: f === LOBBY ? 'Står i entrén och väntar' : p.onBreak ? p.breakWhy : 'Står i hallen och väntar' };
 }
 
+// ---------- Hissvärdinnan (Grinden) ----------
+/** hissen som personalen med id kör (attendant i BUILDING), om någon */
+export const attendedCar = id => S.elevators.find(e => e.attendant === id) || null;
+/** kan hissvärdinnan kliva av? Korgen ska stå tom hemma med stängd grind – annars kör den hem först (attLeave). */
+function grindFree(p) {
+  const e = attendedCar(p.crewId);
+  if (!e) return true;
+  // sitter hon fast i korgen mellan två våningar går hon ingenstans
+  if (e.mode === 'broken' && e.fault && e.fault.trapped) return false;
+  if (e.mode !== 'normal') return true;
+  const home = e.state === 'idle' && Math.abs(e.pos - e.home) < 1e-6 && !e.passengers.length && !e.reserved && e.door <= 0 && !stopFloors(e).length;
+  if (home) return true; // (attLeave står kvar tills attendTick ser att hon har gått – annars ser hissen ledig ut ett steg)
+  if (!e.attLeave) { e.attLeave = true; pev(p, `Kör hem ${e.name} till ${e.home === LOBBY ? 'entrén' : 'hemvåningen'} innan jag går`); }
+  return false;
+}
+/** Varje steg: hissar med hissvärdinna kör bara när hon står i korgen (på sin post). */
+export function attendTick() {
+  for (const e of S.elevators) {
+    if (!e.attendant) continue;
+    const m = crewPerson(e.attendant), on = atPost(m);
+    if (on === e.unmanned) {
+      e.unmanned = !on;
+      if (on) log(`🛗 ${m.name} kliver in i ${e.name} – "Vilken våning får det lov att vara?"`, 'move', e.color);
+      else log(`🛗 ${e.name} står still – ingen hissvärdinna`, 'move', e.color);
+    }
+    if (!on) e.attLeave = false;
+  }
+}
+
 // ---------- Besluten ----------
 /** fönsterputsaren: får gondolen användas just nu? ('' = ja) */
 function gondolaOff() {
@@ -126,8 +155,10 @@ function shiftOver(p, h, busy) {
   if (p.shiftEnd) { const nx = relief(c); return (!nx || !!crewPerson(nx.id)) && !(busy && c.urgent); }
   return c.until !== null && h >= c.until && (!busy || !c.urgent || h >= c.until + 0.5);
 }
-/** får personen lämna posten just nu? fönsterputsaren måste först hissas upp till taket */
+/** får personen lämna posten just nu? fönsterputsaren måste först hissas upp till taket, och hissvärdinnan
+ *  kör först hem korgen (hon kliver av i entrén när den står tom där) */
 function mayLeave(p) {
+  if (CREW_BY[p.crewId].post === 'grind' && atPost(p)) return grindFree(p);
   if (CREW_BY[p.crewId].post !== 'gondola' || !atPost(p)) return true;
   const C = S.cleaner;
   if (!C || C.parked) return true;

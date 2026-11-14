@@ -12,6 +12,8 @@ import { delayTrain } from './train.js';
 import { vipNow } from './life.js';
 import { chiefBack, playerChose, setChief } from './chief.js';
 import { panoText, setPanoHow } from './pano.js';
+import { coasterHowText, setCoasterHow } from './coaster.js';
+import { callSune } from './mess.js';
 
 /** Byt styrlogik: hallknapparna nollställs och alla väntande fördelas om. */
 export function changeStrategy(k) {
@@ -27,7 +29,7 @@ export function changeStrategy(k) {
 /** inställningar som spelaren kan ändra under dygnet */
 const SETTINGS = ['mistakes', 'maint', 'roll'];
 /** Allt spelaren kan framkalla. target = våning (brand) eller hiss (hissfel, het motor, linbrott); utelämnat = slumpen väljer. */
-export const TRIGGERS = ['fire', 'power', 'fault', 'storm', 'heat', 'cable', 'pano', 'medical', 'move', 'lightning', 'cold', 'heatwave', 'train', 'vip'];
+export const TRIGGERS = ['fire', 'power', 'fault', 'storm', 'heat', 'cable', 'pano', 'coaster', 'mess', 'medical', 'move', 'lightning', 'cold', 'heatwave', 'train', 'vip'];
 function triggerAny(type, target = null) {
   if (type === 'move') return moveNow();
   if (type === 'lightning') return strikeNow();
@@ -60,6 +62,8 @@ export const ACTIONS = {
   moveRoute: r => { if (!S.move) return; setMoveRoute(r); playerChose('move', `Flytten: ${{ auto: 'låt styrningen planera', varu: 'allt i varuhissen', balk: 'tungt med hissbalken' }[r]}`); },
   moveBlankets: on => setMoveBlankets(on),
   panoRescue: how => { if (!S.pano || !setPanoHow(how, 'player')) return; playerChose('pano', panoText(how), { inc: 'pano', car: S.pano.car }); },
+  coasterRescue: how => { if (!S.coaster || !setCoasterHow(how, 'player')) return; playerChose('coaster', coasterHowText(how), { inc: 'coaster' }); },
+  cleaner: () => { if (callSune()) playerChose('clean', 'Ringer in städaren Sune'); },
   moveWind: c => { if (!S.move) return; setMoveWind(c); playerChose('move', c === 'varu' ? 'Lasset vid luckan i varuhissen' : 'Lasset vid luckan väntar'); },
 };
 

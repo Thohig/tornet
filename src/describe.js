@@ -8,7 +8,7 @@ import { eta } from './dispatch.js';
 /** personalens poster (crew.js): läget när de sitter där
  * @type {Record<string, [string, string]>} */
 const POST_LABEL = { chief: ['VID KONTROLLBORDET', '#2a5db0'], producer: ['VID BEVAKNINGEN', '#2a5db0'], reception: ['I RECEPTIONEN', '#bd6d91'],
-  gondola: ['I GONDOLEN', '#2a5db0'], terrace: ['PÅ TERRASSEN', '#ff8c42'] };
+  gondola: ['I GONDOLEN', '#2a5db0'], terrace: ['PÅ TERRASSEN', '#ff8c42'], grind: ['KÖR GRINDEN', '#3a7d44'] };
 /** @returns {[string, string]} etikett och färg för personens läge */
 export function stateInfo(p) {
   if (p.dead) return ['HAR GÅTT', '#8d96c9'];
@@ -30,6 +30,7 @@ export function stateInfo(p) {
     case 'away': return ['BORTA', '#8d96c9'];
     case 'assembly': return ['UTE – ÅTERSAMLING', '#ff8c42'];
     case 'incar': return ['KÖR BIL', '#94a3b8'];
+    case 'coaster': return [{ queue: 'KÖAR TILL SVINDELN', lift: 'I BANHISSEN', plat: 'PÅ PLATTFORMEN', train: S.coaster && S.coaster.stuck ? 'FAST I SVINDELN!' : 'ÅKER SVINDELN', exitq: 'PÅ PLATTFORMEN', walk: 'I SERVICETRAPPAN' }[p.cst] || 'VID SVINDELN', '#c81e3a'];
     case 'rope': return [S.pano && S.pano.setup === 'ladder' ? 'KLÄTTRAR NER' : 'FIRAS NER', '#ff8c42'];
   }
   return ['?', '#ffffff'];
@@ -53,6 +54,7 @@ export function noteDetail(p) {
     case 'away': return 'Inte i huset just nu';
     case 'assembly': return 'Väntar på återsamlingsplatsen utanför entrén';
     case 'incar': return `Kör in i garaget på ${fl(p.floor)}`;
+    case 'coaster': return { queue: 'Står i kön till Svindeln', lift: 'Åker Banhissen', plat: 'Väntar på Svindelns plattform', train: 'Sitter i Svindeln', exitq: 'Väntar på Banhissen ner', walk: 'Går ner för Svindelns servicetrappa' }[p.cst] || 'Vid Svindeln';
     case 'rope': return S.pano && S.pano.setup === 'ladder' ? 'På stegbilens stege, på väg ner till gatan' : 'Hänger i selen längs fasaden';
   }
   return '';

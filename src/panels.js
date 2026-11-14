@@ -165,6 +165,7 @@ function trigHtml() {
     + t('lightning', '⛈️', 'Blixt', 'Blixten slår ner (och ibland ut strömmen)')
     + t('fault', '🔧', 'Hissfel', 'En slumpad hiss går sönder') + t('heat', '🌡️', 'Het motor', 'En motor överhettas')
     + t('cable', '🪢', 'Linbrott', 'Linorna går av i en hiss') + t('pano', '🧗', 'Fast på fasaden', 'Panoramahissen fastnar utanför huset – de instängda måste firas ner')
+    + t('coaster', '🎢', 'Svindeln fastnar', 'Nästa tåg med åkare stannar i kedjebacken på taket') + t('mess', '🤢', 'Någon kräks', 'Någon kräks i en hiss med folk i (annars spills kaffe i Sky Café) – driftchefen ringer in städaren')
     + t('medical', '🚑', 'Ambulans', 'Någon svimmar') + t('move', '🚚', 'Flytt', 'Ett hushåll flyttar') + t('vip', '🚁', 'VIP', 'VIP-helikoptern landar')
     + t('train', '🚇', 'Tågstörning', 'Tåget blir försenat') + t('cold', '❄️', 'Kyla', 'En kall dag: dörrarna i entrén tar emot')
     + t('heatwave', '☀️', 'Värmebölja', 'Motorerna kyls sämre') + ikon('bus', '👥', 'Buss!', 'En busslast turister väller in i entrén', false, S.fire ? ' disabled' : '')

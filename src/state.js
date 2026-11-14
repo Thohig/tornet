@@ -76,6 +76,8 @@ export function newStats() {
     crowdSkips: 0, closePresses: 0, heatStops: 0, relevels: 0, stumbles: 0, doorFights: 0,
     medical: 0, medicSec: 0, moveLoads: 0, moves: 0, moveBroken: 0, stormFaults: 0, learnedParks: 0, upperDeck: 0, escalator: 0,
     trains: 0, trainIn: 0, trainOut: 0,
+    // städningen (mess.js) och Svindeln på taket (coaster.js)
+    vomits: 0, spills: 0, cleaned: 0, coasterRides: 0, coasterRiders: 0, coasterStuck: 0,
     // styrningens förutsagda väntan (vid senaste tilldelningen) mot den faktiska: summa fel, summa |fel|, antal
     etaErr: 0, etaAbs: 0, etaN: 0,
     // dygnets händelser i tidsordning (dayEvent): det sammanfattningen berättar om

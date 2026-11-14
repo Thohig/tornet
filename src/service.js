@@ -8,7 +8,7 @@
 import { stream } from './rng.js';
 const { pick, rand, rng } = stream('drift');
 import { fl } from './util.js';
-import { BALANCE, DOOR_T, FLOOR_M, FLOOR_H, CAR_H, VMAX, floorY, shaftCX, timeScale, tempoWear } from './config.js';
+import { BALANCE, DOOR_T, EL, FLOOR_M, FLOOR_H, CAR_H, VMAX, floorY, shaftCX, timeScale, tempoWear } from './config.js';
 import { S, hour, incidentOver, log, notice } from './state.js';
 import { needsFreight, pev, pn, rerouteStranded, spawnStaff } from './people.js';
 import { rebuildPicks, travel, cabinKg, prio, inFireZone } from './dispatch.js';
@@ -68,7 +68,7 @@ export function maybeBreak(e) {
     if (S.incLevel === 'av' || !S.power || S.fire) return false;
     if (rng() >= FAULT_K * (FAULT_MUL[S.incLevel] ?? 1) * tempoWear() * e.wear * e.wear) return false;
   }
-  breakDown(e, e.stormFault ? 'vajerlarm – linorna slog i schaktet i stormen' : pick(FAULTS));
+  breakDown(e, e.stormFault ? 'vajerlarm – linorna slog i schaktet i stormen' : pick(faultsOf(e)));
   e.stormFault = false;
   return true;
 }
@@ -80,7 +80,12 @@ export const FAULT_KIND = /** @type {Record<string, { kind: string, need: [numbe
   'nivåfel – korgen stannar ojämnt': { kind: 'level', need: [12, 18], tool: 'Kalibrerar nivågivaren' },
   'bromsen kärvar': { kind: 'brake', need: [16, 24], tool: 'Slipar och justerar bromsbackarna' },
   'vajerlarm': { kind: 'rope', need: [14, 20], tool: 'Spänner och kontrollerar linorna' },
+  // de små hissarnas egna fel (faults i BUILDING)
+  'grinden har hakat upp sig': { kind: 'door', need: [5, 9], tool: 'Smörjer saxgrinden med en oljekanna' },
+  'nyckelläsaren krånglar': { kind: 'board', need: [5, 9], tool: 'Byter nyckelläsaren' },
 });
+/** felen som kan drabba hiss e: de vanliga och hissens egna */
+const faultsOf = e => (EL[e.id].faults.length ? FAULTS.concat(EL[e.id].faults) : FAULTS);
 const faultKind = what => FAULT_KIND[what] || (what.startsWith('vajerlarm') ? FAULT_KIND.vajerlarm : { kind: 'board', need: [12, 20], tool: 'Felsöker' });
 export function breakDown(e, what) {
   e.breakNext = false; e.trapNext = false;
@@ -108,7 +113,7 @@ export function triggerFault(target = null) {
   const e = target && ok.includes(target) ? target : pick(busy.length ? busy : ok);
   // ibland stannar korgen tvärt mellan två våningar med folk i (de sitter fast tills teknikern får igång den)
   if (target && e.passengers.length && rng() < TRAP_CHANCE) { e.trapNext = true; log(`🔧 ${e.name} hackar och gnisslar…`, 'alert', e.color); return; }
-  if (e.state === 'doors' && e.door >= 1 && e.stops.has(e.floor)) breakDown(e, pick(FAULTS));
+  if (e.state === 'doors' && e.door >= 1 && e.stops.has(e.floor)) breakDown(e, pick(faultsOf(e)));
   else { e.breakNext = true; log(`🔧 ${e.name} låter konstigt… den går sönder vid nästa stopp`, 'alert', e.color); }
 }
 /** andelen av de slumpade hissfelen (med folk ombord) där korgen stannar mellan två våningar */

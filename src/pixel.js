@@ -4,7 +4,10 @@
 // Bara grafik: läser simuleringens tillstånd men ändrar det aldrig (utom S.fx-listan, som den
 // tecknade grafiken också räknar ner).
 import { ARR, clamp, fl } from './util.js';
-import { BREAK, BX1, CAR_H, CAR_W, CONTROL, EL, FL, FLOORS, FLOOR_H, FLOOR_HOURS, FULL_LOAD, GARAGE_FLOORS, HATCH_FLOORS, GROUND_Y, H, INNER_X1, LAND_X0, DOOR_X, DOCK, LOBBY, MEZZ, ROOF_Y, SEAM_F, SHAFT_W, SHAFT_X0, STATION, TOP, TOWER_X1, TRAIN_LEN, TRAIN_X0, TRAIN_X1, W, SPOTS, carPos, floorOpen, floorY, shaftCX, shaftX, surf } from './config.js';
+import { BREAK, BX1, CAR_H, CONTROL, EL, FL, FLOORS, FLOOR_H, FLOOR_HOURS, FULL_LOAD, GARAGE_FLOORS, HATCH_FLOORS, GROUND_Y, H, INNER_X1, LAND_X0, DOOR_X, DOCK, LOBBY, MEZZ, ROOF_Y, SEAM_F, SHAFT_W, SHAFT_X0, STATION, TOP, TOWER_X1, TRAIN_LEN, TRAIN_X0, TRAIN_X1, W, SPOTS, carPos, carX, floorOpen, floorY, shaftCX, shaftX, surf } from './config.js';
+import { DECK_Y as CO_DECK, LIFT_X, PLAT_X0, PLAT_X1, PLAT_Y, SUPPORTS, TRACK, coasterPos, seatBack, trackAt, trackBack } from './coaster.js';
+import { CLEAN_FLOOR_S, sune } from './mess.js';
+import { CREW_BY, atPost, crewPerson } from './crew.js';
 import { exposure, windAt } from './weather.js';
 import { CALL_REPLY, WARM_AT, nextOut, techOf } from './service.js';
 import { HOIST_OK, PARK_Y, TERRACE_Y, cleanerAt } from './hoist.js';
@@ -12,7 +15,7 @@ import { S, hour } from './state.js';
 import { allowed, assignedTo, cabinKg, keyed } from './dispatch.js';
 import { noteDetail, stateInfo } from './describe.js';
 import { VIEW, clouds, ctx, cv, nightness, skyAt, skyline, stars } from './view.js';
-import { carSlot, carSlotX, inWindow, landPos, peopleBehindDoor, personHead, winPos } from './render.js';
+import { carSlot, carSlotXOf, inWindow, landPos, peopleBehindDoor, personHead, winPos } from './render.js';
 import { vpick, vrand } from './rng.js';
 import { PX, blend, dark, light, ellipseSprite, fromCells, sprite, text, textW, plain, rgbOf, led } from './pixart.js';
 import { buttonsMode, hallLit } from './buttons.js';
@@ -20,7 +23,6 @@ import { TRAIN_DOORS, nextTrainMin, trainDoors } from './train.js';
 import { PERSON_H, PERSON_W, cargoSprite, personSprite } from './pixpeople.js';
 import { PAL } from './pixpal.js';
 import { CHIEFS, alarm, chiefOnDuty, chiefPerson } from './chief.js';
-import { CREW_BY } from './crew.js';
 import { RAISE_T, RIG_T, ROPE_DX, riderPos } from './pano.js';
 import { HAIR_NAT, PANTS, SHIRT, SKIN } from './people.js';
 
@@ -326,7 +328,7 @@ const towerX1At = y => (y < SEAM_Y ? UX1 : BX1);
 /** hissen ovanpå i samma schakt (staplade zoner), om någon */
 const stackedAbove = e => INSIDE_EL.find(o => o !== e && shaftX(o.id) === shaftX(e.id) && o.minF === EL[e.id].topF + 1);
 /** rampen ner till garaget: kolumnerna under expresshissarna, där inget schakt går under entrén */
-const RAMP_COLS = COLS.filter(c => c.els.every(e => e.minF >= LOBBY));
+const RAMP_COLS = (() => { const r = []; for (let i = COLS.length - 1; i >= 0 && COLS[i].els.every(e => e.minF >= LOBBY); i--) r.unshift(COLS[i]); return r; })();
 /** rampens nedersta våning (understa garaget – under det ligger stationen) */
 const RAMP_F = Math.min(LOBBY, ...GARAGE_FLOORS);
 function brickWall(x0, y0, x1, y1) {
@@ -582,6 +584,18 @@ function drawLandingDoorsPx() {
     const x = X(shaftX(e.id)) + 2, w = SHAFT_W / PX - 4, yb = Y(surf(f)), h = Math.round(CAR_H / PX) - 1, y = yb - h;
     if (y > lo.height || yb < 0) continue;
     const half = w >> 1;
+    if (e.gate) { // (Grinden: gallergrind i mässing – man ser in i det mörka schaktet)
+      R(x, y, w, h, nt('#2a2630'));
+      for (let n = 0; n < w; n += 4) R(x + n, y, 1, h, nt('#b8962e'));
+      R(x, y, w, 1, nt('#b8962e')); R(x, y + h - 1, w, 1, nt('#b8962e')); R(x, y + (h >> 1), w, 1, nt('#b8962e'));
+      continue;
+    }
+    R(x, y, w, h, e.residents ? nt('#6b4520') : C0);
+    if (e.residents) { // (bostadshissen: trädörrar och en nyckelläsare)
+      for (const dx of [0, half]) { R(x + dx + 1, y + 1, half - 2, h - 2, nt('#a8743c')); R(x + dx + 3, y + 4, half - 6, h - 10, nt('#8a5a2b')); }
+      R(x + half - 1, y, 2, h, nt('#4a2e14')); R(x + w + 2, y + (h >> 1) - 3, 3, 5, INK); R(x + w + 3, y + (h >> 1) - 2, 1, 1, '#7cf06b');
+      continue;
+    }
     R(x, y, w, h, C0);
     for (const dx of [0, half]) {
       R(x + dx + 1, y + 1, half - 2, h - 2, C1);
@@ -1285,7 +1299,7 @@ function floorOverlays(f, h) {
 function carGeom(e) {
   // nivåfel: korgen står en aning för lågt eller högt när linorna töjer sig (överdrivet så att det syns)
   const lv = (e.level || 0) * 2.5 + (e.mode === 'broken' && e.fault && e.fault.kind === 'level' ? Math.sin(S.anim * 9) * 0.03 : 0);
-  const x = X(shaftX(e.id) + 4), cw = CAR_W / PX, chh = CAR_H / PX;
+  const x = X(carX(e.id)), cw = EL[e.id].carW / PX, chh = CAR_H / PX;
   const ybOf = k => Y(floorY(e.pos + k + lv) - 4);
   const top = e.deck2 ? 1 : 0, yb = ybOf(0), yt = ybOf(top) - chh; // yt = överkanten på den översta korgen
   if (yt > lo.height + 40 || yb < -40) return null;
@@ -1457,14 +1471,15 @@ function drawCarPx(e) {
 }
 /** En korg (dubbeldäck: k = 0 nedre, 1 övre) med sina passagerare och dörrar. head = översta korgen (namn och våg). */
 function cabinPx(e, k, x, yb, body, head) {
-  const cw = CAR_W / PX, chh = CAR_H / PX, yt = yb - chh;
+  const cw = EL[e.id].carW / PX, chh = CAR_H / PX, yt = yb - chh;
   R(x, yt + (e.facade ? 2 : 0), cw, chh - (e.facade ? 2 : 0), INK);
   if (e.facade) { R(x + 2, yt, cw - 4, 2, INK); R(x + 1, yt + 1, cw - 2, 1, INK); }
   R(x + 1, yt + 1, cw - 2, chh - 2, body);
   R(x + 1, yt + 1, cw - 2, 1, light(body, 0.4)); R(x + 1, yb - 2, cw - 2, 1, dark(body, 0.3));
   const ix = x + 2, iy = yt + 9, iw = cw - 4, ih = chh - 11; // överkanten (9 px) har namn och våg
   R(ix - 1, iy - 1, iw + 2, ih + 2, INK);
-  const inner = e.facade ? PAL.cabinGlass : e.freight ? PAL.cabinFreight : PAL.cabin;
+  // (bostadshissen är klädd i ek, Grinden är en mässingsbur från 1938)
+  const inner = e.facade ? PAL.cabinGlass : e.freight ? PAL.cabinFreight : e.residents ? '#c89a5e' : e.gate ? '#e3cf8f' : PAL.cabin;
   R(ix, iy, iw, ih, inner);
   R(ix, iy + ih - 6, iw, 6, dark(inner, 0.12));
   if (e.freight && S.move && S.move.state === 'on' && S.move.blankets) {
@@ -1472,16 +1487,32 @@ function cabinPx(e, k, x, yb, body, head) {
     R(ix, iy, iw, ih - 6, '#3f5f9f');
     for (let yy = 0; yy < ih - 6; yy += 6) for (let xx = (yy / 6) % 2 ? 3 : 0; xx < iw; xx += 6) R(ix + xx, iy + yy, 3, 3, '#5577b8');
   } else if (e.freight) for (let n = 0; n < 4; n++) R(ix, iy + 5 + n * 8, iw, 1, 'rgba(27,16,51,.18)');
+  else if (e.residents) for (let n = 0; n < iw; n += 5) R(ix + n, iy, 1, ih - 6, dark(inner, 0.18)); // (panelerna)
+  else if (e.gate) { for (let n = 2; n < iw; n += 4) R(ix + n, iy, 1, ih - 6, '#b8962e'); R(ix, iy + 4, iw, 1, '#b8962e'); }
   else for (let n = 1; n < 4; n++) R(ix + n * Math.round(iw / 4), iy, 1, ih - 6, dark(inner, 0.08));
+  // någon har kräkts i korgen: en pöl på golvet och flugor
+  if (e.mess) {
+    R(ix + 3, iy + ih - 3, Math.min(14, iw - 6), 2, '#9bd36a'); R(ix + 5, iy + ih - 4, 6, 1, '#7fb84e');
+    for (let n = 0; n < 2; n++) R(ix + 6 + Math.round(Math.sin(S.anim * 5 + n * 2) * 5), iy + ih - 10 - Math.round(Math.cos(S.anim * 7 + n) * 3), 1, 1, INK);
+  }
   if (e.facade) { line(ix + 3, iy + ih - 3, ix + 10, iy + 3, '#ffffff'); line(ix + 7, iy + ih - 3, ix + 14, iy + 3, '#ffffff'); }
   // passagerarna: hörnen först (hissetikett), bakre raden först
   g.save(); g.beginPath(); g.rect(ix, iy, iw, ih); g.clip();
   const out = climber(e);
   const ps = e.passengers.filter(p => (!e.deck2 || (p.deck || 0) === k) && p !== out);
   const order = ps.map((p, i) => ({ p, s: carSlot(i) })).sort((a, b) => Number(a.s >= 4) - Number(b.s >= 4));
+  // hissvärdinnan står längst in vid veven (Grinden)
+  if (k === 0 && e.attendant) {
+    const m = crewPerson(e.attendant);
+    if (m && atPost(m)) {
+      const px = x + 3, py = yb - 1 - PERSON_H;
+      g.drawImage(personSprite(m, 'side', 0, 1, { blink: blinkOf(m) }), px, py);
+      R(px + PERSON_W - 1, py + 14, 3, 1, '#b8962e'); R(px + PERSON_W + 1, py + 12, 1, 3, INK); // (veven)
+    }
+  }
   for (const { p, s } of order) {
     // bakre raden står högre upp och lite i skugga, så att huvudena syns ovanför främre raden
-    const back = s < 4, px = x + Math.round(carSlotX(s) / PX) - PERSON_W / 2 + (back ? 0 : 2), py = yb - (back ? 7 : 1) - PERSON_H;
+    const back = s < 4 && !e.attendant, px = x + Math.round(carSlotXOf(e, s) / PX) - PERSON_W / 2 + (back ? 0 : 2), py = yb - (back ? 7 : 1) - PERSON_H;
     if (back) g.filter = 'brightness(0.82)';
     // last (städvagn, paketkärra, flyttlåda, bår …) står bredvid ägaren – resväskan bakom, resten framför
     // (lasten vänds in mot korgens mitt, annars klipps den av väggen)
@@ -1497,7 +1528,7 @@ function cabinPx(e, k, x, yb, body, head) {
   for (const { p, s } of order) {
     const dog = p.cargo ? DOGS[p.cargo.kind] : null; if (!dog) continue;
     const d = cargoSprite(dog + 'F', 1); if (!d) continue;
-    const px = x + Math.round(carSlotX(s) / PX) + 2, py = yb - 1 - d.c.height;
+    const px = x + Math.round(carSlotXOf(e, s) / PX) + 2, py = yb - 1 - d.c.height;
     g.drawImage(d.c, px, py);
     if (Math.sin(S.anim * 0.8 + p.id * 2.3) > 0.97) bark(px + 4, py);
   }
@@ -1515,12 +1546,28 @@ function cabinPx(e, k, x, yb, body, head) {
     // gnistor från verktyget
     if (Math.sin(S.anim * 11 + e.id) > 0.3) for (let n = 0; n < 3; n++) R(px + PERSON_W + 1 + Math.round(vrand(0, 4)), py + 10 + Math.round(vrand(0, 6)), 1, 1, vpick(['#ffd23f', '#ffffff', '#ff9f1c']));
   }
+  // städaren moppar ur korgen (dörrarna står öppna medan han håller på)
+  const mop = k === 0 && e.cleaning ? sune() : null;
+  if (mop) {
+    const px = x + Math.round(cw / 2) - PERSON_W / 2, py = yb - 1 - PERSON_H, sw = Math.round(Math.sin(S.anim * 6) * 3);
+    g.drawImage(personSprite(mop, 'front', 0, 1, { blink: blinkOf(mop) }), px, py);
+    line(px + PERSON_W - 2, py + 12, px + PERSON_W + 2 + sw, yb - 3, '#c8a27a'); R(px + PERSON_W + sw, yb - 3, 5, 2, '#e8e8e8');
+    R(px - 7, yb - 6, 5, 5, INK); R(px - 6, yb - 5, 3, 4, '#3f7cff');
+  }
   g.restore();
   // dörrarna är av tonat glas, så att man ser vilka som åker med
   // dörrfel: dörrarna slår upp och igen
   const flap = e.mode === 'broken' && e.fault && e.fault.kind === 'door' && !e.fault.trapped;
-  const half = iw / 2, open = Math.round(half * (1 - (flap ? 0.5 + 0.5 * Math.sin(S.anim * 7) : e.door)));
-  if (open > 0) for (const side of [0, 1]) {
+  const half = iw / 2, open = Math.round(half * (1 - (flap ? 0.5 + 0.5 * Math.sin(S.anim * 7) : mop ? 1 : e.door)));
+  // Grinden: en saxgrind i mässing som dras ihop åt ena sidan
+  if (e.gate) {
+    const gw = Math.round(iw * (1 - (flap ? 0.5 + 0.5 * Math.sin(S.anim * 7) : e.door)));
+    if (gw > 1) {
+      R(ix, iy, 1, ih, INK); R(ix + gw - 1, iy, 1, ih, INK);
+      const n = Math.max(1, Math.round(gw / 5));
+      for (let j = 0; j < n; j++) { const a = ix + Math.round(j * gw / n), b = ix + Math.round((j + 1) * gw / n) - 1; line(a, iy, b, iy + ih - 1, '#b8962e'); line(b, iy, a, iy + ih - 1, '#b8962e'); }
+    }
+  } else if (open > 0) for (const side of [0, 1]) {
     const px = side ? ix + iw - open : ix;
     R(px, iy, open, ih, PAL.doorGlass);
     R(px, iy + ih - 7, open, 7, PAL.doorLow);
@@ -1545,6 +1592,95 @@ function cabinPx(e, k, x, yb, body, head) {
 }
 const blinkOf = p => Math.sin(S.anim * 0.9 + p.id * 1.7) > 0.985;
 const hotOf = p => (p.mood || 0) === 2 && Math.sin(S.anim * 8 + p.id) > 0;
+
+// ---------- Städningen: fläckar på golvet (mess.js) ----------
+function drawMessPx() {
+  const su = sune();
+  for (const m of S.messes || []) {
+    if (m.kind !== 'floor') continue;
+    const x = X(m.x), y = Y(surf(m.f));
+    if (y < -10 || y > lo.height + 10) continue;
+    const k = 1 - Math.min(1, m.prog / CLEAN_FLOOR_S), w = Math.max(2, Math.round(14 * k));
+    const c = m.what === 'spya' ? '#9bd36a' : '#7a4a2a', c2 = m.what === 'spya' ? '#7fb84e' : '#5a3412';
+    R(x - (w >> 1), y - 1, w, 2, c); R(x - (w >> 2), y - 2, w >> 1, 1, c2);
+    if (m.what === 'spya') for (let n = 0; n < 2; n++) R(x + Math.round(Math.sin(S.anim * 5 + n * 2) * 6), y - 7 - Math.round(Math.cos(S.anim * 6 + n) * 3), 1, 1, INK);
+    // städaren är där: den gula skylten och moppen som går fram och tillbaka
+    if (su && su.job === m.id && su.state === 'office' && su.floor === m.f) {
+      const sx = x + 12; box(sx, y - 11, 7, 10, '#ffd23f'); R(sx + 3, y - 9, 1, 4, INK); R(sx + 3, y - 4, 1, 1, INK);
+      const mx = x + Math.round(Math.sin(S.anim * 6) * 5); R(mx - 3, y - 2, 7, 2, '#e8e8e8');
+    }
+  }
+}
+
+// ---------- Svindeln: berg- och dalbanan på takdäcket (coaster.js) ----------
+const CO_RAIL = '#5a6270', CO_RAIL_HI = '#c8ccd2', CO_CAR = ['#c81e3a', '#ffd23f'];
+function drawCoasterPx(h) {
+  const C = S.coaster;
+  if (!C) return;
+  const deck = Y(CO_DECK);
+  if (deck < -20 || Y(PLAT_Y - 110) > lo.height + 20) return;
+  const n = nightness(h);
+  // pelare ner till däcket
+  for (const [x, y] of SUPPORTS) {
+    if (x < LAND_X0 - 20 || y > CO_DECK - 8) continue;
+    const px = X(x); R(px, Y(y) + 1, 1, deck - Y(y) - 1, '#7a8290');
+    for (let yy = Y(y) + 6; yy < deck - 2; yy += 8) R(px - 1, yy, 3, 1, '#7a8290');
+  }
+  // servicetrappan längs kedjebacken
+  const a = trackAt(0.06), b = trackAt(0.2);
+  for (let k = 0; k <= 10; k++) { const t = k / 10; R(X(a.x + (b.x - a.x) * t) + 4, Y(a.y + (b.y - a.y) * t) + 3, 3, 1, '#94a3b8'); }
+  // rälsen: två linjer
+  for (let i = 1; i < TRACK.length; i++) {
+    const [x0, y0] = TRACK[i - 1], [x1, y1] = TRACK[i];
+    if (Math.max(x0, x1) < LAND_X0 - 20) continue;
+    line(X(x0), Y(y0) + 1, X(x1), Y(y1) + 1, CO_RAIL); line(X(x0), Y(y0), X(x1), Y(y1), CO_RAIL_HI);
+  }
+  // kedjan i backen rör sig när tåget dras upp
+  if (C.train.ph === 'climb' && !C.stuck) for (let k = 0; k < 6; k++) { const t = ((S.anim * 0.6 + k / 6) % 1); const p = trackAt(0.05 + 0.15 * t); R(X(p.x), Y(p.y), 1, 1, '#ffd23f'); }
+  // plattformen med tak och skylt
+  const px0 = X(PLAT_X0), px1 = X(PLAT_X1), py = Y(PLAT_Y);
+  box(px0, py + 1, px1 - px0, 3, '#8a8f99');
+  for (const lx of [px0 + 2, px1 - 3]) R(lx, py + 4, 1, deck - py - 4, '#7a8290');
+  const ry = Y(PLAT_Y - 54);
+  for (const lx of [px0 + 1, px1 - 2]) R(lx, ry + 3, 1, py - ry - 2, '#7a8290');
+  box(px0 - 3, ry, px1 - px0 + 6, 4, '#c81e3a'); R(px0 - 2, ry + 1, px1 - px0 + 4, 1, '#ff6b6b');
+  const sw = textW('SVINDELN') + 6, sx = Math.round((px0 + px1) / 2 - sw / 2);
+  box(sx, ry - 9, sw, 8, '#1b1033'); text(g, 'SVINDELN', sx + sw / 2, ry - 8, S.power && (Math.floor(S.anim * 3) % 4) ? '#ffd23f' : '#ff8c42', 'center');
+  const open = !C.why; R(sx + sw + 1, ry - 7, 3, 3, INK); R(sx + sw + 2, ry - 6, 1, 1, open ? '#7cf06b' : (Math.sin(S.anim * 6) > 0 ? '#ff2d55' : '#7a2033'));
+  if (!open) { const t = plain(C.why.toUpperCase()); label(t, Math.round((px0 + px1) / 2), ry - 21, '#ffe14d'); }
+  if (n > 0.3 && S.power) for (let x = px0; x < px1; x += 8) R(x, ry + 4, 1, 1, '#ffe14d');
+  // Banhissen: ett gallerschakt från däcket upp genom plattformen, och den lilla korgen
+  const lx = X(LIFT_X) - 5, ly0 = Y(PLAT_Y - 30);
+  R(lx, ly0, 1, deck - ly0, '#5a6270'); R(lx + 10, ly0, 1, deck - ly0, '#5a6270');
+  for (let yy = ly0 + 2; yy < deck; yy += 5) line(lx, yy, lx + 10, yy + 4, 'rgba(90,98,112,.6)');
+  const cy = Y(CO_DECK + (PLAT_Y - CO_DECK) * C.lift.pos);
+  box(lx, cy - 15, 11, 15, '#2ec4b6'); R(lx + 1, cy - 13, 9, 12, '#bfeaff');
+  C.lift.riders.forEach((id, i) => { const p = S.people.find(q => q.id === id); if (p) g.drawImage(personSprite(p, 'front', 0, 1), 0, 0, PERSON_W, 10, lx - 2 + i * 3, cy - 12, PERSON_W, 10); });
+  text(g, 'BANHISS', lx + 5, cy - 21, '#ffffff', 'center', 1, INK);
+  // tåget: två vagnar som följer banan, åkarnas huvuden sticker upp
+  const T = C.train;
+  for (let car = 0; car < 2; car++) for (let d = 0; d < 20; d += 2) {
+    const p = trackBack(T.u, car * 28 + d + 2);
+    R(X(p.x) - 1, Y(p.y) - 4, 2, 4, d < 2 ? INK : CO_CAR[car]);
+  }
+  for (let i = T.riders.length - 1; i >= 0; i--) {
+    const p = S.people.find(q => q.id === T.riders[i]); if (!p) continue;
+    const at = trackBack(T.u, seatBack(i)), hx = X(at.x) - PERSON_W / 2 + (i & 1), hy = Y(at.y) - 13;
+    // armarna upp i fallet (efter toppen, på väg ner)
+    const down = T.ph === 'ride' && at.a > 0.6;
+    g.drawImage(personSprite(p, 'front', 0, 1, { blink: blinkOf(p) }), 0, 0, PERSON_W, 10, hx, hy, PERSON_W, 10);
+    if (down) { R(hx + 1, hy - 3, 1, 3, p.look.skin); R(hx + PERSON_W - 2, hy - 3, 1, 3, p.look.skin); }
+  }
+  if (C.stuck && Math.sin(S.anim * 6) > -0.3) { const at = trackAt(T.u); label('FAST!', X(at.x), Y(at.y) - 24, '#ff2d55', '#ffffff'); }
+  // folket i kön, på plattformen och i trappan
+  for (const p of S.people) {
+    if (p.state !== 'coaster' || (p.cst !== 'queue' && p.cst !== 'plat' && p.cst !== 'exitq' && p.cst !== 'walk')) continue;
+    const c = coasterPos(p); if (!c) continue;
+    const walking = p.cst === 'queue' && Math.abs(p.x - p.tx) > 1;
+    const frame = walking || p.cst === 'walk' ? Math.floor(((S.anim * 8) % 4)) : 0;
+    g.drawImage(personSprite(p, 'side', frame, p.cst === 'queue' ? -1 : 1, { blink: blinkOf(p), hot: hotOf(p) }), X(c.x) - PERSON_W / 2, Y(c.y) - PERSON_H + 1);
+  }
+}
 
 // ---------- Folket i hallarna ----------
 function drawHallPeople() {
@@ -1684,9 +1820,9 @@ function drawSelectionPx() {
   const p = S.sel;
   if (!p || p.dead) return;
   if (p.state === 'wait' && p.assigned !== null) {
-    const e = S.elevators[p.assigned], x = X(shaftX(e.id) + 4), yt = Y(floorY(e.pos) - 4 - CAR_H);
-    ants(x - 2, yt - 2, CAR_W / PX + 4, CAR_H / PX + 4, '#ffe14d');
-    label(`→ ${p.name}`, x + CAR_W / PX / 2, yt - 12, '#ffe14d');
+    const e = S.elevators[p.assigned], x = X(carX(e.id)), yt = Y(floorY(e.pos) - 4 - CAR_H), cw = EL[e.id].carW / PX;
+    ants(x - 2, yt - 2, cw + 4, CAR_H / PX + 4, '#ffe14d');
+    label(`→ ${p.name}`, x + cw / 2, yt - 12, '#ffe14d');
   }
   const h = personHead(p);
   if (!h) return;
@@ -1966,7 +2102,7 @@ function drawOutagePx() {
   }
   for (const e of S.elevators) {
     if (!e.passengers.length || e.mode !== 'normal') continue;
-    const x = X(shaftX(e.id) + 4), yt = Y(floorY(e.pos) - 4 - CAR_H), cw = CAR_W / PX, chh = CAR_H / PX;
+    const x = X(carX(e.id)), yt = Y(floorY(e.pos) - 4 - CAR_H), cw = EL[e.id].carW / PX, chh = CAR_H / PX;
     // nödbelysningen i taket och en ficklampa (mobilskärmen) som sveper i korgen
     R(x + 2, yt + 2, cw - 4, chh - 4, 'rgba(255,214,120,.16)');
     R(x + Math.round(cw / 2) - 2, yt + 1, 5, 1, '#ffe9a8');
@@ -2126,6 +2262,8 @@ export function renderPixel(dt) {
   for (const e of S.elevators) drawCarPx(e);
   drawMovePilesPx();
   drawStreetPx(dt, hr);
+  drawMessPx();
+  drawCoasterPx(hr);
   drawHallPeople();
   drawPanoPx();
   drawHeliPx();

@@ -2,7 +2,7 @@
 import { stream } from './rng.js';
 const { rand, rng } = stream('hissar');
 import { ARR, fl } from './util.js';
-import { ACC, CAP, DOOR_T, DWELL, EL, LOBBY, VMAX, shaftCX, CAR_H, floorY } from './config.js';
+import { ACC, CAP, DWELL, EL, LOBBY, shaftCX, CAR_H, floorY } from './config.js';
 import { S, log } from './state.js';
 import { arriveOnFloor, liftsAvailable, pev, pn, setTrip, toStairs, queueSpot } from './people.js';
 import { safeFloor, aheadOf, allowed, allowedDest, allowedPos, assignedTo, isFull, maybePark, rebuildPicks, stopFloors, loadKg, personKg, slotsFull, benched, keyed, posOf, outReason, OUT_TEXT, etaOutcome } from './dispatch.js';
@@ -31,7 +31,13 @@ export function makeElevator(i) {
     // drift: slitage 0–1+, fel, hållen för service, tekniker, energi (kW just nu, kWh i dag)
     wear: 0, wearTrips: 0, wearDist: 0, fault: /** @type {{ what: string, t0: number, need: number, kind?: string, tool?: string, cable?: boolean, exitF?: number, done?: number, trapped?: boolean, n?: number, nextTalk?: number }|null} */ (null),
     hold: false, homeT: 0, techId: /** @type {number|null} */ (null), breakNext: false, serviceNeed: 0, kw: 0, kwh: 0,
-    cap: d.deck2 ? CAP * 2 : CAP, // platser i korgen (dubbeldäck: CAP per däck)
+    cap: d.cap, // platser i korgen (dubbeldäck: CAP per däck; de små hissarna har färre)
+    vmax: d.vmax, doorT: d.doorT, // toppfart och dörrtid (Grinden är långsam och har en saxgrind)
+    residents: d.residents, attendant: d.attendant, gate: d.gate,
+    // städning (mess.js): någon har kräkts i korgen; cleanWant = städaren väntar på korgen, cleaning = städas till S.t
+    mess: false, cleanWant: false, cleaning: 0,
+    // hissvärdinnan (Grinden): unmanned = ingen kör hissen, attLeave = hon vill gå (korgen kör hem först)
+    unmanned: !!d.attendant, attLeave: false,
     // motorvärme (0–1+, överhettad = hot), extrafläkt, nivåfel (våningar, negativt = för lågt), stängd för vinden,
     // beställd service, oberoende drift (flyttdag)
     heat: 0, hot: false, fan: false, level: 0, lvKg: 0, windLock: false, serviceAsap: false, indep: false,
@@ -42,6 +48,8 @@ export function makeElevator(i) {
     creak: false, restartAt: 0, ffCar: false, hotT0: 0, trapNext: false,
   };
 }
+/** ska hissen köra hem och vänta (städaren väntar där, hissvärdinnan ska gå)? */
+export const goHome = e => e.cleanWant || e.attLeave;
 /** Hinner hissen stanna på våning f? Falskt bara om f ligger framför den, närmare än bromssträckan. */
 export function canBrakeTo(e, f) {
   if (e.state !== 'moving' || !e.dir) return true;
@@ -49,7 +57,7 @@ export function canBrakeTo(e, f) {
   return ahead <= 0 || ahead >= (e.v * e.v) / (2 * ACC) + e.v * (1 / 30) * 2 + 0.01;
 }
 /** toppfarten just nu: svajläget i storm och en varm motor sänker den */
-export const vmaxOf = e => VMAX * windMul(e) * heatMul(e);
+export const vmaxOf = e => e.vmax * windMul(e) * heatMul(e);
 export function shouldStop(e, g, d) {
   if (!e.stops.has(g)) return false;
   if (!allowedPos(e, g) && !(e.zoneLock && g === e.minF)) return false; // spärrad hiss får köra ner till sin lägsta våning // expresshissar m.fl. stannar bara på sina våningar
@@ -131,6 +139,8 @@ export function idleEval(e, dt) {
   if (stops.length === 0) {
     if (S.fire && S.fire.mode === 'zone' && !allowedPos(e, f) && f !== (safeFloor(e) ?? e.minF)) e.parkTarget = safeFloor(e) ?? e.minF;
     if (e.parkTarget === f) e.parkTarget = null;
+    // (hissen som ska städas eller vars hissvärdinna vill gå kör hem och väntar där)
+    if (e.parkTarget === null && goHome(e) && f !== e.home) e.parkTarget = e.home;
     if (e.parkTarget === null) { e.dir = 0; e.idleTime += dt; maybePark(e); }
     if (e.parkTarget !== null && e.parkTarget !== f) { e.dir = Math.sign(e.parkTarget - f); e.state = 'moving'; }
     return;
@@ -214,7 +224,7 @@ export function arrive(e, f) {
 export function updateDoors(e, dt) {
   const f = e.floor;
   if (e.doorPhase === 'opening') {
-    e.door = Math.min(1, e.door + dt / DOOR_T);
+    e.door = Math.min(1, e.door + dt / e.doorT);
     if (e.door >= 1) {
       e.doorPhase = 'open'; e.dwell = 0; unload(e, f);
       if (maybeBreak(e)) return;
@@ -243,8 +253,8 @@ export function updateDoors(e, dt) {
   }
   // stänger: i kyla går det trögare i entrén, och dörren kan ta emot (glider upp igen en bit)
   const slow = f === LOBBY ? 1 + 1.5 * S.weather.cold : 1;
-  if (e.bounce > 0) { const k = Math.min(e.bounce, dt / DOOR_T); e.door = Math.min(1, e.door + k); e.bounce -= k; return; }
-  e.door = Math.max(0, e.door - dt / (DOOR_T * slow));
+  if (e.bounce > 0) { const k = Math.min(e.bounce, dt / e.doorT); e.door = Math.min(1, e.door + k); e.bounce -= k; return; }
+  e.door = Math.max(0, e.door - dt / (e.doorT * slow));
   if (e.fightAt > 0 && !e.fought && e.door <= e.fightAt) {
     e.fought = true; e.bounce = 0.3; S.stats.doorFights++;
     log(`❄️ ${e.name}: dörren tar emot i entrén – kalldraget trycker (skorstenseffekten)`, 'move', e.color);
@@ -344,6 +354,13 @@ export function load(e, f) {
       if (!buttons) { p.assigned = null; p.avoid = e.id; rebuildPicks(); }
       continue;
     }
+    // det luktar spya i korgen: de flesta väntar hellre på nästa hiss (den som inte bryr sig kliver på)
+    if (e.mess && !keyed(p) && !p.crewId && !p.role && p.space < 9 && S.t - p.waitStart < 40 && p.crowdSkip !== `m${stop}`) {
+      p.crowdSkip = `m${stop}`; e.skipTrip = e.trips;
+      pev(p, `Usch – någon har kräkts i hiss ${e.name}. Väntar på nästa`);
+      if (!buttons) { p.assigned = null; p.avoid = e.id; rebuildPicks(); }
+      continue;
+    }
     // vid dörren kliver man på så länge det finns plats – vågen märker överlast först när man står inne
     if (slotsFull(e) || loadKg(e) >= e.ratedKg || deckFull(e, p)) { e.fullFlash = 1.2; continue; }
     if (e.dir === 0) e.dir = p.dir;
@@ -402,7 +419,7 @@ export function recallStep(e, dt) {
   // Brandåterkallning: stäng dörrarna, kör direkt till hemvåningen (E, eller närmaste i zonen) utan stopp, släpp ut alla, stäng av
   if (e.rs === 'close') {
     e.state = 'doors'; e.doorPhase = 'closing';
-    e.door = Math.max(0, e.door - dt / DOOR_T);
+    e.door = Math.max(0, e.door - dt / e.doorT);
     if (e.door <= 0) { e.rs = 'move'; e.state = 'moving'; }
     return;
   }
@@ -412,7 +429,7 @@ export function recallStep(e, dt) {
     return;
   }
   if (e.rs === 'open') {
-    e.door = Math.min(1, e.door + dt / DOOR_T);
+    e.door = Math.min(1, e.door + dt / e.doorT);
     if (e.door >= 1) {
       e.doorPhase = 'open';
       if (e.passengers.length) exitAll(e, e.home, `Brandåterkallning – alla ut på ${fl(e.home)}`);
@@ -429,7 +446,7 @@ export function rescueStep(e, dt) {
     return;
   }
   if (e.rs === 'open') {
-    e.door = Math.min(1, e.door + dt / DOOR_T);
+    e.door = Math.min(1, e.door + dt / e.doorT);
     if (e.door >= 1) {
       e.doorPhase = 'open';
       const n = e.passengers.length;

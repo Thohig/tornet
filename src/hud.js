@@ -1,7 +1,7 @@
 // HUD: texterna i kontrollpanelen (hissen eller personen man följer, incidentkorten, registret, loggen och
 // resultatet), välkomstrutan och dygnets sammanfattning. Vilka block som syns i panelen avgörs i panels.js.
 import { ARR, esc, fl } from './util.js';
-import { CAP, EL, FIRE_HINT, FL, LOBBY, DOCK, TOP, ROLE_NAMES, activityRate, FULL_LOAD, timeScale, dayLength } from './config.js';
+import { CAP, EL, FIRE_HINT, FL, LOBBY, DOCK, ROOF, TOP, ROLE_NAMES, activityRate, FULL_LOAD, timeScale, dayLength } from './config.js';
 import { S, hour, log, phaseName } from './state.js';
 import { liftsAvailable } from './people.js';
 import { costBased, costLine, eta, isFull, pickTotal, pickersAt, loadKg, cabinKg, slotsFull } from './dispatch.js';
@@ -16,6 +16,7 @@ import { residentDesc } from './life.js';
 import { STORM_HINT, windMs } from './weather.js';
 import { FAN_KW, jobFloor, tech, techOf, cableStatus } from './service.js';
 import { LADDER_MAX, ladderReach, ropeWindy } from './pano.js';
+import { COASTER_DEFAULT_S, stairsWindy } from './coaster.js';
 import { hoistHalt, hoistStatus } from './hoist.js';
 import { BLANKET_T } from './visits.js';
 import { chiefOnDuty } from './chief.js';
@@ -161,7 +162,8 @@ export function carActs(e) {
     b.push(`<span class="trig-car">Framkalla:${ikon(`trig:fault:${e.id}`, '🔧', 'Hissfel', 'Hissen går sönder vid nästa stopp (ibland mellan två våningar med folk i)')}`
       + ikon(`trig:heat:${e.id}`, '🌡️', 'Het motor', 'Kylningen hakar upp sig och motorn blir het', false, e.hot ? ' disabled' : '')
       + `${e.facade ? ikon('trig:pano', '🧗', 'Fast på fasaden', 'Hydrauliken låser sig nästa gång den kör med folk – korgen fastnar utanpå huset', false, e.panoNext || S.pano ? ' disabled' : '')
-        : ikon(`trig:cable:${e.id}`, '🪢', 'Linbrott', 'Linorna går av på nästa åktur', false, e.snapNext ? ' disabled' : '')}</span>`);
+        : ikon(`trig:cable:${e.id}`, '🪢', 'Linbrott', 'Linorna går av på nästa åktur', false, e.snapNext ? ' disabled' : '')}`
+      + ikon(`trig:mess:${e.id}`, '🤢', 'Någon kräks', 'Någon kräks i korgen – den måste städas', false, e.mess ? ' disabled' : '') + '</span>');
   }
   return b.join('');
 }
@@ -251,6 +253,21 @@ export function incidentHtml() {
       <div class="inc-acts">${b('rope', '🧗 Rep från taket', true, `Räddarna firar ner en i taget ${Pn.toF === LOBBY ? 'till gatan' : 'till takterrassen'} – stannar i hård vind`)}${b('ladder', '🚒 Stegbilen', reach, reach ? 'Stegen från gatan – fungerar i blåst' : `Stegen når bara ${LADDER_MAX} våningar upp`)}${ikon(`follow:${e.id}`, '📹', 'Visa hissen', 'Kameran följer hissen')}</div>
       <div class="inc-hint">Repet går fortare när det är lugnt; stegbilen klarar blåsten men når inte högt. Teknikern kan inte laga hydrauliken förrän alla är ute.</div>`, true));
   }
+  // ---------- Svindeln sitter fast i kedjebacken (incident med val: vänta eller servicetrappan) ----------
+  const Cs = S.coaster && S.coaster.stuck;
+  if (Cs) {
+    const T = S.coaster.train, windy = stairsWindy();
+    const b = (h, txt, hint) => `<button class="btn sm${Cs.how === h ? ' on' : ''}" data-act="coaster:${h}" data-hint="${hint}">${txt}</button>`;
+    const what = { kedja: 'Kedjan har hoppat av drevet', givare: 'En givare har löst ut', 'ström': 'Kedjan stannade när strömmen gick' }[Cs.kind];
+    const status = !Cs.how ? `Banmästaren väntar på besked (bestämmer själv om ~${cd(Cs.t0 + COASTER_DEFAULT_S - S.t)}s).`
+      : Cs.how === 'walk' ? (windy && T.riders.length ? `För blåsigt för trappan (${windMs()} m/s) – de väntar i vagnen. ${Cs.out}/${Cs.n} nere.` : `${Cs.out}/${Cs.n} nere på däcket.`)
+      : !S.power ? 'Väntar på strömmen.' : `Banmästaren är klar om ~${cd(Cs.fixAt - S.t)}s.`;
+    parts.push(card('coaster', 'pano', '🎢 Svindeln sitter fast i kedjebacken', `
+      <div class="inc-s">${what}. Tåget står still högt över takdäcket med <span class="lv">${T.riders.length}</span> åkare fastspända. ${status}</div>
+      ${chiefLine('coaster', 'Hur kommer åkarna loss?')}
+      <div class="inc-acts">${b('wait', '⏳ Sitt kvar', 'Åkarna sitter kvar tills banmästaren har lagat banan – sedan åker de klart')}${b('walk', '🪜 Servicetrappan', 'En i taget ner för trappan längs kedjebacken – stannar i blåst')}${ikon(`show:${ROOF}`, '📹', 'Visa taket', 'Kameran visar Svindeln')}</div>
+      <div class="inc-hint">En givare är återställd på en kvart; en kedja som har hoppat av tar en god stund. I blåst är det säkrast i vagnen.</div>`, true));
+  }
   // ---------- händelser som spelaren bara informeras om ----------
   const V = S.elevators.find(e => e.freight);
   const info = (key, cls, title, body, acts) => {
@@ -320,6 +337,14 @@ export function incidentHtml() {
     info(`medic-${Math.round(A.t0)}`, 'medic', '🚑 Ambulans', what + how,
       (amb ? `<button class="btn xs${on ? ' on' : ''}" data-act="person:${amb.id}" aria-label="Följ ambulansen" data-hint="<b>${on ? 'Följer ambulansen' : 'Följ ambulansen'}</b><br>${on ? 'Sluta följa' : 'Följ'} ${esc(amb.name)} med båren">📹</button>` : '')
       + `${ikon(`show:${A.floor}`, '📍', 'Visa våningen', 'Kameran går dit ambulansen ska')}${V ? `${ikon(`follow:${V.id}`, '📦', 'Följ varuhissen', 'Kameran följer varuhissen')}` : ''}`);
+  }
+  // städningen: skitiga hissar och fläckar, och var Sune är (mess.js)
+  if (S.messes && S.messes.length) {
+    const su = S.people.find(p => p.sune && !p.dead);
+    const list = S.messes.map(m => m.kind === 'car' ? `${S.elevators[m.car].name}${S.elevators[m.car].cleaning ? ' (städas)' : ''}` : `${m.what === 'spya' ? 'spya' : 'kaffe'} på ${fl(m.f)}`).join(', ');
+    info(`mess-${S.messes[0].id}`, 'info', '🧽 Det behöver städas', `${esc(list)}. ${su ? `${esc(su.name)} är här med mopp och balja.` : 'Ingen städare i huset än.'} Folk vill inte kliva på en skitig hiss.`,
+      su ? `<button class="btn xs" data-act="person:${su.id}" aria-label="Följ Sune" data-hint="<b>Följ ${esc(su.name)}</b><br>Kameran följer städaren">📹</button>`
+        : `<button class="btn sm" data-act="cleaner" data-hint="<b>Ring in städaren</b><br>Sune kommer med mopp och balja">🧽 Ring Sune</button>`);
   }
   for (const n of S.notices) {
     if (S.t - n.t0 > 30) continue;
@@ -459,10 +484,11 @@ export function personHtml(p) {
     case 'exiting': now = `Kliver av på ${fl(p.floor)}`; logic = p.spot ? `På väg: ${esc(p.spot.desc.toLowerCase())}` : 'På väg ut genom entrén'; break;
     case 'stairs': now = `Går mot trapphuset på ${fl(p.floor)}`; logic = `Ska gå ${Math.abs(p.dest - p.floor)} våningar till ${fl(p.dest)}`; break;
     case 'instairs': now = `I trapphuset på väg till ${fl(p.dest)}`; logic = `Framme om ~${Math.max(0, Math.ceil(p.timer))}s`; break;
-    case 'office': now = p.sleeping && p.spot.bed ? `Sover i sängen (${fl(p.floor)}) 💤` : `${p.spot.desc} (${FL[p.floor].short})`; logic = `Nästa beslut om ~${Math.max(0, Math.round(p.timer / activityRate(hour())))}s`; break;
+    case 'office': now = p.sleeping && p.spot.bed ? `Sover i sängen (${fl(p.floor)}) 💤` : `${p.spot.desc} (${FL[p.floor].short})`; logic = p.sune ? 'Städar tills det är rent' : `Nästa beslut om ~${Math.max(0, Math.round(p.timer / activityRate(hour())))}s`; break;
     case 'away': now = 'Är inte i huset just nu'; logic = `Kommer tillbaka: ${phaseName(p.returnAt).toLowerCase()}`; break;
     case 'incar': now = `Kör in i garaget på ${fl(p.floor)}`; logic = 'Parkerar och går sedan till hissarna'; break;
     case 'assembly': now = 'Väntar på återsamlingsplatsen'; logic = 'Går in igen när branden är släckt'; break;
+    case 'coaster': now = { queue: 'Står i kön till Svindeln', lift: 'Åker Banhissen', plat: 'Väntar på Svindelns plattform', train: 'Sitter i Svindeln', exitq: 'Väntar på Banhissen ner', walk: 'Går ner för Svindelns servicetrappa' }[p.cst] || 'Vid Svindeln'; logic = S.coaster && S.coaster.stuck && p.cst === 'train' ? 'Sitter fast i kedjebacken – väntar på besked' : `${S.coaster ? S.coaster.queue.length : 0} i kön · tåget har ${8} platser`; break;
   }
   return `<div class="track"><div class="tk-top"><div class="pic"></div><div class="tk-id"><div class="tk-name">${esc(p.name)}</div>`
     + `<div class="tk-role">${esc(role)}</div><div class="tk-state" style="--c:${col};--ct:${PAL.on(col)}">${esc(label)}</div></div></div>`
@@ -512,7 +538,7 @@ export function showIntro() {
     <details class="intro-more"><summary>Mer om huset</summary>
     <ul>
       <li>Det finns <b>inga knappar</b> på våningarna. Varje person har ett eget mål och får en egen hiss. Tankebubblan visar målet och hissen.</li>
-      <li>Hissarna är <b>zonindelade</b>: L1–L2 går i låg zon (TB–5) och H1–H2 i hög zon (6–T) – <b>staplade i samma schakt</b>. Expresshissarna X1–X2 kör E ⇄ 6 utan stopp, och X1 går ända ner till <b>tunnelbanan</b> (TB) – där kommer folk i klump varje gång ett tåg stannar. Den som ska mellan zonerna <b>byter hiss</b> (↹) i entrén och i sky lobbyn. Varuhissen V tar städvagnar och paket, och panoramahissen P åker utanpå fasaden.</li>
+      <li>Hissarna är <b>zonindelade</b>: L1–L2 går i låg zon (TB–5) och H1–H2 i hög zon (6–T) – <b>staplade i samma schakt</b>. Expresshissarna X1–X2 kör E ⇄ 6 utan stopp, och X1 går ända ner till <b>tunnelbanan</b> (TB) – där kommer folk i klump varje gång ett tåg stannar. Den som ska mellan zonerna <b>byter hiss</b> (↹) i entrén och i sky lobbyn. Varuhissen V tar städvagnar och paket, och panoramahissen P åker utanpå fasaden. Längst in står två små hissar: <b>bostadshissen B</b> (bara för de boende, P2/E ⇄ 12–T) och <b>Grinden G</b>, en gallerhiss från 1938 som hissvärdinnan Margit kör mellan E, banken och sky lobbyn. På taket går berg- och dalbanan <b>Svindeln</b> – och mår någon illa efteråt ringer driftchefen in städaren Sune.</li>
       <li>Huset <b>lever</b>: bilar kör in i garaget, leveransbilen lastar av vid kajen, de boende sover, jobbar och går på taket, en fönsterputsare jobbar sig nedåt utanför tornet, hundägare kommer med raggiga pudlar och går hem med nyklippta, och ibland landar en VIP-helikopter på taket.</li>
       <li>Ett <b>dygn</b> tar ungefär ${Math.round(dayLength() / 60)} minuter – stapeln överst i kontrollpanelen visar var i dygnet vi är och dagens incidenter. Trafiken följer dygnet – rusning på morgonen, lunch, hemgång (de får mest tid) – och på natten är det bara väktare, städare och nattugglor. Vissa våningar stänger (caféet, banken …).</li>
       <li><b>Huset sköter sig självt.</b> I <b>driftcentralen</b> på P1 sitter driftchefen (Gun-Britt på dagen, Rune på natten) och tar alla beslut när något händer – svajläge i stormen, brandzon, reservkraft, extrafläkt, service – och säger varför. Textskylten längst ner i bilden visar vad bevakaren (Ludde, på natten Siv) klipper till när regissören är på, och chefens beslut; driftradion står i kontrollpanelen. Vill du bestämma själv tar du över beslutet på incidentkortet.</li>
