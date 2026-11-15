@@ -5,7 +5,7 @@
 import { stream } from './rng.js';
 const { rand, pick, rng } = stream('turistbuss');
 import { fl } from './util.js';
-import { BX1, CAFE, DOOR_X, GROUND_Y, LOBBY, ROOF, activityRate, floorOpen, roomScale, timeScale } from './config.js';
+import { BX1, CAFE, END_H, DOOR_X, GROUND_Y, LOBBY, ROOF, activityRate, floorOpen, roomScale, timeScale } from './config.js';
 import { S, clockStr, dayEvent, hour, log, notice } from './state.js';
 import { makePerson, pev, releaseSpot, setTrip } from './people.js';
 import { speak } from './cast.js';
@@ -53,6 +53,11 @@ function departure(h, stops) {
   return Math.ceil(h * 4) / 4;
 }
 
+/** första kvarten från h då bussen har något att visa (samma regel som spawnBus), null = inte mer i dag. Drar inga slumptal. */
+export function busFrom(h = hour()) {
+  for (let q = h; q < END_H; q = Math.floor(q * 4 + 1) / 4) if (plan(q).length) return q;
+  return null;
+}
 /** Spelaren skickar en turistbuss. Returnerar antalet som kommer (0 = inget att se just nu, −1 = en buss står redan här). */
 export function spawnBus() {
   if (S.tour) return -1;

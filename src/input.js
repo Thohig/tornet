@@ -4,7 +4,8 @@
 import { act } from './actions.js';
 import { clamp } from './util.js';
 import { BX0, CAR_H, CAR_W, DOOR_X, FLOOR_H, GROUND_Y, H, INNER_X1, LOBBY, ROOF_Y, STRAT_NAMES, TOP, WAIT_X1, floorY, shaftX, surf } from './config.js';
-import { S, log } from './state.js';
+import { S, clockStr, log } from './state.js';
+import { busFrom } from './tour.js';
 import { VIEW, camTarget, cv, detachCam, followCar, lookAt, scrollBy, scrollToFloor } from './view.js';
 import { personHead, peopleBehindDoor } from './render.js';
 import { foldInc, select } from './hud.js';
@@ -54,8 +55,16 @@ function bus() {
   if (!S.started || S.fire) return;
   const n = act('bus');
   if (n < 0) return; // (en buss står redan vid hållplatsen)
-  if (!n) { S.fx.push({ x: 140, y: GROUND_Y - 100, text: 'STÄNGT – KOM IMORGON!', color: '#ff5d52', life: 2, size: 26 }); log('Bussen vände – takterrassen och Sky Café är stängda', 'sys'); return; }
-  S.fx.push({ x: 140, y: GROUND_Y - 100, text: 'TURISTBUSS!', color: '#ff8c42', life: 2, size: 30 });
+  const x = VIEW.x0 + 200, y = surf(LOBBY) - 90; // (i hallen – rummen till vänster om VIEW.x0 syns inte)
+  if (!n) {
+    const h = busFrom();
+    const text = h === null ? 'STÄNGT – KOM IMORGON!' : `FÖRST KL ${clockStr(h)}!`;
+    S.fx.push({ x, y, text, color: '#ff5d52', life: 2.5, size: 24 });
+    log(h === null ? 'Bussen vände – takterrassen och Sky Café hinner inte ta emot en tur till i dag'
+      : `Bussen vände – takterrassen och Sky Café är stängda, Stadsturen kan komma från ${clockStr(h)}`, 'sys');
+    return;
+  }
+  S.fx.push({ x, y, text: 'TURISTBUSS!', color: '#ff8c42', life: 2, size: 30 });
 }
 function visitor(f, x = BX0 + 60) {
   if (!S.started || S.fire) return;

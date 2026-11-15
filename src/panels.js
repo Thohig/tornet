@@ -149,7 +149,7 @@ function followHtml(F) {
       inside ? ikon(`inside:${f}`, '👤', 'Följ någon därinne', `${inside} är inne på våningen – klicka igen för nästa`) : '',
       FIRE_FLOORS.includes(f) ? ikon(`trig:fire:${f}`, '🔥', 'Brand här', 'Det börjar brinna på den här våningen', false, S.fire ? ' disabled' : '') : '',
       ikon(`visit:${f}`, '🚶', 'Släpp in en besökare', 'En besökare kommer till våningen', false, S.fire ? ' disabled' : ''),
-      f === LOBBY ? ikon('bus', '🚌', 'Turistbuss!', 'Stadsturen: en guide och fjorton turister ska se takterrassen och Sky Café', false, S.fire || S.tour ? ' disabled' : '') : '',
+      f === LOBBY ? ikon('bus', '🚌', 'Turistbuss!', 'Stadsturen: en guide och fjorton turister ska se takterrassen och Sky Café. Kommer bara när de har öppet (ungefär 07:30–16)', false, S.fire || S.tour ? ' disabled' : '') : '',
     ].join('');
     return { head: `📹 Våning ${fl(f)} · ${esc(FL[f].name)}`, body: `<div class="fl-info">${w} väntar på hiss · ${inside} inne${f === CONTROL ? ' · driftcentralen' : ''}</div><div class="row">${acts}</div>` };
   }
@@ -167,7 +167,7 @@ function trigHtml() {
     + t('cable', '🪢', 'Linbrott', 'Linorna går av i en hiss') + t('pano', '🧗', 'Fast på fasaden', 'Panoramahissen fastnar utanför huset – de instängda måste firas ner')
     + t('medical', '🚑', 'Ambulans', 'Någon svimmar') + t('move', '🚚', 'Flytt', 'Ett hushåll flyttar') + t('vip', '🚁', 'VIP', 'VIP-helikoptern landar')
     + t('train', '🚇', 'Tågstörning', 'Tåget blir försenat') + t('cold', '❄️', 'Kyla', 'En kall dag: dörrarna i entrén tar emot')
-    + t('heatwave', '☀️', 'Värmebölja', 'Motorerna kyls sämre') + ikon('bus', '🚌', 'Turistbuss!', 'Stadsturen: en guide och fjorton turister ska se takterrassen och Sky Café', false, S.fire || S.tour ? ' disabled' : '')
+    + t('heatwave', '☀️', 'Värmebölja', 'Motorerna kyls sämre') + ikon('bus', '🚌', 'Turistbuss!', 'Stadsturen: en guide och fjorton turister ska se takterrassen och Sky Café. Kommer bara när de har öppet (ungefär 07:30–16)', false, S.fire || S.tour ? ' disabled' : '')
     + `</div><div class="dim small">Följ en hiss eller våning för att framkalla något just där.</div>`;
 }
 function stratHtml() {
