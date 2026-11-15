@@ -19,6 +19,7 @@ import { ffNext } from './incidents.js';
 import { CREW_LOOK, crewNext, crewSpot } from './crew.js';
 import { rescueNext } from './pano.js';
 import { buttonsMode, carButtonMistakes } from './buttons.js';
+import { tourNext, tourSpot } from './tour.js';
 
 // ---------- Människor ----------
 export const SKIN = ['#ffdbb8', '#f6c48f', '#d9a066', '#a8693f', '#7a4a2a', '#ffe4c8'];
@@ -195,6 +196,9 @@ export function pickSpot(p, f) {
   if (own) return own;
   // (räddningstjänsten står synligt i hallen eller på taket)
   if (p.rescue) return { x: p.nearX, k: 'stand', face: 1, desc: p.task, temp: true, win: 'hall' };
+  // (Stadsturen står ute på takterrassen och syns, tour.js)
+  const ts = p.tour ? tourSpot(p, f) : null;
+  if (ts) return ts;
   if (p.role) return { x: p.nearX ?? rand(150, 470), k: 'stand', face: pick([1, -1]), desc: p.task || ROLE_SPOT_DESC[p.role] || 'Jobbar', temp: true };
   // (personalens poster, rastmål och personalrummet väljer ingen annan)
   const free = s => !s.brk && !s.post && !s.where && (s.k === 'door' || occOf(s) === null);
@@ -343,7 +347,7 @@ export const STAIRS_UP = 1, STAIRS_DOWN = 2, STAIRS_IMPATIENT_UP = 2, STAIRS_IMP
 const canWalk = p => !p.vip && !p.evac && !(p.cargo && p.cargo.kg >= 15) && p.goal !== undefined;
 /** Tar personen trappan? impatient = har stått i kön en stund. Returnerar true om hen gick. */
 export function stairsChoice(p, impatient) {
-  if (!canWalk(p) || !liftsAvailable()) return false;
+  if (!canWalk(p) || !liftsAvailable() || p.tour) return false; // (turistgruppen håller ihop – ingen tar trappan själv)
   const span = p.goal - p.floor, down = span < 0, n = Math.abs(span);
   if (!n) return false;
   if (alwaysStairs(p) && !impatient) {
@@ -531,6 +535,7 @@ export function decideNext(p) {
   if (p.role) return roleNext(p, h);
   if (p.collapsed) { p.timer = 1e9; return null; } // ligger kvar tills ambulansen kommer
   if (p.kind === 'res') return resNext(p, h);
+  if (p.tour || p.guide) return tourNext(p); // (Stadsturen: guiden säger till när gruppen går vidare, tour.js)
   if (h >= 27.5) return [p.exitFloor, 'Natten är slut – äntligen hem']; // natten går fort: hemresan tar ett par speltimmar
   if (p.kind === 'vis') {
     // i hundsalongen hämtar man sin pudel och har den med sig ut (kopplet syns i hallen och i hissen)
@@ -630,19 +635,6 @@ function roleNext(p, h) {
   return null;
 }
 
-// En busslast turister – de flesta med resväska. Returnerar antalet som kom in (0 om allt är stängt).
-export function spawnBus(n = 14) {
-  let k = 0;
-  for (let i = 0; i < n; i++) {
-    const p = spawnVisitor(LOBBY, -30 - i * 24, rng() < 0.5 ? CAFE : pick(OFFICE_FLOORS), 'Turist på busstur');
-    if (!p) continue;
-    p.look.acc = rng() < 0.5 ? 3 : p.look.acc;
-    p.space = 9; // turistgruppen tränger ihop sig – ingen vill bli lämnad kvar
-    if (rng() < 0.7) withCargo(p, 'resväska');
-    k++;
-  }
-  return k;
-}
 /** hundägare till hundsalongen: hälften lämnar in en raggig pudel, hälften hämtar en nyklippt */
 export function spawnDogOwner() {
   const drop = rng() < 0.5;

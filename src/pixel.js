@@ -22,6 +22,7 @@ import { PAL } from './pixpal.js';
 import { CHIEFS, alarm, chiefOnDuty, chiefPerson } from './chief.js';
 import { CREW_BY } from './crew.js';
 import { RAISE_T, RIG_T, ROPE_DX, riderPos } from './pano.js';
+import { BUS_LEN, BUS_STOP_X } from './tour.js';
 import { HAIR_NAT, PANTS, SHIRT, SKIN } from './people.js';
 
 const INK = PAL.ink;
@@ -304,11 +305,34 @@ function drawStreetPx(dt, h) {
   }
   for (let i = walkers.length - 1; i >= 0; i--) if (walkers[i].x < BX1 - 20 || walkers[i].x > W + 20) walkers.splice(i, 1);
   g.save(); g.beginPath(); g.rect(sx0, gy - 40, sx1 - sx0, 48); g.clip();
+  if (S.tour) drawBusPx(S.tour, gy, n);
   for (const w of walkers) {
     const frame = Math.floor(w.x / 6) % 4 & 3;
     g.drawImage(personSprite(w, 'side', frame, w.dir), X(w.x) - PERSON_W / 2, gy + 3 + Math.round(w.depth) - PERSON_H);
   }
   g.restore();
+}
+
+/** Stadsturens buss (tour.js) vid hållplatsen: kör in från höger, står med öppen dörr medan gruppen är i huset
+ *  och kör vidare åt vänster. Tutar den skakar den lite. */
+function drawBusPx(T, gy, n) {
+  const w = Math.round(BUS_LEN / PX), h = 21, x = X(T.x), y = gy + 4 - h;
+  const standing = T.ph !== 'in' && T.ph !== 'out' && Math.abs(T.x - BUS_STOP_X) < 1;
+  const shake = T.honked && T.ph === 'back' && Math.sin(S.anim * 30) > 0.6 ? 1 : 0;
+  const y0 = y - shake, lit = S.power && n > 0.3;
+  box(x, y0, w, h - 3, '#008080');
+  R(x + 1, y0 + 1, w - 2, 1, light('#008080', 0.3));
+  // vindrutan fram (bussen kör åt vänster), sidorutorna och dörren
+  R(x + 1, y0 + 3, 4, 8, lit ? '#ffe9a8' : '#9fd3ff'); R(x + 1, y0 + 3, 1, 8, '#ffffff');
+  for (let wx = x + 13; wx + 6 < x + w - 2; wx += 7) R(wx, y0 + 3, 6, 5, lit ? '#ffe9a8' : '#9fd3ff');
+  R(x + 6, y0 + 3, 5, h - 7, standing ? '#1b1033' : '#5fb3c9');
+  R(x + 6, y0 + 3, 5, 1, INK);
+  // skylten längs sidan
+  R(x + 12, y0 + 10, w - 14, 7, '#ffd23f');
+  text(g, 'STADSTUREN', x + 12 + Math.round((w - 14) / 2), y0 + 11, INK, 'center');
+  // hjulen
+  for (const hx of [x + 8, x + w - 13]) { R(hx, y0 + h - 5, 7, 5, INK); R(hx + 2, y0 + h - 3, 3, 1, '#7d786d'); }
+  if (lit) R(x - 2, y0 + h - 8, 2, 2, '#fff6a8');
 }
 
 // ---------- Byggnaden ----------
@@ -1582,6 +1606,11 @@ function drawHallPeople() {
     phoneOn(p, fx - PERSON_W / 2, fy - PERSON_H + 1, dir);
     if (cg && p.cargo.kind !== 'resväska') g.drawImage(cg.c, fx + cg.dx, fy - cg.c.height + 1 - cg.lift);
     if (dog && cg) poodleExtras(p, fx, fy, dir, cg);
+    // guiden på Stadsturen håller upp flaggan som gruppen följer
+    if (p.guide) {
+      const px = fx + (dir > 0 ? 6 : -7), wv = Math.sin(S.anim * 6 + p.id) > 0 ? 1 : 0, fw = dir > 0 ? 1 : -6;
+      R(px, fy - 33, 1, 23, '#c8a46e'); box(px + fw, fy - 34 + wv, 7, 5, '#ff8c42');
+    }
     // ånga ur öronen när någon är riktigt sur
     if ((p.mood || 0) === 2) for (let i = 0; i < 2; i++) {
       const k = (S.anim * 1.4 + i * 0.5 + p.id * 0.13) % 1;

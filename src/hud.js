@@ -425,6 +425,8 @@ export function personHtml(p) {
   if (p.cast) role = `★ Stamgäst · ${p.title}`;
   if (p.crewId) role = `${CREW_BY[p.crewId].icon} ${p.title}`;
   else if (p.role === 'arbetsledare') role = `🦺 ${p.title}`;
+  if (p.guide) role = `🚩 ${p.title}`;
+  else if (p.tour) role = '🚌 Turist på Stadsturen';
   if (p.auto) role += ` · bil på ${fl(p.auto.floor)}`;
   role += ` · ${p.kg} kg${p.cargo ? ` + ${p.cargo.name} ${p.cargo.kg} kg` : ''}`;
   const why = p.dead ? 'Har lämnat huset' : `${p.why} → våning ${fl(p.goal ?? p.dest)}${p.goal !== p.dest && p.state !== 'office' ? ` (byter hiss på ${fl(p.dest)})` : ''}`;

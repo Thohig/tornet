@@ -345,6 +345,8 @@ export const pace = h => timeScale(h) / REF_SCALE;
 // Det folk gör i rummen (jobba, fika, sova) räknas i speltid, som när ett dygn tog en halvtimme:
 // rumstimrarna (p.timer i läget office) tickar activityRate(h) gånger fortare än simuleringen.
 const ROOM_SCALE = h => (h >= 22 ? 120 : h >= 20 ? 60 : 30);
+/** spelsekunder per rumsenhet vid klockslaget h (en rumstimer på u enheter varar u · roomScale(h) spelsekunder) */
+export const roomScale = ROOM_SCALE;
 export const activityRate = h => timeScale(h) / ROOM_SCALE(h);
 /** hur mycket en rumstimer hinner ticka ner mellan klockslagen h0 och h1 (tar hänsyn till att takten byts kl 20 och 22) */
 export function roomUnits(h0, h1) {

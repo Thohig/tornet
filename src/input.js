@@ -53,9 +53,9 @@ export function followInside(f) {
 function bus() {
   if (!S.started || S.fire) return;
   const n = act('bus');
-  if (!n) { S.fx.push({ x: 140, y: GROUND_Y - 100, text: 'STÄNGT – KOM IMORGON!', color: '#ff5d52', life: 2, size: 26 }); log('Bussen vände – allt i huset är stängt', 'sys'); return; }
-  S.fx.push({ x: 140, y: GROUND_Y - 100, text: 'BUSSLAST!', color: '#ff8c42', life: 2, size: 30 });
-  log('En busslast turister väller in i entrén!', 'sys');
+  if (n < 0) return; // (en buss står redan vid hållplatsen)
+  if (!n) { S.fx.push({ x: 140, y: GROUND_Y - 100, text: 'STÄNGT – KOM IMORGON!', color: '#ff5d52', life: 2, size: 26 }); log('Bussen vände – takterrassen och Sky Café är stängda', 'sys'); return; }
+  S.fx.push({ x: 140, y: GROUND_Y - 100, text: 'TURISTBUSS!', color: '#ff8c42', life: 2, size: 30 });
 }
 function visitor(f, x = BX0 + 60) {
   if (!S.started || S.fire) return;

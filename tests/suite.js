@@ -2,13 +2,14 @@
 // (tests.html via browser.js) och i terminalen (npm test via run.mjs).
 // Varje test seedar slumpen, så resultaten är exakt reproducerbara.
 import { S, hooks, hour } from '../src/state.js';
-import { floorOpen, FLOOR_HOURS, idx, floorWith, EL, LOBBY, SKY, HOME_FLOORS, OFFICE_FLOORS } from '../src/config.js';
+import { floorOpen, FLOOR_HOURS, idx, floorWith, EL, LOBBY, SKY, HOME_FLOORS, OFFICE_FLOORS, CAFE } from '../src/config.js';
 import { DT, step, advance, newSim, resetDay } from '../src/sim.js';
 import {
   startFire, setFireMode, startOutage, startGenerator, toggleAutoRescue,
   toggleOff, endFire, canRescue,
 } from '../src/incidents.js';
-import { liftsAvailable, spawnBus, pn } from '../src/people.js';
+import { liftsAvailable, pn, spawnVisitor } from '../src/people.js';
+import { TOUR_N } from '../src/tour.js';
 import { loadKg, allowed, allowedPos, posOf, safeFloor, operational, canTake, stopFloors, isFull, costBased, benched, inFireZone } from '../src/dispatch.js';
 import { RATED_KG, FULL_LOAD, VMAX, DEFAULT_TEMPO, dayLength } from '../src/config.js';
 import { needsFreight, mayUseFreight, legDest } from '../src/people.js';
@@ -337,6 +338,13 @@ test('Utan Smart-styrning sover inga hissar', () => {
 });
 
 // ---------- Vikt ----------
+/** en klump turister med resväskor i entrén (överlasttestet) */
+function suitcases(n) {
+  for (let i = 0; i < n; i++) {
+    const p = spawnVisitor(LOBBY, -30 - i * 24, CAFE, 'Turist på busstur');
+    if (p) { p.space = 9; p.cargo = { kind: 'resväska', name: 'resväska', kg: 20 }; }
+  }
+}
 test('Överlast: turister med resväskor – vågen larmar och den sist påstigna kliver av', () => {
   // (överlasten är slumpens sak – den beror på vem som hinner in i vilken korg – så minst tre och upp till sex förmiddagar körs)
   let overloads = 0, maxKg = 0, days = 0;
@@ -347,7 +355,7 @@ test('Överlast: turister med resväskor – vågen larmar och den sist påstign
     const w = watcher();
     const before = S.stats.overloads;
     // stora bussar: med expresshissarna klarar huset en vanlig busslast (14) utan överlast
-    for (let i = 0; i < 4; i++) { spawnBus(24); run(6, w); }
+    for (let i = 0; i < 4; i++) { suitcases(24); run(6, w); }
     run(150, w);
     overloads += S.stats.overloads - before; maxKg = Math.max(maxKg, w.maxKg);
     assert(w.overweight === 0, `frö ${seed}: en hiss körde iväg överlastad ${w.overweight} gånger`);
@@ -1268,9 +1276,49 @@ test('Hissetikett: folk avstår från trånga hissar, och turistgruppen tränger
   for (const seed of [74, 75, 76, 77, 78]) { sim(seed); runUntil(10.3); crowdSkips += S.stats.crowdSkips; holds += S.stats.holds; }
   assert(crowdSkips > 0, 'ingen avstod från en trång hiss i morgonrusningen');
   assert(holds > 0, 'ingen höll upp dörren');
-  sim(76); spawnBus(5);
-  assert(S.people.filter(p => p.why === 'Turist på busstur').every(p => p.space === 9), 'turisterna bryr sig om trängsel');
+  sim(76); runUntil(10); act('bus'); run(10);
+  const group = S.people.filter(p => p.tour);
+  assert(group.length === TOUR_N + 1 && group.every(p => p.space === 9), 'turisterna bryr sig om trängsel');
   return `${crowdSkips} avstod från en trång hiss och ${holds} höll upp dörren i morgonrusningen`;
+});
+test('Stadsturen: guiden räknar in gruppen vid varje stopp, och bussen går med dem som hann', () => {
+  const ROOF = floorWith('roof');
+  let tours = 0, stops = 0, late = 0;
+  for (const [seed, strategy] of [[81, 'smart'], [82, 'buttons'], [83, 'peak']]) {
+    sim(seed, { strategy }); runUntil(10);
+    const w = watcher();
+    assert(act('bus') > 0, `frö ${seed}: ingen buss kl 10`);
+    assert(act('bus') < 0, `frö ${seed}: två bussar samtidigt`);
+    const T = S.tour, seen = [];
+    let g = 0, ph = '';
+    while (S.tour) {
+      const b = w.before(); step(DT); w.check(b);
+      if (++g > 30 * 900) throw new Fail(`frö ${seed}: turen tog aldrig slut (${S.tour.ph})`);
+      if (S.tour && S.tour.ph + S.tour.si !== ph) {
+        ph = S.tour.ph + S.tour.si;
+        if (S.tour.ph === 'at') {
+          // stoppet börjar först när alla som är med står på stoppets våning
+          const f = S.tour.stops[S.tour.si], group = S.people.filter(p => p.tour);
+          assert(group.length && group.every(p => p.floor === f && p.state === 'office'), `frö ${seed}: stoppet på ${fl(f)} började innan alla var där`);
+          seen.push(f);
+        }
+      }
+      const walker = S.people.find(p => p.tour && p.stairsByChoice);
+      assert(!walker, `frö ${seed}: ${walker && walker.name} lämnade gruppen och tog trappan`);
+    }
+    assert(seen[0] === ROOF && seen.includes(CAFE), `frö ${seed}: rutten var ${seen.map(fl).join(' → ')}, inte taket och Sky Café`);
+    assert(T.aboard + T.missed.length + T.lost.length === TOUR_N + 1, `frö ${seed}: ${T.aboard} ombord, ${T.missed.length} missade, ${T.lost.length} tappade – inte ${TOUR_N + 1}`);
+    assert(!S.people.some(p => p.tour), `frö ${seed}: turister kvar med turen efter att bussen gått`);
+    tours++; stops += seen.length; if (T.missed.length) late++;
+  }
+  // bussen väntar inte för evigt: med en avgång som redan passerats tutar den och går utan dem som inte hunnit
+  sim(84); runUntil(10); act('bus');
+  while (S.tour && S.tour.ph !== 'back') step(DT);
+  S.tour.departH = hour();
+  let honk = false, g = 0;
+  while (S.tour && S.tour.ph === 'back') { step(DT); honk ||= S.fx.some(f => f.text === 'TUUT!'); if (++g > 30 * 120) throw new Fail('bussen gick aldrig'); }
+  assert(honk, 'bussen tutade inte trots att det var avgång');
+  return `${tours} turer, ${stops} stopp – alla inräknade · ${late} med någon som missade bussen · bussen tutar och går när det är avgång`;
 });
 test('Hundsalongen: hundägare lämnar in raggiga pudlar och går ut med nyklippta', () => {
   const spa = floorWith('spa');

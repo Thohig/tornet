@@ -2,7 +2,8 @@
 // ändrar simuleringens tillstånd direkt. Rör aldrig DOM – gränssnittet anropar act().
 import { STRAT_NAMES } from './config.js';
 import { S, log } from './state.js';
-import { pev, spawnBus, spawnVisitor } from './people.js';
+import { pev, spawnVisitor } from './people.js';
+import { spawnBus } from './tour.js';
 import { rebuildPicks } from './dispatch.js';
 import { setFireMode, setIncLevel, startGenerator, startRescue, toggleAutoRescue, toggleOff, trigger } from './incidents.js';
 import { setStormMode, setWeather, strikeNow } from './weather.js';

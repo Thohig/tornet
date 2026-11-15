@@ -21,6 +21,7 @@ import { medicClear, visitsReset, visitsRoll, visitsTick } from './visits.js';
 import { hoistReset, hoistTick } from './hoist.js';
 import { chiefReset, chiefRoll, chiefTick } from './chief.js';
 import { panoTick } from './pano.js';
+import { tourReset, tourTick } from './tour.js';
 import { crewArrivals, crewRoll, crewStart, spawnCrew } from './crew.js';
 
 // ---------- Planerad rutt (för HUD) ----------
@@ -142,6 +143,7 @@ export function step(dt) {
   lifeTick(dt);
   trainTick(dt, arrivalRate);
   visitsTick(dt);
+  tourTick(dt);
   hoistTick(dt);
   stormTick(dt);
   nightModeTick(dt);
@@ -237,6 +239,7 @@ export function resetDay() {
   trainReset();
   weatherReset();
   visitsReset();
+  tourReset();
   hoistReset();
   planIncidents(); // (sist: tidtabellen slumpas när allt annat är på plats)
   S.lastInc = null;

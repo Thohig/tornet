@@ -29,6 +29,8 @@ export const S = {
   // väder (temperatur, stormen som incident), flyttdag, ambulans och informationsrutor (se notice)
   weather: /** @type {{ temp: number, cold: number }} */ ({ temp: 15, cold: 0 }), storm: /** @type {any} */ (null),
   move: /** @type {any} */ (null), medic: /** @type {any} */ (null),
+  // Stadsturen: turistbussen och den guidade gruppen (tour.js)
+  tour: /** @type {any} */ (null),
   // takskenan: fönsterputsarens gondol och hissbalken (hoist.js)
   cleaner: /** @type {any} */ (null), hoist: /** @type {any} */ (null),
   notices: /** @type {Notice[]} */ ([]), noticeId: 1,
