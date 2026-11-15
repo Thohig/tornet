@@ -35,8 +35,9 @@ export const LADDER_MAX = 5;
 
 /** kan panoramahissen fastna nu (den kör med folk i)? */
 export const panoCandidate = e => !!e && e.facade && e.mode === 'normal' && !e.hold && !e.indep && !e.panoNext;
-/** korgen är mitt emellan två våningar (som i service.js) */
-const midFloor = e => { const fr = e.pos - Math.floor(e.pos); return fr > 0.35 && fr < 0.75 && e.pos > e.minF + 0.6; };
+/** korgen är mitt emellan två våningar (som i service.js) – och ovanför gatan: under jord, där röret går ner till
+ *  tunnelbanan, når varken repet eller stegbilen fram, så där fastnar den inte */
+const midFloor = e => { const fr = e.pos - Math.floor(e.pos); return fr > 0.35 && fr < 0.75 && e.pos > Math.max(e.minF, LOBBY) + 0.6; };
 /** ska korgen fastna just nu? */
 export const panoDue = e => !!e.panoNext && e.mode === 'normal' && e.state === 'moving' && midFloor(e) && e.passengers.length > 0;
 /** Spelaren (eller slumpen) framkallar det: panoramahissen fastnar nästa gång den kör med folk mellan två våningar */

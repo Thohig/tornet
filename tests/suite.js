@@ -2241,3 +2241,24 @@ test('Dygnets händelser: incidenter som tar slut sparas i statistiken (dagens s
   assert(ev.every(e => /^\d\d:\d\d$/.test(e.time) && e.title && e.text), 'en händelse saknar tid, rubrik eller text');
   return ev.map(e => `${e.time} ${e.type}`).join(' · ');
 });
+test('Panoramahissen går ner till tunnelbanan: från perrongen rakt upp till taket – men fastnar aldrig under gatan', () => {
+  sim(64);
+  const P = S.elevators[PANO.id], roof = floorWith('roof');
+  assert(P.stops.has(STATION) && P.minF === STATION, 'panoramahissen går inte ner till tunnelbanan');
+  // resvägen: från perrongen till taket är en enda resa (förr: expressen till sky lobbyn och sedan höga zonen)
+  assert(legDest(STATION, roof, { kind: 'vis', cargo: null }) === roof, 'från perrongen till taket blir det fortfarande hissbyte');
+  const w = watcher();
+  let fromTrain = 0, up = 0, stuckLow = 0;
+  const seen = new Set();
+  while (hour() < 15) {
+    const b = w.before(); step(DT); w.check(b);
+    for (const p of P.passengers) if (!seen.has(p) && p.floor === STATION) { seen.add(p); fromTrain++; if (p.dest === roof) up++; }
+    // framkalla: hydrauliken ska bara kunna låsa sig ovanför gatan
+    if (!S.pano && !P.panoNext && P.passengers.length && P.pos < LOBBY) act('trigger', 'pano');
+    if (P.fault && P.fault.pano && P.pos < LOBBY + 0.6) stuckLow++;
+  }
+  assert(w.passes === 0 && w.badLeg === 0, `regelbrott (förbi ${w.passes}, delresa ${w.badLeg})`);
+  assert(fromTrain > 0, 'ingen klev på panoramahissen vid perrongen');
+  assert(stuckLow === 0, 'panoramahissen fastnade under gatan');
+  return `${fromTrain} klev på vid perrongen (${up} till taket) · perrongen → taket utan byte · aldrig fast under gatan`;
+});

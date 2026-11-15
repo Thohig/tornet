@@ -137,7 +137,8 @@ export function peakHold(e, f) {
 }
 /** UPP-läge: ska den här lediga hissen möta nästa tåg? (en åt gången, och bara när tåget snart är här) */
 function meetTrain(e) {
-  if (STATION < 0 || S.trainDone || S.train || !e.stops.has(STATION) || e.freight || !(S.trainNext - S.t < 8)) return false;
+  // (panoramahissen möter inte tåget – den ska finnas i entrén för turisterna)
+  if (STATION < 0 || S.trainDone || S.train || !e.stops.has(STATION) || e.freight || e.facade || !(S.trainNext - S.t < 8)) return false;
   return !S.elevators.some(o => o !== e && (o.parkTarget === STATION || (Math.round(o.pos) === STATION && o.state !== 'moving')));
 }
 

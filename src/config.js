@@ -153,8 +153,9 @@ export const BUILDING = {
     { name: 'H1', color: '#008080', group: 'hög', col: 0, start: '6', serves: ['6', '7', '8', '9', '10', '11', '12', '13', '14', 'T'], park: { day: '6', lunch: '6', evening: '11' } },
     { name: 'H2', color: '#2a5db0', group: 'hög', col: 1, start: '10', serves: ['6', '7', '8', '9', '10', '11', '12', '13', '14', 'T'], park: { day: '10', lunch: '6', evening: '13' } },
     { name: 'V', color: '#808080', group: 'varu', col: 2, start: 'P1', home: 'P1', freight: true, ratedKg: 1600 },
-    // terrace: våningen där panoramahissen har en lastdörr mot takterrassen – bara för hissbalkens flyttlass (hoist.js)
-    { name: 'P', color: '#93379e', group: 'panorama', start: 'E', serves: ['E', '6', 'T'], facade: true, terrace: '8' },
+    // terrace: våningen där panoramahissen har en lastdörr mot takterrassen – bara för hissbalkens flyttlass (hoist.js).
+    // Glasröret fortsätter ner genom trottoaren till tunnelbanan (TB): från perrongen åker man direkt upp till taket.
+    { name: 'P', color: '#93379e', group: 'panorama', start: 'E', serves: ['TB', 'E', '6', 'T'], facade: true, terrace: '8' },
   ],
 };
 

@@ -437,6 +437,19 @@ function drawShellStatic(nn) {
   // panoramahissens skenor och gångbryggor (bryggorna når tornet, även över terrassen)
   for (const e of EL.filter(e => e.facade)) {
     const x = X(shaftX(e.id)), t = Y(shaftTop(e) - 8), b = Y(shaftBot(e)), w = SHAFT_W / PX;
+    // under gatan: röret går ner genom trottoaren i ett utgrävt schakt till tunnelbanans tunnel
+    if (EL[e.id].minF < LOBBY) {
+      const gy = Y(GROUND_Y) + 7;
+      R(x - 3, gy, w + 6, b - gy + 2, INK); R(x - 2, gy, w + 4, b - gy + 1, '#2a2620');
+      for (let y = gy + 4; y < b; y += 9) { R(x - 2, y, 2, 1, '#4a4338'); R(x + w, y + 4, 2, 1, '#4a4338'); } // (spontväggen)
+      // ledningarna och avloppsröret går igenom röret i tätade genomföringar
+      for (const [yy, hh] of [[GROUND_Y + 21, 7], [GROUND_Y + 43, 11]]) for (const cx of [x - 4, x + w + 1]) { R(cx, Y(yy) - 1, 3, hh, INK); R(cx + 1, Y(yy), 1, hh - 2, '#a8a395'); }
+      R(x - 3, b, w + 6, 2, INK); R(x - 2, b, w + 4, 1, '#8a909a'); // (golvet i botten av röret)
+      // skylten vid perrongen: härifrån går det rakt upp till taket
+      const sy = Y(floorY(EL[e.id].minF) - 4) - 46, sw = textW('TILL TAKET') + 6;
+      box(x - sw - 2, sy, sw, 9, '#93379e'); text(g, 'TILL TAKET', x - sw / 2 - 2, sy + 2, '#ffffff', 'center');
+      R(x - sw / 2 - 3, sy - 6, 3, 5, '#ffd23f'); R(x - sw / 2 - 4, sy - 5, 5, 1, '#ffd23f'); // (en pil uppåt)
+    }
     // panoramahissens bana: ett glasrör med stålprofiler vid varje våning, som en del av fasaden
     R(x + 3, t, w - 6, b - t, 'rgba(191,234,255,.22)');
     for (let f = 0; f <= FLOORS; f++) {
