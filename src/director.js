@@ -1,7 +1,7 @@
 // Regissören: automatisk kamera som letar upp det mest sevärda i huset och klipper dit.
 // Rent gränssnitt: läser S, ändrar aldrig simuleringen (slumpen är vrand). Kameran rör sig via S.camTarget
 // precis som när man följer en hiss. Allt manuellt (scrolla, följa, klicka på någon) stänger av regissören.
-import { BREAK, CONTROL, CREW, DOCK, FLOOR_H, LOBBY, ROOF, STATION, TOP, floorY, shaftCX } from './config.js';
+import { BREAK, BX1, CONTROL, CREW, DOCK, FLOOR_H, GROUND_Y, LOBBY, ROOF, STATION, TOP, floorY, shaftCX } from './config.js';
 import { alarm, chiefOnDuty } from './chief.js';
 import { CREW_BY, atPost, crewPerson, postFloor } from './crew.js';
 import { S, hour } from './state.js';
@@ -10,6 +10,7 @@ import { vpick, vrand } from './rng.js';
 import { VIEW, camMax, camTarget, keepX, seeH } from './view.js';
 import { personHead } from './render.js';
 import { cleanerAt } from './hoist.js';
+import { BUS_NAME } from './tour.js';
 
 const HOLD = 16;     // sekunder (verklig tid) en vanlig tagning varar
 const MIN_HOLD = 10; // så kort får en tagning bli innan något viktigare får klippa in
@@ -19,7 +20,7 @@ const BORED = 1.5;   // poängavdrag per sekund som något redan har visats (hel
 const FORGET = 120;  // sekunder tills det tråkiga är glömt (avtar exponentiellt)
 const GONE_HOLD = 3; // så länge en våningstagning står kvar efter att händelsen är över
 
-/** @typedef {{ key: string, score: number, kind: 'car'|'person'|'floor'|'cleaner'|'hoist', id: number, why: string, urgent?: boolean }} Shot */
+/** @typedef {{ key: string, score: number, kind: 'car'|'person'|'floor'|'cleaner'|'hoist'|'street', id: number, why: string, urgent?: boolean }} Shot */
 
 // ---------- Slowmotion ----------
 // I de dramatiska ögonblicken går tiden långsammare en kort stund (bara uppspelningen: samma dygn, samma steg).
@@ -91,10 +92,26 @@ function shots() {
   const C = S.chief, lowering = S.elevators.some(e => e.mode === 'rescue');
   if (C && C.on && C.say && C.say.dec && CONTROL >= 0 && S.t - C.say.t0 < 3 && !lowering)
     add('chief', 88, 'floor', CONTROL, `🧑‍💼 ${chiefOnDuty().name}: ${C.say.text}`, S.t - C.say.t0 < 1);
-  if (S.fire) add('fire', 100, 'floor', S.fire.floor, `🔥 Brand på ${fl(S.fire.floor)}`, S.t - S.fire.t0 < 2);
-  // brandmännen på väg upp (i brandhissen eller trapphuset)
+  // (samma nyckel hela branden: när brandmännen är framme visar våningen dem med slangen – eller stegbilens stege)
+  if (S.fire) add('fire', 100, 'floor', S.fire.floor, S.fire.outAt === null ? `🔥 Brand på ${fl(S.fire.floor)}`
+    : S.people.some(p => p.ff && p.state === 'office' && p.floor === S.fire.floor) ? `🚒 Brandmännen släcker på ${fl(S.fire.floor)}`
+    : `🚒 Stegbilen släcker ${fl(S.fire.floor)} utifrån`, S.t - S.fire.t0 < 2);
+  // brandbilen kör in med blåljus på gatan (pixel.js) strax innan kåren är framme
+  if (S.fire && Math.abs(S.fire.brigadeAt + 1.5 - S.t) < 5) add('engine', 104, 'street', 0, S.fire.brigade ? '🚒 Brandmännen springer in' : '🚒 Brandbilen kommer', !S.fire.brigade);
+  // brandmännen på väg upp (i brandhissen eller trapphuset), och tillbaka till bilen när det är släckt
   const ff = S.people.find(p => p.ff && !p.dead && p.state !== 'office' && visible(p));
   if (ff && S.fire) add('ff', 92, 'person', ff.id, '🚒 Brandmännen går in');
+  else if (ff && S.brigade) add('ffout', 48, 'person', ff.id, '🚒 Brandmännen går tillbaka till bilen');
+  // Stadsturen: bussen som kommer och går (gatan), guiden med flaggan och gruppen på takterrassen
+  const T = S.tour;
+  if (T) {
+    if (T.ph === 'in') add('bus', 62, 'street', 0, `🚌 ${BUS_NAME} kommer`);
+    else if (T.ph === 'out') add('bus', 56, 'street', 0, `🚌 ${BUS_NAME} åker${T.missed.length ? ` utan ${T.missed.length}` : ''}`);
+    else if (T.ph === 'back' && T.honked) add('bus', 66, 'street', 0, `🚌 ${BUS_NAME} tutar – ${T.n0 - T.lost.length - T.aboard} är inte ombord`);
+    const gd = S.people.find(p => p.id === T.guide && p.guide && !p.dead);
+    if (gd && gd.state !== 'office' && visible(gd)) add('guide', 46, 'person', gd.id, `🚩 ${name1(gd)} leder ${BUS_NAME}`);
+    if (T.ph === 'at' && T.stops[T.si] === ROOF && ROOF >= 0) add('tourRoof', 36, 'floor', ROOF, `📸 ${BUS_NAME} på takterrassen`);
+  }
   // återsamlingsplatsen och när de utrymda går in igen
   const outside = S.people.filter(p => p.state === 'assembly').length;
   if (outside >= 4) add('assembly', 40 + Math.min(outside, 20), 'floor', LOBBY, `🧍 ${outside} på återsamlingsplatsen`);
@@ -225,6 +242,7 @@ function rate(s, current = false) {
 /** Var tagningen är just nu (världens y), eller null om den inte längre går att visa. */
 function shotY(s) {
   if (s.kind === 'floor') return floorY(s.id) - FLOOR_H / 2;
+  if (s.kind === 'street') return GROUND_Y - 24;
   if (s.kind === 'cleaner') { const G = cleanerAt(); return G && G.crew ? G.y - 30 : null; }
   if (s.kind === 'hoist') return S.hoist && S.hoist.phase !== 'idle' ? S.hoist.y - 10 : null;
   if (s.kind === 'car') { const e = S.elevators[s.id]; return e ? floorY(e.pos) - FLOOR_H / 2 : null; }
@@ -237,6 +255,7 @@ function shotY(s) {
 /** tagningens x i världen (för sidledsscroll på smal skärm), null = låt den stå */
 function shotX(s) {
   if (s.kind === 'floor') return VIEW.x0;
+  if (s.kind === 'street') return BX1 + 80; // (gatan till höger om huset: hållplatsen)
   if (s.kind === 'car') return S.elevators[s.id] ? shaftCX(s.id) : null;
   if (s.kind !== 'person') return null;
   const p = S.people.find(q => q.id === s.id);
@@ -268,7 +287,7 @@ export function updateDirector() {
   // som var brådskande när den klipptes in skyddar inte längre – t.ex. chefens beslut när nödsänkningen börjar)
   const urgent = all.some(c => c.urgent && (!s || (c.key !== s.key && !(cur && cur.urgent))));
   // en våningstagning vars händelse är över (chefens replik, tåget har gått) står inte kvar och visar ingenting
-  const gone = !!s && !cur && s.kind === 'floor' && age > GONE_HOLD;
+  const gone = !!s && !cur && (s.kind === 'floor' || s.kind === 'street') && age > GONE_HOLD;
   if (!S.paused && (y === null || age > MIN_HOLD || urgent || gone)) {
     // (slumpen i rate dras en gång per tagning och bildruta, så att jämförelserna nedan håller ihop)
     const val = new Map(all.map(c => [c, rate(c)]));

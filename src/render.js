@@ -63,13 +63,20 @@ const SHOWN = new Set(['toQueue', 'wait', 'boarding', 'exiting', 'stairs', 'plat
 const SEEN = new WeakMap();
 const lerp = (a, b, t) => a + (b - a) * t;
 /** var personen syns i hallen just nu: { x, a, dir } (a = synlighet 0–1), eller null om hen är "bakom" korridoren */
+/** brandmännen på brandvåningen går inte in i rummen i bilden: de står i hallen med slangen riktad mot lågorna
+ *  vid korridoren (x i hallen, annars null). Gäller tills de går därifrån, även en stund efter att det är släckt. */
+export function ffSpot(p) {
+  if (!p.ff || !S.brigade || p.floor !== S.brigade.floor || (p.state !== 'office' && p.state !== 'exiting')) return null;
+  return DOOR_X + 76 + (p.id % 3) * 22;
+}
 export function landPos(p) {
   let r = SEEN.get(p);
-  // står på en plats i hallen (personalen vid godisautomaten, på perrongen): syns där
-  if (p.state === 'office' && p.spot && p.spot.win === 'hall') {
-    if (r) { r.state = p.state; r.floor = p.floor; r.vis = true; r.vx = p.spot.x; r.win = true; }
-    else SEEN.set(p, { state: p.state, floor: p.floor, vis: true, vx: p.spot.x, win: true });
-    return { x: p.spot.x, a: 1, dir: 0 };
+  // står på en plats i hallen (personalen vid godisautomaten, på perrongen, brandmännen som släcker): syns där
+  const hx = p.state !== 'office' ? null : p.spot && p.spot.win === 'hall' ? p.spot.x : ffSpot(p);
+  if (hx !== null) {
+    if (r) { r.state = p.state; r.floor = p.floor; r.vis = true; r.vx = hx; r.win = true; }
+    else SEEN.set(p, { state: p.state, floor: p.floor, vis: true, vx: hx, win: true });
+    return { x: hx, a: 1, dir: 0, face: p.ff ? -1 : 0 };
   }
   if (p.state === 'ride' || !SHOWN.has(p.state)) {
     const vis = p.state === 'ride', win = inWindow(p);
@@ -91,10 +98,10 @@ export function landPos(p) {
   else {
     // (den som ska med tunnelbanan går ut på perrongen, inte in i korridoren)
     // (till ett fönster i bakväggen går man genom hallen och sätter sig där)
-    const toWin = p.state === 'exiting' && !!(p.spot && p.spot.win);
+    const ffx = ffSpot(p), toWin = p.state === 'exiting' && (!!(p.spot && p.spot.win) || ffx !== null);
     const toDoor = (p.state === 'exiting' && !p.toTrain && !toWin) || p.state === 'stairs';
     if (r.fromDoor && toDoor) { r.vis = false; return null; } // inifrån och in igen: syns aldrig
-    const vxT = toDoor ? DOOR_X : p.state === 'boarding' || toWin ? p.tx : visX(p.tx);
+    const vxT = toDoor ? DOOR_X : ffx !== null ? ffx : p.state === 'boarding' || toWin ? p.tx : visX(p.tx);
     const Dw = Math.abs(p.tx - r.x0), t = Dw > 1 ? clamp(Math.abs(p.x - r.x0) / Dw, 0, 1) : 1;
     // kort gångväg (rummet ligger nära kön): dyk upp/försvinn en bit ut i hallen i stället för att
     // rusa genom den – högst 1,6 × gångfarten i bilden

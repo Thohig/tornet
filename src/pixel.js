@@ -277,6 +277,8 @@ let walkerN = 0;
 let walkerT = 0;
 function drawStreetPx(dt, h) {
   const gy = Y(GROUND_Y), n = nightness(h);
+  truckTick(dt);
+  if (truck.x === TRUCK_PARK) drawTruckLadderPx(X(truck.x), gy); // (stegen syns uppe vid branden även när gatan är utanför bilden)
   if (gy < -40 || gy - 60 > lo.height) return;
   const sx0 = X(BX1 + 7), sx1 = lo.width;
   // träd och busskur framför panoramahissens glasrör, gatlykta längst ut
@@ -306,11 +308,57 @@ function drawStreetPx(dt, h) {
   for (let i = walkers.length - 1; i >= 0; i--) if (walkers[i].x < BX1 - 20 || walkers[i].x > W + 20) walkers.splice(i, 1);
   g.save(); g.beginPath(); g.rect(sx0, gy - 40, sx1 - sx0, 48); g.clip();
   if (S.tour) drawBusPx(S.tour, gy, n);
+  if (truck.x !== null) drawFireTruckPx(X(truck.x), gy);
   for (const w of walkers) {
     const frame = Math.floor(w.x / 6) % 4 & 3;
     g.drawImage(personSprite(w, 'side', frame, w.dir), X(w.x) - PERSON_W / 2, gy + 3 + Math.round(w.depth) - PERSON_H);
   }
   g.restore();
+}
+
+// ---------- Brandbilen ----------
+// Bara grafik (som fotgängarna): bilen kör in från höger strax innan kåren är framme, står med blåljus vid
+// hållplatsen (framför bussen, om den står där) så länge kåren är i huset och kör vidare åt vänster sedan.
+const TRUCK_LEN = 112, TRUCK_PARK = BX1 + 12, TRUCK_V = 130;
+const truck = { x: /** @type {number|null} */ (null) };
+function truckTick(dt) {
+  const F = S.fire;
+  const want = !!(S.brigade || (F && (F.brigade || F.brigadeAt - S.t < 3.5)));
+  const step = S.started && !S.paused ? TRUCK_V * dt * S.speed : 0;
+  if (want) truck.x = truck.x === null || truck.x < TRUCK_PARK ? (truck.x === null ? BX1 + 440 : TRUCK_PARK) : Math.max(TRUCK_PARK, truck.x - step);
+  else if (truck.x !== null) { truck.x -= step; if (truck.x < BX1 - TRUCK_LEN - 20) truck.x = null; }
+}
+function drawFireTruckPx(x, gy) {
+  const w = Math.round(TRUCK_LEN / PX), h = 20, y = gy + 6 - h, on = Math.sin(S.anim * 11) > 0, parked = truck.x === TRUCK_PARK;
+  // skåpet med rulljalusier och den vita randen, hytten fram (bilen kör åt vänster)
+  box(x + 13, y + 2, w - 13, h - 5, '#c81e3a');
+  R(x + 14, y + 11, w - 15, 2, '#ffffff');
+  for (let jx = x + 16; jx + 2 < x + w - 2; jx += 3) R(jx, y + 13, 1, 2, '#a3172e'); // (jalusierna under randen)
+  box(x, y + 5, 15, h - 8, '#c81e3a');
+  R(x + 2, y + 7, 6, 5, '#9fd3ff'); R(x + 2, y + 7, 1, 5, '#ffffff'); R(x + 9, y + 7, 4, 5, '#9fd3ff');
+  R(x + 1, y + h - 6, 2, 2, '#fff6a8');
+  // stegen på taket (rest när kåren släcker utifrån – den ritas då för sig)
+  if (!(parked && ladderUp())) { R(x + 16, y, w - 18, 1, '#cfd4da'); R(x + 16, y + 2, w - 18, 1, '#cfd4da'); for (let lx = x + 17; lx < x + w - 3; lx += 4) R(lx, y, 1, 3, '#9aa3ad'); }
+  // blåljusen på hytten och baktill
+  R(x + 3, y + 3, 4, 2, on ? '#3f7cff' : '#1b2a6e'); R(x + 9, y + 3, 4, 2, on ? '#1b2a6e' : '#3f7cff');
+  R(x + w - 4, y + 1, 3, 2, on ? '#1b2a6e' : '#3f7cff');
+  if (on && parked) { R(x + 1, y + 1, 8, 6, 'rgba(63,124,255,.25)'); }
+  text(g, 'BRANDKÅREN', x + 13 + Math.round((w - 13) / 2), y + 4, '#ffffff', 'center');
+  for (const hx of [x + 4, x + 22, x + w - 12]) { R(hx, y + h - 6, 7, 5, INK); R(hx + 2, y + h - 4, 3, 1, '#7d786d'); }
+}
+/** släcker kåren utifrån (brandmännen hann inte upp i tid)? */
+const ladderUp = () => !!(S.fire && S.fire.outAt !== null && !S.people.some(p => p.ff && !p.dead && p.state === 'office' && p.floor === S.fire.floor));
+/** stegbilen: stegen rest mot brandvåningen och en vattenstråle in genom fasaden */
+function drawTruckLadderPx(x, gy) {
+  if (!ladderUp()) return;
+  const F = S.fire, x0 = x + 30, y0 = gy - 14, x1 = X(towerX1At(floorY(F.floor))) + 2, y1 = Y(surf(F.floor)) - 14;
+  if (Math.max(y0, y1) < 0 || Math.min(y0, y1) > lo.height) return;
+  line(x0, y0, x1 + 2, y1, '#cfd4da'); line(x0 + 2, y0, x1 + 4, y1 + 1, '#9aa3ad');
+  R(x1 + 1, y1 - 3, 4, 4, '#c81e3a');
+  for (let i = 0; i < 8; i++) {
+    const k = (S.anim * 1.8 + i / 8) % 1;
+    R(x1 - Math.round(k * 14), y1 - 2 + Math.round(k * k * 6), 2, 1, k < 0.8 ? '#9fd3ff' : '#ffffff');
+  }
 }
 
 /** Stadsturens buss (tour.js) vid hållplatsen: kör in från höger, står med öppen dörr medan gruppen är i huset
@@ -1309,10 +1357,15 @@ function floorOverlays(f, h) {
     if (f === S.fire.floor) {
       const F = S.fire, prog = fireProg(F);
       R(x0, top, x1 - x0, bot - top, `rgba(255,100,20,${(0.2 + 0.08 * Math.sin(S.anim * 7)) * (1 - prog * 0.85)})`);
-      if (prog < 0.9) {
-        const fr = FLAMES();
-        [DOOR_X - 10, DOOR_X + 10, DOOR_X + 46].forEach((wx, i) => g.drawImage(fr[(Math.floor(S.anim * 9) + i) % 3], X(wx) - 6, bot - 13 - (i === 1 ? 4 : 0)));
-      }
+      // lågorna slocknar en i taget medan brandmännen släcker (den närmast dem först), och det ångar där de var
+      const fr = FLAMES();
+      [DOOR_X - 10, DOOR_X + 10, DOOR_X + 46].forEach((wx, i) => {
+        if (prog < 0.9 - (2 - i) * 0.15) g.drawImage(fr[(Math.floor(S.anim * 9) + i) % 3], X(wx) - 6, bot - 13 - (i === 1 ? 4 : 0));
+        else if (prog < 1) for (let j = 0; j < 3; j++) {
+          const k = (S.anim * 0.8 + j / 3 + i * 0.29) % 1;
+          R(X(wx) - 2 + Math.round(Math.sin(k * 6 + j) * 2), bot - 6 - Math.round(k * 16), 3, 2, `rgba(235,240,245,${(0.7 * (1 - k)).toFixed(2)})`);
+        }
+      });
     }
   }
 }
@@ -1581,6 +1634,20 @@ function cabinPx(e, k, x, yb, body, head) {
   R(ix, yb - 3, Math.round(iw * fr), 2, kg > e.ratedKg ? '#ff2d55' : kg >= e.ratedKg * FULL_LOAD ? '#ff8c42' : '#7cf06b');
 }
 const blinkOf = p => Math.sin(S.anim * 0.9 + p.id * 1.7) > 0.985;
+/** brandmannens vattenstråle: en båge av droppar från munstycket mot lågorna (fx, fy = fötterna, figuren tittar åt vänster).
+ *  Innan släckningen börjat (kåren väntar på att alla ska vara framme) sprutar bara den första. */
+function hoseSpray(p, fx, fy) {
+  const F = S.fire;
+  R(fx + 2, fy - 1, 26, 1, '#c81e3a'); // slangen bakåt längs golvet (mot trapphuset)
+  const nx = fx - 6, ny = fy - 15, tx = X(DOOR_X + 4 + (p.id % 3) * 14), len = nx - tx;
+  R(nx - 2, ny, 3, 2, '#9aa3ad');
+  if (len < 6 || (F.outAt === null && p.id % 3)) return;
+  for (let i = 0; i < 12; i++) {
+    const k = ((S.anim * 1.6 + i / 12 + p.id * 0.37) % 1);
+    const x = Math.round(nx - 2 - k * len), y = Math.round(ny - Math.sin(k * Math.PI) * 9 + k * 8);
+    R(x, y, k < 0.8 ? 2 : 1, 1, k < 0.85 ? '#9fd3ff' : '#ffffff');
+  }
+}
 const hotOf = p => (p.mood || 0) === 2 && Math.sin(S.anim * 8 + p.id) > 0;
 
 // ---------- Folket i hallarna ----------
@@ -1594,7 +1661,7 @@ function drawHallPeople() {
   list.sort((a, b) => (a.p.depth - b.p.depth) || (a.p.id - b.p.id));
   for (const { p, lp } of list) {
     const walking = p.state !== 'wait' && p.state !== 'office'; // (office: står på en plats i hallen, crew.js)
-    const dir = walking && lp.dir ? lp.dir : (p.face || 1);
+    const dir = walking && lp.dir ? lp.dir : (lp.face || p.face || 1);
     const frame = walking ? Math.floor(((p.walkPhase || 0) % (Math.PI * 2)) / (Math.PI / 2)) % 4 : 0;
     const fx = X(lp.x), fy = Y(surf(p.floor) + p.depth * 0.6);
     g.globalAlpha = lp.a;
@@ -1606,6 +1673,8 @@ function drawHallPeople() {
     phoneOn(p, fx - PERSON_W / 2, fy - PERSON_H + 1, dir);
     if (cg && p.cargo.kind !== 'resväska') g.drawImage(cg.c, fx + cg.dx, fy - cg.c.height + 1 - cg.lift);
     if (dog && cg) poodleExtras(p, fx, fy, dir, cg);
+    // brandmannen på brandvåningen: slangen längs golvet och vattenstrålen mot lågorna vid korridoren
+    if (p.ff && lp.face && S.fire && p.floor === S.fire.floor && p.state === 'office') hoseSpray(p, fx, fy);
     // guiden på Stadsturen håller upp flaggan som gruppen följer
     if (p.guide) {
       const px = fx + (dir > 0 ? 6 : -7), wv = Math.sin(S.anim * 6 + p.id) > 0 ? 1 : 0, fw = dir > 0 ? 1 : -6;

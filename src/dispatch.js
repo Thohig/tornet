@@ -63,8 +63,9 @@ export const slotsFull = e => e.passengers.length + e.reserved >= e.cap;
 export const isFull = e => slotsFull(e) || loadKg(e) >= e.ratedKg * FULL_LOAD;
 /** Går hissen både till personens våning och till målet (för den här delresan)? */
 // (en hiss i oberoende drift, som varuhissen på flyttdagen, tar bara flyttgubbarna – som annars får åka varuhissen som alla andra;
-// ambulansen har förtur även där)
-export const canTake = (e, p) => e.legs.some(l => l.includes(p.floor) && l.includes(p.dest)) && elevatorAllows(e, p) && (!e.indep || !!(p.mover || p.medic || p.ff));
+// ambulansen har förtur även där; i zonläge går andra hissar också, men brandmännen åker bara brandhissen)
+export const canTake = (e, p) => e.legs.some(l => l.includes(p.floor) && l.includes(p.dest)) && elevatorAllows(e, p) && (!e.indep || !!(p.mover || p.medic || p.ff))
+  && (!p.ff || e.ffCar || !S.elevators.some(x => x.ffCar && x.mode === 'normal')); // (brandmännen åker brandhissen när det finns en)
 /** Dubbeldäck: korgens läge när den tar folk på våning f (övre däcket står en våning högre). Annars f. */
 export const posOf = (e, f) => (e.deck2 && e.upper.has(f) ? f - 1 : f);
 /** vilket däck den som kliver på på våning f åker (0 = nedre, 1 = övre) */
