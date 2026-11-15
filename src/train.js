@@ -3,6 +3,9 @@
 // Allt ligger i simuleringen (S.train) – grafiken i pixel.js läser bara läget.
 import { stream } from './rng.js';
 const { rand, randi, rng } = stream('tåg');
+// påstigningen har en egen ström: vilka som står på perrongen beror på styrlogiken, och får inte flytta hur många
+// som kliver av nästa tåg
+const BOARD = stream('påstigning');
 import { CAFE, LOBBY, MAXP, STATION, TRAIN_LEN, TRAIN_X0, TRAIN_X1, floorOpen, timeScale } from './config.js';
 import { S, hour, log, notice } from './state.js';
 import { pev, pn, setTrip, spawnEmployee, spawnVisitor } from './people.js';
@@ -114,7 +117,7 @@ function alight(T) {
 function board() {
   for (const p of S.people) {
     if (p.state !== 'platform' || p.dead) continue;
-    if (p.boardAt === undefined) { p.boardAt = S.t + rand(0, 1.8); continue; }
+    if (p.boardAt === undefined) { p.boardAt = S.t + BOARD.rand(0, 1.8); continue; }
     if (S.t < p.boardAt) continue;
     p.dead = true; p.state = 'gone';
     S.stats.trainOut++;

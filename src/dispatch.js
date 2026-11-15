@@ -367,7 +367,7 @@ export function reoptimize() {
   for (const p of S.people) {
     if (p.state !== 'wait' || p.assigned === null) continue;
     const cur = S.elevators[p.assigned];
-    if (cur.state === 'doors' && cur.floor === p.floor) continue;
+    if (cur.state === 'doors' && cur.floor === posOf(cur, p.floor)) continue;
     const cc = personCost(cur, p);
     if (cc < 6) continue;
     let best = null, bc = Infinity;

@@ -10,7 +10,7 @@ const { pick, rand, rng } = stream('drift');
 import { fl } from './util.js';
 import { BALANCE, DOOR_T, FLOOR_M, FLOOR_H, CAR_H, VMAX, floorY, shaftCX, timeScale, tempoWear } from './config.js';
 import { S, hour, incidentOver, log, notice } from './state.js';
-import { needsFreight, pev, pn, rerouteStranded, spawnStaff } from './people.js';
+import { evacFloor, needsFreight, pev, pn, rerouteStranded, spawnStaff } from './people.js';
 import { rebuildPicks, travel, cabinKg, prio, inFireZone } from './dispatch.js';
 import { bounceBoarders, exitAll, exitOne, moveTo, restoreElevator, setMode } from './elevators.js';
 import { incidentStarted } from './incidents.js';
@@ -37,7 +37,8 @@ export function moveKwh(kg, rated, floors) {
 }
 function energyTick(e, dt) {
   const kg = cabinKg(e);
-  e.kw = e.state === 'moving' ? powerKw(kg, e.ratedKg, e.v, e.dir) : 0;
+  // (i fritt fall efter ett linbrott driver ingen motor korgen)
+  e.kw = e.state === 'moving' && e.mode !== 'snapped' ? powerKw(kg, e.ratedKg, e.v, e.dir) : 0;
   // vänteläget räknas i spelets klocktid (natten går fortare), körningen i verklig simuleringstid
   const standby = (e.sleep || e.mode === 'dead' || !S.power ? SLEEP_KW : STANDBY_KW) * dt * timeScale(hour()) / 3600;
   const run = e.kw * dt / 3600;
@@ -138,8 +139,9 @@ function stuckTick(e, dt) {
 }
 
 // ---------- Hisstekniker ----------
-/** sitter fast i en hiss med linbrott (då kan hen inte rädda någon – inte ens sig själv) */
-const trappedIn = p => p.state === 'ride' && !!p.car && p.car.mode === 'snapped';
+/** sitter själv fast i en hiss – linbrott, eller korgen har stannat mellan två våningar (då kan hen inte rädda
+ *  någon, inte ens sig själv: hissjouren skickar en kollega) */
+const trappedIn = p => p.state === 'ride' && !!p.car && (p.car.mode === 'snapped' || (p.car.mode === 'broken' && !!p.car.fault && !!p.car.fault.trapped));
 /** i tjänst: inte en som sitter instängd eller har gått av passet efter att ha blivit utrymd */
 const onDuty = p => p.role === 'hisstekniker' && !p.dead && !p.offDuty && !trappedIn(p);
 /** teknikerna i tjänst (ordinarie först, en extra inringd kan komma till) */
@@ -185,6 +187,8 @@ function chooseJob(p = null) {
 }
 /** Teknikerns nästa beslut (anropas från personernas rollogik i people.js) */
 export function techNext(p) {
+  // (en tekniker som själv har utrymts ur en hiss med linbrott har gått av passet)
+  if (p.offDuty) return [p.exitFloor, 'Kollegan tar över – går hem och vilar'];
   if (p.job !== null && p.job !== undefined) {
     const e = S.elevators[p.job];
     // (jobbet ligger i brandzonen: det får vänta tills branden är släckt – arbetet sparas)
@@ -264,11 +268,14 @@ function techTick(dt) {
   foremanTick();
   // en tekniker som själv sitter fast efter ett linbrott släpper sitt jobb – hissjouren skickar en kollega
   for (const p of S.people) {
-    if (p.role !== 'hisstekniker' || !trappedIn(p) || !hasJob(p)) continue;
+    if (p.role !== 'hisstekniker' || !trappedIn(p) || p.offDuty) continue;
+    // (hen går av passet: kollegan som kommer tar över, och när hen är ute går hen hem och vilar)
+    p.offDuty = true;
+    pev(p, `Sitter själv fast i hiss ${p.car.name} – ringer hissjouren efter en kollega`);
+    if (!hasJob(p)) continue;
     const cur = S.elevators[p.job];
     if (cur.fault) cur.fault.done = p.workT;
     p.job = null; p.workT = 0;
-    pev(p, `Sitter själv fast i hiss ${p.car.name} – ringer hissjouren efter en kollega`);
   }
   const crew = techs();
   // instängda (linbrott, eller korgen har stannat mellan två våningar) går före allt: om ingen tekniker är ledig
@@ -329,6 +336,9 @@ function techTick(dt) {
 function workTick(t, dt) {
   if (!hasJob(t)) return;
   const e = S.elevators[t.job];
+  // (står hen någon annanstans – utsläppt ur en annan hiss, eller hissen gick sönder på en annan våning än där hen
+  // väntade – tittar hen upp strax och går till jobbet, i stället för att stå kvar med ett jobb som aldrig blir gjort)
+  if (t.state === 'office' && t.floor !== jobFloor(e)) t.timer = Math.min(t.timer, 1);
   if (t.state !== 'office' || t.floor !== jobFloor(e)) return;
   if (e.fault && e.fault.crank) return; // (vevar ner korgen för hand vid brandlarm – lagningen får vänta)
   if (e.fault && e.fault.pano && e.fault.trapped) return; // (panoramahissen: räddningstjänsten först, pano.js)
@@ -406,7 +416,7 @@ function crankTick(e, dt) {
   e.doorPhase = 'open';
   const n = e.passengers.length, down = S.t - e.fault.t0, t = S.people.find(p => p.id === c.by && !p.dead);
   // de som kommer ut i brandzonen går raka vägen ut ur huset
-  for (const p of e.passengers) if (inFireZone(e.floor) || inFireZone(p.goal)) { p.evac = true; p.evacFrom = p.goal; p.goal = p.exitFloor; p.why = 'BRANDLARM – utrymning!'; }
+  for (const p of e.passengers) if (inFireZone(e.floor) || inFireZone(p.goal)) { p.evac = true; p.evacFrom = p.goal; p.goal = evacFloor(p); p.leaving = true; p.why = 'BRANDLARM – utrymning!'; }
   exitAll(e, e.floor, 'Utsläppt ur hissen för hand');
   e.fault.trapped = false; e.fault.crank = null;
   log(`🔧 ${e.name} nedvevad till ${fl(e.floor)} – ${n} ute`, 'alert', e.color);
@@ -514,7 +524,7 @@ function evacStep(e, t) {
   const p = nextOut(e);
   if (p) {
     // en utrymd tekniker lämnar över till kollegan och går hem och vilar
-    if (p.role === 'hisstekniker') { p.offDuty = true; p.job = null; p.goal = p.exitFloor; p.why = 'Kollegan tar över – går hem och vilar'; }
+    if (p.role === 'hisstekniker') { p.offDuty = true; p.job = null; p.goal = p.exitFloor; p.leaving = true; p.why = 'Kollegan tar över – går hem och vilar'; }
     exitOne(e, p, s.exitF, `Ute ur hiss ${e.name} genom takluckan`);
     s.out++; s.nextOut = S.t + s.climb;
     pev(p, `Klättrade ut genom takluckan och uppför stegen till ${fl(s.exitF)} – efter ${Math.round(S.t - s.t0)} s`);

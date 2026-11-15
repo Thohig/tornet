@@ -387,6 +387,9 @@ function medicTick() {
   if ((A.state === 'onway' || A.state === 'transport') && !crew.length) {
     // personalen har lämnat huset (med patienten, eller utan om hen redan hade gått)
     A.state = 'done'; A.t1 = S.t;
+    // (patienten som inte kom med – utrymd vid brand när ambulansen kom – har kvicknat till och ligger inte kvar)
+    const pat = A.taken ? null : S.people.find(p => p.id === A.pid && !p.dead && p.collapsed);
+    if (pat) { pat.collapsed = false; if (pat.state === 'office') pat.timer = Math.min(pat.timer, 2); pev(pat, 'Kvicknar till – ambulansen har redan åkt'); }
     S.stats.medicSec += S.t - A.t0;
     dayEvent('medical', '🚑 Ambulansen har kört', `${A.taken ? `${A.pname} fördes till sjukhuset` : 'Ambulansen åkte tom'} – ${Math.round(S.t - A.t0)} s från larm till avfärd.`);
     log(`🚑 Ambulansen kör iväg${A.taken ? ` med ${A.pname}` : ''} – ${Math.round(S.t - A.t0)} s från larm till avfärd`, 'alert');
