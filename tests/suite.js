@@ -51,14 +51,27 @@ function watcher() {
     jumps: 0, orphanService: 0, techClash: 0, badReserved: 0, dupNames: 0, dupEx: '', idleWait: new Map(), idleWaitMax: 0, badPlatform: 0,
     deadAssign: new Map(), deadAssignMax: 0, deadAssignEx: '', prevMode: [], late: [],
     // dockhuset: hur länge någon har suttit instängd, och hur länge en incident har pågått
-    maxTrap: 0, maxStorm: 0, maxFire: 0, maxOutage: 0 };
+    maxTrap: 0, maxStorm: 0, maxFire: 0, maxOutage: 0,
+    // en korg vänder aldrig i fart, ingen går trappan in i brandzonen, och ingen tekniker står kvar med ett jobb på fel våning
+    flips: 0, prevVel: [], intoFire: 0, prevState: new Map(), techLost: new Map(), techLostMax: 0 };
   w.before = () => S.elevators.map(e => e.pos);
   w.check = before => {
     for (const e of S.elevators) for (const p of e.passengers) if ((p.trapT || 0) > w.maxTrap) w.maxTrap = p.trapT;
     if (S.storm) w.maxStorm = Math.max(w.maxStorm, S.t - S.storm.t0);
     if (S.fire) w.maxFire = Math.max(w.maxFire, S.t - S.fire.t0);
     if (S.outage) w.maxOutage = Math.max(w.maxOutage, S.t - S.outage.t0);
+    for (const p of S.people) {
+      // (den som redan gick i trappan när larmet gick räknas inte)
+      if (S.fire && S.t > S.fire.t0 && !p.role && !p.vip && !p.evac && p.state === 'stairs' && w.prevState.get(p.id) !== 'stairs' && !p.escalator && !inFireZone(p.floor) && inFireZone(p.dest)) w.intoFire++;
+      w.prevState.set(p.id, p.state);
+      if (p.role === 'hisstekniker' && !p.offDuty && p.job !== null && p.job !== undefined && p.state === 'office' && p.floor !== jobFloor(S.elevators[p.job]) && !inFireZone(p.floor)) {
+        const since = w.techLost.get(p.id) ?? S.t; w.techLost.set(p.id, since); w.techLostMax = Math.max(w.techLostMax, S.t - since);
+      } else w.techLost.delete(p.id);
+    }
     S.elevators.forEach((e, i) => {
+      const vel = e.v * e.dir;
+      if (w.prevVel[i] !== undefined && vel * w.prevVel[i] < 0 && Math.abs(vel) > 0.3 && Math.abs(w.prevVel[i]) > 0.3) w.flips++;
+      w.prevVel[i] = vel;
       const kg = loadKg(e);
       // en hiss får aldrig köra iväg överlastad
       if (e.state === 'moving' && kg > e.ratedKg + 1e-6) w.overweight++;
@@ -327,7 +340,7 @@ test('Utan Smart-styrning sover inga hissar', () => {
 test('Överlast: turister med resväskor – vågen larmar och den sist påstigna kliver av', () => {
   // (överlasten är slumpens sak – den beror på vem som hinner in i vilken korg – så minst tre och upp till sex förmiddagar körs)
   let overloads = 0, maxKg = 0, days = 0;
-  for (const seed of [51, 52, 53, 54, 55, 56]) {
+  for (const seed of [51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62]) {
     if (days >= 3 && overloads > 0) break;
     days++;
     sim(seed); runUntil(9.6);
@@ -559,7 +572,9 @@ test('Instängda går före: teknikern lämnar ett långt jobb för folk som sit
   sim(43); runUntil(9);
   const w = watcher();
   // ett långt jobb: teknikern lagar en hiss som tar (nästan) hur lång tid som helst
-  const long = S.elevators.find(x => x.mode === 'normal' && !x.passengers.length && !x.deck2 && !x.facade && x.state !== 'moving');
+  const idle = () => S.elevators.find(x => x.mode === 'normal' && !x.passengers.length && !x.deck2 && !x.facade && x.state !== 'moving');
+  for (let i = 0; !idle() && i < 60 / DT; i++) step(DT);
+  const long = idle();
   assert(long, 'ingen ledig hiss att ha sönder');
   breakDown(long, 'motorn byts'); long.fault.need = 1e6;
   let g = 0;
@@ -1377,7 +1392,8 @@ test('Flyttdag: spelarens val – allt i varuhissen, tungt utanpå eller planera
     crewLate += balk.crewAt - balk.t0 >= BLANKET_T - 1e-9 ? 1 : 0;
     const bare = runMove(seed, 'smart', 'auto', false);
     assert(bare.crewAt === bare.t0, 'utan skyddsfiltar ska bärarna börja direkt');
-    scratches += bare.scratches;
+    // (reporna är slumpens sak: med allt i varuhissen går fler stora möbler genom dörren)
+    scratches += bare.scratches + runMove(seed, 'smart', 'varu', false).scratches;
   }
   assert(lockBalk < lockVaru / 2, `med hissbalken var varuhissen låst ${Math.round(lockBalk)} s mot ${Math.round(lockVaru)} s i varuhissen`);
   assert(crewLate === 3, 'med skyddsfiltar började bärarna innan filtarna hängde uppe');
@@ -1688,6 +1704,9 @@ function newInvariantFails(w, tag) {
   if (w.dupNames) f.push(`${tag}: två personer i huset hette samma sak (${w.dupNames} gånger, t.ex. ${w.dupEx})`);
   if (w.deadAssignMax > 0.5) f.push(`${tag}: någon väntade ${w.deadAssignMax.toFixed(1)} s på en hiss som inte kunde komma (${w.deadAssignEx})`);
   if (w.idleWaitMax > 15) f.push(`${tag}: någon stod ${w.idleWaitMax.toFixed(0)} s utan tilldelad hiss medan en ledig hiss som kunde ta hen stod still`);
+  if (w.flips) f.push(`${tag}: en korg bytte riktning i fart ${w.flips} gånger`);
+  if (w.intoFire) f.push(`${tag}: ${w.intoFire} gick trappan in i brandzonen`);
+  if (w.techLostMax > 60) f.push(`${tag}: en tekniker stod ${w.techLostMax.toFixed(0)} s på fel våning med ett jobb`);
   return f;
 }
 // Sällsynta fel visar sig bara med vissa frön – därför körs många hela dygn med slumpade incidenter.
@@ -2038,7 +2057,9 @@ test('Fönsterputsaren: gondolen putsar bara med Hasse ombord, och hissas upp in
 });
 test('Arbetsledaren från hissjouren kommer vid ett linbrott och åker när hissen går igen', () => {
   sim(43); runUntil(9);
-  const e = S.elevators.find(x => x.mode === 'normal' && !x.facade && x.state !== 'moving' && x.pos > x.minF + 1);
+  const still = () => S.elevators.find(x => x.mode === 'normal' && !x.facade && x.state !== 'moving' && x.pos > x.minF + 1);
+  for (let i = 0; !still() && i < 60 / DT; i++) step(DT);
+  const e = still();
   assert(e, 'ingen hiss att ha linbrott i');
   snapCable(e);
   let g = 0, stig = null;
@@ -2070,8 +2091,11 @@ test('Panoramahissen fast på fasaden: räddningstjänsten firar ner alla med re
   assert(who.length > 0 && e.mode === 'broken' && e.fault.pano, 'korgen fastnade inte med folk i');
   const at = Math.round(e.pos * 1000);
   let g = 0, moved = 0, worked = 0;
+  // (var var och en landade – efteråt kan de ha hunnit åka vidare med en annan hiss)
+  const landed = new Map(), roping = new Set();
   while (S.pano && S.pano.ph !== 'done' && ++g < 400 / DT) {
     const b = w.before(); step(DT); w.check(b);
+    for (const p of who) { if (p.state === 'rope') roping.add(p); else if (roping.has(p) && !landed.has(p)) landed.set(p, p.floor); }
     if (Math.round(e.pos * 1000) !== at) moved++;
     if (techOf(e) && techOf(e).workT > 0 && e.passengers.length) worked++;
   }
@@ -2081,7 +2105,7 @@ test('Panoramahissen fast på fasaden: räddningstjänsten firar ner alla med re
   assert(worked === 0, 'teknikern lagade hydrauliken med folk kvar i korgen');
   // (den som är nere kan redan ha klivit på en annan hiss)
   assert(who.every(p => p.state !== 'rope' && p.car !== e && !e.passengers.includes(p)), 'någon är kvar i korgen eller i repet');
-  assert(who.every(p => p.floor === P.toF || p.dead || p.floor !== Math.round(e.pos)), 'någon landade fel');
+  assert(who.every(p => landed.get(p) === P.toF), `någon landade fel (${who.map(p => fl(landed.get(p) ?? -1)).join(', ')} – skulle till ${fl(P.toF)})`);
   assert(S.chief.log.some(d => d.key === 'pano' && d.by === 'chief'), 'chefen beslutade aldrig');
   g = 0;
   while (e.mode !== 'normal' && ++g < 300 / DT) step(DT);
@@ -2150,16 +2174,17 @@ test('Slumpströmmar: oberoende per delsystem – ankomsterna beror inte på sty
     const seen = new Set(), out = [];
     while (hour() < until) {
       step(DT);
-      for (const p of S.people) if (!seen.has(p.id)) { seen.add(p.id); if (p.kind === 'emp' && p.exitFloor !== STATION) out.push(S.t.toFixed(2)); }
+      for (const p of S.people) if (!seen.has(p.id)) { seen.add(p.id); if (p.kind === 'emp' || (p.kind === 'vis' && !p.vip)) out.push(`${S.t.toFixed(2)}:${p.kind === 'emp' ? p.home : p.goal}:${p.kg}`); }
     }
     return { at: out.join(' '), n: out.length, wear: S.elevators.map(e => e.wear.toFixed(6)).join(), temp: S.weather.temp };
   };
-  const smart = arrivals({ strategy: 'smart' }, 10.3), near = arrivals({ strategy: 'nearest' }, 10.3);
+  // (hela dagen: samma personer – hemvåning eller ärende, vikt – på samma sekunder, även de som kommer med tåget)
+  const smart = arrivals({ strategy: 'smart' }, 20), near = arrivals({ strategy: 'nearest' }, 20);
   assert(smart.n > 20 && smart.at === near.at, `ankomsterna skiljer sig mellan smart och närmast (${smart.n} mot ${near.n})`);
   // (före sju har ingen incident börjat: slumpens nivå får inte flytta något annat)
   const av = arrivals({ incLevel: 'av' }, 7), kaos = arrivals({ incLevel: 'kaos' }, 7);
   assert(av.at === kaos.at && av.wear === kaos.wear && av.temp === kaos.temp, 'slumpens nivå ändrade ankomsterna, slitaget eller vädret');
-  return `${streamNames().length} strömmar · ${smart.n} anställda genom entrén på samma sekunder med smart och närmast · av = kaos före 07`;
+  return `${streamNames().length} strömmar · ${smart.n} anställda och besökare – samma personer på samma sekunder med smart och närmast · av = kaos före 07`;
 });
 test('Determinism: samma frö och samma spelaråtgärder ger exakt samma dygn (även dag 2)', () => {
   const run = () => {
@@ -2261,4 +2286,103 @@ test('Panoramahissen går ner till tunnelbanan: från perrongen rakt upp till ta
   assert(fromTrain > 0, 'ingen klev på panoramahissen vid perrongen');
   assert(stuckLow === 0, 'panoramahissen fastnade under gatan');
   return `${fromTrain} klev på vid perrongen (${up} till taket) · perrongen → taket utan byte · aldrig fast under gatan`;
+});
+
+test('Brand: ingen går trappan in i brandzonen, och de utrymda kommer tillbaka – även de som kom med tåg eller bil', () => {
+  sim(1, { chief: true });
+  runUntil(9.6);
+  const w = watcher(), f = idx('7');
+  startFire(f);
+  const evac = new Map();
+  let g = 0;
+  while (S.fire && ++g < 200 / DT) {
+    const b = w.before(); step(DT); w.check(b);
+    for (const p of S.people) if (p.evac && p.kind === 'emp') evac.set(p.id, p);
+  }
+  assert(!S.fire, 'branden tog aldrig slut');
+  const commuters = [...evac.values()].filter(p => p.exitFloor !== LOBBY).length;
+  run(120, w);
+  const gone = [...evac.values()].filter(p => p.dead);
+  assert(evac.size > 20 && commuters > 5, `för få utrymda för att testet ska säga något (${evac.size}, ${commuters} med tåg/bil)`);
+  assert(w.intoFire === 0, `${w.intoFire} gick trappan in i brandzonen`);
+  assert(w.flips === 0, `en korg bytte riktning i fart ${w.flips} gånger vid återkallningen`);
+  assert(gone.length <= evac.size * 0.1, `${gone.length} av ${evac.size} utrymda anställda gick hem för dagen (${gone.slice(0, 3).map(p => `${p.name}: ${p.why}`).join('; ')})`);
+  return `${evac.size} anställda utrymda (${commuters} kom med tåg eller bil) · ${evac.size - gone.length} tillbaka i huset · ingen in i brandzonen`;
+});
+test('Brand: husets personal som står i kön i brandzonen går ner till entrén – de lämnar inte huset', () => {
+  sim(5, { chief: true });
+  runUntil(10.3);
+  let hit = null, g = 0;
+  while (!hit && ++g < 600 / DT) { step(DT); hit = S.people.find(p => p.crewId && (p.state === 'wait' || p.state === 'toQueue') && p.floor > LOBBY + 2 && p.goal !== LOBBY) || null; }
+  assert(hit, 'ingen ur personalen stod i en kö högt upp');
+  const id = hit.crewId;
+  startFire(Math.min(hit.floor + 1, idx('14')), false);
+  assert(hit.goal === LOBBY && hit.leaving === false, `${hit.name} utryms ut ur huset (mål ${fl(hit.goal)}, hemgång ${hit.leaving})`);
+  g = 0; while (S.fire && ++g < 200 / DT) step(DT);
+  run(30);
+  assert(crewPerson(id), `${hit.name} lämnade huset under branden`);
+  return `${hit.name} gick ner till entrén och var kvar efter branden`;
+});
+test('Hissteknikern: den som hamnar på fel våning med ett jobb går till jobbet (hissen blir lagad)', () => {
+  sim(12); runUntil(10);
+  const e = S.elevators.find(x => x.mode === 'normal' && x.state === 'idle' && !x.passengers.length && Math.round(x.pos) > LOBBY + 1 && !x.facade);
+  assert(e, 'ingen ledig hiss en bit upp');
+  breakDown(e, 'bromsen kärvar');
+  let g = 0, t = null;
+  while (!(t && t.state === 'office' && t.floor === jobFloor(e)) && ++g < 200 / DT) { step(DT); t = techOf(e); }
+  assert(t && t.job === e.id, 'teknikern kom aldrig fram');
+  // (som när hen släpps ut ur en annan hiss, eller hissen går sönder någon annanstans än där hen väntar)
+  t.floor = LOBBY; t.timer = 1e9;
+  const w = watcher();
+  g = 0; while (e.mode === 'broken' && ++g < 240 / DT) { const b = w.before(); step(DT); w.check(b); }
+  assert(e.mode !== 'broken', `${e.name} blev aldrig lagad – ${t.name} står på ${fl(t.floor)} (${t.state})`);
+  assert(w.techLostMax < 10, `teknikern stod ${w.techLostMax.toFixed(0)} s på fel våning`);
+  return `${t.name} gick tillbaka till ${e.name} och lagade den`;
+});
+test('Mjukt dygnsskifte: en boende som är borta utan bokad hemkomst kommer hem på morgonen', () => {
+  sim(8, { roll: 'mjuk' });
+  runTo(1, 29.9);
+  const p = S.people.find(q => q.kind === 'res' && q.state === 'office' && q.floor === q.home && !q.moving);
+  assert(p, 'ingen boende hemma');
+  // (som den som utrymdes sent på kvällen: ute, och inget i schemat som tar hen hem)
+  for (const ev of p.sched) ev.done = true;
+  p.state = 'away'; p.returnAt = 99; p.spot = null;
+  // (hen kan hinna gå till jobbet igen efteråt – det räcker att hen kom hem)
+  let home = false, g = 0;
+  while ((S.day < 2 || hour() < 9) && ++g < 400000) { step(DT); if (S.day === 2 && p.state !== 'away') home = true; }
+  assert(home, `${p.name} kom aldrig hem på morgonen dag 2 (returnAt ${p.returnAt})`);
+  return `${p.name} kom hem på morgonen dag 2`;
+});
+test('Ambulans och brand: patienten som utryms innan ambulansen kommer ligger inte kvar för alltid', () => {
+  sim(21, { roll: 'mjuk' });
+  runUntil(10);
+  assert(act('trigger', 'medical') !== false && S.medic, 'ingen svimmade');
+  const pat = S.people.find(p => p.id === S.medic.pid);
+  startFire(Math.max(FIRE_FLOORS[0], Math.min(pat.floor, idx('14'))));
+  let g = 0; while ((S.fire || S.medic.state !== 'done') && ++g < 400 / DT) step(DT);
+  run(60);
+  assert(S.medic.state === 'done', 'ambulansen åkte aldrig');
+  assert(pat.dead || !pat.collapsed, `${pat.name} ligger kvar avsvimmad (${pat.state} på ${fl(pat.floor)})`);
+  return pat.dead ? `${pat.name} ${S.medic.taken ? 'åkte med ambulansen' : 'lämnade huset'}` : `${pat.name} kvicknade till`;
+});
+test('Hissteknikern sitter själv fast mellan två våningar: hissjouren skickar en kollega som får loss dem', () => {
+  sim(12); runUntil(10);
+  const high = () => S.elevators.find(x => x.mode === 'normal' && x.state === 'idle' && !x.passengers.length && Math.round(x.pos) > SKY && !x.facade && !x.freight);
+  for (let i = 0; !high() && i < 120 / DT; i++) step(DT);
+  const far = high();
+  assert(far, 'ingen ledig hiss högt upp');
+  breakDown(far, 'bromsen kärvar'); far.fault.need = 1e6;
+  // teknikern åker upp – och hissen hen åker med tvärstannar mellan två våningar
+  let g = 0, t = null, e = null;
+  while (!e && ++g < 300 / DT) {
+    step(DT); t = techOf(far);
+    const c = t && t.state === 'ride' ? t.car : null;
+    if (c && c.mode === 'normal' && c.state === 'moving' && c.pos - Math.floor(c.pos) > 0.35 && c.pos - Math.floor(c.pos) < 0.75 && c.pos > c.minF + 0.6) e = c;
+  }
+  assert(e, 'teknikern åkte aldrig hiss till jobbet');
+  trapBreak(e);
+  g = 0; while (e.mode === 'broken' && ++g < 300 / DT) step(DT);
+  assert(e.mode !== 'broken', `${e.name} blev aldrig lagad – den enda teknikern (${t.name}) satt själv fast i den`);
+  const n = S.people.filter(p => p.role === 'hisstekniker').length;
+  return `${t.name} satt fast i ${e.name} · en kollega kom och fick igång den (${n} tekniker i huset)`;
 });

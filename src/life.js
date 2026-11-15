@@ -1,6 +1,8 @@
 // Husets liv: bilar i garaget, leveranser vid lastkajen, de boendes dygnsrutiner och VIP-besök med helikopter.
 import { stream } from './rng.js';
 const { pick, rand, rng } = stream('liv');
+// buden är ankomster: en egen ström, som dras lika många gånger oavsett hur det går för hissarna
+const BUD = stream('bud');
 import { fl } from './util.js';
 import { DOCK, FL, GARAGE_FLOORS, HOME_FLOORS, LOBBY, OFFICE_FLOORS, ROOF, SPOTS, floorOpen, floorWith, pace } from './config.js';
 import { S, clockStr, hour, log, occOf, setOcc } from './state.js';
@@ -35,7 +37,8 @@ export function arriveByCar(p, parked = false) {
 /** Personen lämnar huset: med bil (bilen kör ut), till fots – eller för de boende: är borta en stund */
 export function leaveBuilding(p) {
   // utrymd vid brand: väntar på återsamlingsplatsen utanför entrén och går in igen när branden är släckt
-  if (p.evac && S.fire && p.floor === LOBBY && !p.role && !p.auto && !p.movedOut && ['emp', 'vis', 'res'].includes(p.kind)) {
+  // (även den som kom med bil eller tåg: bilen står kvar i garaget)
+  if (p.evac && S.fire && p.floor === LOBBY && !p.role && !p.vip && !p.movedOut && ['emp', 'vis', 'res'].includes(p.kind)) {
     p.state = 'assembly'; p.backAt = undefined; S.fire.assembled++;
     pev(p, 'Ute! Väntar på återsamlingsplatsen utanför entrén tills branden är släckt');
     return;
@@ -62,11 +65,17 @@ export function leaveBuilding(p) {
 /** Branden är släckt: tillbaka in från återsamlingsplatsen – dit man var på väg, eller hem om det har blivit sent */
 export function backFromAssembly(p) {
   p.evac = false; p.state = 'toQueue'; p.floor = LOBBY; p.x = -30 - rand(0, 30);
+  if (!fireReturn(p, 'Tillbaka in efter branden')) leaveBuilding(p);
+}
+/** Efter branden: p går tillbaka dit hen var (evacFrom). Falskt om det inte finns något att gå tillbaka till –
+ *  hen var på väg ut, det har blivit sent eller våningen har stängt. */
+export function fireReturn(p, why) {
   const h = hour(), to = p.evacFrom;
   p.evacFrom = undefined;
-  if (to === undefined || to === LOBBY || to === p.exitFloor || h >= 21 || !floorOpen(to, h) && to !== p.home) { leaveBuilding(p); return; }
-  setTrip(p, to, 'Tillbaka in efter branden', false);
+  if (to === undefined || to === LOBBY || to === p.exitFloor || h >= 21 || !floorOpen(to, h) && to !== p.home) return false;
+  setTrip(p, to, why, false);
   pev(p, `Branden är släckt – går in igen till ${fl(to)}`);
+  return true;
 }
 function autoTick(dt) {
   for (const a of S.autos) {
@@ -97,7 +106,7 @@ function truckTick(dt) {
   if (T.state === 'in') { T.x = Math.min(70, T.x + 150 * dt); if (T.x >= 70) T.state = 'parked'; }
   else if (T.state === 'parked') {
     const busy = S.people.filter(p => p.role === 'bud').length;
-    if (h < 11.5 && busy < 3 && rng() < 0.03 * pace(h) * dt) spawnCourier(); // (per speltimme)
+    if (h < 11.5) { const r = BUD.rng(); if (busy < 3 && r < 0.03 * pace(h) * dt) spawnCourier(); } // (per speltimme)
     if (h >= 12 && busy === 0) { T.state = 'out'; log('🚚 Leveransbilen kör iväg', 'sys'); }
   } else if (T.state === 'out') { T.x -= 150 * dt; if (T.x < -300) S.truck = null; }
 }
@@ -106,7 +115,7 @@ function spawnCourier() {
   if (!goals.length) return;
   const p = makePerson('staff', DOCK, S.truck.x + 150);
   p.role = 'bud'; p.exitFloor = DOCK; p.cargo = { kind: 'paket', name: 'paketkärra', kg: 40 };
-  const g = pick(goals);
+  const g = BUD.pick(goals);
   setTrip(p, g, `Levererar paket till ${FL[g].short}`);
   S.people.push(p); S.truck.sent++;
   pev(p, `Lastar av paket vid lastkajen · ${p.why} (${fl(g)})`);
@@ -218,7 +227,7 @@ function heliTick(dt) {
   const h = hour();
   const H = S.heli;
   if (!H) {
-    const due = S.vipVisits.find(v => !v.done && h >= v.at);
+    const due = S.fire ? null : S.vipVisits.find(v => !v.done && h >= v.at); // (vid brandlarm väntar helikoptern)
     if (due) { due.done = true; S.heli = { state: 'land', y: -260, visit: due }; log(`🚁 En helikopter närmar sig takterrassen – VIP-besök till ${FL[due.goal].short}!`, 'alert'); }
     return;
   }
@@ -268,7 +277,8 @@ export function lifeRoll() {
     p.wake = r.wake; p.sleepAt = r.sleep; p.sched = r.ev.sort((a, b) => a.at - b.at);
     // ute över natten: kommer hem på gårdagens tid (24 timmar tidigare på den nya klockan), inte på dagens hemkomst
     if (p.state === 'away') {
-      p.returnAt = Math.max(6, p.returnAt - 24);
+      // (den som gick utan bokad hemkomst – returnAt 99, t.ex. utrymd sent på kvällen – kommer hem på morgonen)
+      p.returnAt = Math.max(6, Math.min(p.returnAt, 30.5) - 24);
       p.sched.unshift({ at: p.returnAt, go: 'home', why: 'Hem efter natten ute' });
     }
   }

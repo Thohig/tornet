@@ -186,6 +186,13 @@ export function moveStep(e, dt) {
 }
 export function moveTo(e, target, vmax, dt) {
   const d = Math.sign(target - e.pos);
+  // på väg åt andra hållet (återkallad i full fart): bromsa in först – en korg vänder inte på ett ögonblick
+  if (e.v > 0 && e.dir && e.dir !== d) {
+    e.v = Math.max(0, e.v - ACC * dt);
+    const st = e.v * dt, np = Math.max(e.minF, Math.min(e.maxF, e.pos + e.dir * st));
+    e.distance += Math.abs(np - e.pos); e.pos = np;
+    return false;
+  }
   if (!d) { e.v = 0; return true; }
   e.dir = d;
   const dist = Math.abs(target - e.pos);

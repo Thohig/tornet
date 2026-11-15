@@ -7,7 +7,8 @@ import { fl } from './util.js';
 import { FL, LOBBY, OFFICE_FLOORS, TOP } from './config.js';
 import { S, hooks, hour, incidentOver, log } from './state.js';
 import { trappedTalk } from './cast.js';
-import { arriveOnFloor, makePerson, pev, pn, setTrip, toStairs } from './people.js';
+import { arriveOnFloor, evacFloor, makePerson, pev, pn, setTrip, toStairs } from './people.js';
+import { fireReturn } from './life.js';
 import { allowedDest, allowedFor, allowedPos, inFireZone, posOf, rebuildPicks, safeFloor } from './dispatch.js';
 import { canBrakeTo, deckFloor, exitAll, recallCar, releaseCalls, restoreElevator, setMode } from './elevators.js';
 import { cableCandidate, triggerCable, triggerFault, triggerHeat } from './service.js';
@@ -44,13 +45,17 @@ export function startFire(f = pick(OFFICE_FLOORS.slice(1)), auto = true) {
   log(`🔥 BRAND på våning ${fl(f)}! Larmet går – våning ${fl(f - 1)} och uppåt utryms`, 'alert');
   for (const p of S.people) {
     if (!inFireZone(p.floor)) continue;
+    const queued = p.state === 'wait' || p.state === 'toQueue', out = evacFloor(p);
     if (p.state === 'office') p.timer = rand(0.2, 3);
-    else if ((p.state === 'wait' || p.state === 'toQueue') && p.dest !== p.exitFloor) {
-      p.evac = true; p.evacFrom = p.goal; const x = p.x; setTrip(p, p.exitFloor, 'BRANDLARM – utrymning!'); p.x = x;
-      pev(p, `Brandlarmet går! Ändrar mål till ${fl(p.exitFloor)}`);
+    // (husets personal går ner till entrén och väntar där – de lämnar inte huset, som när de sitter på sin post)
+    else if (queued && p.crewId) {
+      if (p.goal !== LOBBY) { const x = p.x; p.onBreak = false; setTrip(p, LOBBY, 'BRANDLARM – går ner till entrén', false); p.x = x; }
+    } else if (queued && !(p.goal === out && p.leaving)) {
+      p.evac = true; p.evacFrom = p.goal; const x = p.x; setTrip(p, out, 'BRANDLARM – utrymning!', true); p.x = x;
+      pev(p, `Brandlarmet går! Ändrar mål till ${fl(out)}`);
       // står redan vid utgången (t.ex. VIP-gästerna vid helikoptern på taket): gå ut direkt i stället för att köa
-      if (p.floor === p.exitFloor) arriveOnFloor(p);
-    } else if (['wait', 'toQueue', 'stairs', 'instairs'].includes(p.state) && p.goal === p.exitFloor) p.evac = true; // redan på väg ut
+      if (p.floor === out) arriveOnFloor(p);
+    } else if (['wait', 'toQueue', 'stairs', 'instairs'].includes(p.state) && p.goal === out && p.leaving) p.evac = true; // redan på väg ut
   }
   rebuildPicks();
   if (auto) { log('🚨 Brandlarmet återkallar alla hissar automatiskt', 'alert'); setFireMode('recall'); }
@@ -139,6 +144,11 @@ export function endFire() {
     if (e.ffCar) { e.ffCar = false; e.indep = false; } // brandhissen går i vanlig trafik igen
   }
   for (const p of S.people) {
+    // den som inte hann ut vänder: den som står i kön direkt, den som är i trappan eller hissen när hen är nere
+    if (p.evac && !p.role && p.state !== 'assembly' && p.evacFrom !== undefined) {
+      if (p.state === 'wait' || p.state === 'toQueue') { p.evac = false; fireReturn(p, 'Faran över – tillbaka in'); }
+      else p.evacBack = true;
+    }
     p.evac = false;
     // brandmännen går tillbaka till brandbilen, de utrymda på återsamlingsplatsen går in igen (i omgångar)
     if (p.ff && p.state === 'office') p.timer = Math.min(p.timer, rand(1, 3));
