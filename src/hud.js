@@ -21,6 +21,7 @@ import { BLANKET_T } from './visits.js';
 import { chiefOnDuty } from './chief.js';
 import { CREW_BY } from './crew.js';
 import { extraActions } from './input.js';
+import { rememberDay, showMenu } from './menu.js';
 import { allStatsHtml, avgWait, grade, lastDay, safetyGrade, saveDay, summaryHtml } from './summary.js';
 export { grade, safetyGrade };
 
@@ -496,11 +497,12 @@ export function hideOverlay() { $('overlay').classList.remove('show'); }
 // tangenterna. Resten ligger under "Mer om huset". Samma ruta är hjälpen (?) under spelet – då pausas
 // tiden medan den är öppen. Enter, mellanslag och Esc stänger den.
 let introKeys = /** @type {((ev: KeyboardEvent) => void)|null} */ (null);
-export function showIntro() {
-  const help = !!S.started, wasPaused = S.paused;
+/** mode: 'start' = innan dygnet börjar (KÖR! → then), 'help' = under spelet (pausar), 'menu' = från startmenyn (tillbaka dit) */
+export function showIntro(mode = S.started ? 'help' : 'start', then = /** @type {(() => void)|null} */ (null)) {
+  const help = mode !== 'start', wasPaused = S.paused;
   // pekskärm (telefon, surfplatta): inga tangenter och ingen mus att hålla över
   const touch = matchMedia('(pointer: coarse)').matches;
-  if (help) S.paused = true;
+  if (mode === 'help') S.paused = true;
   showOverlay(`<div class="card intro"><h1>TORNET${help ? ' · HJÄLP' : ''}</h1>
     <p>Välkommen till <b>Tornet</b> – åtta hissar styrda av <b>Hiss-O-Matic 3000</b>, ${FL.length} våningar och en massa folk med bråttom. <b>Huset sköter sig självt:</b> driftchefen tar besluten och berättar varför, och regissören 🎬 klipper bilden till det som händer. Luta dig tillbaka och titta.</p>
     <ul class="intro-short">
@@ -528,7 +530,9 @@ export function showIntro() {
   const go = () => {
     if (introKeys) { removeEventListener('keydown', introKeys, true); introKeys = null; }
     hideOverlay();
+    if (mode === 'menu') { showMenu(); return; }
     if (help) { S.paused = wasPaused; return; }
+    if (then) { then(); return; }
     S.started = true; log('Dag 1 börjar – dörrarna öppnas!', 'sys');
   };
   $('go').onclick = go;
@@ -542,11 +546,13 @@ export function showIntro() {
   };
   addEventListener('keydown', introKeys, true);
 }
-extraActions.help = () => { if (!$('overlay').classList.contains('show')) showIntro(); };
+extraActions.help = () => { if (S.started && !$('overlay').classList.contains('show')) showIntro('help'); };
 /** Dygnet är slut: det sparas (summary.js). Mjukt dygnsskifte: huset rullar vidare och gårdagen finns som vy i
  *  panelen; annars stannar spelet för sammanfattningen och NÄSTA DAG börjar om från början. */
 export function showSummary() {
   saveDay();
+  const D = lastDay();
+  rememberDay({ day: D.day, letter: D.st.waitN ? grade(avgWait(D.st)).letter : '–', served: D.st.served, incidents: D.st.incidents });
   if (S.roll === 'mjuk') return;
   S.summaryShown = true; S.paused = true;
   showOverlay(`<div class="card sumcard"><h1>DAG ${S.day} ÄR SLUT</h1>${summaryHtml()}<button class="btn" id="next">NÄSTA DAG ▶</button></div>`);
