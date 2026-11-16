@@ -8,7 +8,7 @@ Simulering av skyskrapan Tornet med 8 hissar (styrsystemet heter Hiss-O-Matic 30
 python3 serve.py          # http://localhost:8123 (no-cache-server, krävs för att ändringar ska synas)
 ```
 
-`python3 serve.py --auto-stop` är säkert läge (så startar `Tornet.app` i code-mappen spelet): bara localhost, bara spelets filer (`ALLOWED`), och servern stänger av sig själv 5 min efter att spelet tystnat (spelet anropar `/ping` var 30:e sekund, `main.js`) eller efter 12 h.
+Servern lyssnar bara på den egna datorn (`--lan` = även nätverket, t.ex. mobilen) och lämnar bara ut spelets filer: `ALLOWED` i `serve.py` – **en ny mapp som spelet laddar måste läggas till där**, annars ger den 404. `python3 serve.py --auto-stop` (så startar `Tornet.app` i code-mappen spelet) stänger dessutom av sig själv 5 min efter att spelet tystnat (spelet anropar `/ping` var 30:e sekund, `main.js`) eller efter 12 h. Spelet hämtar inget utifrån: typsnittet VT323 ligger i `fonts/` (OFL).
 
 Ingen byggprocess: webbläsaren laddar `src/*.js` som ES-moduler direkt. Förhandsvisning: `.claude/launch.json` → konfigurationen `hiss`.
 
