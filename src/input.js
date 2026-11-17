@@ -10,6 +10,7 @@ import { VIEW, camTarget, cv, detachCam, followCar, lookAt, scrollBy, scrollToFl
 import { personHead, peopleBehindDoor } from './render.js';
 import { foldInc, select } from './hud.js';
 import { toggleSound, unlockSound } from './sound.js';
+import { toggleMusic } from './music.js';
 import { toggleAuto } from './director.js';
 
 // ---------- Uppspelning och inställningar ----------
@@ -90,6 +91,7 @@ export function doAction(cmd) {
   else if (a === 'setting') act('setting', b, c);
   else if (a === 'tags') toggleTags();
   else if (a === 'sound') toggleSound();
+  else if (a === 'music') toggleMusic();
   else if (a === 'bus') bus();
   else if (a === 'visit') visitor(+b);
   else if (a === 'trig') { if (S.started) act('trigger', b, c !== undefined && c !== '' ? +c : null); }

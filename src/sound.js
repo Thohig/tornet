@@ -3,7 +3,8 @@
 // ändrar aldrig simuleringen. Ljudet är avstängt från början; webbläsaren kräver ett klick innan något får låta.
 import { CAR_H, FLOOR_H, VMAX, W, floorY, shaftCX } from './config.js';
 import { S } from './state.js';
-import { VIEW } from './view.js';
+import { VIEW, camTarget } from './view.js';
+import { updateMusic } from './music.js';
 import { vrand } from './rng.js';
 
 const KEY = 'hiss.sound';
@@ -206,11 +207,21 @@ function incidentSounds() {
   if (S.storm && S.storm.struck !== null && S.storm.struck !== heardStrike) { heardStrike = S.storm.struck; thunder(true); }
 }
 
+/** Hissen vars musik hörs: den man följer, eller den som personen man följer åker i. */
+function listenCar() {
+  const t = camTarget();
+  if (t?.kind === 'car') return S.elevators[t.id];
+  if (t?.kind === 'person' && S.sel?.state === 'ride' && S.sel.car) return S.sel.car;
+  return null;
+}
+
 // ---------- Varje bildruta ----------
 export function updateSound() {
   if (!on || !ac || ac.state !== 'running') return;
   ensureCars();
   incidentSounds();
+  const lc = listenCar();
+  updateMusic(ac, master, lc, lc ? panOf(lc) : 0);
   const now = ac.currentTime;
   const still = S.paused || !S.started;
   for (const e of S.elevators) {

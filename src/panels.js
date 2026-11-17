@@ -17,6 +17,7 @@ import { chiefOnDuty } from './chief.js';
 import { $, ikon, carHtml, dayNumbers, drawPortrait, incidentPanel, logHtml, personHtml, rosterHtml, statsHtml } from './hud.js';
 import { peopleBehindDoor } from './render.js';
 import { soundOn } from './sound.js';
+import { musicOn } from './music.js';
 import { lastDay, summaryHtml } from './summary.js';
 import { SPEEDS, extraActions, uiHooks } from './input.js';
 
@@ -199,7 +200,8 @@ function viewHtml(v) {
     + `<div class="hint">Nattservice håller nere slitaget – utan den slits hissarna dag för dag och går oftare sönder.</div>`
     + `<div class="lbl">Nytt dygn</div>${set('roll', [['mjuk', 'Rullar vidare'], ['ny', 'Börjar om']])}`
     + `<div class="hint">Rullar vidare: kl 06 fortsätter huset som det är – reparationer, incidenter och folk följer med. Börjar om: spelet stannar för dagens resultat och nästa dygn börjar från början (bara slitage och pågående hissfel följer med).</div>`
-    + `<div class="lbl">Visa</div><div class="row">${btn('tags', 'Namnbrickor (T)', S.tags)}${btn('sound', `Ljud (M) ${soundOn() ? '🔊' : '🔇'}`, soundOn())}</div>`;
+    + `<div class="lbl">Visa</div><div class="row">${btn('tags', 'Namnbrickor (T)', S.tags)}${btn('sound', `Ljud (M) ${soundOn() ? '🔊' : '🔇'}`, soundOn())}${btn('music', 'Hissmusik ♪', musicOn())}</div>`
+    + `<div class="hint">Hissmusiken spelas inne i hissen du följer (eller som den du följer åker med) när ljudet är på.</div>`;
 }
 /** blocken som kan bli länkar: ikon, namn och förklaring */
 const BLOCKS = { chief: ['📻', 'Driftradion', 'Det senaste som hänt i huset'], trig: ['⚡', 'Framkalla', 'Brand, strömavbrott, storm, hissfel …'],
