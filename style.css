@@ -74,6 +74,7 @@ body{background:var(--desk);font-family:var(--ui);font-size:12px;color:var(--ink
 .pl-ph{flex:1;min-width:0;font-size:11px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pl-ctl{display:flex;gap:2px;align-items:center;flex-wrap:wrap}
 .pl-ctl .btn.ico{font-size:12px;font-weight:700}
+.pl-cam{display:inline-flex;gap:2px}
 .tl{position:relative;height:18px;background:var(--dos);box-shadow:var(--sunken);margin-top:4px;overflow:hidden}
 .tl-b{position:absolute;top:2px;bottom:2px;border-right:1px solid #000}
 .tl-b.night{background:#1a1f4a}
@@ -381,3 +382,19 @@ body.menu #side,body.menu #lower{display:none}
   .mn-logo{font-size:48px}
   .mn-cards{grid-template-columns:1fr}
 }
+
+/* ---------- Rundvisningen (intro.js): Berit berättar i ett block överst i panelen; det hon pratar om
+   lyfts fram (tour-hi) och blinkar (tour-spot), resten av panelen tonas ner ---------- */
+.b-tour{background:var(--face)}
+.tour-say{background:var(--note);box-shadow:var(--sunken);padding:5px 7px;margin:2px 0 4px;font-size:12px;line-height:1.4;min-height:5.6em}
+.tour-say b{color:var(--navy)}
+.tour-dots{display:flex;gap:3px;justify-content:center;margin:2px 0}
+.tour-dots i{width:7px;height:7px;background:var(--face);box-shadow:var(--sunken)}
+.tour-dots i.was{background:var(--shade)}
+.tour-dots i.now{background:var(--navy)}
+.tour-nav{margin-bottom:0}
+.tour-next,.tour-go{font-weight:700;min-width:84px}
+#side.touring>.blk:not(.tour-hi):not(.b-tour){opacity:.45}
+.tour-hi{outline:2px solid var(--vga-y);outline-offset:-1px}
+.tour-spot{animation:tourspot .7s infinite alternate}
+@keyframes tourspot{from{outline:2px solid transparent;outline-offset:1px}to{outline:2px solid #ff8c00;outline-offset:1px}}

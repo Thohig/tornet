@@ -23,8 +23,13 @@ import { SPEEDS, extraActions, uiHooks } from './input.js';
 const side = $('side'), portrait = $('portrait');
 
 // ---------- Vyer och utfällda länkar (bara gränssnittets tillstånd) ----------
-/** @type {{ view: null|'roster'|'log'|'stats'|'set'|'yesterday', open: Set<string>, fireFloor: string, squeezed: Set<string>, key: string }} */
-const UI = { view: null, open: new Set(), fireFloor: '', squeezed: new Set(), key: '' };
+/** @typedef {{ key: string, html: string, focus: string[], spot: string[] }} TourPanel */
+/** @type {{ view: null|'roster'|'log'|'stats'|'set'|'yesterday', open: Set<string>, fireFloor: string, squeezed: Set<string>, key: string, tour: TourPanel|null }} */
+const UI = { view: null, open: new Set(), fireFloor: '', squeezed: new Set(), key: '', tour: null };
+/** Rundvisningen (intro.js): ett eget block överst, blocken i focus fälls ut och lyfts fram, och det som
+ *  matchar väljarna i spot blinkar (även textskylten i bilden). null = ingen rundvisning. */
+export function setTour(t) { UI.tour = t; UI.view = null; updatePanel(); }
+const focused = k => !!UI.tour && UI.tour.focus.includes(k);
 /** vyerna: ikon, namn och förklaring (länkarna längst ner är ikoner) */
 const VIEWS = { roster: ['📋', 'Register', 'Alla i huset just nu – klicka på någon för att följa hen'], log: ['📜', 'Logg', 'Allt som har hänt, med filter'],
   set: ['⚙️', 'Inställningar', 'Felknappar, underhåll och vad som händer när dygnet tar slut'], stats: ['🏆', 'Resultat', 'Dagens siffror och betyg'] };
@@ -121,7 +126,7 @@ function playHtml() {
   const speeds = SPEEDS.map(v => { const t = { 0.25: '¼×', 0.5: '½×', 1: '1×', 2: '2×' }[v]; return ikon(`spd:${v}`, t, `Fart ${t}`, 'Snabbare och långsammare med + och −', S.speed === v); }).join('');
   return `<div class="pl-top"><span class="pl-logo" data-hint="Hissarna styrs av Hiss-O-Matic 3000">TORNET</span><span class="pl-sun">${night ? '🌙' : '☀️'}</span>`
     + `<span class="pl-ph"><b>${phaseName(h)}</b> · ${wx}<br><span class="dim">Dag ${S.day} · ${S.people.length} i huset · frö ${S.seed}</span></span></div>`
-    + `<div class="pl-ctl">${ikon('pause', S.paused ? '▶' : '❚❚', S.paused ? 'Spela' : 'Paus', 'Mellanslag', S.paused)}${speeds}<span class="sp"></span>${camTools()}`
+    + `<div class="pl-ctl">${ikon('pause', S.paused ? '▶' : '❚❚', S.paused ? 'Spela' : 'Paus', 'Mellanslag', S.paused)}${speeds}<span class="sp"></span><span class="pl-cam">${camTools()}</span>`
     + `${ikon('help', '?', 'Hjälp', 'Handgreppen, tangenterna och mer om huset')}</div>${timelineHtml()}`;
 }
 /** kamerans verktyg: ikoner i uppspelningsraden (vad regissören visar står på textskylten i bilden) */
@@ -203,19 +208,21 @@ const TITLES = Object.fromEntries(Object.entries(BLOCKS).map(([k, v]) => [k, `${
 
 // ---------- Layouten: vilket läge varje block får just nu ----------
 // ordning uppifrån och ner; de som krymper först när det inte får plats står sist i SQUEEZE
-const ORDER = ['play', 'events', 'follow', 'chief', 'trig', 'strat', 'day', 'view', 'links'];
+const ORDER = ['tour', 'play', 'events', 'follow', 'chief', 'trig', 'strat', 'day', 'view', 'links'];
 const SQUEEZE = ['strat', 'trig', 'day', 'chief'];
 function layout(busy, F, inc) {
   const calm = !busy && !F;
   /** @type {Record<string, string|null>} */
-  const m = { play: 'full', events: null, follow: F ? 'full' : null, view: UI.view ? 'full' : null, links: 'full',
+  const m = { tour: UI.tour ? 'full' : null, play: 'full', events: null, follow: F ? 'full' : null, view: UI.view ? 'full' : null, links: 'full',
     chief: calm ? 'full' : 'row', trig: calm ? 'full' : 'link', strat: calm ? 'full' : 'link', day: busy ? 'link' : 'row' };
   if (S.started && (inc.n || S.warn)) m.events = 'full';
   for (const k of UI.open) if (m[k] === 'link' || m[k] === 'row') m[k] = 'full';
-  for (const k of UI.squeezed) if (!UI.open.has(k) && m[k]) m[k] = k === 'chief' ? 'row' : 'link';
+  for (const k of UI.squeezed) if (!UI.open.has(k) && !focused(k) && m[k]) m[k] = k === 'chief' ? 'row' : 'link';
   // en vy (register, logg …) tar platsen under händelserna: verktygen blir länkar
   if (UI.view) for (const k of ['follow', 'chief', 'trig', 'strat', 'day']) if (m[k]) m[k] = k === 'follow' ? 'row' : 'link';
   if (!S.started) for (const k of ['trig', 'strat', 'day']) m[k] = null;
+  // rundvisningen: det Berit pratar om är utfällt (om det finns just nu)
+  if (UI.tour) for (const k of UI.tour.focus) if (m[k]) m[k] = 'full';
   return m;
 }
 
@@ -246,7 +253,9 @@ function render(m, F, inc) {
     if (mode === 'link') { const [i, n, h] = BLOCKS[k]; links.push(ikon(`open:${k}`, i, n, `${h} – klicka för att fälla ut`)); continue; }
     let html = '', cls = `blk b-${k} m-${mode}`;
     const fold = k in TITLES && mode === 'full' && (UI.open.has(k) || k === 'trig' || k === 'strat') ? `<button class="blk-x" data-act="fold:${k}" data-hint="Fäll ihop">▁</button>` : '';
-    if (k === 'play') html = playHtml();
+    if (focused(k)) cls += ' tour-hi';
+    if (k === 'tour') html = UI.tour.html;
+    else if (k === 'play') html = playHtml();
     else if (k === 'events') html = warnHtml() + inc.html;
     else if (k === 'follow') {
       const f = followHtml(F);
@@ -268,6 +277,14 @@ function render(m, F, inc) {
   shown.forEach((e, i) => { if (side.children[i] !== e) side.insertBefore(e, side.children[i] || null); });
   while (side.children.length > shown.length) side.lastChild.remove();
   if (F && F.kind === 'person') drawPortrait(F.p);
+  tourSpots();
+}
+/** rundvisningen: resten av panelen tonas ner och det som visas blinkar (läggs på igen när blocken byggs om) */
+function tourSpots() {
+  const T = UI.tour, want = new Set(T ? T.spot.flatMap(q => [...document.querySelectorAll(q)]) : []);
+  side.classList.toggle('touring', !!T && (T.focus.length > 0 || T.spot.length > 0));
+  for (const e of document.querySelectorAll('.tour-spot')) if (!want.has(e)) e.classList.remove('tour-spot');
+  for (const e of want) e.classList.add('tour-spot');
 }
 /** Rita panelen. Läget räknas om när situationen ändras (incident, det du följer, en vy); får något inte
  *  plats krymper de minst viktiga blocken tills det gör det (och står kvar så tills situationen ändras). */
@@ -277,12 +294,12 @@ export function updatePanel() {
   const inc = S.started ? incidentPanel() : { html: '', n: 0, open: 0, alert: false };
   const F = S.started ? followed() : null, busy = inc.alert || !!S.warn;
   // (när ett kort fälls ihop blir det plats igen: då får blocken fällas ut på nytt)
-  const key = `${busy}|${F ? F.kind : ''}|${UI.view}|${inc.n}|${inc.open}`;
+  const key = `${busy}|${F ? F.kind : ''}|${UI.view}|${inc.n}|${inc.open}|${UI.tour ? UI.tour.key : ''}`;
   if (key !== UI.key) { UI.key = key; UI.squeezed.clear(); if (busy || F) UI.open.clear(); }
   for (let i = 0; i <= SQUEEZE.length; i++) {
     render(layout(busy, F, inc), F, inc);
     if (side.scrollHeight <= side.clientHeight + 1) break;
-    const next = SQUEEZE.find(k => { const m = layout(busy, F, inc)[k]; return m && m !== 'link' && !(m === 'row' && k === 'chief') && !UI.open.has(k) && !UI.squeezed.has(k); });
+    const next = SQUEEZE.find(k => { const m = layout(busy, F, inc)[k]; return m && m !== 'link' && !(m === 'row' && k === 'chief') && !UI.open.has(k) && !focused(k) && !UI.squeezed.has(k); });
     if (!next) break;
     UI.squeezed.add(next);
   }

@@ -11,11 +11,12 @@ import { VIEW, camMax, resize } from './view.js';
 import { toggleAuto } from './director.js';
 import { esc, fl } from './util.js';
 import { hideOverlay, showIntro, showOverlay } from './hud.js';
+import { startIntro } from './intro.js';
 
 const DEMO_SEED = 19950824;  // visningsdygnet bakom menyn (samma varje gång)
 const DEMO_FROM = 7.6;       // …som börjar mitt i morgonrusningen
 const SPIN_MS = 30;          // så länge per bildruta som fram-spolningen får räkna
-const KEY = { boot: 'tornet.boot', seen: 'tornet.intro', last: 'tornet.senast', opts: 'tornet.val' };
+const KEY = { boot: 'tornet.boot', seen: 'tornet.intro', offer: 'tornet.rundvisning', last: 'tornet.senast', opts: 'tornet.val' };
 const store = {
   get(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch { return null; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* privat fönster m.m. */ } },
@@ -125,7 +126,8 @@ export function showMenu() {
     M.demo = true;
   }
   VIEW.camY = camMax();
-  boot(() => render());
+  // första gången: erbjud rundvisningen innan menyn
+  boot(() => { if (!store.get(KEY.offer)) { store.set(KEY.offer, 1); M.view = 'offer'; } render(); });
   addEventListener('keydown', keys, true);
 }
 function close() {
@@ -147,6 +149,7 @@ function mainHtml() {
       ${item('new', '⚙️', 'NY DAG…', 'Välj tempo, slumpen, styrlogik och frö')}
       ${item('scen', '🎬', 'SCENARIER…', 'Spola fram till något som händer')}
       ${item('today', '📅', 'DAGENS TORN', `Samma dygn för alla i dag · frö ${todaySeed()}`)}
+      ${item('intro', '🛎️', 'RUNDVISNING', 'Berit visar runt i huset – ungefär 3 minuter')}
       ${item('help', '?', 'HUR FUNKAR DET', 'Klicka, följ, framkalla')}
     </div>
     ${lastLine()}</div>`;
@@ -176,6 +179,15 @@ function newHtml() {
     </fieldset>
     <div class="mn-btns"><button class="btn mi" data-mn="back">Avbryt</button><button class="btn mi mn-ok" data-mn="go">OK – starta</button></div></div>`;
 }
+function offerHtml() {
+  return `<div class="card mn"><h1>Hiss-O-Matic 3000</h1>
+    <div class="mn-logo">TORNET</div>
+    <div class="mn-tag">Första gången i Tornet? Receptionisten Berit visar gärna runt.</div>
+    <div class="mn-list">
+      ${item('intro', '🛎️', 'RUNDVISNING', 'Hissarna, folket, driftchefen och allt du kan göra – ungefär 3 minuter')}
+      ${item('back', '▶', 'HOPPA ÖVER', 'Direkt till startmenyn')}
+    </div></div>`;
+}
 function scenHtml() {
   return `<div class="card mn mn-scen"><h1>Scenarier</h1>
     <div class="mn-cards">${SCENARIOS.map(s => `<button class="mi mn-cart" data-mn="s:${s.k}"><span class="mn-ico">${s.icon}</span><span><b>${s.name}</b><small>${s.text}</small><i>kl ${String(Math.floor(s.at)).padStart(2, '0')}</i></span></button>`).join('')}</div>
@@ -183,7 +195,7 @@ function scenHtml() {
 }
 function render() {
   if (!M.open) return;
-  showOverlay(M.view === 'new' ? newHtml() : M.view === 'scen' ? scenHtml() : mainHtml());
+  showOverlay(M.view === 'new' ? newHtml() : M.view === 'scen' ? scenHtml() : M.view === 'offer' ? offerHtml() : mainHtml());
   const o = /** @type {HTMLElement} */ (document.getElementById('overlay'));
   o.classList.add('menu');
   o.querySelectorAll('[data-mn]').forEach(b => b.addEventListener('click', () => pickItem(/** @type {HTMLElement} */ (b).dataset.mn)));
@@ -210,6 +222,7 @@ function pickItem(k) {
     return start({ ...defaults(), ...(L ? { seed: L.seed, tempo: L.tempo, incLevel: L.incLevel, strategy: L.strategy } : {}) });
   }
   if (k === 'help') { close(); showIntro('menu'); return; }
+  if (k === 'intro') { tour(); return; }
   if (k === 'new') { opts = defaults(); M.view = 'new'; return render(); }
   if (k === 'scen') { M.view = 'scen'; return render(); }
   if (k === 'back') { M.view = 'main'; return render(); }
@@ -238,6 +251,15 @@ function keys(ev) {
     if (field) pickItem('go'); else t.click();
   } else return;
   ev.preventDefault();
+}
+
+// ---------- Rundvisningen ----------
+/** Berit visar runt i ett eget dygn (intro.js); sedan ett nytt dygn (KÖR!) eller tillbaka till menyn. */
+function tour() {
+  close();
+  M.demo = false;
+  store.set(KEY.seen, 1); // (välkomstrutan behövs inte efter rundvisningen)
+  startIntro(how => { if (how === 'go') start({ ...defaults() }); else showMenu(); });
 }
 
 // ---------- Starta ----------

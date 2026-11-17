@@ -8,6 +8,7 @@ import { updateSound } from './sound.js';
 import { slowmo, updateDirector } from './director.js';
 import { updatePanel } from './panels.js';
 import { menuDemo, menuTick, showMenu } from './menu.js';
+import { introTick } from './intro.js';
 
 // ---------- Start ----------
 // Startmenyn (menu.js) väljer frö, tempo, slumpen … Adressen går före: ?seed=123 spelar om exakt samma dag
@@ -33,6 +34,7 @@ function frame(now) {
   const dt = Math.min(0.25, (now - last) / 1000); last = now;
   const slow = slowmo(dt);
   menuTick();
+  introTick();
   if ((S.started || menuDemo()) && !S.paused) advance(dt, S.speed * slow);
   S.anim += dt;
   updateDirector();

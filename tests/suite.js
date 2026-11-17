@@ -31,6 +31,7 @@ import { CHIEFS, chiefPerson, setChief } from '../src/chief.js';
 import { CREW_BY, atPost, crewPerson, postFloor } from '../src/crew.js';
 import { CREW } from '../src/config.js';
 import { PANO, ladderReach, PANO_CREW_S, PANO_DEFAULT_S } from '../src/pano.js';
+import { INTRO_OPTS, INTRO_SEED, STOPS, introPerson } from '../src/introStops.js';
 
 // ---------- Ramverk ----------
 export const tests = [];
@@ -2433,4 +2434,24 @@ test('Hissteknikern sitter själv fast mellan två våningar: hissjouren skickar
   assert(e.mode !== 'broken', `${e.name} blev aldrig lagad – den enda teknikern (${t.name}) satt själv fast i den`);
   const n = S.people.filter(p => p.role === 'hisstekniker').length;
   return `${t.name} satt fast i ${e.name} · en kollega kom och fick igång den (${n} tekniker i huset)`;
+});
+
+test('Rundvisningen: varje stopp hinner fram, händelserna går att framkalla och det finns någon att följa', () => {
+  // samma väg som intro.js: spola fram till stoppet, framkalla händelserna och stå kvar en stund (som spelaren läser)
+  sim(INTRO_SEED, { ...INTRO_OPTS });
+  const out = [];
+  for (const s of STOPS) {
+    if (s.at !== undefined) { assert(hour() < s.at + 0.2, `${s.k}: dygnet har redan gått förbi kl ${s.at}`); while (hour() < s.at) step(DT); }
+    if (s.until) { const to = hour() + (s.max ?? 0.5); while (!s.until() && hour() < to) step(DT); assert(s.until(), `${s.k}: väntade förgäves`); }
+    for (const [name, ...args] of s.ev || []) assert(act(name, ...args) !== false, `${s.k}: ${name} ${args.join(' ')} gick inte att framkalla`);
+    if (s.cam.car !== undefined) assert(s.cam.car >= 0, `${s.k}: hissen finns inte`);
+    if (s.cam.floor !== undefined) assert(s.cam.floor >= 0, `${s.k}: våningen finns inte`);
+    if (s.cam.person) { const p = introPerson(); assert(p, `${s.k}: ingen att följa`); out.push(p.name); }
+    assert(s.text({ who: 'X' }).length > 20, `${s.k}: ingen text`);
+    for (let i = 0; i < 20 / DT; i++) step(DT);
+    const car = s.cam.car !== undefined ? S.elevators[s.cam.car] : null;
+    if (s.k === 'fel') assert(car && (car.mode === 'broken' || car.breakNext || car.trapNext), `${s.k}: ${car && car.name} gick inte sönder`);
+    if (s.k === 'framkalla') assert(S.heli, `${s.k}: ingen helikopter`);
+  }
+  return `${STOPS.length} stopp till kl ${hour().toFixed(2)} · följde ${out.join(', ')}`;
 });
