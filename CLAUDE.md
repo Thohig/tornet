@@ -24,7 +24,7 @@ npm run bench       # simuleringens fart (steg/s per styrlogik)
 npm run league      # styrlogikerna mot varandra: väntetid (p50/p95/p99), kWh, trappa, ETA-fel; --save=x / --cmp=x; --flytt --flyttval=auto|varu|balk; --utanchef
 ```
 
-Samma testsvit körs i webbläsaren på `/tests.html`.
+Samma testsvit körs i webbläsaren på `/tests.html`. På GitHub kör `.github/workflows/check.yml` `npm run check` vid varje push och pull request.
 
 ## Arkitektur
 

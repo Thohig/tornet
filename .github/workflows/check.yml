@@ -1,0 +1,33 @@
+# Typkontroll och hela testsviten (npm run check) vid varje push och pull request.
+# Fångar brutet facit (tests/golden.json), typfel och brutna invarianter innan de hamnar på main.
+name: Kontroll
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+# En ny push på samma gren avbryter körningen som redan pågår.
+concurrency:
+  group: kontroll-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Typkontroll och tester
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Typkontroll
+        run: npm run typecheck
+      - name: Tester
+        run: npm test
