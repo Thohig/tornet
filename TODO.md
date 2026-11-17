@@ -22,6 +22,3 @@ Simuleringen är deterministisk, så ett dygn kan sparas som frö + inställning
 
 ## Mät ritningen
 `npm run bench` mäter simuleringen men inte grafiken, och `renderPixel` gör mycket per bildruta. Ett profilläge (t.ex. `?prof=1`) som visar tid per del (hallar, folk, text, lager) direkt i bilden – särskilt nyttigt på mobilen.
-
-## Tydligare facit
-När facit-testet larmar är det svårt att se vad som ändrats. Låt `npm run golden` (eller testet) skriva ut vilka dygn och vilka nyckeltal som skiljer mot `tests/golden.json`, så blir det lättare att avgöra om ändringen var avsiktlig.

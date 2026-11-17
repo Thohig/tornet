@@ -27,6 +27,7 @@ import { MEZZ, STATION, TRAIN_X0, TRAIN_X1 } from '../src/config.js';
 import { LAST_H } from '../src/train.js';
 import { FIRE_FLOORS, INC_LEVELS } from '../src/incidents.js';
 import { CONTROL, BREAK } from '../src/config.js';
+import { goldenDiff } from './goldendiff.js';
 import { CHIEFS, chiefPerson, setChief } from '../src/chief.js';
 import { CREW_BY, atPost, crewPerson, postFloor } from '../src/crew.js';
 import { CREW } from '../src/config.js';
@@ -1729,13 +1730,10 @@ let golden = null;
 export function setGolden(g) { golden = g; }
 test('Regression: samma frön ger samma dygn som facit', () => {
   if (!golden) throw new Fail('facit saknas (tests/golden.json) – skapa det med:  npm run golden');
-  const diffs = [];
-  for (const c of GOLDEN_CASES) {
-    const key = caseKey(c), want = golden[key], got = dayFingerprint(c);
-    if (!want) { diffs.push(`${key}: saknas i facit`); continue; }
-    for (const k of Object.keys(got)) if (JSON.stringify(got[k]) !== JSON.stringify(want[k])) diffs.push(`${key} ${k}: ${want[k]} → ${got[k]}`);
-  }
-  assert(diffs.length === 0, `${diffs.length} skillnader mot facit:\n  ${diffs.slice(0, 12).join('\n  ')}${diffs.length > 12 ? '\n  …' : ''}\n(avsiktlig ändring? godkänn med: npm run golden)`);
+  const got = {};
+  for (const c of GOLDEN_CASES) got[caseKey(c)] = dayFingerprint(c);
+  const d = goldenDiff(golden, got, { maxCases: 6 });
+  assert(d.changed === 0, `${d.text}\n(avsiktlig ändring? godkänn med: npm run golden)`);
   return `${GOLDEN_CASES.length} dygn identiska med facit`;
 });
 

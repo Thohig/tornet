@@ -6,6 +6,7 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
 import { Worker } from 'node:worker_threads';
 import { tests, Fail, setGolden, GOLDEN_CASES, caseKey, dayFingerprint } from './suite.js';
+import { goldenDiff } from './goldendiff.js';
 
 const goldenPath = new URL('./golden.json', import.meta.url);
 const args = process.argv.slice(2);
@@ -14,8 +15,13 @@ const c = { ok: '\x1b[32m', bad: '\x1b[31m', dim: '\x1b[2m', bold: '\x1b[1m', of
 if (args.includes('--update-golden')) {
   const g = {};
   for (const gc of GOLDEN_CASES) { g[caseKey(gc)] = dayFingerprint(gc); process.stdout.write('.'); }
+  // Visa vad som ändras mot det gamla facit innan det skrivs över, så att det går att se om
+  // ändringen var den avsedda.
+  const old = existsSync(goldenPath) ? JSON.parse(readFileSync(goldenPath, 'utf8')) : null;
+  const d = old ? goldenDiff(old, g) : null;
+  console.log(d ? `\n${d.changed ? c.bold : c.dim}${d.text}${c.off}` : '\nInget tidigare facit.');
   writeFileSync(goldenPath, JSON.stringify(g, null, 2) + '\n');
-  console.log(`\nFacit uppdaterat: ${GOLDEN_CASES.length} dygn skrivna till tests/golden.json`);
+  console.log(`Facit ${d && !d.changed ? 'oförändrat' : 'uppdaterat'}: ${GOLDEN_CASES.length} dygn skrivna till tests/golden.json`);
   process.exit(0);
 }
 
