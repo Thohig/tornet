@@ -101,3 +101,4 @@ Det finns ingen topplist, statusrad, låda eller högerklicksmeny: hela gränssn
 - Nya simuleringsfunktioner får ett test i `tests/suite.js`; regler som alltid ska gälla läggs i `watcher()` (kontrolleras varje steg över 40 slumpade dygn och över 24 dygn med slumpade spelaråtgärder). Ny spelaråtgärd = post i `ACTIONS` (actions.js) och i `PLAYER_ACTIONS` (suite.js). Ny incident med val = ett beslut i `chief.js` (med skäl) och `chiefLine(nyckel, …)` på kortet. Testernas `sim()` har driftchefen på rast (`chief: false`) om inget annat sägs; dockhustestet kör kaosdygn utan spelaren och kräver att incidenterna tar slut av sig själva.
 - Kontrollera grafik i webbläsaren. För att spola fram tiden i konsolen: `const st = await import('/src/state.js'), sim = await import('/src/sim.js'); while (st.hour() < 21) sim.step(sim.DT);`
 - Höj `?v=` på `style.css` i `index.html` när CSS ändras.
+- Planerade tekniska förbättringar står i `TODO.md` – stryk det som blir gjort.
