@@ -31,6 +31,13 @@ export const chiefOnDuty = (h = hour()) => (h >= CHIEFS[1].from ? CHIEFS[1] : CH
  * @typedef {{ key: string, text: string, why: string, t: number, time: string, by: 'chief'|'player', info: boolean,
  *   inc: string|null, floor: number|null, car: number|null, outcome: string|null }} Decision
  */
+/**
+ * Driftchefens tillstånd i S.chief: på/rast, gällande beslut, dagens beslut och repliken i kontrollrummet.
+ * @typedef {{ on: boolean, strat: boolean, manual: Record<string, boolean>, dec: Record<string, Decision>, log: Decision[],
+ *   say: { text: string, t0: number, until: number, dec: boolean }|null, stormT: number, fireT0: number|null,
+ *   svcN: number, svcT: number, rushT: number, stratBy: string|null, seen: Record<string, boolean>, incSeen: number|null,
+ *   alarmed?: boolean }} Chief
+ */
 /** Nollställ chefen för ett nytt dygn (på/av och strategibyten följer med). */
 export function chiefReset() {
   const C = S.chief;

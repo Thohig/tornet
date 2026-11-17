@@ -17,6 +17,8 @@ import { allowedPos, costBased, outReason, OUT_TEXT, prio, posOf } from './dispa
 import { canBrakeTo, deckFloor, unload, releaseCalls } from './elevators.js';
 import { hoistHalt, hoistServes } from './hoist.js';
 import { spawnCrew } from './crew.js';
+/** @typedef {import('./elevators.js').Elevator} Elevator */
+/** @typedef {import('./people.js').Person} Person */
 
 const freightCar = () => S.elevators.find(e => e.freight) || null;
 
@@ -60,7 +62,16 @@ export function visitsTick(dt) {
 export const MOVE_ROUTES = ['auto', 'varu', 'balk'];
 /** sekunder det tar att klä varuhissen med skyddsfiltar innan bärarna börjar */
 export const BLANKET_T = 10;
-/** Väljer hushållet som flyttar och packar bohaget (anropas när dygnet börjar, efter de boende) */
+/**
+ * Flyttdagen (S.move): hushållet, bohaget (items), lassen, bärarna, spelarens val och vad som hände.
+ * @typedef {{ floor: number, apt: number, family: number[], who: string, at: number, smart: boolean, items: MoveItem[],
+ *   loads: number, done: number, truck: number, loadT: number, crew: number, hoist: boolean,
+ *   route: string, blankets: boolean, windChoice: string|null, crewAt: number, crewOut: boolean,
+ *   pivots: number, stuck: number, broken: number, scratches: number, indepSec: number, hoisted: number, viaV: number,
+ *   dockWait: number, budWait: number, notes: Record<string, boolean>, state: string, t0: number, t1: number }} Move
+ */
+/** Väljer hushållet som flyttar och packar bohaget (anropas när dygnet börjar, efter de boende)
+ * @param {boolean} smart @param {number} at @returns {Move|null} */
 function planMove(smart, at) {
   // (stamgästerna – Majken och Lill-Olle – bor kvar)
   const homes = [];
@@ -87,10 +98,10 @@ function planMove(smart, at) {
   return { floor: H.f, apt: H.apt, family: H.members.map(p => p.id), who: who.name, at, smart, items: list,
     loads: list.length, done: 0, truck: 0, loadT: 0, crew: list.length > 9 ? 3 : 2, hoist: hoistServes(H.f),
     // spelarens val
-    route: 'auto', blankets: true, windChoice: /** @type {string|null} */ (null), crewAt: 0, crewOut: false,
+    route: 'auto', blankets: true, windChoice: null, crewAt: 0, crewOut: false,
     // vad som hände (resultatet)
     pivots: 0, stuck: 0, broken: 0, scratches: 0, indepSec: 0, hoisted: 0, viaV: 0, dockWait: 0, budWait: 0,
-    notes: /** @type {Record<string, boolean>} */ ({}),
+    notes: {},
     state: 'planned', t0: 0, t1: 0 };
 }
 /** Bara för mätningar (ligan): ett dygn med flyttdag även när slumpen inte gav någon */
@@ -255,7 +266,7 @@ function spawnMover(M, i, loader) {
   pev(p, loader ? 'Öppnar flyttbilens bakdörrar vid lastkajen – tar emot det som bärs ner' : `Kliver ur flyttbilen vid lastkajen · ${p.why}`);
   log(`🚚 ${pn(p)} (flyttgubbe) ${loader ? 'lastar flyttbilen vid lastkajen' : `åker upp till ${fl(M.floor)}`}`, 'person', null, p.id);
 }
-/** rumstimern när en flyttgubbe kommer fram (people.js): i lägenheten reserveras nästa lass */
+/** rumstimern när en flyttgubbe kommer fram (people.js): i lägenheten reserveras nästa lass @param {Person} p */
 export function moverTimer(p) {
   const M = S.move;
   if (p.loader) return 1e9;
@@ -272,7 +283,7 @@ export function moverTimer(p) {
   }
   return t;
 }
-/** flyttgubbens nästa beslut (anropas från personernas rollogik) */
+/** flyttgubbens nästa beslut (anropas från personernas rollogik) @param {Person} p */
 export function moverNext(p) {
   const M = S.move;
   if (!M || M.state !== 'on') return [p.exitFloor, 'Flytten är klar – åker hem'];
@@ -316,6 +327,8 @@ const cap = s => s[0].toUpperCase() + s.slice(1);
  * ("PIVOT!") och ibland fastnar de helt: då bärs möbeln tillbaka till lastluckan och tar hissbalken – eller
  * (utan balk, eller när spelaren valt allt i varuhissen) trycks den in med våld. Utan skyddsfiltar kan
  * stora möbler skrapa i väggarna. Returnerar true om flyttgubben fick kliva av igen.
+ * @param {Person} p
+ * @param {Elevator} e
  */
 export function moveBoard(e, p) {
   const M = S.move;
@@ -355,7 +368,7 @@ export function moveBoard(e, p) {
   log(`🛋️ ${name} fastnar i dörren till ${e.name} – flyttgubbarna vänder och vrider`, 'move', e.color, p.id);
   return false;
 }
-/** de boende som flyttar: packar hemma och går när lägenheten är tom (anropas av resNext i life.js) */
+/** de boende som flyttar: packar hemma och går när lägenheten är tom (anropas av resNext i life.js) @param {Person} p */
 export function movingResNext(p) {
   const M = S.move;
   if (!M || M.state === 'planned') return undefined; // vanlig dag tills flytten börjar
@@ -395,7 +408,7 @@ function medicTick() {
     log(`🚑 Ambulansen kör iväg${A.taken ? ` med ${A.pname}` : ''} – ${Math.round(S.t - A.t0)} s från larm till avfärd`, 'alert');
   }
 }
-/** uppe hos patienten: på våningen – inte i en hiss eller i trappan (den med akutväskan kan ta trappan ner) */
+/** uppe hos patienten: på våningen – inte i en hiss eller i trappan (den med akutväskan kan ta trappan ner) @param {Person} p */
 const upstairs = (A, p) => p.floor === A.floor && !['ride', 'boarding', 'stairs', 'instairs'].includes(p.state);
 /**
  * Hissen som körde upp personalen väntar på dem: den står kvar på patientens våning (parkerar inte, somnar
@@ -423,6 +436,11 @@ function holdTick(A, crew) {
   e.medicHold = false; A.car = null;
   if (out) log(`🚑 ${e.name} kan inte vänta längre på ambulansen – personalen får en annan hiss med förtur`, 'alert', e.color);
 }
+/**
+ * Ambulansen (S.medic): patienten, var, ambulanspersonalen (state: called → …) och hissen de låser.
+ * @typedef {{ pid: number, pname: string, floor: number, where: string, t0: number, crewAt: number, state: string,
+ *   taken: boolean, t1: number, car: number|null, held: boolean, spotX: number }} Medic
+ */
 /** Någon svimmar (dygnets schema, eller spelarens test). Returnerar false om ingen passar. */
 export function startMedical() {
   if (S.medic && S.medic.state !== 'done') return false;
@@ -433,7 +451,7 @@ export function startMedical() {
   p.collapsed = true; p.timer = 1e9; p.mood = 1;
   const where = FL[p.floor].short;
   pev(p, p.floor === floorWith('aerobic') ? 'Svimmar mitt i passet! Någon ringer 112' : 'Mår dåligt och svimmar – någon ringer 112');
-  S.medic = { pid: p.id, pname: p.name, floor: p.floor, where, t0: S.t, crewAt: S.t + rand(6, 10), state: 'called', taken: false, t1: 0, car: /** @type {number|null} */ (null), held: false, spotX: p.spot ? p.spot.x : 300 };
+  S.medic = { pid: p.id, pname: p.name, floor: p.floor, where, t0: S.t, crewAt: S.t + rand(6, 10), state: 'called', taken: false, t1: 0, car: null, held: false, spotX: p.spot ? p.spot.x : 300 };
   S.stats.medical++;
   log(`🚑 ${pn(p)} har svimmat på ${where} (${fl(p.floor)}) – ambulans larmad`, 'alert', null, p.id);
   return true;
@@ -449,7 +467,7 @@ function spawnMedic(A, i) {
   pev(p, `Springer in i entrén med ${p.cargo.name} · ${p.why}`);
   log(`🚑 ${pn(p)} (ambulanssjukvårdare) på väg till ${fl(A.floor)}`, 'person', null, p.id);
 }
-/** ambulanspersonalens nästa beslut (anropas från personernas rollogik) */
+/** ambulanspersonalens nästa beslut (anropas från personernas rollogik) @param {Person} p */
 export function medicNext(p) {
   const A = S.medic;
   if (!A || p.floor !== A.floor) return [p.exitFloor, A && A.taken ? 'Till ambulansen' : 'Tillbaka till ambulansen'];
@@ -472,7 +490,7 @@ export function medicNext(p) {
  * lägena släpper av alla.
  */
 /** Hissen ställs på patientens våning: den som fortfarande åker med (på väg längre) kliver av här –
- *  en hiss som väntar på ambulansen kör ingenstans */
+ *  en hiss som väntar på ambulansen kör ingenstans @param {Elevator} e */
 function holdClear(e) {
   const f = Math.round(e.pos), out = e.passengers.filter(p => !prio(p));
   if (!out.length) return;
@@ -486,6 +504,7 @@ function holdClear(e) {
   log(`🚑 ${e.name}: ${out.length} passagerare kliver av på ${fl(f)} – hissen väntar på ambulansen`, 'alert', e.color);
   if (e.state === 'doors' && e.doorPhase === 'open') unload(e, f);
 }
+/** @param {Elevator} e */
 export function medicClear(e) {
   const crew = S.people.find(p => p.medic && p.state === 'wait' && p.assigned === e.id);
   const target = crew ? crew.floor : null;
@@ -514,6 +533,7 @@ export function medicClear(e) {
   log(`🚑 ${e.name}: ${out.length} passagerare kliver av på ${fl(at)} – ambulansen har förtur`, 'alert', e.color);
   if (e.state === 'doors' && e.doorPhase === 'open') unload(e, at);
 }
+/** @param {Elevator} e */
 const onTheWay = (e, dest, target) => {
   const d = Math.sign(target - e.pos);
   return d !== 0 && (dest - e.pos) * d >= 0 && (target - dest) * d >= 0;

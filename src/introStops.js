@@ -5,6 +5,7 @@
 // spot = css-väljare som blinkar, auto = regissören på, text = Berits replik (ctx.who = personen vi följer).
 import { BUILDING, CONTROL, FL, LOBBY, ROOF, STATION, TOP } from './config.js';
 import { S } from './state.js';
+/** @typedef {import('./people.js').Person} Person */
 
 /** rundvisningens dygn: samma frö varje gång, ingen slump (alla incidenter framkallas) */
 export const INTRO_SEED = 19951117;
@@ -14,6 +15,7 @@ const TOP_F = ROOF >= 0 ? ROOF : TOP;
 
 /** personen som rundvisningen följer: en anställd som väntar på hiss i entrén (annars någon som väntar) */
 export function introPerson() {
+  /** @param {Person} p */
   const ok = p => !p.dead && p.state === 'wait' && !p.crewId && p.kind === 'emp';
   return S.people.find(p => ok(p) && p.floor === LOBBY && p.dest !== LOBBY) || S.people.find(ok) || null;
 }

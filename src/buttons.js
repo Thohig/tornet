@@ -10,6 +10,8 @@ import { S, log } from './state.js';
 import { elevatorAllows, pev, pn, toStairs } from './people.js';
 import { allowed, eta, isFull, operational, outLong, rebuildPicks, posOf } from './dispatch.js';
 import { kidPressed, kidRate } from './cast.js';
+/** @typedef {import('./elevators.js').Elevator} Elevator */
+/** @typedef {import('./people.js').Person} Person */
 
 export const buttonsMode = () => S.strategy === 'buttons';
 /** Hur ofta folk trycker fel: av / lite / mycket (gäller alla styrlogiker – i de andra slår man in fel våning) */
@@ -26,12 +28,13 @@ export const callKey = (g, f, d) => `${g}|${f}|${d}`;
 /** Hissgruppen personen ställer sig vid: en grupp där en hiss tar hen hela delresan. Går flera grupper dit
  *  (t.ex. expressen och stationsexpressen mellan entrén och sky lobbyn) väljer man den som redan står öppen
  *  åt rätt håll, annars på måfå. */
-/** grupperna som tar p från våningen till delmålet – helst de där någon hiss går (en skylt säger "ur funktion") */
+/** grupperna som tar p från våningen till delmålet – helst de där någon hiss går (en skylt säger "ur funktion") @param {Person} p */
 function banksFor(p) {
   const groups = [...new Set(EL.filter(x => elevatorAllows(x, p) && x.legs.some(l => l.includes(p.floor) && l.includes(p.dest))).map(x => x.group))];
   const live = groups.filter(g => S.elevators.some(e => e.group === g && !outLong(e)));
   return live.length ? live : groups;
 }
+/** @param {Person} p */
 export function bankFor(p) {
   const groups = banksFor(p);
   if (groups.length <= 1) return groups[0] ?? null;
@@ -50,7 +53,7 @@ function press(g, f, d) {
 }
 
 // ---------- Personerna: trycker på knappen i hallen ----------
-/** Personen kommer fram till hissarna och trycker (ibland fel). */
+/** Personen kommer fram till hissarna och trycker (ibland fel). @param {Person} p */
 export function pressHallButton(p) {
   const g = bankFor(p);
   p.bank = g; p.assigned = null; p.fixAt = 0;
@@ -79,7 +82,7 @@ export function pressHallButton(p) {
     log(`🙈 ${pn(p)} trycker på båda knapparna på ${fl(p.floor)}`, 'button', null, p.id);
   }
 }
-/** Varje steg för den som väntar i KNAPPAR-läget (ersätter tilldelningen i de andra lägena). */
+/** Varje steg för den som väntar i KNAPPAR-läget (ersätter tilldelningen i de andra lägena). @param {Person} p */
 export function buttonWaitTick(p, dt) {
   if (!allowed(p.floor) || !allowed(p.dest)) {
     toStairs(p, S.fire && S.fire.mode === 'recall' ? 'Brandåterkallning – alla hissar avstängda, tar trapporna' : 'Hissarna kör inte hit pga branden – tar trapporna');
@@ -118,7 +121,7 @@ export function buttonWaitTick(p, dt) {
 }
 
 // ---------- Personerna: knapparna inne i korgen ----------
-/** Efter påstigning: rätt knapp trycks alltid (så ingen åker förbi sitt mål) – ibland också fel. */
+/** Efter påstigning: rätt knapp trycks alltid (så ingen åker förbi sitt mål) – ibland också fel. @param {Person} p @param {Elevator} e */
 export function carButtonMistakes(p, e) {
   const ahead = f => e.stops.has(f) && f !== e.floor && (e.dir === 0 || (f - e.floor) * e.dir > 0);
   if (p.child && rng() < mistakeRate(kidRate(p))) {
@@ -145,6 +148,7 @@ export function carButtonMistakes(p, e) {
 /**
  * Skydd mot bus ("antinuisance", som i riktiga hissar): fler våningsknappar än rimligt för så få
  * passagerare ⇒ alla knappar rensas, och passagerarna trycker sitt mål igen.
+ * @param {Elevator} e
  */
 export function antiNuisance(e) {
   if (e.carCalls.size < e.passengers.length + 3) return;
@@ -158,7 +162,7 @@ export function antiNuisance(e) {
 // ---------- Styrsystemet: fördelar hallanropen ----------
 // OBS: assignCalls läser ALDRIG S.people – bara anropen, korgarnas läge, våningsknappar och våg.
 // (Ett test kontrollerar det.)
-/** kostnad för att korg e tar anropet c: tid till våningen + lite för last och fullt */
+/** kostnad för att korg e tar anropet c: tid till våningen + lite för last och fullt @param {Elevator} e */
 const callCost = (e, c) => eta(e, c.f, c.d) + e.passengers.length * 0.3 + (isFull(e) ? 60 : 0);
 export function assignCalls(reopt = false) {
   let changed = false;
@@ -183,7 +187,7 @@ export function dispatchCalls(reopt = false) {
   if (assignCalls(reopt)) rebuildPicks();
 }
 /** Hissen öppnar på våning f: den besvarar anropet åt sitt håll (eller ett av dem om den är ledig).
- *  Dubbeldäck: anropen på båda däckens våningar. */
+ *  Dubbeldäck: anropen på båda däckens våningar. @param {Elevator} e */
 export function answerCalls(e, f) {
   const fs = e.deck2 && e.upper.has(f + 1) ? [f, f + 1] : [f];
   const lit = d => fs.some(g => S.calls[callKey(e.group, g, d)]);

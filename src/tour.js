@@ -9,6 +9,7 @@ import { BX1, CAFE, END_H, DOOR_X, GROUND_Y, LOBBY, ROOF, activityRate, floorOpe
 import { S, clockStr, dayEvent, hour, log, notice } from './state.js';
 import { makePerson, pev, releaseSpot, setTrip } from './people.js';
 import { speak } from './cast.js';
+/** @typedef {import('./people.js').Person} Person */
 
 /** hur många turister bussen har med sig (utom guiden) */
 export const TOUR_N = 14;
@@ -58,6 +59,12 @@ export function busFrom(h = hour()) {
   for (let q = h; q < END_H; q = Math.floor(q * 4 + 1) / 4) if (plan(q).length) return q;
   return null;
 }
+/**
+ * Stadsturen (S.tour): bussen, rutten (stops, si = stoppet just nu), gruppen (members, guide) och avgången.
+ * @typedef {{ ph: string, x: number, stops: number[], si: number, members: number[], guide: number, n0: number,
+ *   stay: number, waitT: number, graceT: number, departH: number, honkT: number, honked: boolean, hurried: boolean,
+ *   lost: string[], missed: string[], aboard: number, t0: number, arriveH: number, backH: number }} Tour
+ */
 /** Spelaren skickar en turistbuss. Returnerar antalet som kommer (0 = inget att se just nu, −1 = en buss står redan här). */
 export function spawnBus() {
   if (S.tour) return -1;
@@ -65,9 +72,9 @@ export function spawnBus() {
   const h = hour(), stops = plan(h);
   if (!stops.length) return 0;
   stops.push(LOBBY);
-  S.tour = { ph: 'in', x: BUS_FROM, stops, si: -1, members: /** @type {number[]} */ ([]), guide: -1, n0: 0,
+  S.tour = { ph: 'in', x: BUS_FROM, stops, si: -1, members: [], guide: -1, n0: 0,
     stay: 0, waitT: 0, graceT: 0, departH: departure(h, stops.slice(0, -1)), honkT: 0, honked: false, hurried: false,
-    lost: /** @type {string[]} */ ([]), missed: /** @type {string[]} */ ([]), aboard: 0, t0: S.t, arriveH: h, backH: 0 };
+    lost: [], missed: [], aboard: 0, t0: S.t, arriveH: h, backH: 0 };
   log(`🚌 ${BUS_NAME} svänger in mot hållplatsen – en guidad tur med ${TOUR_N} turister`, 'sys');
   return TOUR_N + 1;
 }
@@ -101,6 +108,7 @@ function crew(T) {
   return T.members.map(id => by.get(id)).filter(p => p && !p.dead && p.tour);
 }
 const guideOf = (T, live) => live.find(p => p.id === T.guide && p.guide) || null;
+/** @param {Person} p */
 const there = (p, f) => p.floor === f && p.state === 'office' && !p.evac;
 /** alla är framme: guiden räknar in dem och stoppet börjar */
 function gathered(T, live) {
@@ -203,13 +211,13 @@ export function tourTick(dt) {
   if (T.stay <= 0) moveOn(T, live, false);
 }
 /** På takterrassen står gruppen ute i det fria och syns: guiden närmast korridoren med flaggan, turisterna runt
- *  guiden och tittar på utsikten. Annars (Sky Café) väljer man plats som vanligt (null). */
+ *  guiden och tittar på utsikten. Annars (Sky Café) väljer man plats som vanligt (null). @param {Person} p */
 export function tourSpot(p, f) {
   if (f !== ROOF || !S.tour) return null;
   if (p.guide) return { x: DOOR_X + 18, k: 'stand', face: 1, desc: `Berättar om utsikten för ${BUS_NAME}`, temp: true, win: 'hall' };
   return { x: DOOR_X + rand(36, 290), k: 'stand', face: rng() < 0.6 ? -1 : 1, desc: pick(['Tittar på utsikten', 'Fotograferar stan', 'Lyssnar på guiden', 'Pekar ut tunnelbanebron']), temp: true, win: 'hall' };
 }
-/** vad en turist bestämmer sig för i ett rum (decideNext i people.js): guiden sköter gruppen, man stannar tills hen säger till */
+/** vad en turist bestämmer sig för i ett rum (decideNext i people.js): guiden sköter gruppen, man stannar tills hen säger till @param {Person} p */
 export function tourNext(p) {
   if (p.tour && S.tour) return null;
   return [p.exitFloor, p.guide ? 'Turen är slut – går hem' : `Har tappat bort ${BUS_NAME} – går ut på egen hand`];

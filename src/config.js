@@ -427,7 +427,7 @@ export const CAST = [
 // lines = vad de säger på posten och på rasten (pratbubblorna i pixel.js – aldrig kontorsrepliker).
 /** @typedef {{ id: string, name: string, role: string, title: string, post: string, from: number, until: number|null,
  *   arrive: number|null|'event', kg: number, fit: number, speed: number, space: number, polite: boolean, icon: string,
- *   breaks: [number, number, string, string][], cover?: string, urgent?: boolean, look: object,
+ *   breaks: [number, number, string, string][], cover?: string, urgent?: boolean, look: import('./people.js').Look,
  *   lines: { post: string[], break: string[] } }} CrewDef */
 /** @type {CrewDef[]} */
 export const CREW = [

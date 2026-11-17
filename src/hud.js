@@ -23,10 +23,13 @@ import { CREW_BY } from './crew.js';
 import { extraActions } from './input.js';
 import { rememberDay, showMenu } from './menu.js';
 import { allStatsHtml, avgWait, grade, lastDay, safetyGrade, saveDay, summaryHtml } from './summary.js';
+/** @typedef {import('./elevators.js').Elevator} Elevator */
+/** @typedef {import('./people.js').Person} Person */
 export { grade, safetyGrade };
 
 export function $(id) { return document.getElementById(id); }
 // ---------- Hissen man följer: allt om hissen (förr hisspopupen) ----------
+/** @param {Elevator} e */
 export function carHtml(e) {
   const n = e.passengers.length, kg = cabinKg(e), pct = kg / e.ratedKg, svc = serviceStatus(e), route = plannedRoute(e);
   const kw = e.kw > 0.05 ? `⚡ drar ${e.kw.toFixed(0)} kW` : e.kw < -0.05 ? `♻ återmatar ${(-e.kw).toFixed(0)} kW` : e.state === 'moving' ? '⚡ 0 kW' : '⚡ vila';
@@ -40,7 +43,7 @@ export function carHtml(e) {
     + `<div class="meta">${Math.round(e.distance)} vån · ${e.trips} stopp · slitage ${Math.round(e.wear * 100)} % · 🌡️ ${motorC(e)} °C${e.fan ? ' 🌀' : ''} · ${kw} · ${e.kwh.toFixed(1)} kWh i dag</div>`;
 }
 /** Kort beskrivning av hissens zon, t.ex. "P2–6 · låg zon" eller "E⇄6 express" */
-/** motorns temperatur i °C (värmen 0–1 där 1 = överhettningsskyddet löser ut vid 100 °C) */
+/** motorns temperatur i °C (värmen 0–1 där 1 = överhettningsskyddet löser ut vid 100 °C) @param {Elevator} e */
 export const motorC = e => Math.round(35 + e.heat * 65);
 export function zoneText(d) {
   if (d.deck2) return `${fl(d.minF)} ⇄ ${fl(d.maxF)} nedre · ${fl(d.upper[0])} ⇄ ${fl(d.upper[d.upper.length - 1])} övre · dubbeldäck`;
@@ -49,6 +52,7 @@ export function zoneText(d) {
   if (d.freight) return `${fl(d.minF)}–${fl(d.maxF)} · varuhiss ${d.ratedKg} kg`;
   return `${fl(d.minF)}–${fl(d.maxF)} · ${d.group} zon`;
 }
+/** @param {Elevator} e */
 export function stateLabel(e) {
   if (e.mode === 'snapped') return e.snap.ph === 'fall' ? 'FALLER! 🪢' : 'LINBROTT 🪢';
   if (e.mode === 'broken' && e.fault.cable) return 'LINBYTE 🔧';
@@ -74,6 +78,7 @@ export function stateLabel(e) {
   return 'VILAR';
 }
 export const nameList = list => (list.length > 2 ? `${list.length} st` : list.map(p => p.name).join(' & '));
+/** @param {Elevator} e */
 export function reasonAt(e, f, d) {
   const r = [];
   const off = e.passengers.filter(p => p.dest === f);
@@ -83,6 +88,7 @@ export function reasonAt(e, f, d) {
   else if (back.length) r.push(`vänder & hämtar ${nameList(back)} ${ARR(-d)}`);
   return r.join(' + ') || '—';
 }
+/** @param {Elevator} e */
 export function whyText(e) {
   if (e.zoneLock) return `Når ingen våning utanför brandzonen – står spärrad på ${fl(e.minF)} tills branden är släckt`;
   if (e.mode === 'snapped' || (e.mode === 'broken' && e.fault.cable)) return cableStatus(e);
@@ -127,7 +133,7 @@ export function whyText(e) {
 const tripGuess = (from, to) => (from === to ? 4 : 12 + Math.abs(to - from) * 2.5);
 const secs = s => `${Math.max(1, Math.round(s))} s`;
 /** Teknikerns tidplan för hissen e (beställd service, nattservice eller hissfel) – null om ingen är på gång.
- *  Bara en uppskattning för gränssnittet: simuleringen slumpar arbetstiden först när arbetet börjar. */
+ *  Bara en uppskattning för gränssnittet: simuleringen slumpar arbetstiden först när arbetet börjar. @param {Elevator} e */
 export function serviceStatus(e) {
   if (e.mode === 'snapped' || (e.mode === 'broken' && e.fault.cable)) return `🔧 ${cableStatus(e)}`;
   const broken = e.mode === 'broken';
@@ -151,6 +157,7 @@ export function serviceStatus(e) {
  *  läses upp av skärmläsare. extra = fler attribut (t.ex. ' disabled'). */
 export const ikon = (act, icon, name, hint = '', isOn = false, extra = '') =>
   `<button class="btn ico${isOn ? ' on' : ''}" data-act="${act}" aria-label="${name}" data-hint="<b>${name}</b>${hint ? `<br>${hint}` : ''}"${extra}>${icon}</button>`;
+/** @param {Elevator} e */
 export function carActs(e) {
   const b = [];
   b.push(e.off ? ikon(`car:off:${e.id}`, '▶', 'Sätt i drift', `${e.name} tar nya resenärer igen`) : ikon(`car:off:${e.id}`, '⏸', 'Ta ur drift', `${e.name} lämnar av dem som är ombord och tar inga nya`));
@@ -397,6 +404,7 @@ export function incidentPanel() {
 }
 export function rosterHtml() {
   const f = S.rosterFilter;
+  /** @param {Person} p */
   const ok = p => f === 'all' || (f === 'crew' ? !!p.crewId || p.role === 'arbetsledare' : f === 'wait' ? (p.state === 'wait' || p.state === 'toQueue')
     : f === 'ride' ? (p.state === 'ride' || p.state === 'boarding') : (p.state === 'office' || p.state === 'exiting'));
   const order = { wait: 0, toQueue: 1, boarding: 2, ride: 3, rope: 3, stairs: 4, instairs: 4, exiting: 5, office: 6, incar: 7, away: 8, assembly: 8, platform: 4 };
@@ -418,7 +426,7 @@ export function rosterHtml() {
     return `<div class="rr${p.id === sid ? ' sel' : ''}" data-pid="${p.id}"><i style="background:${col}"></i><span>${p.cast ? '★ ' : p.crewId ? `${CREW_BY[p.crewId].icon} ` : ''}${esc(p.name)}</span><span>${where}</span><span class="rt">${t}</span></div>`;
   }).join('') || '<div class="rr"><i></i><span>–</span></div>';
 }
-/** Personen man följer: vem, vart, varför och vad styrningen tänker. Porträttet ritas med drawPortrait. */
+/** Personen man följer: vem, vart, varför och vad styrningen tänker. Porträttet ritas med drawPortrait. @param {Person} p */
 export function personHtml(p) {
   const [label, col] = stateInfo(p);
   let role = p.kind === 'emp' ? `Anställd · ${FL[p.home].name} (${fl(p.home)})${p.overtime ? ' · jobbar över' : ''}`
@@ -474,7 +482,7 @@ export function personHtml(p) {
     + `<div class="tk-line"><b>IDAG</b><span>${p.trips} resor · väntat ${Math.round(p.totalWait)}s · åkt ${Math.round(p.totalRide)}s${p.smoked ? ' · 💨 fick rök' : ''}</span></div>`
     + `<div class="tk-hist">${p.hist.slice(0, 12).map(h => `<div><span>${h.time}</span>${esc(h.text)}</div>`).join('')}</div></div>`;
 }
-/** porträttet: pixelfiguren framifrån, förstorad 5 gånger (huvud och överkropp syns) */
+/** porträttet: pixelfiguren framifrån, förstorad 5 gånger (huvud och överkropp syns) @param {Person} p */
 export function drawPortrait(p) {
   const [, col] = stateInfo(p), d = VIEW.dpr;
   pctx.setTransform(d, 0, 0, d, 0, 0);
@@ -484,7 +492,7 @@ export function drawPortrait(p) {
   const spr = personSprite({ ...p, mood: p.dead ? 0 : p.mood }, 'front', 0, 1);
   pctx.drawImage(spr, 2, 4, spr.width * 5, spr.height * 5);
 }
-/** följ en person: spåra hen och låt kameran följa (null = sluta) */
+/** följ en person: spåra hen och låt kameran följa (null = sluta) @param {Person} p */
 export function select(p) {
   S.sel = p; S.trackDirty = true; S.logDirty = true;
   if (p) { VIEW.follow = null; VIEW.camFloor = null; VIEW.camSel = true; } else VIEW.camSel = false;

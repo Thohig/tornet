@@ -5,34 +5,34 @@ import { START_H } from './config.js';
 export const S = {
   started: false, paused: false, speed: 1, strategy: 'smart', tags: false,
   t: 0, clock: 0, day: 1, anim: 0, tempo: 'lang', // tempo: dygnets längd (TEMPOS i config)
-  people: [], elevators: [], log: [], fx: [], wl: null,
-  nextId: 1, reoptT: 0, summaryShown: false, stats: null, logDirty: true,
+  people: /** @type {import('./people.js').Person[]} */ ([]), elevators: /** @type {import('./elevators.js').Elevator[]} */ ([]), log: [], fx: [], wl: null,
+  nextId: 1, reoptT: 0, summaryShown: false, stats: /** @type {Stats|null} */ (null), logDirty: true,
   // nytt dygn: 'mjuk' = huset rullar vidare kl 06 (rollDay i sim.js), 'ny' = dygnet börjar om från början (resetDay);
   // yesterday = gårdagens statistik efter ett mjukt dygnsskifte
-  roll: 'ny', yesterday: /** @type {{ day: number, stats: any }|null} */ (null),
-  sel: null, hover: null, hoverDoor: null, carCycle: 0,
+  roll: 'ny', yesterday: /** @type {{ day: number, stats: Stats }|null} */ (null),
+  sel: /** @type {import('./people.js').Person|null} */ (null), hover: /** @type {import('./people.js').Person|null} */ (null), hoverDoor: /** @type {number|null} */ (null), carCycle: 0,
   rosterFilter: 'all', logFilter: 'all',
   // incidenter
   // slumpen: hur ofta incidenterna kommer av sig själva (av/lugn/normal/kaos, se INC_LEVELS i incidents.js)
-  incLevel: 'normal', power: true, fire: null, outage: null,
+  incLevel: 'normal', power: true, fire: /** @type {import('./incidents.js').Fire|null} */ (null), outage: /** @type {import('./incidents.js').Outage|null} */ (null),
   // driftchefen i kontrollrummet (chief.js) och driftradion: det som händer och besluten, i klartext
-  chief: /** @type {any} */ (null), feed: /** @type {{ t: number, time: string, text: string, kind: string, color: string|null }[]} */ ([]),
+  chief: /** @type {import('./chief.js').Chief|null} */ (null), feed: /** @type {{ t: number, time: string, text: string, kind: string, color: string|null }[]} */ ([]),
   // dygnets tidtabell för slumpade incidenter, förvarningen som pågår och den senaste incidenten (efterspelet)
-  powerBack: /** @type {number|null} */ (null), brigade: /** @type {any} */ (null),
-  incPlan: /** @type {{ at: number, night: boolean }[]} */ ([]), warn: /** @type {any} */ (null), lastInc: /** @type {any} */ (null),
+  powerBack: /** @type {number|null} */ (null), brigade: /** @type {import('./incidents.js').Brigade|null} */ (null),
+  incPlan: /** @type {{ at: number, night: boolean }[]} */ ([]), warn: /** @type {import('./incidents.js').Warn|null} */ (null), lastInc: /** @type {{ id: number, type: string, t: number }|null} */ (null),
   // KNAPPAR-läget: hallanrop { 'grupp|våning|riktning': anrop } och hur ofta folk trycker fel (av/lite/mycket)
   calls: /** @type {Record<string, import('./buttons.js').HallCall>} */ ({}), mistakes: 'lite',
   // drift: underhåll 'natt' (nattservice) eller 'fel' (bara när något går sönder), när teknikern kommer, rusningsläge
-  maint: 'natt', techCallAt: /** @type {number|null} */ (null), foreman: /** @type {{ car: number, at: number }|null} */ (null), pano: /** @type {any} */ (null),
+  maint: 'natt', techCallAt: /** @type {number|null} */ (null), foreman: /** @type {{ car: number, at: number }|null} */ (null), pano: /** @type {import('./pano.js').Pano|null} */ (null),
   // extra tekniker: samtalet till hissjouren (syns i grafiken) och när kollegan kommer
   techCall: /** @type {{ by: number, t0: number, until: number, n: number, cars: number[], trapped?: string|null }|null} */ (null), extraAt: /** @type {number|null} */ (null), peakMode: /** @type {string|null} */ (null),
   // väder (temperatur, stormen som incident), flyttdag, ambulans och informationsrutor (se notice)
-  weather: /** @type {{ temp: number, cold: number }} */ ({ temp: 15, cold: 0 }), storm: /** @type {any} */ (null),
-  move: /** @type {any} */ (null), medic: /** @type {any} */ (null),
+  weather: /** @type {{ temp: number, cold: number }} */ ({ temp: 15, cold: 0 }), storm: /** @type {import('./weather.js').Storm|null} */ (null),
+  move: /** @type {import('./visits.js').Move|null} */ (null), medic: /** @type {import('./visits.js').Medic|null} */ (null),
   // Stadsturen: turistbussen och den guidade gruppen (tour.js)
-  tour: /** @type {any} */ (null),
+  tour: /** @type {import('./tour.js').Tour|null} */ (null),
   // takskenan: fönsterputsarens gondol och hissbalken (hoist.js)
-  cleaner: /** @type {any} */ (null), hoist: /** @type {any} */ (null),
+  cleaner: /** @type {import('./hoist.js').Cleaner|null} */ (null), hoist: /** @type {import('./hoist.js').Hoist|null} */ (null),
   notices: /** @type {Notice[]} */ ([]), noticeId: 1,
   // lärande parkering: dagens anrop per timme och våning, och minnet från tidigare dygn (följer med som slitaget)
   learnToday: /** @type {number[][]|null} */ (null), learnMem: /** @type {number[][]|null} */ (null),
@@ -69,6 +69,7 @@ export function setOcc(s, id) { if (id === null) S.occ.delete(s); else S.occ.set
 // Krokar som gränssnittet kopplar in sig på. Simuleringen rör aldrig DOM själv.
 /** @type {{ incident: (floor: number|null) => void, dayEnd: () => void }} */
 export const hooks = { incident() {}, dayEnd() {} };
+/** Dygnets siffror (S.stats). Delsystemen lägger till egna räknare vid behov (t.ex. panoStuck). @typedef {ReturnType<typeof newStats>} Stats */
 export function newStats() {
   return { served: 0, waitSum: 0, waitN: 0, waitMax: 0, rideSum: 0, rideN: 0, angry: 0,
     smoked: 0, trappedSec: 0, stairs: 0, evacuated: 0, incidents: 0, overloads: 0, transfers: 0, carsIn: 0, deliveries: 0, vips: 0,

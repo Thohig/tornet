@@ -23,8 +23,10 @@ import { chiefReset, chiefRoll, chiefTick } from './chief.js';
 import { panoTick } from './pano.js';
 import { tourReset, tourTick } from './tour.js';
 import { crewArrivals, crewRoll, crewStart, spawnCrew } from './crew.js';
+/** @typedef {import('./elevators.js').Elevator} Elevator */
 
 // ---------- Planerad rutt (för HUD) ----------
+/** @param {Elevator} e */
 export function plannedRoute(e) {
   if (e.mode === 'recall') return [e.home];
   if (e.mode === 'rescue') return [e.rescueTarget];
@@ -109,6 +111,7 @@ function nightModeTick(dt) {
     return;
   }
   // gruppens vakthiss: den första som kan köra (en trasig hiss, en på service eller en avstängd räknas inte)
+  /** @param {Elevator} e */
   const usable = e => !outReason(e) && !e.indep;
   const keeper = g => S.elevators.find(x => x.group === g && usable(x));
   for (const e of S.elevators) {

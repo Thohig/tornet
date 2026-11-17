@@ -10,6 +10,7 @@ import { BX1, DOOR_T, EL, HATCH_FLOORS, LOBBY, SEAM_F, TOP, TOWER_X1, floorY } f
 import { S, hour, log } from './state.js';
 import { moveTo, restoreElevator, setMode, vmaxOf } from './elevators.js';
 import { windAt } from './weather.js';
+/** @typedef {import('./elevators.js').Elevator} Elevator */
 
 /** huset har ett smalt torn med fasad att putsa (och en takskena) */
 export const HAS_TOWER = TOWER_X1[TOP] < BX1;
@@ -48,13 +49,15 @@ export function cleanerPlan(h) {
   return k < 0.25 ? { y: lerp(P[i], P[i + 1], smooth(k / 0.25)), scrub: false, crew: true } : { y: P[i + 1], scrub: true, crew: true };
 }
 
+/** Fönsterputsarens gondol (S.cleaner) @typedef {{ y: number, scrub: boolean, crew: boolean, parked: boolean, waiting: boolean, recall: boolean }} Cleaner */
+/** Hissbalken och panoramahissens lastläge (S.hoist) @typedef {{ phase: string, y: number, t: number, item: number|null, halted: string,
+ *   lift: string|null, liftT: number, liftItem: number|null }} Hoist */
 export function hoistReset() {
   // crew = putsaren (Hasse, crew.js) står i gondolen; recall = han vill av – gondolen hissas upp till taket
   S.cleaner = { y: PARK_Y, scrub: false, crew: false, parked: true, waiting: false, recall: false };
   // phase: idle | rig (balken svängs ut) | fetch (kroken till luckan) | hook | lower | unrig
   // lift: panoramahissens lastläge – up | openT | load | closeT | down | openE | unload | closeE | abort (brand)
-  S.hoist = { phase: 'idle', y: PARK_Y, t: 0, item: /** @type {number|null} */ (null), halted: '',
-    lift: /** @type {string|null} */ (null), liftT: 0, liftItem: /** @type {number|null} */ (null) };
+  S.hoist = { phase: 'idle', y: PARK_Y, t: 0, item: null, halted: '', lift: null, liftT: 0, liftItem: null };
 }
 /** Putsarens gondol, eller null om huset saknar ett smalt torn (för regissören och grafiken) */
 export const cleanerAt = () => (HAS_TOWER && S.cleaner ? S.cleaner : null);
@@ -162,7 +165,7 @@ function liftTick() {
   S.hoist.lift = P.door > 0 ? 'closeE' : 'up'; S.hoist.liftT = 0;
   log(`🚚 ${P.name} går i lastläge – kör upp till terrassen och hämtar flyttlasset`, 'alert', P.color);
 }
-/** Ett steg för panoramahissen i lastläge (anropas från updateElevator när strömmen är på) */
+/** Ett steg för panoramahissen i lastläge (anropas från updateElevator när strömmen är på) @param {Elevator} e */
 export function liftStep(e, dt) {
   const H = S.hoist, M = S.move;
   const open = () => { e.state = 'doors'; e.doorPhase = 'opening'; e.door = Math.min(1, e.door + dt / DOOR_T); if (e.door >= 1) e.doorPhase = 'open'; return e.door >= 1; };

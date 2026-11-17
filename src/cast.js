@@ -6,6 +6,8 @@ const { pick, rng } = stream('repliker');
 import { CAST, CAFE, LOBBY, OFFICE_FLOORS, SPOTS, floorOpen, floorWith, idx, shaftCX } from './config.js';
 import { S, log } from './state.js';
 import { makePerson, pev, setTrip } from './people.js';
+/** @typedef {import('./elevators.js').Elevator} Elevator */
+/** @typedef {import('./people.js').Person} Person */
 
 /** @typedef {import('./config.js').CastDef} CastDef */
 export const castDef = id => CAST.find(c => c.id === id);
@@ -15,6 +17,7 @@ const homeOf = c => { const t = floorWith(c.home); return t >= 0 ? t : idx(c.hom
 /**
  * Repliken visas i en pratbubbla en stund och hamnar i loggen och personens historik.
  * later = personen är inne i ett rum (syns inte) – repliken sägs när hen kommer ut i kön.
+ * @param {Person} p
  */
 export function say(p, key, vars = {}, later = false) {
   const c = castDef(p.cast);
@@ -23,13 +26,15 @@ export function say(p, key, vars = {}, later = false) {
   if (later) { p.sayLater = text; return; }
   speak(p, text);
 }
-/** säg en sparad replik (anropas när personen ställer sig i kön) */
+/** säg en sparad replik (anropas när personen ställer sig i kön) @param {Person} p */
 export function flushSay(p) { if (p.sayLater) { speak(p, p.sayLater); p.sayLater = null; } }
+/** @param {Person} p */
 export function speak(p, text) {
   p.say = { text, until: S.t + 8 };
   pev(p, `Säger: "${text}"`);
   log(`💬 ${p.name}: "${text}"`, 'person', null, p.id);
 }
+/** @param {Person} p */
 function castify(p, c) {
   p.name = c.name; p.cast = c.id; p.quirk = c.quirk; p.title = c.title;
   Object.assign(p.look, c.look);
@@ -56,12 +61,12 @@ function spawnCastEmployee(c) {
   log(`★ ${p.name} kommer till jobbet (${p.title.split(' –')[0]})`, 'person', null, p.id);
   return p;
 }
-/** Boende som blir stamgäster (Majken, Lill-Olle) – anropas när de boende flyttar in på morgonen */
+/** Boende som blir stamgäster (Majken, Lill-Olle) – anropas när de boende flyttar in på morgonen @param {Person} p */
 export function castResident(p) {
   const c = CAST.find(x => x.resident === p.rtype && !S.people.some(q => q.cast === x.id));
   if (c) castify(p, c);
 }
-/** Pizzabudet är alltid Pizza-Pelle */
+/** Pizzabudet är alltid Pizza-Pelle @param {Person} p */
 export function castPizza(p) {
   const c = castDef('pelle');
   if (!p || !c) return;
@@ -72,6 +77,7 @@ export function castPizza(p) {
 // ---------- Egenheterna ----------
 /** Gunnar gnäller högre ju längre han väntar */
 const GRIPE_AT = [15, 35, 60];
+/** @param {Person} p */
 export function castWaitTick(p) {
   if (p.quirk !== 'gnäll') return;
   const n = p.gripes || 0;
@@ -81,7 +87,7 @@ export function castWaitTick(p) {
     if (n === GRIPE_AT.length - 1) p.mood = 2;
   }
 }
-/** Påstigning: Gunnar muttrar, Majken pratar med de andra, Lill-Olle jublar */
+/** Påstigning: Gunnar muttrar, Majken pratar med de andra, Lill-Olle jublar @param {Person} p @param {Elevator} e */
 export function castBoard(p, e) {
   if (p.quirk === 'gnäll' && (p.gripes || 0) > 0) say(p, 'board');
   p.gripes = 0;
@@ -95,16 +101,16 @@ export function castBoard(p, e) {
   }
   if (p.quirk === 'bus' && rng() < 0.4) say(p, 'ride');
 }
-/** Fia tar alltid trappan (så länge hissarna går – annars gör alla det ändå) */
+/** Fia tar alltid trappan (så länge hissarna går – annars gör alla det ändå) @param {Person} p */
 export const alwaysStairs = p => p.quirk === 'trappa';
-/** Kurt hämtar kaffe så fort han sitter vid sin plats en stund */
+/** Kurt hämtar kaffe så fort han sitter vid sin plats en stund @param {Person} p */
 export function castNext(p, h) {
   if (p.quirk !== 'kaffe' || p.floor !== p.home || h >= 17.5 || !floorOpen(CAFE, h) || !floorOpen(CAFE, h + 1.2) || rng() > 0.55) return null;
   p.cups = (p.cups || 0) + 1; S.stats.cups++;
   say(p, 'coffee', { n: p.cups }, true);
   return [CAFE, `Kaffe nummer ${p.cups}`];
 }
-/** Doris håller upp dörren när någon är på väg till kön på våningen (en gång per stopp) */
+/** Doris håller upp dörren när någon är på väg till kön på våningen (en gång per stopp) @param {Elevator} e */
 export function doorHold(e, f) {
   if (e.heldTrip === e.trips || !e.passengers.length && !e.reserved) return 0; // Doris är inte med
   const doris = S.people.find(p => p.quirk === 'dörr' && p.car === e && (p.state === 'ride' || p.state === 'boarding'));
@@ -116,6 +122,7 @@ export function doorHold(e, f) {
 }
 /** Andra artiga passagerare håller också upp dörren ibland (slås en gång per stopp, inte om Doris redan gör det) */
 const HOLD_LINES = ['Vänta, jag håller dörren!', 'Spring, vi väntar!', 'Det finns plats!'];
+/** @param {Elevator} e */
 export function politeHold(e, f) {
   if (e.heldTrip === e.trips || e.politeTrip === e.trips || !e.passengers.length) return 0;
   const p = e.passengers.find(q => q.polite && q.state === 'ride' && !q.cast);
@@ -140,7 +147,7 @@ const TALK = {
   fault: ['Den där hissen krånglade förut – jag satt fast!', 'Teknikern fick bända upp dörrarna.'],
   pano: ['Såg du? De firade ner folk från panoramahissen!', 'Jag tar trappan i en vecka nu.', 'Hängde de verkligen i rep utanpå huset?'],
 };
-/** någon i korgen pratar om den senaste incidenten (en gång per person och incident) */
+/** någon i korgen pratar om den senaste incidenten (en gång per person och incident) @param {Person} p @param {Elevator} e */
 export function incidentTalk(p, e) {
   const L = S.lastInc;
   if (!L || S.t - L.t > TALK_S || p.talkedInc === L.id || e.passengers.length < 2 || p.medic || p.ff) return;
@@ -151,13 +158,14 @@ export function incidentTalk(p, e) {
   speak(p, pick(own || TALK[L.type] || TALK.fault));
 }
 const TRAPPED = ['Hallå?! Hör någon oss?', 'Vi sitter fast!', 'Andas lugnt, det ordnar sig.', 'Har någon täckning?', 'Knacka i väggen!'];
-/** en av de instängda säger något (stamgästerna med egna repliker) */
+/** en av de instängda säger något (stamgästerna med egna repliker) @param {Elevator} e */
 export function trappedTalk(e) {
   if (!e.passengers.length || e.passengers.some(q => q.say && q.say.until > S.t)) return;
   const p = pick(e.passengers), c = castDef(p.cast);
   speak(p, pick((c && c.lines.trapped) || TRAPPED));
 }
 
-/** Lill-Olle trycker på alla knappar mycket oftare än andra barn */
+/** Lill-Olle trycker på alla knappar mycket oftare än andra barn @param {Person} p */
 export const kidRate = p => (p.quirk === 'bus' ? 0.6 : 0.15);
+/** @param {Person} p */
 export function kidPressed(p) { if (p.quirk === 'bus') say(p, 'buttons'); }

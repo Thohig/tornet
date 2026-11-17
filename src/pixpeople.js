@@ -5,6 +5,7 @@ import { PAL } from './pixpal.js';
 
 const INK = PAL.ink;
 import { blend, dark, light, fromCells, flipped, sprite } from './pixart.js';
+/** @typedef {import('./people.js').Person} Person */
 
 const W = 10, H = 22; // figurens yta utan kontur (konturen lägger till 1 pixel runtom)
 export const PERSON_W = W + 2, PERSON_H = H + 2;
@@ -118,7 +119,8 @@ function build(look, o) {
 }
 
 const CACHE = new WeakMap();
-/** figuren för en person; dir < 0 = vänd åt vänster */
+/** figuren för en person; dir < 0 = vänd åt vänster
+ * @param {Pick<Person, 'id'|'mood'|'look'> & { child?: boolean, smoked?: boolean }} p */
 export function personSprite(p, view, frame, dir, extra = {}) {
   const look = p.look;
   let m = CACHE.get(look);

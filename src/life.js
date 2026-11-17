@@ -9,6 +9,7 @@ import { S, clockStr, hour, log, occOf, setOcc } from './state.js';
 import { makePerson, openFloors, pev, pn, setTrip } from './people.js';
 import { castResident } from './cast.js';
 import { movingResNext } from './visits.js';
+/** @typedef {import('./people.js').Person} Person */
 
 // ---------- Garaget ----------
 // Parkeringsplatser per garagevåning (P1 har lastkaj till vänster och färre platser)
@@ -19,7 +20,8 @@ function freeSlot() {
   const free = slotList().filter(s => !S.autos.some(a => a.floor === s.floor && a.slot === s.x));
   return free.length ? pick(free) : null;
 }
-/** Personen kommer med bil: bilen kör in i garaget och personen kliver ur. Falskt om garaget är fullt. */
+/** En bil i garaget @typedef {{ id: number, floor: number, slot: number, x: number, state: string, color: string, owner: number }} Auto */
+/** Personen kommer med bil: bilen kör in i garaget och personen kliver ur. Falskt om garaget är fullt. @param {Person} p */
 export function arriveByCar(p, parked = false) {
   const s = freeSlot();
   if (!s) return false;
@@ -34,7 +36,7 @@ export function arriveByCar(p, parked = false) {
   }
   return true;
 }
-/** Personen lämnar huset: med bil (bilen kör ut), till fots – eller för de boende: är borta en stund */
+/** Personen lämnar huset: med bil (bilen kör ut), till fots – eller för de boende: är borta en stund @param {Person} p */
 export function leaveBuilding(p) {
   // utrymd vid brand: väntar på återsamlingsplatsen utanför entrén och går in igen när branden är släckt
   // (även den som kom med bil eller tåg: bilen står kvar i garaget)
@@ -62,13 +64,13 @@ export function leaveBuilding(p) {
   pev(p, p.movedOut ? 'Flyttar härifrån – hejdå huset!' : 'Lämnar huset – hejdå!');
   log(`${pn(p)} lämnar huset${p.exitFloor !== LOBBY ? ` (från ${fl(p.exitFloor)})` : ''}`, 'person', null, p.id);
 }
-/** Branden är släckt: tillbaka in från återsamlingsplatsen – dit man var på väg, eller hem om det har blivit sent */
+/** Branden är släckt: tillbaka in från återsamlingsplatsen – dit man var på väg, eller hem om det har blivit sent @param {Person} p */
 export function backFromAssembly(p) {
   p.evac = false; p.state = 'toQueue'; p.floor = LOBBY; p.x = -30 - rand(0, 30);
   if (!fireReturn(p, 'Tillbaka in efter branden')) leaveBuilding(p);
 }
 /** Efter branden: p går tillbaka dit hen var (evacFrom). Falskt om det inte finns något att gå tillbaka till –
- *  hen var på väg ut, det har blivit sent eller våningen har stängt. */
+ *  hen var på väg ut, det har blivit sent eller våningen har stängt. @param {Person} p */
 export function fireReturn(p, why) {
   const h = hour(), to = p.evacFrom;
   p.evacFrom = undefined;
@@ -154,6 +156,7 @@ function routine(type) {
   return { wake: 7, sleep: 23, ev: [] };
 }
 const TYPE_NAMES = { worker: 'jobbar inne i stan', child: 'går i skolan', student: 'pluggar', pensioner: 'pensionär', vd: 'VD med långa dagar', artist: 'konstnär – nattuggla' };
+/** @param {Person} p */
 export const residentDesc = p => `Bor på ${fl(p.home)} (${p.apt ? 'höger' : 'vänster'} lägenhet) · ${TYPE_NAMES[p.rtype] || ''}`;
 /** de boende i husets lägenheter; only(f, apt) = bara de lägenheter där det inte bor någon (dygnsskiftet) */
 function makeResidents(only = (/** @type {number} */ _f, /** @type {number} */ _apt) => true) {
@@ -177,13 +180,13 @@ function makeResidents(only = (/** @type {number} */ _f, /** @type {number} */ _
     }));
   });
 }
-/** En plats i den egna lägenheten: sängen när man sover, annars soffa/kök/dator */
+/** En plats i den egna lägenheten: sängen när man sover, annars soffa/kök/dator @param {Person} p */
 export function homeSpot(p) {
   const mine = SPOTS[p.home].filter(s => s.apt === p.apt);
   const want = mine.filter(s => !!s.bed === !!p.sleeping && (occOf(s) === null || occOf(s) === p.id));
   return pick(want.length ? want : mine);
 }
-/** Nästa beslut för en boende (anropas när tiden på platsen är slut) */
+/** Nästa beslut för en boende (anropas när tiden på platsen är slut) @param {Person} p */
 export function resNext(p, h) {
   // flyttdag: hushållet som flyttar packar hemma och går när lägenheten är tom (visits.js)
   if (p.moving) {
@@ -210,6 +213,7 @@ export function resNext(p, h) {
   if (s !== p.spot) { if (p.spot && occOf(p.spot) === p.id) setOcc(p.spot, null); p.spot = s; setOcc(s, p.id); p.x = s.x; p.face = s.face || 1; }
   return null;
 }
+/** @param {Person} p */
 function awayTick(p) {
   if (hour() < p.returnAt || S.fire) return; // vid brand släpps ingen in
   const ev = p.sched.find(e => !e.done && e.go === 'home');

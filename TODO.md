@@ -5,8 +5,8 @@ Förslag som inte är gjorda än, ungefär i den ordning de ger mest. Stryk det 
 ## Dela upp testet med 40 slumpade dygn
 ”Invarianter över 40 slumpade dygn” tar ensam ~58 s och sätter golvet för hela sviten nu när den körs parallellt (~94 s på 10 kärnor). Delas det i fyra tester om tio dygn var bör sviten gå ner mot 30–40 s. Samma sak gäller i mindre skala ”Spelaråtgärder … över 24 dygn” (~34 s) och ”Samma frö ger exakt samma dag” (~28 s).
 
-## Typer för `Person` och `Elevator`
-`HallCall`, `CastDef`, `Shot` m.fl. har `@typedef`, men inte de två viktigaste objekten – `p` och `e` är otypade överallt. En typ för var och en, plus de 14 `@type {any}` i `S` (`chief`, `storm`, `move`, `pano`, `brigade`, `medic` …), låter `tsc` hitta felstavade fält. På sikt kan `strict` slås på fil för fil.
+## Stäng `S` för typkontrollen
+`Person`, `Elevator` och incidenternas tillstånd (`S.fire`, `S.pano`, `S.move` …) har typer, men `S` själv är ett öppet objekt i en JS-fil: `tsc` godtar vilket fält som helst på `S` (även `S.felstavat`), och fält som `S.train`, `S.autos` och `S.heli` läggs till utanför `state.js`. En handskriven typ för hela `S` (ungefär 110 fält) stänger det. Även `S.stats` (`ReturnType<typeof newStats>`) är öppen. På sikt kan `strict` slås på fil för fil.
 
 ## Dela upp `pixel.js`
 2 265 rader, nästan en femtedel av spelkoden. Dela efter vad som ritas – t.ex. hallar/korridorer/skyltar, schakt/korgar, gatan/perrongen/bilar, kontrollrummet/personalrummet – och behåll `layer()` och `reserve`/`place` i `pixel.js`. Inget beteende ändras.

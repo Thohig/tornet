@@ -9,6 +9,7 @@ import { blankPerson, gotoSpot, pev, pn, releaseSpot, setTrip } from './people.j
 import { inFireZone } from './dispatch.js';
 import { windAt } from './weather.js';
 import { WIND_STOP } from './hoist.js';
+/** @typedef {import('./people.js').Person} Person */
 
 /** @typedef {import('./config.js').CrewDef} CrewDef */
 /** hur ofta (rumstid, se activityRate) personalen tittar upp: rast, larm, skiftbyte */
@@ -26,7 +27,7 @@ export const alarm = () => !!(S.fire || S.outage || S.storm || S.warn
   || S.elevators.some(e => e.mode === 'snapped' || e.hot || (e.mode === 'broken' && e.fault && e.fault.trapped)));
 /** personen ur personalen med id, om hen är i huset */
 export const crewPerson = id => S.people.find(p => p.crewId === id && !p.dead) || null;
-/** sitter p på sin post just nu? */
+/** sitter p på sin post just nu? @param {Person} p */
 export const atPost = p => !!p && p.state === 'office' && !!p.spot && p.spot.post === CREW_BY[p.crewId].post && p.floor === postFloor(p.spot.post);
 /** sitter någon på posten? */
 const manned = post => S.people.some(p => p.crewId && !p.dead && atPost(p) && p.spot.post === post);
@@ -72,7 +73,7 @@ export function spawnCrew(id, atStart = false, from = LOBBY) {
 
 // ---------- Platser ----------
 /** Var personen sätter sig på våning f: posten (om den är ledig och det inte är rast), rastmålet, personalrummet,
- *  annars stående i hallen. Drar inga slumptal. */
+ *  annars stående i hallen. Drar inga slumptal. @param {Person} p */
 export function crewSpot(p, f) {
   const c = CREW_BY[p.crewId], mine = s => occOf(s) === null || occOf(s) === p.id;
   const post = SPOTS[f].find(s => s.post === c.post);
@@ -100,7 +101,7 @@ function gondolaOff() {
   if (S.move && S.move.state === 'on' && S.move.hoist && S.move.items.some(it => it.st === 'hatch' || it.st === 'hoist')) return 'Hissbalken behöver takskenan – väntar i personalrummet';
   return '';
 }
-/** varför personen inte ska vara på posten just nu ('' = hen ska vara där) */
+/** varför personen inte ska vara på posten just nu ('' = hen ska vara där) @param {Person} p */
 function offReason(p, h) {
   const c = CREW_BY[p.crewId];
   if (c.post === 'chief' && S.chief && !S.chief.on) return 'Går på rast – du får ta besluten så länge';
@@ -118,7 +119,7 @@ export function crewRoll() {
   for (const p of S.people) if (p.crewId && CREW_BY[p.crewId].until === null) { p.shiftEnd = true; p.timer = Math.min(p.timer, CREW_LOOK); }
   for (const c of CREW) if (c.arrive === null && !crewPerson(c.id)) spawnCrew(c.id);
 }
-/** passet är slut? */
+/** passet är slut? @param {Person} p */
 function shiftOver(p, h, busy) {
   const c = CREW_BY[p.crewId];
   if (c.post === 'terrace') return !S.move || S.move.state === 'done' || !S.move.hoist;
@@ -126,7 +127,7 @@ function shiftOver(p, h, busy) {
   if (p.shiftEnd) { const nx = relief(c); return (!nx || !!crewPerson(nx.id)) && !(busy && c.urgent); }
   return c.until !== null && h >= c.until && (!busy || !c.urgent || h >= c.until + 0.5);
 }
-/** får personen lämna posten just nu? fönsterputsaren måste först hissas upp till taket */
+/** får personen lämna posten just nu? fönsterputsaren måste först hissas upp till taket @param {Person} p */
 function mayLeave(p) {
   if (CREW_BY[p.crewId].post !== 'gondola' || !atPost(p)) return true;
   const C = S.cleaner;
@@ -137,6 +138,7 @@ function mayLeave(p) {
 /**
  * Vart personen ska härnäst (som roleNext i people.js): posten, ett rastmål eller hem. Drar inga slumptal.
  * Returnerar [våning, varför] eller null (stanna).
+ * @param {Person} p
  */
 export function crewNext(p, h) {
   const c = CREW_BY[p.crewId], busy = alarm(), pf = postFloor(c.post);
@@ -183,7 +185,7 @@ export function crewNext(p, h) {
   if (p.floor === pf) return sitDown(p, pf);
   return [pf, busy && c.urgent ? 'Larm! Skyndar tillbaka till kontrollrummet' : `Tillbaka till jobbet${p.floor === BREAK ? '' : ` på ${c.post === 'gondola' ? 'taket' : 'posten'}`}`, false];
 }
-/** byt plats på samma våning (från posten till rastmålet eller tvärtom) */
+/** byt plats på samma våning (från posten till rastmålet eller tvärtom) @param {Person} p */
 function sitDown(p, f) {
   releaseSpot(p); p.state = 'exiting'; gotoSpot(p, f);
   pev(p, p.spot.desc);

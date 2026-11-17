@@ -19,6 +19,8 @@ import { nextOut } from './service.js';
 import { windAt } from './weather.js';
 import { WIND_STOP, TERRACE_Y } from './hoist.js';
 import { say } from './cast.js';
+/** @typedef {import('./elevators.js').Elevator} Elevator */
+/** @typedef {import('./people.js').Person} Person */
 
 /** panoramahissen (på fasaden), om huset har någon */
 export const PANO = EL.find(d => d.facade) || null;
@@ -33,12 +35,12 @@ const ROPE_V = 95, RETURN_T = 3, CLIMB_PER_FLOOR = 1.6;
 /** så många våningar över entrén når stegbilen */
 export const LADDER_MAX = 5;
 
-/** kan panoramahissen fastna nu (den kör med folk i)? */
+/** kan panoramahissen fastna nu (den kör med folk i)? @param {Elevator} e */
 export const panoCandidate = e => !!e && e.facade && e.mode === 'normal' && !e.hold && !e.indep && !e.panoNext;
 /** korgen är mitt emellan två våningar (som i service.js) – och ovanför gatan: under jord, där röret går ner till
- *  tunnelbanan, når varken repet eller stegbilen fram, så där fastnar den inte */
+ *  tunnelbanan, når varken repet eller stegbilen fram, så där fastnar den inte @param {Elevator} e */
 const midFloor = e => { const fr = e.pos - Math.floor(e.pos); return fr > 0.35 && fr < 0.75 && e.pos > Math.max(e.minF, LOBBY) + 0.6; };
-/** ska korgen fastna just nu? */
+/** ska korgen fastna just nu? @param {Elevator} e */
 export const panoDue = e => !!e.panoNext && e.mode === 'normal' && e.state === 'moving' && midFloor(e) && e.passengers.length > 0;
 /** Spelaren (eller slumpen) framkallar det: panoramahissen fastnar nästa gång den kör med folk mellan två våningar */
 export function triggerPano() {
@@ -47,14 +49,21 @@ export function triggerPano() {
   e.panoNext = true;
   log(`🔩 ${e.name} hackar på fasaden – det luktar hydraulolja…`, 'alert', e.color);
 }
-/** når stegbilen korgen? */
+/** når stegbilen korgen? @param {Elevator} e */
 export const ladderReach = e => e.pos <= LOBBY + LADDER_MAX;
 /** blåser det för mycket för att fira ner någon i rep? */
 export const ropeWindy = () => windAt() > WIND_STOP;
-/** vad räddningstjänsten väljer själv: rep när det är lugnt, annars stegbilen om den når – annars rep när vinden mojnar */
+/** vad räddningstjänsten väljer själv: rep när det är lugnt, annars stegbilen om den når – annars rep när vinden mojnar @param {Elevator} e */
 export function autoHow(e) { return !ropeWindy() || !ladderReach(e) ? 'rope' : 'ladder'; }
 
-/** Korgen tvärstannar på fasaden: de instängda väntar på räddningstjänsten. */
+/**
+ * Räddningen av de instängda i panoramahissen (S.pano). ph: stuck → rig → lower → done; how: 'rope'|'ladder';
+ * rider = den som är på väg ner just nu.
+ * @typedef {{ car: number, t0: number, ph: string, how: string|null, by: string, setup: string, crew: boolean, crewAt: number,
+ *   n: number, out: number, t: number, next: number, t1: number, toF: number, noted: string,
+ *   rider: { id: number, t0: number, dur: number, y0: number, y1: number, how: string }|null }} Pano
+ */
+/** Korgen tvärstannar på fasaden: de instängda väntar på räddningstjänsten. @param {Elevator} e */
 export function panoStick(e) {
   e.panoNext = false; e.breakNext = false; e.trapNext = false;
   bounceBoarders(e);
@@ -63,9 +72,9 @@ export function panoStick(e) {
   e.fault = { what: 'hydraulventilen har låst sig – korgen hänger fast på fasaden', kind: 'hydraul', tool: 'Byter hydraulventilen', t0: S.t,
     need: rand(20, 30), trapped: true, pano: true, n: e.passengers.length, nextTalk: S.t + rand(2, 4) };
   const high = TERRACE_F >= 0 && e.pos >= SEAM_F;
-  S.pano = { car: e.id, t0: S.t, ph: 'stuck', how: /** @type {string|null} */ (null), by: '', setup: '', crew: false, crewAt: S.t + PANO_CREW_S,
+  S.pano = { car: e.id, t0: S.t, ph: 'stuck', how: null, by: '', setup: '', crew: false, crewAt: S.t + PANO_CREW_S,
     n: e.passengers.length, out: 0, t: 0, next: 0, t1: 0, toF: high ? TERRACE_F : LOBBY, noted: '',
-    rider: /** @type {{ id: number, t0: number, dur: number, y0: number, y1: number, how: string }|null} */ (null) };
+    rider: null };
   S.stats.faults++; S.stats.panoStuck = (S.stats.panoStuck || 0) + 1;
   for (const p of e.passengers) pev(p, `Hiss ${e.name} tvärstannade utanpå huset – vi hänger på fasaden! (hydrauliken)`);
   log(`🛗 ${e.name} sitter fast på fasaden mellan två våningar – ${e.passengers.length} instängda, räddningstjänsten larmas`, 'alert', e.color);
@@ -145,7 +154,7 @@ export function panoTick() {
   pev(p, P.setup === 'rope' ? `Selen på – firas ner längs fasaden till ${toF === LOBBY ? 'gatan' : 'takterrassen'}` : 'Klättrar ut på stegen och ner mot gatan');
   if (p.cast) say(p, 'rope');
 }
-/** framme på terrassen eller gatan: vidare dit hen skulle */
+/** framme på terrassen eller gatan: vidare dit hen skulle @param {Person} p @param {Elevator} e */
 function land(P, e, p) {
   const f = p.ropeF ?? LOBBY;
   p.ropeF = undefined;
@@ -156,6 +165,7 @@ function land(P, e, p) {
   pev(p, `${P.setup === 'rope' ? 'Firad ner' : 'Nere på gatan'} efter ${Math.round(S.t - P.t0)} s på fasaden – ${rng() < 0.5 ? 'benen skakar' : 'aldrig mer panoramahiss'}`);
   log(`🧗 ${pn(p)} är nere ${f === LOBBY ? 'på gatan' : 'på takterrassen'} (${P.out}/${P.n})`, 'alert', e.color, p.id);
 }
+/** @param {Elevator} e */
 function finish(P, e) {
   P.ph = 'done'; P.t1 = S.t;
   e.fault.trapped = false; // (nu kan teknikern laga hydrauliken)
@@ -180,7 +190,7 @@ function spawnRescuer(i) {
   pev(p, `Kliver ur räddningsbilen med rep och sele · ${p.why}`);
   log(`🚒 ${pn(p)} (räddningstjänsten) går in`, 'person', null, p.id);
 }
-/** räddarens nästa beslut (rollogiken i people.js): taket för repet, gatan (entrén) för stegbilen, hem när det är klart */
+/** räddarens nästa beslut (rollogiken i people.js): taket för repet, gatan (entrén) för stegbilen, hem när det är klart @param {Person} p */
 export function rescueNext(p) {
   const P = S.pano;
   if (!P || P.ph === 'done') return [p.exitFloor, 'Alla är ute – tillbaka till räddningsbilen'];
@@ -191,7 +201,7 @@ export function rescueNext(p) {
 }
 
 // ---------- Var den som är på väg ner syns (grafiken och träffytorna) ----------
-/** x (figurens mitt) och y (huvudets överkant) i världen för den som firas ner eller klättrar, eller null */
+/** x (figurens mitt) och y (huvudets överkant) i världen för den som firas ner eller klättrar, eller null @param {Person} p */
 export function riderPos(p) {
   const P = S.pano;
   if (!P || !P.rider || P.rider.id !== p.id) return null;

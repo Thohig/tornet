@@ -15,6 +15,8 @@ import { cableCandidate, triggerCable, triggerFault, triggerHeat } from './servi
 import { startStorm } from './weather.js';
 import { startMedical } from './visits.js';
 import { PANO, panoCandidate, triggerPano } from './pano.js';
+/** @typedef {import('./elevators.js').Elevator} Elevator */
+/** @typedef {import('./people.js').Person} Person */
 
 // ---------- Incidenter ----------
 /** våningar där spelaren kan starta en brand: allt ovanför entrén utom takterrassen */
@@ -33,14 +35,16 @@ export function trigger(type, target = null) {
 }
 export function incidentStarted(floor) {
   S.stats.incidents++;
-  S.flash = 3;
   hooks.incident(floor);
 }
 // --- Brand ---
+/** Branden (S.fire) @typedef {{ floor: number, t0: number, mode: string, brigadeAt: number, brigade: boolean, outAt: number|null,
+ *   attackBy: number, smoked: number, evac: number, stairs0: number, assembled: number }} Fire */
+/** Brandkåren på plats (S.brigade): när, brandhissen och brandvåningen @typedef {{ t0: number, car: number|null, floor: number }} Brigade */
 /** Brand på våning f. Larmet återkallar hissarna automatiskt (auto = false: spelaren/testet väljer själv). */
 export function startFire(f = pick(OFFICE_FLOORS.slice(1)), auto = true) {
   if (S.fire) return;
-  S.fire = { floor: f, t0: S.t, mode: 'none', brigadeAt: S.t + rand(22, 30), brigade: false, outAt: /** @type {number|null} */ (null), attackBy: 0,
+  S.fire = { floor: f, t0: S.t, mode: 'none', brigadeAt: S.t + rand(22, 30), brigade: false, outAt: null, attackBy: 0,
     smoked: 0, evac: 0, stairs0: S.stats.stairs, assembled: 0 };
   log(`🔥 BRAND på våning ${fl(f)}! Larmet går – våning ${fl(f - 1)} och uppåt utryms`, 'alert');
   for (const p of S.people) {
@@ -191,7 +195,7 @@ function spawnFirefighter(tf, i, walk) {
   pev(p, `Springer in i entrén i rökdykarutrustning · ${p.why}`);
   log(`🚒 ${pn(p)} (brandman) går in`, 'person', null, p.id);
 }
-/** brandmannens nästa beslut (anropas från personernas rollogik) */
+/** brandmannens nästa beslut (anropas från personernas rollogik) @param {Person} p */
 export function ffNext(p) {
   const F = S.fire;
   if (!F) return [p.exitFloor, 'Branden är släckt – tillbaka till brandbilen'];
@@ -203,22 +207,27 @@ function brigadeTick() {
   if (S.brigade && !S.fire && !S.people.some(p => p.ff && !p.dead)) { S.brigade = null; log('🚒 Brandbilen åker iväg', 'alert'); }
 }
 // --- Strömavbrott ---
+/** Strömavbrottet (S.outage). busy = hissen som nödsänks just nu; för efterspelet: orsak, instängda, längst instängd …
+ * @typedef {{ t0: number, backAt: number, genAt: number|null, gen: boolean, auto: boolean, busy: number|null,
+ *   cause: string|null, trapIds: number[], maxTrap: number, stairs0: number, rescued: number, nextTalk: number }} Outage */
 export function startOutage() {
   if (!S.power) return;
   S.power = false;
   S.outage = { t0: S.t, backAt: S.t + rand(40, 55), genAt: null, gen: false, auto: false, busy: null,
     // för efterspelet: orsak, vilka som satt fast, längst instängd, trappresor och räddade hissar; när någon säger något
-    cause: /** @type {string|null} */ (null), trapIds: /** @type {number[]} */ ([]), maxTrap: 0, stairs0: S.stats.stairs, rescued: 0, nextTalk: S.t + rand(3, 6) };
+    cause: null, trapIds: [], maxTrap: 0, stairs0: S.stats.stairs, rescued: 0, nextTalk: S.t + rand(3, 6) };
   for (const e of S.elevators) { e.v = 0; if (e.state === 'moving') e.stuck = true; }
   for (const p of S.people) if (p.state === 'wait') p.assigned = null;
   rebuildPicks();
   log('⚡ STRÖMAVBROTT! Alla hissar stannar där de är', 'alert');
   incidentStarted(null);
 }
-/** hissar där folk sitter fast när strömmen går: i normal drift, eller på väg hem i en brandåterkallning */
+/** hissar där folk sitter fast när strömmen går: i normal drift, eller på väg hem i en brandåterkallning @param {Elevator} e */
 const stranded = e => e.mode === 'normal' || e.mode === 'recall';
+/** @param {Elevator} e */
 export const canRescue = e => !S.power && S.outage && S.outage.gen && S.outage.busy === null && stranded(e)
   && e.passengers.length > 0 && !(e.state === 'doors' && e.door >= 0.95);
+/** @param {Elevator} e */
 export function startRescue(e, how) {
   if (!canRescue(e)) return;
   // nödsänk till närmaste våning nedanför där hissen har dörrar (expresshissar har inga dörrar på vägen)
@@ -250,6 +259,7 @@ export function outageTick(dt) {
   }
   if (O.gen && O.auto && O.busy === null) {
     // ambulanspersonalen först, sedan den fullaste hissen
+    /** @param {Elevator} e */
     const medics = e => e.passengers.some(p => p.medic) ? 1 : 0;
     const c = S.elevators.filter(canRescue).sort((a, b) => medics(b) - medics(a) || b.passengers.length - a.passengers.length)[0];
     if (c) startRescue(c, 'auto');
@@ -366,7 +376,10 @@ const WARN_LOG = {
   cable: e => `🪢 Det knarrar i bärlinorna på ${e.name} – de är slitna (${Math.round(e.wear * 100)} %)…`,
   pano: e => `🔩 ${e.name} hackar på fasaden – det luktar hydraulolja…`,
 };
-/** förvarningen startar: incidenten bryter ut när den är slut */
+/** En incident i tidtabellen som ska bryta ut: typen och var (våning för brand, hiss för fel/värme/linbrott/panorama)
+ * @typedef {{ type: string, floor?: number, car?: number }} IncPick */
+/** Förvarningen som pågår (S.warn) @typedef {IncPick & { t0: number, until: number }} Warn */
+/** förvarningen startar: incidenten bryter ut när den är slut @param {IncPick} inc */
 function startWarn(inc) {
   const e = inc.car !== undefined ? S.elevators[inc.car] : null;
   S.warn = { ...inc, t0: S.t, until: S.t + WARN_S[inc.type] };
@@ -407,6 +420,7 @@ export function toggleAutoRescue(on = !(S.outage && S.outage.auto)) {
   if (!S.outage) return;
   S.outage.auto = on; log(`Auto-räddning ${on ? 'PÅ – ambulansen först, sedan fullaste hissen' : 'AV'}`, 'alert');
 }
+/** @param {Elevator} e */
 export function toggleOff(e, off = !e.off) {
   e.off = off;
   log(`${e.name} ${off ? 'tas ur drift – kör klart sina passagerare men tar inga nya' : 'är i drift igen'}`, 'alert', e.color);

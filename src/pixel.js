@@ -24,6 +24,8 @@ import { CREW_BY } from './crew.js';
 import { RAISE_T, RIG_T, ROPE_DX, riderPos } from './pano.js';
 import { BUS_LEN, BUS_STOP_X } from './tour.js';
 import { HAIR_NAT, PANTS, SHIRT, SKIN } from './people.js';
+/** @typedef {import('./elevators.js').Elevator} Elevator */
+/** @typedef {import('./people.js').Person} Person */
 
 const INK = PAL.ink;
 
@@ -113,6 +115,17 @@ function label(str, cx, y, fill = '#ffffff', color = INK, align = 'center') {
 let taken = [];
 const hits = (x, y, w, h) => taken.some(r => x < r.x + r.w && r.x < x + w && y < r.y + r.h && r.y < y + h);
 function reserve(x, y, w, h) { taken.push({ x, y, w, h }); }
+/** En ny bildruta: ritytan får fönstrets storlek, kameran läses av och platsbokningen töms.
+ *  Ger skalan (skärmpixlar per världsenhet) och ritytans storlek i låga pixlar. */
+function beginFrame() {
+  const s = VIEW.scale * VIEW.dpr;
+  const w = Math.ceil(cv.width / s / PX) + 1, h = Math.ceil(cv.height / s / PX) + 2;
+  if (lo.width !== w || lo.height !== h) { lo.width = w; lo.height = h; }
+  X0 = VIEW.x0; CY = Math.floor(VIEW.camY / PX);
+  g.setTransform(1, 0, 0, 1, 0, 0); g.imageSmoothingEnabled = false; g.globalAlpha = 1;
+  taken = [];
+  return { s, w, h };
+}
 /** närmaste lediga y för rutan (bokas), eller null om allt är upptaget */
 function place(x, y, w, h, steps = [0, -11, 11, -22]) {
   for (const d of steps) if (!hits(x, y + d, w, h)) { reserve(x, y + d, w, h); return y + d; }
@@ -388,6 +401,7 @@ function drawBusPx(T, gy, n) {
 // behöver (UX1). Taket på den breda delen blir en terrass, och under expresshissarna går garagerampen.
 const INSIDE_EL = EL.filter(e => !e.facade);
 // (dubbeldäck: schaktet går en våning högre än nedre däckets översta stopp – topF)
+/** (tar både hissen och dess data i EL) @param {{ id: number, minF: number }} e */
 const shaftTop = e => floorY(EL[e.id].topF + 1) + 4, shaftBot = e => floorY(e.minF) + 4;
 const BASE_Y = floorY(0) + 6, DECK_Y = floorY(TOP);
 const UX1 = TOWER_X1[TOP], SEAM_Y = floorY(SEAM_F); // tornets övre högerkant och terrassens golv
@@ -395,7 +409,7 @@ const UX1 = TOWER_X1[TOP], SEAM_Y = floorY(SEAM_F); // tornets övre högerkant 
 const COLS = [...new Set(INSIDE_EL.map(e => shaftX(e.id)))].sort((a, b) => a - b).map(x => ({ x, els: INSIDE_EL.filter(e => shaftX(e.id) === x) }));
 /** tornets högerkant i höjd med världens y */
 const towerX1At = y => (y < SEAM_Y ? UX1 : BX1);
-/** hissen ovanpå i samma schakt (staplade zoner), om någon */
+/** hissen ovanpå i samma schakt (staplade zoner), om någon @param {{ id: number, minF: number }} e */
 const stackedAbove = e => INSIDE_EL.find(o => o !== e && shaftX(o.id) === shaftX(e.id) && o.minF === EL[e.id].topF + 1);
 /** rampen ner till garaget: kolumnerna under expresshissarna, där inget schakt går under entrén */
 const RAMP_COLS = COLS.filter(c => c.els.every(e => e.minF >= LOBBY));
@@ -678,7 +692,7 @@ function drawLandingDoorsPx() {
 }
 /** Våningsdisplay ovanför hissdörren. KNAPPAR: riktning, korgens våning och hallknapparna ▲/▼.
  *  Destinationsstyrning (övriga lägen): det finns inga hallknappar – displayen är bredare och visar i stället
- *  vilka våningar hissen ska till med dem som väntar här (som "5 8 12" i verkliga hus). */
+ *  vilka våningar hissen ska till med dem som väntar här (som "5 8 12" i verkliga hus). @param {Elevator} e */
 function lantern(e, f) {
   const buttons = buttonsMode(), w = buttons ? 31 : 45;
   const x = X(shaftCX(e.id)) - Math.floor(w / 2), y = Y(floorY(f) - 108);
@@ -718,7 +732,7 @@ function lantern(e, f) {
     else { R(lx, ly, 5, 1, c); R(lx + 1, ly + 1, 3, 1, c); R(lx + 2, ly + 2, 1, 1, c); }
   }
 }
-/** målvåningarna för dem som väntar på våning f och har fått hissen e (i färdriktningen, närmast först) */
+/** målvåningarna för dem som väntar på våning f och har fått hissen e (i färdriktningen, närmast först) @param {Elevator} e */
 function destsAt(e, f) {
   const set = new Set();
   for (const p of S.people) if (p.floor === f && p.assigned === e.id && (p.state === 'wait' || p.state === 'boarding')) set.add(p.dest);
@@ -928,6 +942,15 @@ function drawEscalatorPx() {
 }
 
 let OCC = [], OCC_IN = [];
+/** hur många som är på varje våning (i hallen, respektive inne i rummen) – räknas en gång per bildruta */
+function countOcc() {
+  OCC = new Array(FLOORS).fill(0); OCC_IN = new Array(FLOORS).fill(0);
+  for (const p of S.people) {
+    if (p.dead) continue;
+    if (p.state !== 'ride' && p.state !== 'away' && p.state !== 'incar' && p.state !== 'assembly') OCC[p.floor]++;
+    if ((p.state === 'office' && !(p.spot && p.spot.win)) || p.state === 'instairs') OCC_IN[p.floor]++;
+  }
+}
 function drawHall(f, h) {
   const top = Y(floorY(f + 1) + 4), bot = Y(floorY(f) - 4), x0 = X(LAND_X0), x1 = X(INNER_X1);
   const th = FL[f].theme, acc = FL[f].acc;
@@ -996,7 +1019,8 @@ function drawHall(f, h) {
 // är chefen på rast eller på väg står stolen tom. Pratbubblan ritas i drawChiefPx.
 /** var chefens huvud ritades i den här bildrutan (låg upplösning), null = syns inte */
 let chiefAt = /** @type {{ x: number, y: number }|null} */ (null);
-/** den som sitter i ett fönster ritas med en egen figur (humöret efter larmet – personens eget p.mood rörs inte) */
+const resetChiefAt = () => { chiefAt = null; };
+/** den som sitter i ett fönster ritas med en egen figur (humöret efter larmet – personens eget p.mood rörs inte) @param {Person} p */
 const winFig = (p, mood) => ({ id: p.id, mood, child: false, smoked: false, look: p.look });
 const sitters = (f, win) => S.people.filter(p => !p.dead && p.floor === f && inWindow(p) && p.spot.win === win);
 function controlRoom(top, bot) {
@@ -1036,7 +1060,7 @@ function controlRoom(top, bot) {
     R(x + 1, my + 1, mw - 2, 1, e.color); // hissens färg upptill
     const cx = x + Math.floor(mw / 2);
     R(cx, my + 2, 1, mh - 3, '#1f3a28');
-    const k = clamp((e.pos - e.minF) / Math.max(1, e.topF - e.minF), 0, 1), dy = my + mh - 2 - Math.round(k * (mh - 4));
+    const k = clamp((e.pos - e.minF) / Math.max(1, EL[e.id].topF - e.minF), 0, 1), dy = my + mh - 2 - Math.round(k * (mh - 4));
     const dot = bad ? '#ff2d55' : e.hot ? '#ff9f1c' : e.mode === 'service' || e.hold ? '#ffe14d' : e.sleep ? '#2f6b47' : light(e.color, 0.35);
     R(cx - 1, dy - 1, 3, 2, dot);
   });
@@ -1371,7 +1395,7 @@ function floorOverlays(f, h) {
 }
 
 // ---------- Hissarna ----------
-/** korgens läge i lågupplösta pixlar, null om den är utanför bilden */
+/** korgens läge i lågupplösta pixlar, null om den är utanför bilden @param {Elevator} e */
 function carGeom(e) {
   // nivåfel: korgen står en aning för lågt eller högt när linorna töjer sig (överdrivet så att det syns)
   const lv = (e.level || 0) * 2.5 + (e.mode === 'broken' && e.fault && e.fault.kind === 'level' ? Math.sin(S.anim * 9) * 0.03 : 0);
@@ -1381,7 +1405,7 @@ function carGeom(e) {
   if (yt > lo.height + 40 || yb < -40) return null;
   return { x, cw, chh, ybOf, top, yb, yt };
 }
-/** motvikt och bärlinor: ritas före våningsdisplayerna (som sitter framför schakten) och korgarna */
+/** motvikt och bärlinor: ritas före våningsdisplayerna (som sitter framför schakten) och korgarna @param {Elevator} e */
 function drawRopesPx(e) {
   const G = carGeom(e);
   if (!G || e.facade) return;
@@ -1429,7 +1453,7 @@ function drawRopesPx(e) {
   }
 }
 /** Ett hissfel syns på sitt sätt: rök ur motorn, ERR på styrkortet, gnistor från bromsen, nivåpilar –
- *  och vid ett fel mellan två våningar sitter folk fast med nödljuset tänt och knackar */
+ *  och vid ett fel mellan två våningar sitter folk fast med nödljuset tänt och knackar @param {Elevator} e */
 function faultPx(e, x, cw, chh, yt, yb) {
   const F = e.fault, kind = F ? F.kind : '';
   if (F && F.trapped) {
@@ -1443,7 +1467,7 @@ function faultPx(e, x, cw, chh, yt, yb) {
   if (kind === 'brake' && Math.sin(S.anim * 9) > 0.2) for (const sx of [x - 2, x + cw + 1]) for (let n = 0; n < 3; n++) R(sx + Math.round(vrand(-1, 1)), yb - Math.round(vrand(2, chh - 2)), 1, 1, vpick(['#ffd23f', '#ffffff', '#ff9f1c']));
   if (kind === 'level') { const up = Math.sin(S.anim * 3) > 0; text(g, up ? '▲' : '▼', x + cw + 3, yt + chh / 2 - 3, '#ffe14d', 'left', 1, INK); }
 }
-/** Linbrott: hur långt ner i schaktet linorna når (0–1 av vägen till korgen), null = hela linor */
+/** Linbrott: hur långt ner i schaktet linorna når (0–1 av vägen till korgen), null = hela linor @param {Elevator} e */
 function ropesCut(e) {
   if (e.mode === 'snapped') return 0.22;
   if (e.mode !== 'broken' || !e.fault || !e.fault.cable) return null;
@@ -1452,7 +1476,7 @@ function ropesCut(e) {
 }
 /** en fransig linända (dir = 1 nedåt, -1 uppåt) */
 function frayed(x, y, dir = 1) { R(x - 1, y + dir, 1, 1, INK); R(x + 1, y + dir, 1, 1, INK); R(x, y + 2 * dir, 1, 1, '#7a6f9a'); }
-/** Linbrott: gnistor från fångapparaten, takluckan, stegen upp till schaktdörren och teknikern på korgtaket */
+/** Linbrott: gnistor från fångapparaten, takluckan, stegen upp till schaktdörren och teknikern på korgtaket @param {Elevator} e */
 function drawCableRescue(e, G) {
   const { x, cw, yt, yb } = G;
   const s = e.snap, F = e.mode === 'broken' && e.fault && e.fault.cable ? e.fault : null;
@@ -1493,8 +1517,9 @@ function drawCableRescue(e, G) {
     g.drawImage(personSprite(c, 'front', 0, 1, { blink: blinkOf(c) }), lx - 2, py);
   }
 }
-/** den som klättrar ut genom takluckan just nu (ritas på stegen, inte i korgen) */
+/** den som klättrar ut genom takluckan just nu (ritas på stegen, inte i korgen) @param {Elevator} e */
 const climber = e => (e.snap && e.snap.ph === 'evac' && S.t > e.snap.nextOut - e.snap.climb * 0.7 ? nextOut(e) : null);
+/** @param {Elevator} e */
 function drawCarPx(e) {
   const G = carGeom(e);
   if (!G) return;
@@ -1545,7 +1570,7 @@ function drawCarPx(e) {
   const talker = e.passengers.find(talking);
   if (talker) speech(talker, x + cw / 2, yt - 23);
 }
-/** En korg (dubbeldäck: k = 0 nedre, 1 övre) med sina passagerare och dörrar. head = översta korgen (namn och våg). */
+/** En korg (dubbeldäck: k = 0 nedre, 1 övre) med sina passagerare och dörrar. head = översta korgen (namn och våg). @param {Elevator} e */
 function cabinPx(e, k, x, yb, body, head) {
   const cw = CAR_W / PX, chh = CAR_H / PX, yt = yb - chh;
   R(x, yt + (e.facade ? 2 : 0), cw, chh - (e.facade ? 2 : 0), INK);
@@ -1633,9 +1658,10 @@ function cabinPx(e, k, x, yb, body, head) {
   R(ix, yb - 3, iw, 2, 'rgba(27,16,51,.6)');
   R(ix, yb - 3, Math.round(iw * fr), 2, kg > e.ratedKg ? '#ff2d55' : kg >= e.ratedKg * FULL_LOAD ? '#ff8c42' : '#7cf06b');
 }
+/** @param {Person} p */
 const blinkOf = p => Math.sin(S.anim * 0.9 + p.id * 1.7) > 0.985;
 /** brandmannens vattenstråle: en båge av droppar från munstycket mot lågorna (fx, fy = fötterna, figuren tittar åt vänster).
- *  Innan släckningen börjat (kåren väntar på att alla ska vara framme) sprutar bara den första. */
+ *  Innan släckningen börjat (kåren väntar på att alla ska vara framme) sprutar bara den första. @param {Person} p */
 function hoseSpray(p, fx, fy) {
   const F = S.fire;
   R(fx + 2, fy - 1, 26, 1, '#c81e3a'); // slangen bakåt längs golvet (mot trapphuset)
@@ -1648,6 +1674,7 @@ function hoseSpray(p, fx, fy) {
     R(x, y, k < 0.8 ? 2 : 1, 1, k < 0.85 ? '#9fd3ff' : '#ffffff');
   }
 }
+/** @param {Person} p */
 const hotOf = p => (p.mood || 0) === 2 && Math.sin(S.anim * 8 + p.id) > 0;
 
 // ---------- Folket i hallarna ----------
@@ -1711,7 +1738,7 @@ function drawHallPeople() {
 }
 /** hundar i koppel: bagagesorten → figurernas namn (gång, gång2, S = sitter, F = framifrån) */
 const DOGS = { pudel: 'pudel', raggig: 'ragg' };
-/** pudelns koppel (från handen till halsbandet) och ett "VOV!" då och då */
+/** pudelns koppel (från handen till halsbandet) och ett "VOV!" då och då @param {Person} p */
 function poodleExtras(p, fx, fy, dir, cg) {
   const hx = fx + dir * 2, hy = fy - 9;
   const cx = fx + cg.dx + (dir > 0 ? 6 : cg.c.width - 7), cy = fy - cg.c.height + 5;
@@ -1719,8 +1746,9 @@ function poodleExtras(p, fx, fy, dir, cg) {
   if (Math.sin(S.anim * 0.8 + p.id * 2.3) > 0.97) bark(fx + cg.dx + Math.round(cg.c.width / 2), fy - cg.c.height - 1);
 }
 function bark(cx, y) { text(g, 'VOV!', cx, y - 6, '#ffffff', 'center', 1, INK); }
+/** @param {Person} p */
 const talking = p => !!(p.say && S.t < p.say.until);
-/** pratbubbla med namn och replik, med en liten pil ner mot personen */
+/** pratbubbla med namn och replik, med en liten pil ner mot personen @param {Person} p */
 function speech(p, cx, y) { bubble(`${p.name}: "${p.say.text}"`, cx, y); }
 function bubble(str, cx, y0, fill = '#ffffff') {
   const s = plain(str);
@@ -1735,7 +1763,7 @@ function bubble(str, cx, y0, fill = '#ffffff') {
   g.restore();
   R(cx - 1, y0 + 9, 3, 1, INK); R(cx, y0 + 10, 1, 1, INK);
 }
-/** tankebubblan: mål och tilldelad hiss (n = hur många som tänker samma sak) */
+/** tankebubblan: mål och tilldelad hiss (n = hur många som tänker samma sak) @param {Person} p */
 function thought(p, x, y, n = 1) {
   // KNAPPAR: personen vet bara vilken knapp hen tryckt – ingen hiss är "hens"
   const buttons = buttonsMode() && !p.vip;
@@ -1756,8 +1784,10 @@ function thought(p, x, y, n = 1) {
 // ---------- Telefonsamtalet: teknikern ringer in en extra tekniker ----------
 /** var den som ringer ritades i den här bildrutan (låg upplösning), null = syns inte */
 let callAt = /** @type {{ x: number, y: number }|null} */ (null);
+const resetCallAt = () => { callAt = null; };
+/** @param {Person} p */
 const calling = p => !!S.techCall && S.techCall.by === p.id && S.t < S.techCall.until;
-/** mobiltelefonen vid örat; (px, py) = figurens övre vänstra hörn, dir = sidovyns riktning (0 = framifrån) */
+/** mobiltelefonen vid örat; (px, py) = figurens övre vänstra hörn, dir = sidovyns riktning (0 = framifrån) @param {Person} p */
 function phoneOn(p, px, py, dir = 0) {
   if (!calling(p)) return;
   const hx = dir ? px + PERSON_W / 2 + (dir > 0 ? 1 : -3) : px + PERSON_W - 4, hy = py + 3;
@@ -1807,6 +1837,7 @@ function drawSelectionPx() {
   g.drawImage(ARROW(), hx - 3, hy - 7);
   trackNote(p, hx, hy - 9, false);
 }
+/** @param {Person} p */
 function trackNote(p, x, yb, side) {
   const [lab, col] = stateInfo(p);
   const name = plain(`${p.name}${p.state === 'instairs' ? ' (i trapphuset)' : ''}`), detail = plain(noteDetail(p)), sl = plain(lab);
@@ -1870,7 +1901,7 @@ const ROLE_GAGS = {
   'brandman': ['Ur vägen!', 'Rökdykare på väg upp', 'Släckt här – vidare!'],
   'lastare': [],
 };
-/** vad den här personen kan säga i rummet, eller null = kontorets/våningens vanliga repliker */
+/** vad den här personen kan säga i rummet, eller null = kontorets/våningens vanliga repliker @param {Person} p */
 function workLines(p) {
   if (p.crewId) { const L = CREW_BY[p.crewId].lines; return p.onBreak || (p.spot && p.spot.brk) ? L.break : L.post; }
   return p.role ? ROLE_GAGS[p.role] || [] : null;
@@ -1917,6 +1948,7 @@ function drawRoofPx() {
   box(X(SHAFT_X0 - 8), Y(ROOF_Y - 50), Math.round((UX1 - SHAFT_X0 + 4) / PX), 24, PAL.machine);
   R(X(SHAFT_X0 - 8) + 1, Y(ROOF_Y - 50) + 1, Math.round((UX1 - SHAFT_X0 + 4) / PX) - 2, 1, PAL.machineHi);
   text(g, 'MASKINRUM', X(SHAFT_X0), Y(ROOF_Y - 50) + 2, INK);
+  /** @param {Elevator} e */
   const wheel = (e, cx, cy) => {
     g.drawImage(wheelSprite(e.color, Math.floor(((e.distance * 2.2) % (Math.PI / 3)) / (Math.PI / 3) * 6)), X(cx) - 8, Y(cy) - 8);
     // varm motor: det ångar och lyser rött i maskinen; extrafläkten snurrar bredvid
@@ -2209,19 +2241,10 @@ function drawFxPx(dt) {
 
 // ---------- Hela bilden ----------
 export function renderPixel(dt) {
-  const s = VIEW.scale * VIEW.dpr;
-  const w = Math.ceil(cv.width / s / PX) + 1, h = Math.ceil(cv.height / s / PX) + 2;
-  if (lo.width !== w || lo.height !== h) { lo.width = w; lo.height = h; }
-  X0 = VIEW.x0; CY = Math.floor(VIEW.camY / PX);
-  g.setTransform(1, 0, 0, 1, 0, 0); g.imageSmoothingEnabled = false; g.globalAlpha = 1;
-  callAt = null; chiefAt = null; taken = [];
+  const { s, w, h } = beginFrame();
+  resetCallAt(); resetChiefAt();
   const hr = hour();
-  OCC = new Array(FLOORS).fill(0); OCC_IN = new Array(FLOORS).fill(0);
-  for (const p of S.people) {
-    if (p.dead) continue;
-    if (p.state !== 'ride' && p.state !== 'away' && p.state !== 'incar' && p.state !== 'assembly') OCC[p.floor]++;
-    if ((p.state === 'office' && !(p.spot && p.spot.win)) || p.state === 'instairs') OCC_IN[p.floor]++;
-  }
+  countOcc();
   drawSkyAll(hr);
   drawGroundPx();
   drawShell(hr);

@@ -12,6 +12,7 @@ import { foldInc, select } from './hud.js';
 import { toggleSound, unlockSound } from './sound.js';
 import { toggleMusic } from './music.js';
 import { toggleAuto } from './director.js';
+/** @typedef {import('./people.js').Person} Person */
 
 // ---------- Uppspelning och inställningar ----------
 export const SPEEDS = [0.25, 0.5, 1, 2];
@@ -22,7 +23,7 @@ export function cycleStrategy() { act('strategy', STRATS[(STRATS.indexOf(S.strat
 export function toggleTags() { S.tags = !S.tags; }
 
 // ---------- Följa ----------
-/** låt kameran följa en person (och följ hen i panelen) */
+/** låt kameran följa en person (och följ hen i panelen) @param {Person} p */
 export function followPerson(p) {
   if (S.sel !== p) select(p); else { VIEW.camSel = true; S.followHold = 0; }
   VIEW.follow = null; VIEW.camFloor = null; VIEW.auto = false;

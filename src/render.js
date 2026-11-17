@@ -10,6 +10,7 @@ import { renderPixel } from './pixel.js';
 import { PX } from './pixart.js';
 import { PERSON_H, PERSON_W } from './pixpeople.js';
 import { windAt } from './weather.js';
+/** @typedef {import('./people.js').Person} Person */
 
 /** platser i korgen: bakre raden (0–3) och främre raden (4–7), utspridda över korgens bredd */
 export function carSlotX(i) { return i < 4 ? 12 + i * (CAR_W - 24) / 3 : 16 + (i - 4) * (CAR_W - 32) / 3; }
@@ -17,10 +18,10 @@ export function carSlotX(i) { return i < 4 ? 12 + i * (CAR_W - 24) / 3 : 16 + (i
 const CORNERS = [0, 3, 1, 2, 4, 7, 5, 6];
 export const carSlot = i => CORNERS[i % 8];
 /** syns personen på sin plats (spot.win): i ett fönster i hallens bakvägg (kontrollrummet, personalrummet),
- *  bakom receptionsdisken, i gondolen eller på takterrassen? ('hall' = står i hallen och ritas som folket där) */
+ *  bakom receptionsdisken, i gondolen eller på takterrassen? ('hall' = står i hallen och ritas som folket där) @param {Person} p */
 export const inWindow = p => p.state === 'office' && !!(p.spot && p.spot.win) && p.spot.win !== 'hall';
 /** var den som syns på sin plats ritas: x = figurens mitt och y = huvudets överkant, i världens koordinater
- *  (pixel.js ritar figuren just där – samma geometri som gondolen och terrassen ritas med) */
+ *  (pixel.js ritar figuren just där – samma geometri som gondolen och terrassen ritas med) @param {Person} p */
 export function winPos(p) {
   const s = p.spot;
   switch (s.win) {
@@ -30,6 +31,7 @@ export function winPos(p) {
     default: return { x: s.x, y: surf(p.floor) - PX * (PERSON_H + (s.k === 'stand' ? 4 : s.win === 'control' ? -5 : -1)) };
   }
 }
+/** @param {Person} p */
 export function personHead(p) {
   // var personens huvud syns just nu (för markörer & träffytor)
   if (p.dead) return null;
@@ -64,11 +66,12 @@ const SEEN = new WeakMap();
 const lerp = (a, b, t) => a + (b - a) * t;
 /** var personen syns i hallen just nu: { x, a, dir } (a = synlighet 0–1), eller null om hen är "bakom" korridoren */
 /** brandmännen på brandvåningen går inte in i rummen i bilden: de står i hallen med slangen riktad mot lågorna
- *  vid korridoren (x i hallen, annars null). Gäller tills de går därifrån, även en stund efter att det är släckt. */
+ *  vid korridoren (x i hallen, annars null). Gäller tills de går därifrån, även en stund efter att det är släckt. @param {Person} p */
 export function ffSpot(p) {
   if (!p.ff || !S.brigade || p.floor !== S.brigade.floor || (p.state !== 'office' && p.state !== 'exiting')) return null;
   return DOOR_X + 76 + (p.id % 3) * 22;
 }
+/** @param {Person} p */
 export function landPos(p) {
   let r = SEEN.get(p);
   // står på en plats i hallen (personalen vid godisautomaten, på perrongen, brandmännen som släcker): syns där

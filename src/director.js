@@ -11,6 +11,7 @@ import { VIEW, camMax, camTarget, keepX, seeH } from './view.js';
 import { personHead } from './render.js';
 import { cleanerAt } from './hoist.js';
 import { BUS_NAME } from './tour.js';
+/** @typedef {import('./people.js').Person} Person */
 
 const HOLD = 16;     // sekunder (verklig tid) en vanlig tagning varar
 const MIN_HOLD = 10; // så kort får en tagning bli innan något viktigare får klippa in
@@ -66,7 +67,9 @@ let lastAnim = 0, cleanerShown = -1e9, lastDay = -1;
 /** nödsänkningar: hiss-id → när regissören först såg den och var den slutade (för tagningen efteråt) */
 const rescues = /** @type {Map<number, { t0: number, floor: number, t1: number|null, seen: number }>} */ (new Map());
 const RESCUE_AFTER = 4; // sekunder (speltid) kameran stannar kvar medan de räddade kliver ut
+/** @param {Person} p */
 const name1 = p => p.name.split(' ')[0];
+/** @param {Person} p */
 const visible = p => { const h = personHead(p); return h && !h.hidden; };
 
 /** Allt som är värt att titta på just nu, med poäng. */

@@ -8,6 +8,8 @@ import { liftsAvailable, pev, pn, toStairs, elevatorAllows } from './people.js';
 import { buttonsMode, mistakeRate, pressHallButton } from './buttons.js';
 import { moveKwh, heatMul } from './service.js';
 import { windMul } from './weather.js';
+/** @typedef {import('./elevators.js').Elevator} Elevator */
+/** @typedef {import('./people.js').Person} Person */
 
 // ---------- Destinationsstyrning ----------
 // Varje hiss har e.pick: { '3u': antal } = personer den ska hämta på våning 3 som ska uppåt.
@@ -20,6 +22,7 @@ export function rebuildPicks() {
     for (const p of S.people) if ((p.state === 'ride' || p.state === 'boarding') && p.car && p.car.deck2) p.car.deckN[p.deck || 0]++;
     for (const e of deck2) e.deckFull = e.deckN.map(n => n >= CAP);
   }
+  /** @param {Elevator} e */
   const roomFor = (e, f) => !e.deck2 || !e.deckFull[deckOf(e, f)];
   // KNAPPAR: hissen vet bara om anropen i hallen (ett per våning och riktning), inte hur många som väntar
   const buttons = buttonsMode();
@@ -32,18 +35,24 @@ export function rebuildPicks() {
     e.pickKg += EST_KG; // styrningen vet inte vad väntande väger – bara vågen i korgen mäter på riktigt
   }
 }
+/** @param {Elevator} e */
 export function assignedTo(e, f, d) { return (e.pick[f + K(d)] || 0) > 0; }
+/** @param {Elevator} e */
 export function pickTotal(e) { let n = 0; for (const k in e.pick) n += e.pick[k]; return n; }
+/** @param {Elevator} e */
 export function stopFloors(e) {
   const s = new Set(e.carCalls);
   for (const k in e.pick) s.add(parseInt(k, 10));
   return [...s];
 }
+/** @param {Elevator} e */
 export const aheadOf = (e, f, d) => stopFloors(e).some(g => (g - f) * d > 0);
 // Vikt i hissen just nu: passagerare + de som håller på att kliva in
 // Uppskattad vikt per väntande person (systemet kan inte väga folk innan de kliver på)
 export const EST_KG = 75;
+/** @param {Person} p */
 export const personKg = p => p.kg + (p.cargo ? p.cargo.kg : 0);
+/** @param {Elevator} e */
 export function loadKg(e) {
   let kg = e.resKg || 0;
   for (const p of e.passengers) kg += personKg(p);
@@ -51,6 +60,7 @@ export function loadKg(e) {
 }
 // Vikt som syns på vågen: bara de som redan står i korgen (inte de som är på väg in).
 // Används av grafiken – lastreglerna använder loadKg.
+/** @param {Elevator} e */
 export function cabinKg(e) {
   let kg = 0;
   for (const p of e.passengers) kg += personKg(p);
@@ -58,31 +68,34 @@ export function cabinKg(e) {
   if (e.mode === 'lift' && S.hoist && S.hoist.liftItem !== null && S.move) kg += S.move.items[S.hoist.liftItem].kg;
   return kg;
 }
+/** @param {Elevator} e */
 export const slotsFull = e => e.passengers.length + e.reserved >= e.cap;
 // "Full" = alla platser tagna eller full last (≥ 80 % av märklasten): hissen tar inga nya hämtningar
+/** @param {Elevator} e */
 export const isFull = e => slotsFull(e) || loadKg(e) >= e.ratedKg * FULL_LOAD;
 /** Går hissen både till personens våning och till målet (för den här delresan)? */
 // (en hiss i oberoende drift, som varuhissen på flyttdagen, tar bara flyttgubbarna – som annars får åka varuhissen som alla andra;
 // ambulansen har förtur även där; i zonläge går andra hissar också, men brandmännen åker bara brandhissen)
+/** @param {Person} p @param {Elevator} e */
 export const canTake = (e, p) => e.legs.some(l => l.includes(p.floor) && l.includes(p.dest)) && elevatorAllows(e, p) && (!e.indep || !!(p.mover || p.medic || p.ff))
   && (!p.ff || e.ffCar || !S.elevators.some(x => x.ffCar && x.mode === 'normal')); // (brandmännen åker brandhissen när det finns en)
-/** Dubbeldäck: korgens läge när den tar folk på våning f (övre däcket står en våning högre). Annars f. */
+/** Dubbeldäck: korgens läge när den tar folk på våning f (övre däcket står en våning högre). Annars f. @param {Elevator} e */
 export const posOf = (e, f) => (e.deck2 && e.upper.has(f) ? f - 1 : f);
-/** vilket däck den som kliver på på våning f åker (0 = nedre, 1 = övre) */
+/** vilket däck den som kliver på på våning f åker (0 = nedre, 1 = övre) @param {Elevator} e */
 export const deckOf = (e, f) => (e.deck2 && e.upper.has(f) ? 1 : 0);
-/** Får hissen stanna med korgen på g? (brandzonen – för dubbeldäck gäller det båda däcken) */
+/** Får hissen stanna med korgen på g? (brandzonen – för dubbeldäck gäller det båda däcken) @param {Elevator} e */
 export const allowedPos = (e, g) => (e.ffCar ? ffAllowed(g) : allowed(g)) && (!e.deck2 || allowed(g + 1));
 /** Får hissen släppa av p vid målet? (dubbeldäck: i zonläge kan E vara tillåten men inte mellanplanet ovanför,
- *  och då stannar korgen inte där – målet måste läggas om) */
+ *  och då stannar korgen inte där – målet måste läggas om) @param {Person} p @param {Elevator} e */
 export const allowedDest = (e, p) => allowedPos(e, posOf(e, p.dest));
-/** hissen tar inga nya resenärer: ur drift (spelaren), stängd för vinden eller överhettad motor */
+/** hissen tar inga nya resenärer: ur drift (spelaren), stängd för vinden eller överhettad motor @param {Elevator} e */
 export const benched = e => !!(e.off || e.windLock || e.hot);
 // ---------- Tillgänglighet ----------
 // Alla frågor om en hiss kan ta folk utgår från outReason. Undantagen är uttalade:
 //   operational – styrningen: även strömmen och nattvilan (en sovande hiss väcks, den tilldelas inte)
 //   servesNow   – ruttval, nattläge, strandade: kan p få hissen (VIP-lås, zon, last), ström och vila oräknat
 //   outLong     – ruttvalet planerar bara runt längre avbrott; brandlägena sköter allowed() och trappan
-/** Varför tar hissen inga nya resenärer? '' = den tar. Strömmen, nattvilan, VIP-låset och oberoende drift räknas inte här. */
+/** Varför tar hissen inga nya resenärer? '' = den tar. Strömmen, nattvilan, VIP-låset och oberoende drift räknas inte här. @param {Elevator} e */
 export function outReason(e) {
   if (e.mode !== 'normal') return e.mode;
   if (e.hot) return 'hot';
@@ -99,14 +112,15 @@ export const OUT_TEXT = /** @type {Record<string, string>} */ ({
   broken: 'gick sönder', service: 'är på service', recall: 'kallas ner av brandlarmet', locked: 'är låst (brand)',
   rescue: 'nödsänks', dead: 'är strömlös', snapped: 'fick linbrott', lift: 'kör ett flyttlass', liftwant: 'ska köra ett flyttlass',
 });
+/** @param {Elevator} e */
 export const operational = e => S.power && !outReason(e) && !e.sleep;
-/** kan p få hissen just nu (bortsett från strömmen och nattvilan)? */
+/** kan p få hissen just nu (bortsett från strömmen och nattvilan)? @param {Person} p @param {Elevator} e */
 export const servesNow = (e, p) => !outReason(e) && !(e.vipLock && !prio(p)) && canTake(e, p);
-/** hissen är borta en längre stund (fel, service, avstängd, vind, värme) – ruttvalet tar en annan väg */
+/** hissen är borta en längre stund (fel, service, avstängd, vind, värme) – ruttvalet tar en annan väg @param {Elevator} e */
 export const outLong = e => e.mode === 'broken' || e.mode === 'snapped' || e.mode === 'service' || e.hold || benched(e);
-/** har egen nyckel/prioritet och använder aldrig hallknapparna (VIP-gruppen, ambulansen, flyttgubbarna) */
+/** har egen nyckel/prioritet och använder aldrig hallknapparna (VIP-gruppen, ambulansen, flyttgubbarna) @param {Person} p */
 export const keyed = p => !!(p.vip || p.medic || p.mover || p.ff || p.rescue);
-/** får en hiss för sig själva (VIP-läge): VIP-gruppen och ambulanspersonalen */
+/** får en hiss för sig själva (VIP-läge): VIP-gruppen och ambulanspersonalen @param {Person} p */
 export const prio = p => !!(p.vip || p.medic);
 /** strategier som använder kostnadsfunktionen (Smart och dess varianter) */
 export const costBased = (k = S.strategy) => k === 'smart' || k === 'peak' || k === 'eco';
@@ -125,7 +139,7 @@ export const PEAK_HOLD = 3.2;
 // är på väg, en av dem möter tåget, och vid perrongen väntar hissen in alla som kliver av.
 /** står ett tåg inne eller är det strax här? */
 export const trainNear = () => STATION >= 0 && !S.trainDone && (S.train ? S.train.state !== 'out' : S.trainNext > 0 && S.trainNext - S.t < 4);
-/** UPP-läge: en hiss som öppnar i sin hemvåning (entrén/sky lobbyn) väntar lite längre så att fler hinner med */
+/** UPP-läge: en hiss som öppnar i sin hemvåning (entrén/sky lobbyn) väntar lite längre så att fler hinner med @param {Elevator} e */
 export function peakHold(e, f) {
   if (S.strategy !== 'peak' || S.peakMode !== 'upp' || e.dir < 0 || e.freight) return 0;
   const room = e.passengers.length + e.reserved < e.cap / 2;
@@ -136,7 +150,7 @@ export function peakHold(e, f) {
   if (e.stops.has(STATION) && trainNear()) return 0;
   return room ? PEAK_HOLD : 0;
 }
-/** UPP-läge: ska den här lediga hissen möta nästa tåg? (en åt gången, och bara när tåget snart är här) */
+/** UPP-läge: ska den här lediga hissen möta nästa tåg? (en åt gången, och bara när tåget snart är här) @param {Elevator} e */
 function meetTrain(e) {
   // (panoramahissen möter inte tåget – den ska finnas i entrén för turisterna)
   if (STATION < 0 || S.trainDone || S.train || !e.stops.has(STATION) || e.freight || e.facade || !(S.trainNext - S.t < 8)) return false;
@@ -146,7 +160,7 @@ function meetTrain(e) {
 // ---------- Energisparläget ----------
 // Energin räknas i kWh och vägs mot väntetid: 1 kWh ≈ ECO_S_PER_KWH sekunders väntan.
 export const ECO_S_PER_KWH = 400, ECO_START_S = 8;
-/** Extra energi för att hiss e ska hämta p: tomkörning till p (med hissens last), om den inte redan är på väg förbi */
+/** Extra energi för att hiss e ska hämta p: tomkörning till p (med hissens last), om den inte redan är på väg förbi @param {Person} p @param {Elevator} e */
 export function fetchKwh(e, p) {
   const stops = stopFloors(e);
   const f = posOf(e, p.floor), d = Math.sign(f - e.pos);
@@ -154,11 +168,12 @@ export function fetchKwh(e, p) {
   if (e.dir === d && stops.some(g => (g - f) * d >= 0)) return 0; // åker ändå dit
   return moveKwh(loadKg(e), e.ratedKg, f - e.pos);
 }
-/** energikostnaden i sekunder (bara för energisparläget) */
+/** energikostnaden i sekunder (bara för energisparläget) @param {Person} p @param {Elevator} e */
 export function ecoCost(e, p) {
   const idle = !stopFloors(e).length && !e.passengers.length;
   return ECO_S_PER_KWH * fetchKwh(e, p) + (idle ? ECO_START_S : 0);
 }
+/** @param {Elevator} e */
 export const pickersAt = (e, f, d) => S.people.filter(p => p.state === 'wait' && p.assigned === e.id && posOf(e, p.floor) === f && p.dir === d);
 // Får hissarna köra till våning f? (påverkas av brandläget)
 export function allowed(f) {
@@ -167,7 +182,7 @@ export function allowed(f) {
   if (S.fire.mode === 'zone') return f <= S.fire.floor - 2;
   return true;
 }
-/** Högsta våning hissen går till som ligger utanför brandzonen (null om ingen – t.ex. höghissar vid brand lågt ner). */
+/** Högsta våning hissen går till som ligger utanför brandzonen (null om ingen – t.ex. höghissar vid brand lågt ner). @param {Elevator} e */
 export function safeFloor(e) {
   let best = null;
   for (const f of e.stops) if (allowedPos(e, f) && (best === null || f > best)) best = f;
@@ -175,7 +190,7 @@ export function safeFloor(e) {
 }
 /** brandkåren (brandmännen och brandhissen) får köra upp till två våningar under branden, även under återkallningen */
 export const ffAllowed = f => !S.fire || f <= S.fire.floor - 2;
-/** får personen åka hiss mellan våningarna just nu? */
+/** får personen åka hiss mellan våningarna just nu? @param {Person} p */
 export const allowedFor = (p, f) => (p.ff ? ffAllowed(f) : allowed(f));
 export const inFireZone = f => !!S.fire && f > LOBBY && f >= S.fire.floor - 1;
 
@@ -196,7 +211,7 @@ export function learnBlend() {
   S.learnMem = t.map((row, b) => row.map((v, f) => Math.round((m ? (m[b][f] + v) / 2 : v) * 10) / 10));
 }
 /** Var brukar det bli kö den närmaste timmen? Den våning (som hissen går till) med störst väntad efterfrågan
- *  och som ingen annan hiss i gruppen redan står vid eller kör till – eller null. */
+ *  och som ingen annan hiss i gruppen redan står vid eller kör till – eller null. @param {Elevator} e */
 export function learnedFloor(e, h) {
   const m = S.learnMem;
   if (!m) return null;
@@ -212,6 +227,7 @@ export function learnedFloor(e, h) {
   return best;
 }
 
+/** @param {Person} p */
 export function requestRide(p) {
   pev(p, `Tänker: jag ska till ${fl(p.dest)} ${ARR(p.dir)}`);
   if (!keyed(p)) {
@@ -239,9 +255,9 @@ export function requestRide(p) {
 }
 
 // ---------- Kostnadsberäkning ----------
-/** Styrningen antecknar när den tror att hissen är framme (jämförs med verkligheten när personen kliver på). */
+/** Styrningen antecknar när den tror att hissen är framme (jämförs med verkligheten när personen kliver på). @param {Person} p @param {Elevator} e */
 function predict(p, e) { p.etaAt = S.t + eta(e, p.floor, p.dir); }
-/** anropas när p kliver på: hur fel blev förutsägelsen? (positivt = hissen kom senare än väntat) */
+/** anropas när p kliver på: hur fel blev förutsägelsen? (positivt = hissen kom senare än väntat) @param {Person} p */
 export function etaOutcome(p) {
   if (p.etaAt === undefined) return;
   const err = S.t - p.etaAt;
@@ -250,12 +266,12 @@ export function etaOutcome(p) {
 }
 const travelV = (dist, v) => (dist <= 0.001 ? 0 : dist / v + (v / ACC) * 0.5);
 export function travel(dist, v = VMAX) { return dist <= 0.001 ? 0 : dist / v + (v / ACC) * 0.5; }
-/** Toppfarten som kostnadsstyrningen räknar med: den vet om svajläget och varma motorer – de enkla lägena gör det inte */
+/** Toppfarten som kostnadsstyrningen räknar med: den vet om svajläget och varma motorer – de enkla lägena gör det inte @param {Elevator} e */
 export const etaV = e => (costBased() ? VMAX * windMul(e) * heatMul(e) : VMAX);
 // Ett stopp tar längre tid ju fler som kliver på och av (uppmätt: ≈ 0,6 s per påstigande, 0,25 s per avstigande
 // utöver dörrarna). Styrningen vet hur många den ska hämta (e.pick) och vart passagerarna ska.
 export const BOARD_S = 0.6, ALIGHT_S = 0.25;
-/** extra sekunder vid varje stopp (korgens läge) för dem som kliver på och av där */
+/** extra sekunder vid varje stopp (korgens läge) för dem som kliver på och av där @param {Elevator} e */
 function stopLoad(e) {
   /** @type {Map<number, number>} */
   const m = new Map();
@@ -263,6 +279,7 @@ function stopLoad(e) {
   for (const p of e.passengers) { const g = posOf(e, p.dest); m.set(g, (m.get(g) || 0) + ALIGHT_S); }
   return m;
 }
+/** @param {Elevator} e */
 export function eta(e, f, d) {
   f = posOf(e, f); // (dubbeldäck: personens våning → korgens läge)
   const stops = stopFloors(e);
@@ -292,6 +309,7 @@ export function eta(e, f, d) {
   for (const g of stops) s += sc(g);
   return t + travel(Math.abs(ext - pos)) + travel(Math.abs(ext - f)) + s;
 }
+/** @param {Person} p @param {Elevator} e */
 export function personCost(e, p) {
   const stops = stopFloors(e);
   let c = eta(e, p.floor, p.dir);
@@ -317,6 +335,7 @@ export function personCost(e, p) {
   if (S.strategy === 'eco') c += ecoCost(e, p);
   return c;
 }
+/** @param {Person} p */
 export function costLine(p, chosenId) {
   return S.elevators.map(e => {
     if (!operational(e)) return `${e.name} –`;
@@ -325,6 +344,7 @@ export function costLine(p, chosenId) {
     return e.id === chosenId ? `<u>${t} ✓</u>` : t;
   }).join(' · ');
 }
+/** @param {Person} p */
 export function dispatchPerson(p) {
   if (!allowedFor(p, p.floor) || !allowedFor(p, p.dest)) {
     toStairs(p, S.fire && S.fire.mode === 'recall' ? 'Brandåterkallning – alla hissar avstängda, tar trapporna' : 'Hissarna kör inte hit pga branden – tar trapporna');
@@ -386,6 +406,7 @@ export function reoptimize() {
   }
 }
 // Var hissarna parkerar när de är lediga (bara Smart). Varje hiss har egna parkeringsvåningar i BUILDING.
+/** @param {Elevator} e */
 export function parkFloor(e, h) {
   const p = /** @type {{ day?: string, lunch?: string, evening?: string }} */ (EL[e.id].park || {});
   const at = label => (label !== undefined ? idx(label) : e.home);
@@ -410,6 +431,7 @@ function demand(f, h) {
   const m = S.learnMem;
   return m ? m[learnBin(h)][f] + 0.5 * m[learnBin(h + 1)][f] : 0;
 }
+/** @param {Elevator} e */
 export function maybePark(e) {
   if (benched(e) || e.indep || e.medicHold || e.zoneLock || e.hold || e.sleep) return;
   // Energisnål: parkerar bara uppåt, dit det brukar bli kö – en tom hiss uppåt återmatar el

@@ -4,12 +4,13 @@ import { fl } from './util.js';
 import { FL } from './config.js';
 import { S } from './state.js';
 import { eta } from './dispatch.js';
+/** @typedef {import('./people.js').Person} Person */
 
 /** personalens poster (crew.js): läget när de sitter där
  * @type {Record<string, [string, string]>} */
 const POST_LABEL = { chief: ['VID KONTROLLBORDET', '#2a5db0'], producer: ['VID BEVAKNINGEN', '#2a5db0'], reception: ['I RECEPTIONEN', '#bd6d91'],
   gondola: ['I GONDOLEN', '#2a5db0'], terrace: ['PÅ TERRASSEN', '#ff8c42'] };
-/** @returns {[string, string]} etikett och färg för personens läge */
+/** @returns {[string, string]} etikett och färg för personens läge @param {Person} p */
 export function stateInfo(p) {
   if (p.dead) return ['HAR GÅTT', '#8d96c9'];
   switch (p.state) {
@@ -35,7 +36,7 @@ export function stateInfo(p) {
   return ['?', '#ffffff'];
 }
 
-/** En rad om vad personen gör just nu – till spårlappen som följer personen i bilden */
+/** En rad om vad personen gör just nu – till spårlappen som följer personen i bilden @param {Person} p */
 export function noteDetail(p) {
   if (p.dead) return 'Har lämnat huset';
   const via = p.goal !== p.dest && p.state !== 'office' ? ` (byter på ${fl(p.dest)})` : '';

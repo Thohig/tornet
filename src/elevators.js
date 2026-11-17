@@ -13,8 +13,34 @@ import { doorHold, politeHold } from './cast.js';
 import { liftStep } from './hoist.js';
 import { windMul } from './weather.js';
 import { peakHold } from './dispatch.js';
+/** @typedef {import('./people.js').Person} Person */
 
 // ---------- Hissar ----------
+/** Ett hissfel som väntar på tekniker (service.js) @typedef {{ what: string, t0: number, need: number, kind?: string, tool?: string, cable?: boolean, exitF?: number, done?: number, trapped?: boolean, n?: number, nextTalk?: number, pano?: boolean, crank?: { to: number, by: number, open: boolean } }} Fault */
+/** Linbrottet: fall → fast → utrymning (service.js) @typedef {{ ph: string, t0: number, stopAt: number, caughtT: number, exitF: number, n: number, out: number, nextOut: number, climb: number }} Snap */
+/**
+ * En hiss. Läget (`pos`, `floor`, `carCalls`, `pick`, `stops`) räknas i nedre däckets våningar,
+ * `serves` i riktiga våningar (se posOf/deckFloor i dispatch.js). Grundfälten sätts i `makeElevator`,
+ * de valfria av delsystemen när de behövs.
+ * @typedef {{
+ *   id: number, name: string, color: string, pos: number, v: number, dir: number, pick: Record<string, number>,
+ *   serves: Set<number>, stops: Set<number>, upper: Set<number>, legs: number[][], deck2: boolean, minF: number, maxF: number,
+ *   home: number, group: string, ratedKg: number, freight: boolean, express: boolean, facade: boolean, terraceF: number,
+ *   liftWant: boolean, state: string, doorPhase: 'opening'|'open'|'closing'|null, door: number, dwell: number, dwellNeed: number,
+ *   floor: number, passengers: import('./people.js').Person[], reserved: number, carCalls: Set<number>,
+ *   parkTarget: number|null, idleTime: number, distance: number, trips: number, lastOff: number, lastOn: number,
+ *   target: number|null, targetKind: string|null, fullFlash: number, mode: string, off: boolean, rs: string|null,
+ *   rescueTarget: number, snapNext: boolean, snap: Snap|null, wear: number, wearTrips: number, wearDist: number,
+ *   fault: Fault|null, hold: boolean, homeT: number, techId: number|null, breakNext: boolean, serviceNeed: number,
+ *   kw: number, kwh: number, cap: number, heat: number, hot: boolean, fan: boolean, level: number, lvKg: number,
+ *   windLock: boolean, serviceAsap: boolean, indep: boolean, medicHold: boolean, outWas: string, vipLock: boolean,
+ *   sleep: boolean, zoneLock: boolean, creak: boolean, restartAt: number, ffCar: boolean, hotT0: number, trapNext: boolean,
+ *   overloadFlash?: number, resKg?: number, pickKg?: number, panoNext?: boolean, bounce?: number, stormFault?: boolean,
+ *   sleepT?: number, fightAt?: number, fought?: boolean, deckN?: number[], deckFull?: boolean[], stumbleNoted?: number,
+ *   stuck?: boolean, heldTrip?: number, politeTrip?: number, skipTrip?: number, closeTrip?: number, carCallStop?: boolean,
+ * }} Elevator
+ */
+/** @param {number} i @returns {Elevator} */
 export function makeElevator(i) {
   const d = EL[i], pos = d.startF;
   return {
@@ -27,9 +53,9 @@ export function makeElevator(i) {
     distance: 0, trips: 0, lastOff: 0, lastOn: 0, target: null, targetKind: null, fullFlash: 0,
     mode: 'normal', off: false, rs: null, rescueTarget: 0,
     // linbrott: snapNext = linorna går av vid nästa åktur, snap = förloppet (fall → fast → utrymning)
-    snapNext: false, snap: /** @type {{ ph: string, t0: number, stopAt: number, caughtT: number, exitF: number, n: number, out: number, nextOut: number, climb: number }|null} */ (null),
+    snapNext: false, snap: null,
     // drift: slitage 0–1+, fel, hållen för service, tekniker, energi (kW just nu, kWh i dag)
-    wear: 0, wearTrips: 0, wearDist: 0, fault: /** @type {{ what: string, t0: number, need: number, kind?: string, tool?: string, cable?: boolean, exitF?: number, done?: number, trapped?: boolean, n?: number, nextTalk?: number }|null} */ (null),
+    wear: 0, wearTrips: 0, wearDist: 0, fault: null,
     hold: false, homeT: 0, techId: /** @type {number|null} */ (null), breakNext: false, serviceNeed: 0, kw: 0, kwh: 0,
     cap: d.deck2 ? CAP * 2 : CAP, // platser i korgen (dubbeldäck: CAP per däck)
     // motorvärme (0–1+, överhettad = hot), extrafläkt, nivåfel (våningar, negativt = för lågt), stängd för vinden,
@@ -42,14 +68,15 @@ export function makeElevator(i) {
     creak: false, restartAt: 0, ffCar: false, hotT0: 0, trapNext: false,
   };
 }
-/** Hinner hissen stanna på våning f? Falskt bara om f ligger framför den, närmare än bromssträckan. */
+/** Hinner hissen stanna på våning f? Falskt bara om f ligger framför den, närmare än bromssträckan. @param {Elevator} e */
 export function canBrakeTo(e, f) {
   if (e.state !== 'moving' || !e.dir) return true;
   const ahead = (f - e.pos) * e.dir;
   return ahead <= 0 || ahead >= (e.v * e.v) / (2 * ACC) + e.v * (1 / 30) * 2 + 0.01;
 }
-/** toppfarten just nu: svajläget i storm och en varm motor sänker den */
+/** toppfarten just nu: svajläget i storm och en varm motor sänker den @param {Elevator} e */
 export const vmaxOf = e => VMAX * windMul(e) * heatMul(e);
+/** @param {Elevator} e */
 export function shouldStop(e, g, d) {
   if (!e.stops.has(g)) return false;
   if (!allowedPos(e, g) && !(e.zoneLock && g === e.minF)) return false; // spärrad hiss får köra ner till sin lägsta våning // expresshissar m.fl. stannar bara på sina våningar
@@ -60,7 +87,7 @@ export function shouldStop(e, g, d) {
   return false;
 }
 /** Hissen kan inte hämta fler – personerna den skulle hämta (utom de som keep(p) behåller) får en ny hiss,
- *  och hallanropen den hade tagit (KNAPPAR) går tillbaka till gruppen. */
+ *  och hallanropen den hade tagit (KNAPPAR) går tillbaka till gruppen. @param {Elevator} e */
 export function releaseCalls(e, why, keep = /** @type {((p: any) => boolean)|null} */ (null)) {
   let n = 0;
   for (const p of S.people) {
@@ -75,12 +102,13 @@ export function releaseCalls(e, why, keep = /** @type {((p: any) => boolean)|nul
   if (n || calls) rebuildPicks();
 }
 /** Byter hissens läge. Alla byten går hit: lämnar hissen normal drift släpps väntande hämtningar direkt,
- *  så att ingen står och väntar på en hiss som inte kommer. */
+ *  så att ingen står och väntar på en hiss som inte kommer. @param {Elevator} e */
 export function setMode(e, m) {
   const was = e.mode;
   e.mode = m;
   if (m !== 'normal' && was === 'normal') releaseCalls(e, OUT_TEXT[m] || m);
 }
+/** @param {Elevator} e */
 export function updateElevator(e, dt) {
   e.fullFlash = Math.max(0, e.fullFlash - dt);
   e.overloadFlash = Math.max(0, (e.overloadFlash || 0) - dt);
@@ -100,7 +128,7 @@ export function updateElevator(e, dt) {
   // efter ett strömavbrott startar hissarna om en i taget
   if (e.restartAt && S.t < e.restartAt) { if (e.state === 'moving') e.v = 0; return; }
   if (e.state === 'doors') { updateDoors(e, dt); return; }
-  if (e.state === 'idle') { idleEval(e, dt); if (e.state !== 'moving') return; }
+  if (e.state === 'idle') { idleEval(e, dt); if (/** @type {string} */ (e.state) !== 'moving') return; } // (idleEval kan sätta igång den)
   // ett hissfel som stoppar korgen mellan två våningar (folk sitter fast tills teknikern lagat den)
   if (trapDue(e)) { trapBreak(e); return; }
   if (panoDue(e)) { panoStick(e); return; } // (panoramahissen fastnar på fasaden – pano.js)
@@ -109,6 +137,7 @@ export function updateElevator(e, dt) {
   if (snapDue(e)) snapCable(e);
 }
 // Brandzon: passagerare som klev på efter spärren och ska in i zonen släpps av vid hissens säkra våning
+/** @param {Elevator} e */
 function zoneReroute(e, f) {
   const drop = safeFloor(e) ?? e.minF;
   let here = false;
@@ -121,6 +150,7 @@ function zoneReroute(e, f) {
   }
   return here;
 }
+/** @param {Elevator} e */
 export function idleEval(e, dt) {
   const f = Math.round(e.pos);
   e.pos = f; e.v = 0; e.target = null;
@@ -144,6 +174,7 @@ export function idleEval(e, dt) {
   const near = stops.reduce((a, b) => (Math.abs(b - f) < Math.abs(a - f) ? b : a));
   e.dir = Math.sign(near - f) || 1; e.state = 'moving';
 }
+/** @param {Elevator} e */
 export function moveStep(e, dt) {
   const d = e.dir;
   if (d === 0) { e.state = 'idle'; return; }
@@ -184,6 +215,7 @@ export function moveStep(e, dt) {
     e.pos += step * d; e.distance += step;
   }
 }
+/** @param {Elevator} e */
 export function moveTo(e, target, vmax, dt) {
   const d = Math.sign(target - e.pos);
   // på väg åt andra hållet (återkallad i full fart): bromsa in först – en korg vänder inte på ett ögonblick
@@ -202,6 +234,7 @@ export function moveTo(e, target, vmax, dt) {
   e.pos += d * st; e.distance += st;
   return false;
 }
+/** @param {Elevator} e */
 export function arrive(e, f) {
   e.carCallStop = e.carCalls.has(f); // stannade för en knapp i korgen (kan vara en felknapp)
   e.pos = f; e.v = 0; e.floor = f; e.carCalls.delete(f);
@@ -218,6 +251,7 @@ export function arrive(e, f) {
   heatOnStop(e); levelStart(e);
   for (const p of e.passengers) if (posOf(e, p.dest) !== f) pev(p, `Hiss ${e.name} stannar på ${fl(deckFloor(e, p, f))} (inte mitt mål)`);
 }
+/** @param {Elevator} e */
 export function updateDoors(e, dt) {
   const f = e.floor;
   if (e.doorPhase === 'opening') {
@@ -262,6 +296,7 @@ export function updateDoors(e, dt) {
 /**
  * STÄNG-knappen: en otålig passagerare trycker på den, gärna flera gånger. Med vanliga knappar (KNAPPAR)
  * stänger dörren lite tidigare; i destinationssystemen är knappen inte ens kopplad – som i många riktiga hissar.
+ * @param {Elevator} e
  */
 function closePress(e) {
   if (e.closeTrip === e.trips) return;
@@ -276,8 +311,9 @@ function closePress(e) {
     pev(p, `Trycker på STÄNG fem gånger – dörren går igen lite tidigare`);
   } else pev(p, 'Trycker på STÄNG fem gånger – knappen är inte ens kopplad i det här systemet');
 }
-/** dubbeldäck: våningen där passageraren står när korgen är på f (övre däcket en våning högre) */
+/** dubbeldäck: våningen där passageraren står när korgen är på f (övre däcket en våning högre) @param {Person} p @param {Elevator} e */
 export const deckFloor = (e, p, f) => (e.deck2 && p.deck === 1 ? f + 1 : f);
+/** @param {Person} p @param {Elevator} e */
 export function exitPassenger(e, p, f) {
   const ride = S.t - p.rideStart;
   p.floor = f; p.car = null; p.assigned = null; p.mood = 0; p.angryNoted = false; p.trapT = 0; p.trapNoted = false;
@@ -285,6 +321,7 @@ export function exitPassenger(e, p, f) {
   p.totalRide += ride;
   return ride;
 }
+/** @param {Elevator} e */
 export function unload(e, f) {
   const out = e.passengers.filter(p => posOf(e, p.dest) === f);
   e.passengers = e.passengers.filter(p => posOf(e, p.dest) !== f);
@@ -302,13 +339,14 @@ export function unload(e, f) {
   e.lastOff = out.length;
   e.dwellNeed = DWELL + out.length * 0.18;
 }
+/** @param {Elevator} e */
 export function exitAll(e, f, why) {
   // alla passagerare måste ut här (brand, ström) – de som inte var framme går vidare
   const ps = e.passengers; e.passengers = [];
   for (const p of ps) exitOne(e, p, deckFloor(e, p, f), why);
   e.carCalls.clear();
 }
-/** En passagerare måste ut på våningen pf (en riktig våning) innan hen är framme – och går vidare därifrån. */
+/** En passagerare måste ut på våningen pf (en riktig våning) innan hen är framme – och går vidare därifrån. @param {Person} p @param {Elevator} e */
 export function exitOne(e, p, pf, why) {
   e.passengers = e.passengers.filter(q => q !== p);
   exitPassenger(e, p, pf);
@@ -317,11 +355,13 @@ export function exitOne(e, p, pf, why) {
   if (liftsAvailable() && allowed(pf) && allowed(p.goal)) { setTrip(p, p.goal, p.why); pev(p, `${why} – ställer mig i kön igen`); }
   else toStairs(p, `${why} – tar trapporna`);
 }
+/** @param {Elevator} e */
 export function load(e, f) {
   // (dubbeldäck: folk på våningen ovanför kliver på övre däcket samtidigt)
   const waiting = S.people.filter(p => p.state === 'wait' && (p.floor === f || (e.deck2 && p.floor === f + 1 && e.upper.has(p.floor)))).sort((a, b) => a.waitStart - b.waitStart);
   // varje person kommenterar ett visst hisstopp högst en gång (per hiss – annars spammas loggen
   // när två hissar står öppna samtidigt på samma våning)
+  /** @param {Person} p */
   const seen = p => { p.seenBy = p.seenBy || {}; if (p.seenBy[e.id] === e.trips) return true; p.seenBy[e.id] = e.trips; return false; };
   let boarded = false;
   const buttons = buttonsMode();
@@ -370,13 +410,15 @@ export function load(e, f) {
   if (boarded && buttons) for (const d of [1, -1]) if (d === e.dir) { clearCall(e.group, f, d); if (e.deck2) clearCall(e.group, f + 1, d); }
   if (boarded) rebuildPicks();
 }
-/** dubbeldäck: varje däck har CAP platser */
+/** dubbeldäck: varje däck har CAP platser @param {Person} p @param {Elevator} e */
 const deckFull = (e, p) => e.deck2 && S.people.filter(q => q.car === e && (q.state === 'ride' || q.state === 'boarding') && q.deck === (e.upper.has(p.floor) ? 1 : 0)).length >= CAP;
+/** @param {Elevator} e */
 export function bounceBoarders(e) {
   // folk som är på väg in i en hiss som just stängts av får vänta igen
   for (const p of S.people) if (p.state === 'boarding' && p.car === e) { p.state = 'wait'; p.car = null; p.assigned = null; p.waitStart = S.t; }
   e.reserved = 0; e.resKg = 0;
 }
+/** @param {Elevator} e */
 export function restoreElevator(e) {
   const d = e.dir;
   setMode(e, 'normal'); e.rs = null; e.target = null; e.targetKind = null; e.dir = 0;
@@ -398,13 +440,14 @@ export function restoreElevator(e) {
   // (utom brandhissen, som kör brandkåren)
   if (S.fire && S.fire.mode === 'recall' && !e.ffCar) recallCar(e);
 }
-/** Brandåterkallning av en hiss: stäng dörrarna och kör hem utan stopp (recallStep tar över) */
+/** Brandåterkallning av en hiss: stäng dörrarna och kör hem utan stopp (recallStep tar över) @param {Elevator} e */
 export function recallCar(e) {
   bounceBoarders(e);
   setMode(e, 'recall'); e.rs = e.door > 0 ? 'close' : 'move'; e.parkTarget = null;
 }
 
 // ---------- Hisslägen vid incidenter ----------
+/** @param {Elevator} e */
 export function recallStep(e, dt) {
   // Brandåterkallning: stäng dörrarna, kör direkt till hemvåningen (E, eller närmaste i zonen) utan stopp, släpp ut alla, stäng av
   if (e.rs === 'close') {
@@ -428,6 +471,7 @@ export function recallStep(e, dt) {
     }
   }
 }
+/** @param {Elevator} e */
 export function rescueStep(e, dt) {
   // Nödsänkning på reservkraft: krypkör till närmaste våning nedanför, öppna, släpp ut alla
   if (e.rs === 'move') {
@@ -449,6 +493,7 @@ export function rescueStep(e, dt) {
 }
 
 // Överlast: vågen i golvet piper och den som klev på sist får kliva av och vänta på nästa hiss.
+/** @param {Person} p @param {Elevator} e */
 export function kickOff(e, p) {
   e.passengers = e.passengers.filter(q => q !== p);
   if (!e.passengers.some(q => posOf(e, q.dest) === posOf(e, p.dest))) e.carCalls.delete(posOf(e, p.dest));

@@ -9,6 +9,7 @@ import { clamp, fl } from './util.js';
 import { LOBBY, SKY } from './config.js';
 import { S, incidentOver, log, notice } from './state.js';
 import { incidentStarted, startOutage } from './incidents.js';
+/** @typedef {import('./elevators.js').Elevator} Elevator */
 
 /** hur lätt linorna slår i schaktet i normal drift i storm (vajerlarm per sekund och vindstyrka) */
 export const STORM_FAULT_K = 0.3;
@@ -25,7 +26,7 @@ export function weatherReset() {
     'Skorstenseffekten: varm luft stiger i schakten och suger in kall luft genom entrén. Hissdörrarna på E stänger trögt och tar ibland emot.',
     { floor: LOBBY });
 }
-/** hur utsatt hissen är för vinden: panoramahissen på fasaden mest, sedan de höga schakten */
+/** hur utsatt hissen är för vinden: panoramahissen på fasaden mest, sedan de höga schakten @param {Elevator} e */
 export const exposure = e => (e.facade ? 1 : e.maxF >= SKY ? 0.65 : 0);
 /** vinden 0–1 just nu (deterministisk: byar räknas ur simuleringstiden, inte ur slumpen) */
 export function windAt() {
@@ -36,11 +37,13 @@ export function windAt() {
 }
 /** vindstyrka i m/s (bara för texter) */
 export const windMs = () => Math.round(windAt() * 32);
-/** svajläget sänker farten i de höga schakten när det blåser */
+/** svajläget sänker farten i de höga schakten när det blåser @param {Elevator} e */
 export function windMul(e) {
   if (!S.storm || S.storm.mode !== 'sway' || windAt() < 0.45) return 1;
   return 1 - 0.45 * exposure(e);
 }
+/** Stormen (S.storm): förlopp, svajläge (mode), fel den orsakat och blixten (strikeAt, struck = när den slog ner)
+ * @typedef {{ t0: number, len: number, peak: number, mode: string, faults: number, strikeAt: number|null, struck: number|null }} Storm */
 export function startStorm() {
   if (S.storm) return false;
   const len = rand(50, 75);

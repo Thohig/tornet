@@ -33,6 +33,8 @@ import { CREW_BY, atPost, crewPerson, postFloor } from '../src/crew.js';
 import { CREW } from '../src/config.js';
 import { PANO, ladderReach, PANO_CREW_S, PANO_DEFAULT_S } from '../src/pano.js';
 import { INTRO_OPTS, INTRO_SEED, STOPS, introPerson } from '../src/introStops.js';
+/** @typedef {import('../src/elevators.js').Elevator} Elevator */
+/** @typedef {import('../src/people.js').Person} Person */
 
 // ---------- Ramverk ----------
 export const tests = [];
@@ -115,6 +117,7 @@ function watcher() {
       if (e.reserved !== S.people.filter(p => p.state === 'boarding' && p.car === e).length) w.badReserved++;
       // Återgår hissen till normal drift mitt i farten (återkallning/nödsänkning avbruten) hinner den inte bromsa till
       // våningar inom bromssträckan – de får den köra förbi tills den har stannat (sedan vänder den tillbaka)
+      /** @param {Person} p */
       const pdOf = p => posOf(e, p.dest), crossed = pd => (a < pd && b > pd) || (a > pd && b < pd);
       if (e.mode !== 'normal' || e.state !== 'moving') w.late[i] = null;
       else if ((w.prevMode[i] ?? 'normal') !== 'normal') w.late[i] = new Set(e.passengers.map(pdOf).filter(pd => crossed(pd) || !canBrakeTo(e, pd)));
@@ -747,7 +750,7 @@ test('Sky lobbyn: långa resor byter hiss på 6:an, expressen stannar aldrig på
 });
 test('Staplade zoner: låg → hög zon går via entrén (eller mellanplanet), expressen och sky lobbyn', () => {
   sim(1, { strategy: 'nearest' }); // (utan kostnadsstyrning väljer man däck efter udda/jämna våningar)
-  const p = { cargo: null, kind: 'emp' };
+  const p = /** @type {any} */ ({ cargo: null, kind: 'emp' });
   const route = (from, goal) => { const r = [from]; let f = from; for (let i = 0; i < 6 && f !== goal; i++) { f = legDest(f, goal, p); r.push(f); } return r.map(fl).join('→'); };
   // dubbeldäcken: nedre däcket E ⇄ 6, övre däcket 1 ⇄ 7 (rulltrappa E → 1)
   const cases = [['3', '10', '3→1→7→10'], ['P2', 'T', 'P2→E→T'], ['12', '1', '12→7→1'], ['5', '6', '5→E→6'], ['E', '9', 'E→1→7→9'],
@@ -1133,7 +1136,7 @@ test('Rusning och tåget: hissen väntar in klumpen vid perrongen men står inte
   for (let g = 0; !(S.train && S.train.state === 'stop' && S.train.spawned < S.train.n && S.train.n > 1) && g < 60 / DT; g++) step(DT);
   assert(S.train && S.train.state === 'stop', 'inget tåg stod inne');
   const X1 = S.elevators.find(e => e.express && e.stops.has(STATION)), X2 = S.elevators.find(e => e.express && !e.stops.has(STATION));
-  const save = [X1.dir, X2.dir, X1.passengers, X2.passengers, X1.reserved, X2.reserved];
+  const save = /** @type {const} */ ([X1.dir, X2.dir, X1.passengers, X2.passengers, X1.reserved, X2.reserved]);
   X1.dir = 1; X2.dir = 1; X1.passengers = []; X2.passengers = []; X1.reserved = 0; X2.reserved = 0;
   const atStation = peakHold(X1, STATION), x1Lobby = peakHold(X1, LOBBY), x2Lobby = peakHold(X2, LOBBY);
   [X1.dir, X2.dir, X1.passengers, X2.passengers, X1.reserved, X2.reserved] = save;
@@ -1865,7 +1868,9 @@ test(`Spelaråtgärder: invarianter över ${FUZZ_SEEDS.length} dygn med slumpade
     if (w.selfDest) fails.push(`${tag}: någon väntade på hiss till sin egen våning (${w.selfDest} steg)`);
     // (en brand eller ett strömavbrott som fortfarande pågår när dygnet slutar låser hissarna med rätta)
     // (en service som teknikern utför eller är på väg till när dygnet tar slut är inte fast)
+    /** @param {Elevator} e */
     const working = e => !!techOf(e);
+    /** @param {Elevator} e */
     const stuckMode = e => (e.mode === 'service' && !working(e)) || (!S.fire && (e.mode === 'recall' || e.mode === 'locked')) || (!S.outage && (e.mode === 'rescue' || e.mode === 'dead'));
     if (S.elevators.some(stuckMode))
       fails.push(`${tag}: hiss kvar i läge ${S.elevators.filter(stuckMode).map(e => `${e.name}:${e.mode}`).join(' ')} när dygnet tog slut`);
@@ -2023,7 +2028,9 @@ test(`Dockhuset: utan spelaren tar sig huset igenom kaosdygn – incidenterna ta
 test('Driftcheferna är personer: vid bordet, fikar när det är lugnt, skyndar tillbaka vid larm och byter skift kl 22', () => {
   sim(31, { chief: true });
   const gb = chiefPerson(0);
+  /** @param {Person} p */
   const atDesk = p => !!p && p.state === 'office' && p.floor === CONTROL && p.spot && p.spot.post === 'chief';
+  /** @param {Person} p */
   const inBreak = p => !!p && p.state === 'office' && p.floor === BREAK && p.spot && p.spot.brk;
   assert(atDesk(gb), `${CHIEFS[0].name} sitter inte vid kontrollbordet när dygnet börjar`);
   // en fikarast när det är lugnt (på dagen)
@@ -2318,7 +2325,7 @@ test('Panoramahissen går ner till tunnelbanan: från perrongen rakt upp till ta
   const P = S.elevators[PANO.id], roof = floorWith('roof');
   assert(P.stops.has(STATION) && P.minF === STATION, 'panoramahissen går inte ner till tunnelbanan');
   // resvägen: från perrongen till taket är en enda resa (förr: expressen till sky lobbyn och sedan höga zonen)
-  assert(legDest(STATION, roof, { kind: 'vis', cargo: null }) === roof, 'från perrongen till taket blir det fortfarande hissbyte');
+  assert(legDest(STATION, roof, /** @type {any} */ ({ kind: 'vis', cargo: null })) === roof, 'från perrongen till taket blir det fortfarande hissbyte');
   const w = watcher();
   let fromTrain = 0, up = 0, stuckLow = 0;
   const seen = new Set();

@@ -15,6 +15,8 @@ import { rebuildPicks, travel, cabinKg, prio, inFireZone } from './dispatch.js';
 import { bounceBoarders, exitAll, exitOne, moveTo, restoreElevator, setMode } from './elevators.js';
 import { incidentStarted } from './incidents.js';
 import { trappedTalk } from './cast.js';
+/** @typedef {import('./elevators.js').Elevator} Elevator */
+/** @typedef {import('./people.js').Person} Person */
 
 // ---------- Energi ----------
 export const MOVE_KW = 3;      // friktion, drivsystem och ventilation när korgen rör sig
@@ -35,6 +37,7 @@ export function moveKwh(kg, rated, floors) {
   const lift = imbalance(kg, rated, floors) * 9.81 * Math.abs(floors) * FLOOR_M / 3.6e6;
   return MOVE_KW * travel(Math.abs(floors)) / 3600 + (lift > 0 ? lift / MOTOR_EFF : lift * REGEN);
 }
+/** @param {Elevator} e */
 function energyTick(e, dt) {
   const kg = cabinKg(e);
   // (i fritt fall efter ett linbrott driver ingen motor korgen)
@@ -53,6 +56,7 @@ function energyTick(e, dt) {
 // (kalibrerat för ett dygn på 6 minuter: ungefär 350 stopp per dygn i hela huset – tempoWear() skalar om för längre dygn)
 export const WEAR_STOP = 0.0022, WEAR_FLOOR = 0.00055, FAULT_K = 0.034, SERVICE_AT = 0.2;
 export const FAULTS = ['dörrfel – dörrarna går inte att stänga', 'motorn överhettad', 'styrkortet hänger sig', 'nivåfel – korgen stannar ojämnt', 'bromsen kärvar', 'vajerlarm'];
+/** @param {Elevator} e */
 function wearTick(e) {
   const stops = e.trips - e.wearTrips, dist = e.distance - e.wearDist;
   if (!stops && !dist) return;
@@ -62,7 +66,7 @@ function wearTick(e) {
 }
 /** slumpens reglage (S.incLevel) gör slitagefelen ovanligare eller vanligare */
 const FAULT_MUL = { lugn: 0.5, normal: 1, kaos: 2 };
-/** Anropas när dörrarna har öppnat helt och folk klivit av: går hissen sönder här? */
+/** Anropas när dörrarna har öppnat helt och folk klivit av: går hissen sönder här? @param {Elevator} e */
 export function maybeBreak(e) {
   if (e.mode !== 'normal' || e.hold) return false;
   if (!e.breakNext) {
@@ -83,6 +87,7 @@ export const FAULT_KIND = /** @type {Record<string, { kind: string, need: [numbe
   'vajerlarm': { kind: 'rope', need: [14, 20], tool: 'Spänner och kontrollerar linorna' },
 });
 const faultKind = what => FAULT_KIND[what] || (what.startsWith('vajerlarm') ? FAULT_KIND.vajerlarm : { kind: 'board', need: [12, 20], tool: 'Felsöker' });
+/** @param {Elevator} e */
 export function breakDown(e, what) {
   e.breakNext = false; e.trapNext = false;
   setMode(e, 'broken'); e.hold = false; e.parkTarget = null; e.dir = 0; e.v = 0;
@@ -115,9 +120,9 @@ export function triggerFault(target = null) {
 /** andelen av de slumpade hissfelen (med folk ombord) där korgen stannar mellan två våningar */
 export const TRAP_CHANCE = 0.45;
 const TRAP_FAULTS = ['styrkortet hänger sig', 'bromsen kärvar', 'dörrfel – dörrarna går inte att stänga'];
-/** ska korgen stanna mellan två våningar nu? */
+/** ska korgen stanna mellan två våningar nu? @param {Elevator} e */
 export const trapDue = e => e.trapNext && e.mode === 'normal' && e.state === 'moving' && midFloor(e) && e.passengers.length > 0;
-/** Korgen tvärstannar mellan två våningar: passagerarna sitter kvar tills teknikern har lagat hissen. */
+/** Korgen tvärstannar mellan två våningar: passagerarna sitter kvar tills teknikern har lagat hissen. @param {Elevator} e */
 export function trapBreak(e) {
   e.trapNext = false; e.breakNext = false;
   const what = pick(TRAP_FAULTS), K = faultKind(what);
@@ -132,7 +137,7 @@ export function trapBreak(e) {
   rerouteStranded();
   rebuildPicks();
 }
-/** de som sitter fast i en trasig korg: tiden räknas, humöret sjunker och någon säger något ibland */
+/** de som sitter fast i en trasig korg: tiden räknas, humöret sjunker och någon säger något ibland @param {Elevator} e */
 function stuckTick(e, dt) {
   for (const p of e.passengers) { p.trapT = (p.trapT || 0) + dt; S.stats.trappedSec += dt; p.mood = p.trapT > 25 ? 2 : p.trapT > 8 ? 1 : 0; }
   if (S.t >= e.fault.nextTalk) { e.fault.nextTalk = S.t + rand(6, 10); trappedTalk(e); }
@@ -140,15 +145,15 @@ function stuckTick(e, dt) {
 
 // ---------- Hisstekniker ----------
 /** sitter själv fast i en hiss – linbrott, eller korgen har stannat mellan två våningar (då kan hen inte rädda
- *  någon, inte ens sig själv: hissjouren skickar en kollega) */
+ *  någon, inte ens sig själv: hissjouren skickar en kollega) @param {Person} p */
 const trappedIn = p => p.state === 'ride' && !!p.car && (p.car.mode === 'snapped' || (p.car.mode === 'broken' && !!p.car.fault && !!p.car.fault.trapped));
-/** i tjänst: inte en som sitter instängd eller har gått av passet efter att ha blivit utrymd */
+/** i tjänst: inte en som sitter instängd eller har gått av passet efter att ha blivit utrymd @param {Person} p */
 const onDuty = p => p.role === 'hisstekniker' && !p.dead && !p.offDuty && !trappedIn(p);
 /** teknikerna i tjänst (ordinarie först, en extra inringd kan komma till) */
 export const techs = () => S.people.filter(onDuty);
 /** den första teknikern i tjänst, eller null */
 export const tech = () => S.people.find(onDuty) || null;
-/** teknikern som har hissen e som sitt jobb, eller null */
+/** teknikern som har hissen e som sitt jobb, eller null @param {Elevator} e */
 export const techOf = e => S.people.find(p => onDuty(p) && p.job === e.id) || null;
 /** så många trasiga hissar i kö (utöver den teknikern jobbar med) innan hen ringer in en extra tekniker */
 export const EXTRA_QUEUE = 2;
@@ -159,15 +164,18 @@ export const queuedFaults = () => S.elevators.filter(e => (e.mode === 'broken' |
 export const nightWindow = (h = hour()) => h >= 21 && h < 27;
 /** våningen teknikern ska till för hissen e */
 // (panoramahissens hydraulaggregat står vid dess hemvåning – korgen hänger ju utanpå huset)
+/** @param {Elevator} e */
 export const jobFloor = e => (e.mode === 'snapped' ? e.snap.exitF : e.mode === 'broken' ? (e.fault.cable ? e.fault.exitF : e.fault.pano ? e.home : e.floor) : e.home);
 /** folk sitter fast i hissen e och väntar på en tekniker (linbrott, eller korgen har stannat mellan två våningar) */
 // (panoramahissen på fasaden räknas inte: där kan teknikern inget göra förrän räddningstjänsten har fått ut dem)
+/** @param {Elevator} e */
 const trapping = e => e.passengers.length > 0 && !(e.fault && e.fault.pano) &&
   ((e.mode === 'snapped' && e.snap.ph !== 'fall') || (e.mode === 'broken' && !!e.fault && !!e.fault.trapped));
 /** Nästa jobb för teknikern p (null = vem som helst): trasiga hissar först, sedan (på natten, med nattservice)
  *  den mest slitna. En hiss som en annan tekniker redan har tagit hoppas över. Den extra teknikern tar bara fel. */
 function chooseJob(p = null) {
   // (under en brand går ingen tekniker in i brandzonen)
+  /** @param {Elevator} e */
   const free = e => (e.techId === null || (p !== null && e.techId === p.id)) && !inFireZone(jobFloor(e));
   // linbrott med folk instängda går före allt annat (först fångat, först räddat)
   const snapped = S.elevators.filter(e => e.mode === 'snapped' && e.snap.ph !== 'fall' && free(e)).sort((a, b) => a.snap.t0 - b.snap.t0);
@@ -185,7 +193,7 @@ function chooseJob(p = null) {
   const worn = S.elevators.filter(e => e.mode === 'normal' && e.wear >= SERVICE_AT && !(e.freight && heavy) && free(e)).sort((a, b) => b.wear - a.wear);
   return worn[0] || null;
 }
-/** Teknikerns nästa beslut (anropas från personernas rollogik i people.js) */
+/** Teknikerns nästa beslut (anropas från personernas rollogik i people.js) @param {Person} p */
 export function techNext(p) {
   // (en tekniker som själv har utrymts ur en hiss med linbrott har gått av passet)
   if (p.offDuty) return [p.exitFloor, 'Kollegan tar över – går hem och vilar'];
@@ -219,8 +227,9 @@ function callTech(why) {
   S.techCallAt = S.t + rand(8, 15);
   log(`📞 ${why} – hissteknikern är på väg`, 'alert');
 }
+/** @param {Person} p */
 const hasJob = p => p.job !== null && p.job !== undefined;
-/** Teknikern t har för många trasiga hissar i kö: hen ringer hissjouren, som skickar en extra tekniker. */
+/** Teknikern t har för många trasiga hissar i kö: hen ringer hissjouren, som skickar en extra tekniker. @param {Person} t */
 function callExtra(t, queued) {
   const n = queued.length, names = queued.map(e => e.name).join(', '), stuck = queued.find(trapping);
   // (sitter det folk fast är det det samtalet handlar om)
@@ -241,12 +250,12 @@ function callExtra(t, queued) {
 // jobbet på plats (står vid hissen och inspekterar) och åker tillbaka till jouren när hissen går igen.
 const FOREMAN = { name: 'Stig', title: 'Arbetsledare på hissjouren',
   look: { skin: '#ffdbb8', shirt: '#ffd23f', pants: '#2b2f45', hair: 2, hairC: '#e8e8e8', tie: false, tieC: '#ffe14d', stripe: true, acc: 3 } };
-/** beställ arbetsledaren till hissen e (kommer klockan at, om han inte redan är här) */
+/** beställ arbetsledaren till hissen e (kommer klockan at, om han inte redan är här) @param {Elevator} e */
 function foremanFor(e, at) {
   if (S.foreman || S.people.some(p => p.role === 'arbetsledare' && !p.dead)) return;
   S.foreman = { car: e.id, at };
 }
-/** Arbetsledarens nästa beslut (rollogiken i people.js) */
+/** Arbetsledarens nästa beslut (rollogiken i people.js) @param {Person} p */
 export function foremanNext(p) {
   const e = S.elevators[p.watch];
   if (!e || (e.mode !== 'snapped' && e.mode !== 'broken')) return [p.exitFloor, `${e ? e.name : 'Hissen'} går igen – åker tillbaka till jouren`];
@@ -332,7 +341,7 @@ function techTick(dt) {
   }
   for (const t of techs()) workTick(t, dt);
 }
-/** teknikern t arbetar på sitt jobb (om hen är framme) */
+/** teknikern t arbetar på sitt jobb (om hen är framme) @param {Person} t @param {number} dt */
 function workTick(t, dt) {
   if (!hasJob(t)) return;
   const e = S.elevators[t.job];
@@ -389,7 +398,7 @@ function workTick(t, dt) {
 // Teknikern som står vid en korg där folk sitter fast utryms inte förrän de är ute: hen vevar ner korgen för
 // hand (bromsen lossas, korgen glider sakta) till närmaste våning, öppnar och släpper ut dem – de utryms med
 // hen. Hissen är fortfarande trasig och lagas när branden är släckt.
-/** Teknikern t ska utrymmas: vevar hen först ner en korg med instängda? (true = vevandet pågår, vänta) */
+/** Teknikern t ska utrymmas: vevar hen först ner en korg med instängda? (true = vevandet pågår, vänta) @param {Person} t */
 export function fireCrank(t) {
   if (!hasJob(t)) return false;
   const e = S.elevators[t.job];
@@ -404,7 +413,7 @@ export function fireCrank(t) {
   }
   return true;
 }
-/** korgen glider ner för hand, dörrarna öppnas och de instängda går ut (och utryms om det brinner) */
+/** korgen glider ner för hand, dörrarna öppnas och de instängda går ut (och utryms om det brinner) @param {Elevator} e */
 function crankTick(e, dt) {
   const c = e.fault.crank;
   if (!c.open) {
@@ -434,11 +443,11 @@ export const FALL_G = 3.2;  // våningar/s² i fritt fall (överdrivet långsamt
 export const CLIMB_T = 4;   // sekunder per person ut genom takluckan …
 export const CLIMB_FLOOR = 1.5; // … och lite till för varje våning stegen är lång (expresshissar)
 export const CABLE_H = [3, 5]; // linbytet tar 3–5 speltimmar
-/** kan linorna gå av i den här hissen? (panoramahissen på fasaden är hydraulisk och har inga linor) */
+/** kan linorna gå av i den här hissen? (panoramahissen på fasaden är hydraulisk och har inga linor) @param {Elevator} e */
 export const cableCandidate = e => e.mode === 'normal' && !e.hold && !e.indep && !e.facade && !e.snapNext;
-/** korgen är tillräckligt långt från en våning för att fastna emellan (och har utrymme att falla) */
+/** korgen är tillräckligt långt från en våning för att fastna emellan (och har utrymme att falla) @param {Elevator} e */
 const midFloor = e => { const fr = e.pos - Math.floor(e.pos); return fr > 0.35 && fr < 0.75 && e.pos > e.minF + 0.6; };
-/** ska linorna (som knarrat) gå av just nu? */
+/** ska linorna (som knarrat) gå av just nu? @param {Elevator} e */
 export const snapDue = e => e.snapNext && e.mode === 'normal' && e.state === 'moving' && midFloor(e);
 /** Spelaren eller slumpen: linorna i en hiss i fart går av (helst en med folk i). Står alla still knarrar
  *  linorna i en hiss, och de går av mitt emellan två våningar på dess nästa åktur. */
@@ -451,7 +460,7 @@ export function triggerCable(target = null) {
   const e = pick(ok); e.snapNext = true;
   log(`🪢 Det knarrar oroväckande i bärlinorna på ${e.name}…`, 'alert', e.color);
 }
-/** Linorna går av: korgen börjar falla (snapStep tar över tills fångapparaten griper). */
+/** Linorna går av: korgen börjar falla (snapStep tar över tills fångapparaten griper). @param {Elevator} e */
 export function snapCable(e) {
   // (ett väntande hissfel eller vajerlarm försvinner med linbytet – hela hissen gås igenom)
   e.snapNext = false; e.breakNext = false; e.stormFault = false;
@@ -472,9 +481,9 @@ export function snapCable(e) {
   incidentStarted(null);
   foremanFor(e, S.t + 25); // (arbetsledaren från hissjouren kommer och tittar på linbrottet)
 }
-/** korgtakets höjd i våningar (dubbeldäck: övre korgens tak) */
+/** korgtakets höjd i våningar (dubbeldäck: övre korgens tak) @param {Elevator} e */
 export const carRoof = e => e.pos + (e.deck2 ? 1 : 0) + CAR_H / FLOOR_H;
-/** Fritt fall tills fångapparaten griper. Sedan står korgen helt still tills linorna är bytta. */
+/** Fritt fall tills fångapparaten griper. Sedan står korgen helt still tills linorna är bytta. @param {Elevator} e */
 export function snapStep(e, dt) {
   const s = e.snap;
   if (!s || s.ph !== 'fall') { e.v = 0; return; }
@@ -482,6 +491,7 @@ export function snapStep(e, dt) {
   e.pos = Math.max(s.stopAt, e.pos - e.v * dt);
   if (e.pos <= s.stopAt + 1e-9) caught(e);
 }
+/** @param {Elevator} e */
 function caught(e) {
   const s = e.snap;
   e.pos = s.stopAt; e.v = 0; e.dir = 0; e.state = 'idle'; e.floor = Math.floor(e.pos + 1e-6);
@@ -499,17 +509,17 @@ function caught(e) {
   }
   log(`🛑 Fångapparaten i ${e.name} grep – korgen står fast ${between ? 'mellan två våningar' : `vid ${fl(Math.round(e.pos))}`}${e.passengers.length ? `, ${e.passengers.length} instängda` : ''}`, 'alert', e.color);
 }
-/** de instängda väntar i den fastkörda korgen (var den tom stängs den av för linbyte, steget efter att den fångades) */
+/** de instängda väntar i den fastkörda korgen (var den tom stängs den av för linbyte, steget efter att den fångades) @param {Elevator} e */
 function trappedTick(e, dt) {
   if (!e.passengers.length && e.snap.ph === 'trapped' && S.t > e.snap.caughtT) { cableDown(e); return; }
   for (const p of e.passengers) { p.trapT = (p.trapT || 0) + dt; S.stats.trappedSec += dt; }
 }
-/** vem som tas ut härnäst: förtur (VIP, ambulans), sedan den som har suttit fast längst – null om ingen är kvar */
+/** vem som tas ut härnäst: förtur (VIP, ambulans), sedan den som har suttit fast längst – null om ingen är kvar @param {Elevator} e */
 export function nextOut(e) {
   if (!e.passengers.length) return null;
   return [...e.passengers].sort((a, b) => Number(prio(b)) - Number(prio(a)) || (b.trapT || 0) - (a.trapT || 0) || a.id - b.id)[0];
 }
-/** teknikern är på plats ovanför korgen: öppnar takluckan och tar ut en i taget */
+/** teknikern är på plats ovanför korgen: öppnar takluckan och tar ut en i taget @param {Elevator} e */
 function evacStep(e, t) {
   const s = e.snap;
   if (s.ph === 'fall') return;
@@ -531,7 +541,7 @@ function evacStep(e, t) {
   }
   if (!e.passengers.length) cableDown(e, t);
 }
-/** Läget för en hiss med linbrott, i klartext (för HUD:en) */
+/** Läget för en hiss med linbrott, i klartext (för HUD:en) @param {Elevator} e */
 export function cableStatus(e) {
   const t = techOf(e) || tech(), mine = !!t && t.job === e.id;
   const here = mine && t.state === 'office' && t.floor === jobFloor(e);
@@ -547,7 +557,7 @@ export function cableStatus(e) {
   const left = Math.max(0, F.need - t.workT);
   return `${t.name} byter linor i schaktet (${Math.round(100 * Math.min(1, t.workT / F.need))} %) · klar om ~${left < 1 ? `${Math.max(1, Math.round(left * 60))} min` : `${Math.round(left * 10) / 10} h`} speltid`;
 }
-/** alla är ute (eller korgen var tom): hissen står avstängd medan linorna byts */
+/** alla är ute (eller korgen var tom): hissen står avstängd medan linorna byts @param {Elevator} e */
 function cableDown(e, t = null) {
   const s = e.snap;
   setMode(e, 'broken');
@@ -566,6 +576,7 @@ function cableDown(e, t = null) {
  * Ett hissfel som inte är lagat när dygnet börjar om (resetDay): vad som är trasigt, hur långt teknikern hann
  * och var korgen står. Folket följer inte med – de instängda räknas som ute. null = inget att föra över.
  * @returns {{ what: string, kind?: string, tool?: string, need: number, done: number, cable: boolean, exitF?: number, pos: number }|null}
+ * @param {Elevator} e
  */
 export function keptFault(e) {
   if (e.mode === 'snapped' && e.snap && e.snap.ph !== 'fall')
@@ -574,7 +585,7 @@ export function keptFault(e) {
   const f = e.fault, t = techOf(e);
   return { what: f.what, kind: f.kind, tool: f.tool, need: f.need, done: t ? t.workT : f.done || 0, cable: !!f.cable, exitF: f.exitF, pos: e.pos };
 }
-/** Felet k från gårdagen läggs på den nya hissen e: linbytet står kvar mellan två våningar, annat står öppet på närmaste stopp */
+/** Felet k från gårdagen läggs på den nya hissen e: linbytet står kvar mellan två våningar, annat står öppet på närmaste stopp @param {Elevator} e */
 export function restoreFault(e, k) {
   setMode(e, 'broken');
   e.dir = 0; e.v = 0; e.parkTarget = null;
@@ -592,10 +603,11 @@ export function restoreFault(e, k) {
 // långsammare; blir den för het löser överhettningsskyddet ut: hissen kör klart sina passagerare,
 // tar inga nya och står still tills motorn har svalnat. Extrafläkten (spelarens åtgärd) kyler fortare.
 export const HEAT_STOP = 0.05, HEAT_TAU = 55, FAN_TAU = 15, FAN_KW = 1.2, WARM_AT = 0.8, COOL_AT = 0.5;
-/** ett stopp värmer motorn */
+/** ett stopp värmer motorn @param {Elevator} e */
 export function heatOnStop(e) { e.heat += HEAT_STOP * (0.5 + cabinKg(e) / e.ratedKg); }
-/** varm motor kör långsammare */
+/** varm motor kör långsammare @param {Elevator} e */
 export const heatMul = e => (e.heat >= WARM_AT ? 0.8 : 1);
+/** @param {Elevator} e */
 function heatTick(e, dt) {
   e.heat += Math.max(0, e.kw) * dt * 0.0004; // lyfter tungt = värme
   // en varm dag kyler maskinrummet sämre
@@ -610,7 +622,7 @@ function heatTick(e, dt) {
   }
   if (e.fan && !e.hot && e.heat < 0.25) { e.fan = false; log(`🌀 ${e.name}: extrafläkten stängs av`, 'alert', e.color); }
 }
-/** Spelaren startar extrafläkten i maskinrummet */
+/** Spelaren startar extrafläkten i maskinrummet @param {Elevator} e */
 export function startFan(e) {
   if (!e || e.fan) return;
   e.fan = true;
@@ -631,9 +643,9 @@ export function triggerHeat(target = null) {
 // bit. Når det LEVEL_TOL justerar hissen nivån (dörrarna hålls öppna en stund). Slitna linor töjer sig
 // mer, och i en sliten hiss kan den som kliver på eller av snubbla på kanten.
 export const STRETCH = 0.05, LEVEL_TOL = 0.025;
-/** anropas när hissen öppnar: korgen står i nivå */
+/** anropas när hissen öppnar: korgen står i nivå @param {Elevator} e */
 export function levelStart(e) { e.lvKg = cabinKg(e); e.level = 0; }
-/** medan dörrarna står öppna */
+/** medan dörrarna står öppna @param {Elevator} e */
 export function levelTick(e) {
   const kg = cabinKg(e);
   e.level = -(kg - (e.lvKg || 0)) / e.ratedKg * STRETCH * (1 + 2 * e.wear);
@@ -641,7 +653,7 @@ export function levelTick(e) {
     e.lvKg = kg; e.level = 0; e.dwellNeed += 0.25; S.stats.relevels++;
   }
 }
-/** Kliver någon på eller av när korgen inte står i nivå? Då kan hen snubbla. */
+/** Kliver någon på eller av när korgen inte står i nivå? Då kan hen snubbla. @param {Person} p @param {Elevator} e */
 export function maybeStumble(e, p) {
   if (Math.abs(e.level || 0) < LEVEL_TOL * 0.45 || e.wear < 0.4 || rng() >= 0.06 * e.wear) return;
   const cm = Math.round(Math.abs(e.level) * 350);
@@ -657,7 +669,7 @@ export function maybeStumble(e, p) {
       { car: e.id, floor: e.floor, act: `level:${e.id}`, actLabel: '🔧 Beställ service nu' });
   }
 }
-/** Spelaren beställer service (nivåjustering) – teknikern kommer direkt, även på dagen */
+/** Spelaren beställer service (nivåjustering) – teknikern kommer direkt, även på dagen @param {Elevator} e */
 export function orderService(e) {
   if (!e || e.serviceAsap || e.mode !== 'normal') return;
   e.serviceAsap = true;
