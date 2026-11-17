@@ -16,7 +16,7 @@ Node (Homebrew) behövs bara för tester/typkontroll. I ett skal utan profil må
 
 ```bash
 eval "$(/opt/homebrew/bin/brew shellenv)"
-npm test            # hela sviten i Node (~2 min)
+npm test            # hela sviten i Node, parallellt, en tråd per kärna (--jobs=N, --jobs=1 = en tråd)
 npm run typecheck   # tsc på JSDoc-typer (jsconfig.json)
 npm run check       # båda
 npm run golden      # skriv om tests/golden.json efter AVSIKTLIGA beteendeändringar
