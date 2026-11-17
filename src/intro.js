@@ -33,7 +33,7 @@ export function startIntro(done) {
 /** gå till stopp i; ett stopp vi redan sett visar bara kameran och texten igen (inga händelser, ingen spolning) */
 function go(i) {
   const back = i <= T.max;
-  T.i = i; T.max = Math.max(T.max, i);
+  T.i = i;
   const s = STOPS[i];
   const early = s.at !== undefined && hour() < s.at, waiting = !!s.until && !s.until();
   if (!back && (early || waiting)) {
@@ -44,6 +44,8 @@ function go(i) {
 function arrive(back) {
   T.spin = null;
   const s = STOPS[T.i];
+  // (räknas som sett först när vi är framme: går man bakåt under spolningen spolas det om nästa gång)
+  T.max = Math.max(T.max, T.i);
   if (!back) for (const [name, ...args] of s.ev || []) act(name, ...args);
   camera(s.cam);
   paint();
