@@ -4,7 +4,7 @@
 // hissas ut genom lastluckan och ner till takterrassen. Där rullas de över till panoramahissen, som i lastläge
 // ('lift') kör ner dem till entrén. Ingen hänger under en last: så länge balken är ute står gondolen parkerad.
 // Balken stannar i hård vind, vid brand och vid strömavbrott.
-// (Simulering: läget ligger i S.cleaner och S.hoist, grafiken i pixel.js läser bara.)
+// (Simulering: läget ligger i S.cleaner och S.hoist, grafiken i pixroof.js läser bara.)
 import { fl } from './util.js';
 import { BX1, DOOR_T, EL, HATCH_FLOORS, LOBBY, SEAM_F, TOP, TOWER_X1, floorY } from './config.js';
 import { S, hour, log } from './state.js';

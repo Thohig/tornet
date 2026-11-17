@@ -1,6 +1,6 @@
 // Tunnelbanan under huset: tåg enligt tidtabell som lämnar av folk i klump och tar med dem som ska hem.
 // Tåget kör in från vänster längs perrongens bakvägg, stannar, öppnar dörrarna och kör vidare åt höger.
-// Allt ligger i simuleringen (S.train) – grafiken i pixel.js läser bara läget.
+// Allt ligger i simuleringen (S.train) – grafiken i pixhall.js läser bara läget.
 import { stream } from './rng.js';
 const { rand, randi, rng } = stream('tåg');
 // påstigningen har en egen ström: vilka som står på perrongen beror på styrlogiken, och får inte flytta hur många

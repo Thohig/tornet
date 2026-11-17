@@ -99,7 +99,7 @@ function shots() {
   if (S.fire) add('fire', 100, 'floor', S.fire.floor, S.fire.outAt === null ? `🔥 Brand på ${fl(S.fire.floor)}`
     : S.people.some(p => p.ff && p.state === 'office' && p.floor === S.fire.floor) ? `🚒 Brandmännen släcker på ${fl(S.fire.floor)}`
     : `🚒 Stegbilen släcker ${fl(S.fire.floor)} utifrån`, S.t - S.fire.t0 < 2);
-  // brandbilen kör in med blåljus på gatan (pixel.js) strax innan kåren är framme
+  // brandbilen kör in med blåljus på gatan (pixbuilding.js) strax innan kåren är framme
   if (S.fire && Math.abs(S.fire.brigadeAt + 1.5 - S.t) < 5) add('engine', 104, 'street', 0, S.fire.brigade ? '🚒 Brandmännen springer in' : '🚒 Brandbilen kommer', !S.fire.brigade);
   // brandmännen på väg upp (i brandhissen eller trapphuset), och tillbaka till bilen när det är släckt
   const ff = S.people.find(p => p.ff && !p.dead && p.state !== 'office' && visible(p));

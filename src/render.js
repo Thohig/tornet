@@ -1,5 +1,5 @@
 // Grafikens ingång och logiken för VAR folk syns i bilden (hallen framför hissarna).
-// Själva ritandet sker i pixel.js. Allt här är bara grafik: simuleringens p.x ändras aldrig.
+// Själva ritandet sker i pixel.js (och delarna i pix*.js). Allt här är bara grafik: simuleringens p.x ändras aldrig.
 import { clamp } from './util.js';
 import { BX1, CAR_W, DOOR_X, TOP, TOWER_X1, W, WAIT_X1, floorY, shaftX, surf } from './config.js';
 import { TERRACE_Y } from './hoist.js';
@@ -21,7 +21,7 @@ export const carSlot = i => CORNERS[i % 8];
  *  bakom receptionsdisken, i gondolen eller på takterrassen? ('hall' = står i hallen och ritas som folket där) @param {Person} p */
 export const inWindow = p => p.state === 'office' && !!(p.spot && p.spot.win) && p.spot.win !== 'hall';
 /** var den som syns på sin plats ritas: x = figurens mitt och y = huvudets överkant, i världens koordinater
- *  (pixel.js ritar figuren just där – samma geometri som gondolen och terrassen ritas med) @param {Person} p */
+ *  (pixhall.js och pixroof.js ritar figuren just där – samma geometri som gondolen och terrassen ritas med) @param {Person} p */
 export function winPos(p) {
   const s = p.spot;
   switch (s.win) {

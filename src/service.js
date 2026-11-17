@@ -77,7 +77,7 @@ export function maybeBreak(e) {
   e.stormFault = false;
   return true;
 }
-/** Feltyperna: hur de syns (pixel.js) och hur lång tid de tar att laga (s) */
+/** Feltyperna: hur de syns (pixcars.js) och hur lång tid de tar att laga (s) */
 export const FAULT_KIND = /** @type {Record<string, { kind: string, need: [number, number], tool: string }>} */ ({
   'dörrfel – dörrarna går inte att stänga': { kind: 'door', need: [10, 16], tool: 'Justerar dörrmaskinen' },
   'motorn överhettad': { kind: 'motor', need: [18, 26], tool: 'Byter motorns kylfläkt' },

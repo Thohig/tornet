@@ -191,7 +191,7 @@ export const TERRACE_F = (() => { const e = BUILDING.elevators.find(d => d.terra
 // post = arbetsplatsen för någon i CREW (nedan), where = ett rastmål, brk = en plats i personalrummet.
 // win = var den som är där syns: 'control'/'break' i fönstren i hallens bakvägg, 'reception' bakom disken i
 // entrén, 'gondola' i fönsterputsarens gondol, 'terrace' på takterrassen, 'hall' stående i hallen.
-// Utan win försvinner man in i korridoren som alla andra. x är var personen står (pixel.js ritar runt dem).
+// Utan win försvinner man in i korridoren som alla andra. x är var personen står (pixhall.js ritar runt dem).
 // (Platserna är bara för personalen – andra väljer dem aldrig, se pickSpot i people.js.)
 const INNER_X1_C = 619; // (= INNER_X1 längre ner: hallens innerkant mot schakten)
 const crewSpot = (f, s) => { if (f >= 0) SPOTS[f].push(s); };
@@ -424,7 +424,7 @@ export const CAST = [
 // händelse (lastaren med flyttdagen). breaks: [klockslag, sekunder (verklig tid), rastmål, varför] där rastmålet
 // är break (personalrummet), cafe (Sky Café), roof (takträdgården), kiosk, vending (godisautomaten) eller platform.
 // cover = posten som måste vara bemannad innan man går på rast; urgent = går tillbaka till posten vid larm.
-// lines = vad de säger på posten och på rasten (pratbubblorna i pixel.js – aldrig kontorsrepliker).
+// lines = vad de säger på posten och på rasten (pratbubblorna i pixfolk.js – aldrig kontorsrepliker).
 /** @typedef {{ id: string, name: string, role: string, title: string, post: string, from: number, until: number|null,
  *   arrive: number|null|'event', kg: number, fit: number, speed: number, space: number, polite: boolean, icon: string,
  *   breaks: [number, number, string, string][], cover?: string, urgent?: boolean, look: import('./people.js').Look,

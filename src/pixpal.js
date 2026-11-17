@@ -1,5 +1,5 @@
 // Pixelgrafikens färgpalett: "Kontor 95" – grått och beige som en 90-talsdator, med blågrönt och
-// marinblått. Alla byggnadsfärger i pixel.js hämtas härifrån. Hissarnas färger (EL.color) och
+// marinblått. Alla byggnadsfärger i pixelgrafiken (pix*.js) hämtas härifrån. Hissarnas färger (EL.color) och
 // våningarnas accentfärger (acc) ligger i config.js och är valda i samma palett.
 // Signalfärger (brand, spårning, nödskyltar) ligger kvar i ritkoden – de ska synas i alla paletter.
 
