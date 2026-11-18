@@ -34,7 +34,7 @@ import { CREW } from '../src/config.js';
 import { PANO, ladderReach, PANO_CREW_S, PANO_DEFAULT_S } from '../src/pano.js';
 import { INTRO_OPTS, INTRO_SEED, STOPS, introPerson } from '../src/introStops.js';
 import { CUES, PIECES, layout, partOf } from '../src/scoreData.js';
-import { hz } from '../src/music.js';
+import { hz, onGrid } from '../src/music.js';
 /** @typedef {import('../src/elevators.js').Elevator} Elevator */
 /** @typedef {import('../src/people.js').Person} Person */
 
@@ -2479,6 +2479,24 @@ test('Rundvisningen: varje stopp hinner fram, händelserna går att framkalla oc
     if (s.k === 'framkalla') assert(S.heli, `${s.k}: ingen helikopter`);
   }
   return `${STOPS.length} stopp till kl ${hour().toFixed(2)} · följde ${out.join(', ')}`;
+});
+
+test('Rytmen i huset: engångsljuden hamnar på musikens sextondelar', () => {
+  const near = (a, b) => Math.abs(a - b) < 1e-9;
+  assert(near(onGrid(10, null), 10.02), 'utan musik ska ljudet låta genast');
+  const g = { next: 10.2, step: 5, st: 0.125 };
+  for (const now of [9.5, 9.99, 10.0, 10.18, 10.31, 11.7]) {
+    const t = onGrid(now, g), k = (t - g.next) / g.st;
+    assert(t >= now + 0.02 - 1e-9, `kl ${now}: ${t} är för tidigt`);
+    assert(t < now + 0.02 + g.st + 1e-9, `kl ${now}: ${t} väntar mer än en sextondel`);
+    assert(near(k, Math.round(k)), `kl ${now}: ${t} ligger inte i rutnätet`);
+  }
+  // swing: varannan åttondel kommer sent, och ljudet hamnar på den svängda tiden
+  const sw = { next: 10, step: 0, st: 0.1, swing: 0.5 };
+  assert(near(onGrid(10.13, sw), 10.25), `svängd åttondel: ${onGrid(10.13, sw)}`);
+  assert(near(onGrid(10.21, sw), 10.25), `svängd åttondel, sent: ${onGrid(10.21, sw)}`);
+  assert(near(onGrid(10.26, sw), 10.3), `efter den svängda: ${onGrid(10.26, sw)}`);
+  return 'rutnät, swing och utan musik';
 });
 
 test('Husmusiken: alla stycken går att lägga ut och dygnet har musik i varje del', () => {

@@ -224,6 +224,21 @@ export function updateScore(ctx, dest, on, house, intro) {
   } else whistleAt = Math.max(whistleAt, now + vrand(0.5, 2));
 }
 
+/**
+ * Rutnätet i stycket som hörs mest just nu (null = ingen husmusik hörs, eller den tystnar för brandkåren).
+ * @returns {import('./music.js').Grid|null}
+ */
+export function scoreGrid() {
+  if (!M || !ac || ac.currentTime < hushUntil) return null;
+  let best = null, lvl = 0.3;
+  for (const [k, sl] of Object.entries(M.slots)) {
+    if (sl.next === null || sl.lvl <= lvl) continue;
+    const P = PIECES[k];
+    lvl = sl.lvl; best = { next: sl.next, step: sl.step, st: 60 / P.bpm / 4, swing: P.swing || 0 };
+  }
+  return best;
+}
+
 /** Lägger ut stycket k:s toner fram till AHEAD. */
 function schedule(k, sl, now) {
   const P = PIECES[k], ev = EVENTS[k], st = 60 / P.bpm / 4;

@@ -1,11 +1,13 @@
 // Ljud: allt syntetiseras med Web Audio (fyrkant, triangel, brus) – inga ljudfiler.
 // Rent gränssnitt: läser S varje bildruta och letar efter förändringar (dörrar, ankomst, överlast),
 // ändrar aldrig simuleringen. Ljudet är avstängt från början; webbläsaren kräver ett klick innan något får låta.
+// Rytmen i huset: när musik spelar skjuts dörrarnas och plingens ljud fram till nästa sextondel i musikens takt
+// (onGrid i music.js), och plingets andra ton kommer två sextondelar senare – så spelar hela huset med.
 import { CAR_H, FLOOR_H, VMAX, W, floorY, shaftCX } from './config.js';
 import { S } from './state.js';
 import { VIEW, camTarget } from './view.js';
-import { musicOn, updateMusic } from './music.js';
-import { musicHush, updateScore } from './score.js';
+import { musicGrid, musicOn, onGrid, updateMusic } from './music.js';
+import { musicHush, scoreGrid, updateScore } from './score.js';
 import { vrand } from './rng.js';
 
 const KEY = 'hiss.sound';
@@ -89,7 +91,7 @@ function panOf(e) {
 const pitchOf = e => (e.freight ? 0.75 : e.express ? 1.2 : 1) * (1 + ((e.id * 7) % 5) * 0.03);
 
 // ---------- Byggstenar ----------
-/** Ny utgång med volym och panorering; släpps när ljudet är slut. */
+/** Ny utgång med volym och panorering; släpps när ljudet är slut (dur räknas från nu, väntan på takten inräknad). */
 function out(vol, pan, dur) {
   if (voices >= MAX_VOICES) return null;
   voices++;
@@ -124,27 +126,26 @@ function sweep(dst, f0, f1, t0, dur, vol = 1) {
 }
 
 // ---------- Ljuden ----------
-/** Ankomstpling: två toner, uppåt stigande och nedåt fallande (som riktiga hissar). */
-function ding(e, vol, pan) {
-  const g = out(vol * 0.32, pan, 1.3); if (!g) return;
-  const t = ac.currentTime, k = pitchOf(e);
+/** Ankomstpling: två toner, uppåt stigande och nedåt fallande (som riktiga hissar). t = när, gap = mellan tonerna. */
+function ding(e, vol, pan, t, gap = 0.2) {
+  const g = out(vol * 0.32, pan, t - ac.currentTime + gap + 1.1); if (!g) return;
+  const k = pitchOf(e);
   const [a, b] = e.dir < 0 ? [1046.5, 784] : e.dir > 0 ? [784, 1046.5] : [880, 880];
-  for (const [f, t0] of [[a, 0], [b, 0.2]]) {
+  for (const [f, t0] of [[a, 0], [b, gap]]) {
     tone(g, 'triangle', f * k, t + t0, 1.0);
     tone(g, 'square', f * k * 2, t + t0, 0.12, 0.12); // lite 16-bitarsglans i anslaget
   }
 }
 /** Dörrarna glider: brus som sveper upp (öppnas) eller ner (stängs). */
-function door(e, opening, vol, pan) {
-  const g = out(vol * 0.22, pan, 0.6); if (!g) return;
-  const t = ac.currentTime, k = pitchOf(e);
+function door(e, opening, vol, pan, t) {
+  const g = out(vol * 0.22, pan, t - ac.currentTime + 0.6); if (!g) return;
+  const k = pitchOf(e);
   if (opening) sweep(g, 500 * k, 1600 * k, t, 0.5);
   else sweep(g, 1500 * k, 450 * k, t, 0.5);
 }
 /** Dörrarna slår ihop. */
-function thud(e, vol, pan) {
-  const g = out(vol * 0.5, pan, 0.25); if (!g) return;
-  const t = ac.currentTime;
+function thud(e, vol, pan, t) {
+  const g = out(vol * 0.5, pan, t - ac.currentTime + 0.25); if (!g) return;
   const o = tone(g, 'sine', 110 * pitchOf(e), t, 0.18);
   o.frequency.exponentialRampToValueAtTime(45, t + 0.15);
   sweep(g, 300, 200, t, 0.06, 0.6);
@@ -226,6 +227,10 @@ export function updateSound(intro = false) {
   updateMusic(ac, master, lc, lc ? panOf(lc) : 0, musicHush());
   updateScore(ac, master, musicOn(), !lc, intro);
   const now = ac.currentTime;
+  // musikens rutnät: kassetten i hissen man följer, annars husmusiken (null = ingen musik, ljuden låter genast)
+  const grid = !musicOn() ? null : lc ? musicGrid() : scoreGrid();
+  const at = onGrid(now, grid);
+  const gap = grid ? Math.max(0.15, Math.min(0.3, 2 * grid.st)) : 0.2;
   const still = S.paused || !S.started;
   for (const e of S.elevators) {
     const c = cars[e.id];
@@ -247,9 +252,9 @@ export function updateSound(intro = false) {
     if (flashUp) { buzzer(near, pan); c.last = lastAny = now; continue; }
     if (now - c.last < MIN_GAP || now - lastAny < ALL_GAP) continue;
     let played = true;
-    if (ph === 'opening' && was !== 'opening') { ding(e, near, pan); door(e, true, near, pan); }
-    else if (ph === 'closing' && was !== 'closing') door(e, false, near, pan);
-    else if (ph === null && was === 'closing') thud(e, near, pan);
+    if (ph === 'opening' && was !== 'opening') { ding(e, near, pan, at, gap); door(e, true, near, pan, at); }
+    else if (ph === 'closing' && was !== 'closing') door(e, false, near, pan, at);
+    else if (ph === null && was === 'closing') thud(e, near, pan, at);
     else played = false;
     if (played) c.last = lastAny = now;
   }

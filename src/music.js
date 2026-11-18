@@ -21,6 +21,27 @@ export const hz = n => {
   if (!m) throw new Error(`okänd ton ${n}`);
   return 440 * 2 ** ((SEMI[m[1]] + 12 * (+m[2] + 1) - 69) / 12);
 };
+/** @typedef {{ next: number, step: number, st: number, swing?: number }} Grid
+ *  Musikens rutnät: tiden för nästa sextondel som inte är utlagd än, dess nummer i stycket, en sextondels längd
+ *  och swing (hur sent varannan åttondel kommer, andel av en sextondel). */
+
+/**
+ * Rytmen i huset: första sextondelen i rutnätet g som kommer minst lat sekunder efter now – dit skjuts
+ * engångsljuden (dörrar, pling) så att huset spelar med i musiken. Utan rutnät: genast.
+ * @param {number} now @param {Grid|null} g @param {number} [lat] @returns {number}
+ */
+export function onGrid(now, g, lat = 0.02) {
+  const from = now + lat;
+  if (!g || !(g.st > 0)) return from;
+  let k = Math.ceil((from - g.next) / g.st) - 1; // ett steg tidigare: en svängd åttondel kan ändå hinnas med
+  for (let i = 0; i < 4; i++, k++) {
+    const sw = g.swing && (((g.step + k) % 4) + 4) % 4 === 2 ? g.swing * g.st : 0;
+    const t = g.next + k * g.st + sw;
+    if (t >= from) return t;
+  }
+  return from;
+}
+
 /** 'A4:0:3 C5:3:3' → [ton, steg, längd i steg] */
 export const mel = s => s.split(' ').map(t => { const [n, a, b] = t.split(':'); return /** @type {[string, number, number]} */ ([n, +a, +b]); });
 
@@ -145,6 +166,10 @@ function playStep(i, t, k, step) {
 let tape = 0;                 // bandets fart 0..1 (strömavbrott saktar ner det)
 let next = /** @type {number|null} */ (null), step = 0;
 let carId = -1, lastNow = 0, lastV = 0, dip = 0;
+/** @type {Grid|null} */
+let grid = null;
+/** Kassettens rutnät just nu (null = bandet står eller hörs inte). */
+export const musicGrid = () => grid;
 
 /** Grundtonen per hiss: varuhissens band är djupare, expressens ljusare. */
 const keyOf = e => 2 ** ((e.freight ? -5 : e.express ? 2 : 0) / 12);
@@ -161,7 +186,7 @@ export function updateMusic(ctx, dest, e, panTo, hush = 1) {
   const play = on && !!e && S.started && !S.paused;
   if (!play) {
     m.fade.gain.setTargetAtTime(0, now, 0.15);
-    next = null; carId = -1;
+    next = null; carId = -1; grid = null;
     return;
   }
   // bandet går så länge hissen har ström
@@ -203,4 +228,5 @@ export function updateMusic(ctx, dest, e, panTo, hush = 1) {
     step = (step + 1) % LEN;
     next += st;
   }
+  grid = tape > 0.08 && hush > 0 && next !== null ? { next, step, st: STEP / tape } : null;
 }
