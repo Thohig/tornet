@@ -21,6 +21,9 @@ function freeSlot() {
   return free.length ? pick(free) : null;
 }
 /** En bil i garaget @typedef {{ id: number, floor: number, slot: number, x: number, state: string, color: string, owner: number }} Auto */
+/** Leveransbilen vid lastkajen (S.truck) @typedef {{ x: number, state: string, sent: number }} Truck */
+/** Ett VIP-besök som kommer med helikopter (S.vipVisits) @typedef {{ at: number, goal: number, done?: boolean }} VipVisit */
+/** VIP-helikoptern (S.heli) @typedef {{ state: string, y: number, visit: VipVisit }} Heli */
 /** Personen kommer med bil: bilen kör in i garaget och personen kliver ur. Falskt om garaget är fullt. @param {Person} p */
 export function arriveByCar(p, parked = false) {
   const s = freeSlot();

@@ -213,10 +213,15 @@ const fmt = (w) => `resor ${S.stats.served}, snittväntan ${avgWait().toFixed(1)
 test('Samma frö ger exakt samma dag (även med incidenter)', () => {
   sim(1234, { autoInc: true }); runDay(); const a = fingerprint();
   sim(1234, { autoInc: true }); runDay(); const b = fingerprint();
-  sim(99, { autoInc: true }); runDay(); const c = fingerprint();
   assert(a === b, `olika resultat med samma frö:\n${a}\n${b}`);
-  assert(a !== c, 'olika frön gav samma dag');
   return `frö 1234 → ${S.stats.incidents} incidenter, identiskt två gånger`;
+});
+test('Olika frön ger olika dagar', () => {
+  // (ett eget test så att det går parallellt med det ovan; en morgon räcker för att frön ska skilja sig)
+  sim(1234, { autoInc: true }); runUntil(9); const a = fingerprint();
+  sim(99, { autoInc: true }); runUntil(9); const c = fingerprint();
+  assert(a !== c, 'olika frön gav samma morgon');
+  return 'frö 1234 och 99 skiljer sig redan kl 09';
 });
 test('Bildfrekvensen påverkar inte simuleringen', () => {
   sim(555);
@@ -1071,7 +1076,7 @@ test('Energi: strömmen beror på lasten mot motvikten', () => {
   assert(S.stats.energyRun > 0 && S.stats.regen > 0, 'ingen energi räknades');
   return `full upp ${heavyUp.toFixed(0)} kW · tom ner ${emptyDown.toFixed(0)} kW · balanserad ${balanced.toFixed(0)} kW · tom upp ${emptyUp.toFixed(0)} kW · full ner ${heavyDown.toFixed(0)} kW`;
 });
-test('Energisnål drar mindre ström än Smart, och Rusning blir inte sämre i entrén på morgonen (snitt över sex dygn)', () => {
+test('Energisnål drar mindre ström än Smart (snitt över sex dygn)', () => {
   const r = {}, N = 6;
   for (const strategy of ['smart', 'peak', 'eco']) {
     let wait = 0, kwh = 0, run = 0;
@@ -1079,10 +1084,15 @@ test('Energisnål drar mindre ström än Smart, och Rusning blir inte sämre i e
       sim(seed, { strategy });
       runDay(); wait += avgWait(); kwh += S.stats.energy; run += S.stats.energyRun;
     }
-    r[strategy] = { wait: wait / N, morning: 0, kwh: kwh / N, run: run / N };
+    r[strategy] = { wait: wait / N, kwh: kwh / N, run: run / N };
   }
   assert(r.eco.kwh < r.smart.kwh && r.eco.run < r.smart.run * 0.9, `energi: smart ${r.smart.kwh.toFixed(1)} (körning ${r.smart.run.toFixed(1)}) · eco ${r.eco.kwh.toFixed(1)} (${r.eco.run.toFixed(1)}) kWh`);
   assert(r.eco.wait < r.smart.wait * 1.3, `eco väntar för länge: ${r.eco.wait.toFixed(1)}s mot ${r.smart.wait.toFixed(1)}s`);
+  return `dygn smart ${r.smart.wait.toFixed(1)} · rusning ${r.peak.wait.toFixed(1)} · eco ${r.eco.wait.toFixed(1)} s · energi smart ${r.smart.kwh.toFixed(1)} · eco ${r.eco.kwh.toFixed(1)} kWh (körning ${r.smart.run.toFixed(1)} → ${r.eco.run.toFixed(1)})`;
+});
+test('Rusning blir inte sämre än Smart i entrén på morgonen (48 morgnar)', () => {
+  /** @type {Record<string, { morning: number, lobby: number }>} */
+  const r = {};
   // morgonrusningen varierar mycket mellan dygn – jämför den över 48 frön (bara förmiddagen),
   // totalt och i entrén (väntan för dem som kliver på där)
   for (const strategy of ['smart', 'peak']) {
@@ -1097,7 +1107,7 @@ test('Energisnål drar mindre ström än Smart, och Rusning blir inte sämre i e
       }
       morning += (S.stats.waitSum - w0) / Math.max(1, S.stats.waitN - n0);
     }
-    r[strategy].morning = morning / M; r[strategy].lobby = lobby / Math.max(1, lobbyN);
+    r[strategy] = { morning: morning / M, lobby: lobby / Math.max(1, lobbyN) };
   }
   // Rusning är bara lite snabbare i entrén: över 3 200 morgnar (7–10.3) 3–5 % kortare väntan, oavsett slumpgenerator.
   // Dygnen sprider så mycket (kvoten över tolv morgnar 0,63–1,58) att en fördel inte går att visa här –
@@ -1106,7 +1116,7 @@ test('Energisnål drar mindre ström än Smart, och Rusning blir inte sämre i e
   // spridningen ±0,08 kring 0,96, så kravet är att Rusning inte blir klart sämre, varken i entrén eller totalt.
   assert(r.peak.lobby < r.smart.lobby * 1.15, `entrén på morgonen: rusning ${r.peak.lobby.toFixed(2)}s · smart ${r.smart.lobby.toFixed(2)}s`);
   assert(r.peak.morning < r.smart.morning * 1.1, `morgonrusning: rusning ${r.peak.morning.toFixed(2)}s · smart ${r.smart.morning.toFixed(2)}s`);
-  return `morgon smart ${r.smart.morning.toFixed(1)} · rusning ${r.peak.morning.toFixed(1)} s (entrén ${r.smart.lobby.toFixed(1)} → ${r.peak.lobby.toFixed(1)} s) · dygn smart ${r.smart.wait.toFixed(1)} · rusning ${r.peak.wait.toFixed(1)} · eco ${r.eco.wait.toFixed(1)} s · energi smart ${r.smart.kwh.toFixed(1)} · eco ${r.eco.kwh.toFixed(1)} kWh (körning ${r.smart.run.toFixed(1)} → ${r.eco.run.toFixed(1)})`;
+  return `morgon smart ${r.smart.morning.toFixed(1)} · rusning ${r.peak.morning.toFixed(1)} s (entrén ${r.smart.lobby.toFixed(1)} → ${r.peak.lobby.toFixed(1)} s)`;
 });
 test('Rusning: på morgonen kör lediga hissar direkt tillbaka till entrén (eller möter tåget)', () => {
   // (i rusningen är hissarna ofta upptagna hela tiden – därför fyra förmiddagar)
@@ -1733,14 +1743,18 @@ export function dayFingerprint(c) {
 }
 let golden = null;
 export function setGolden(g) { golden = g; }
-test('Regression: samma frön ger samma dygn som facit', () => {
-  if (!golden) throw new Fail('facit saknas (tests/golden.json) – skapa det med:  npm run golden');
-  const got = {};
-  for (const c of GOLDEN_CASES) got[caseKey(c)] = dayFingerprint(c);
-  const d = goldenDiff(golden, got, { maxCases: 6 });
-  assert(d.changed === 0, `${d.text}\n(avsiktlig ändring? godkänn med: npm run golden)`);
-  return `${GOLDEN_CASES.length} dygn identiska med facit`;
-});
+// i tre delar så att de går parallellt
+for (let k = 0; k < GOLDEN_CASES.length; k += 5) {
+  const part = GOLDEN_CASES.slice(k, k + 5);
+  test(`Regression: samma frön ger samma dygn som facit (${part.map(caseKey).join(', ')})`, () => {
+    if (!golden) throw new Fail('facit saknas (tests/golden.json) – skapa det med:  npm run golden');
+    const got = {}, want = {};
+    for (const c of part) { got[caseKey(c)] = dayFingerprint(c); want[caseKey(c)] = golden[caseKey(c)]; }
+    const d = goldenDiff(want, got, { maxCases: 6 });
+    assert(d.changed === 0, `${d.text}\n(avsiktlig ändring? godkänn med: npm run golden)`);
+    return `${part.length} dygn identiska med facit`;
+  });
+}
 
 // ---------- Invarianter över många frön ----------
 /** de nyare invarianterna (hopp, service utan tekniker, reserverade platser, väntan bredvid ledig hiss) */
@@ -1762,12 +1776,14 @@ function newInvariantFails(w, tag) {
   return f;
 }
 // Sällsynta fel visar sig bara med vissa frön – därför körs många hela dygn med slumpade incidenter.
+// 40 dygn i fyra tester om tio, så att de går parallellt (strategin och chefen följer dygnets nummer i)
 const MANY_SEEDS = Array.from({ length: 40 }, (_, i) => 1000 + i);
-test(`Invarianter över ${MANY_SEEDS.length} slumpade dygn (alla strategier, med incidenter)`, () => {
+for (let k = 0; k < MANY_SEEDS.length; k += 10) test(`Invarianter över slumpade dygn ${k + 1}–${k + 10} av ${MANY_SEEDS.length} (alla strategier, med incidenter)`, () => {
   const strategies = ['smart', 'peak', 'eco', 'nearest', 'random', 'buttons', 'smart', 'buttons'];
   const fails = [];
   let trips = 0, incidents = 0, worstWait = 0, heaviest = 0;
-  for (const [i, seed] of MANY_SEEDS.entries()) {
+  for (let i = k; i < k + 10; i++) {
+    const seed = MANY_SEEDS[i];
     const strategy = strategies[i % strategies.length];
     sim(seed, { strategy, autoInc: true, chief: i % 2 === 0 });
     const w = watcher();
@@ -1837,12 +1853,14 @@ export const PLAYER_ACTIONS = {
   chief: r => act('chief', r() < 0.7),
   chiefBack: r => act('chiefBack', ['storm', 'fire', 'power', 'strategy', 'move', 'pano', `heat${Math.floor(r() * S.elevators.length)}`][Math.floor(r() * 7)]),
 };
+// 24 dygn i fyra tester om sex, så att de går parallellt
 const FUZZ_SEEDS = Array.from({ length: 24 }, (_, i) => 5000 + i);
-test(`Spelaråtgärder: invarianter över ${FUZZ_SEEDS.length} dygn med slumpade åtgärder (även på natten)`, () => {
+for (let k = 0; k < FUZZ_SEEDS.length; k += 6) test(`Spelaråtgärder: invarianter över dygn ${k + 1}–${k + 6} av ${FUZZ_SEEDS.length} med slumpade åtgärder (även på natten)`, () => {
   const strategies = ['smart', 'buttons', 'peak', 'eco', 'nearest', 'random'];
   const names = Object.keys(PLAYER_ACTIONS), fails = [];
   let actions = 0;
-  for (const [i, seed] of FUZZ_SEEDS.entries()) {
+  for (let i = k; i < k + 6; i++) {
+    const seed = FUZZ_SEEDS[i];
     const strategy = strategies[i % strategies.length], tag = `frö ${seed} (${strategy})`;
     sim(seed, { strategy, autoInc: i % 2 === 0, maint: 'natt', chief: i % 3 !== 2 });
     const r = mulberry(seed * 7919), w = watcher();
@@ -1879,7 +1897,7 @@ test(`Spelaråtgärder: invarianter över ${FUZZ_SEEDS.length} dygn med slumpade
     fails.push(...newInvariantFails(w, tag));
   }
   assert(fails.length === 0, `${fails.length} fel:\n  ${fails.slice(0, 12).join('\n  ')}`);
-  return `${actions} spelaråtgärder över ${FUZZ_SEEDS.length} dygn utan fel`;
+  return `${actions} spelaråtgärder över sex dygn utan fel`;
 });
 
 // ---------- Driftchefen: huset sköter sig självt ----------

@@ -20,6 +20,7 @@ import { drawCallPx, drawFxPx, drawGagsPx, drawHallPeople, drawHoverPx, drawSele
 import { countOcc, deckSign, drawChiefPx, drawEscalatorPx, drawHall, floorOverlays, resetChiefAt } from './pixhall.js';
 import { drawGroundPx, drawLanternsPx, drawShell, drawSkyAll, drawSlabsPx, drawStreetPx, drawTerracePx, terminal } from './pixbuilding.js';
 import { drawCarPx, drawPanoPx, drawRopesPx } from './pixcars.js';
+import { drawProf, lap } from './prof.js';
 import { drawBannersPx, drawBrigadePx, drawCleanerPx, drawHeliPx, drawHoistPx, drawLightningPx, drawMedicPx, drawMovePilesPx, drawOutagePx, drawRoofPx, drawSmokePx, drawSnowPx, drawWeatherPx } from './pixroof.js';
 
 // ---------- Hela bilden ----------
@@ -28,22 +29,28 @@ export function renderPixel(dt) {
   resetCallAt(); resetChiefAt();
   const hr = hour();
   countOcc();
+  lap('grafik: förbered');
   drawSkyAll(hr);
   drawGroundPx();
   drawShell(hr);
+  lap('himmel/fasad');
   for (let f = 0; f < FLOORS; f++) {
     if (floorY(f) < VIEW.camY - 10 || floorY(f + 1) > VIEW.camY + VIEW.viewH + 10) continue;
     drawHall(f, hr); terminal(f); floorOverlays(f, hr); deckSign(f);
   }
+  lap('hallar');
   drawSlabsPx();
   drawEscalatorPx();
   drawTerracePx(hr);
   for (const e of S.elevators) drawRopesPx(e);
   drawLanternsPx();
   for (const e of S.elevators) drawCarPx(e);
+  lap('schakt/korgar');
   drawMovePilesPx();
   drawStreetPx(dt, hr);
+  lap('gatan');
   drawHallPeople();
+  lap('folk');
   drawPanoPx();
   drawHeliPx();
   drawSnowPx(dt);
@@ -56,6 +63,7 @@ export function renderPixel(dt) {
   drawRoofPx();
   drawCleanerPx();
   drawHoistPx();
+  lap('tak/väder/incidenter');
   drawCallPx();
   drawChiefPx();
   drawSelectionPx();
@@ -63,9 +71,13 @@ export function renderPixel(dt) {
   drawGagsPx(dt);
   drawFxPx(dt);
   drawBannersPx();
+  lap('text/bubblor');
   // skala upp till skärmen utan utjämning
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.imageSmoothingEnabled = false;
   const k = PX * s;
   ctx.drawImage(lo, 0, Math.round((CY * PX - VIEW.camY) * s), Math.round(w * k), Math.round(h * k));
+  lap('skala upp');
+  drawProf(ctx);
+  lap('profilen');
 }

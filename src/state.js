@@ -2,16 +2,28 @@
 import { START_H } from './config.js';
 
 // ---------- Tillstånd ----------
-export const S = {
+/** En rad i loggen (S.log, nyast först) @typedef {{ time: string, text: string, kind: string, color: string|null, pid: number|null }} LogLine */
+/** En ljudeffekt/text som flyter upp i bilden (S.fx; bara grafiken räknar ner life och sätter band = våningsbandet där lika texter slås ihop) @typedef {{ x: number, y: number, text: string, color: string, life: number, size?: number, band?: number }} Fx */
+/** Kvälls- och nattpersonalens schema och stamgästerna (sim.js) @typedef {{ at: number, run: () => void, done?: boolean }} SchedEv */
+/** Väntande per våning och riktning, byggs om varje steg (sim.js) @typedef {{ u: import('./people.js').Person[], d: import('./people.js').Person[] }[]} WaitLists */
+
+// Alla fält i S deklareras här, även de som bara ett delsystem använder: S har typen av den här literalen
+// (GameState), så typkontrollen larmar för fält som inte finns (S.felstavat). Nytt fält = ny rad här.
+const INIT = {
   started: false, paused: false, speed: 1, strategy: 'smart', tags: false,
   t: 0, clock: 0, day: 1, anim: 0, tempo: 'lang', // tempo: dygnets längd (TEMPOS i config)
-  people: /** @type {import('./people.js').Person[]} */ ([]), elevators: /** @type {import('./elevators.js').Elevator[]} */ ([]), log: [], fx: [], wl: null,
+  seed: 0, acc: 0, // dygnets frö (newSim) och tid som inte hunnit bli ett steg (advance)
+  people: /** @type {import('./people.js').Person[]} */ ([]), elevators: /** @type {import('./elevators.js').Elevator[]} */ ([]),
+  log: /** @type {LogLine[]} */ ([]), fx: /** @type {Fx[]} */ ([]), wl: /** @type {WaitLists|null} */ (null),
+  sched: /** @type {SchedEv[]} */ ([]), wakeAt: 0, // wakeAt: tidigast när en sovande hiss får väckas igen (nattläget)
   nextId: 1, reoptT: 0, summaryShown: false, stats: /** @type {Stats|null} */ (null), logDirty: true,
   // nytt dygn: 'mjuk' = huset rullar vidare kl 06 (rollDay i sim.js), 'ny' = dygnet börjar om från början (resetDay);
   // yesterday = gårdagens statistik efter ett mjukt dygnsskifte
   roll: 'ny', yesterday: /** @type {{ day: number, stats: Stats }|null} */ (null),
   sel: /** @type {import('./people.js').Person|null} */ (null), hover: /** @type {import('./people.js').Person|null} */ (null), hoverDoor: /** @type {number|null} */ (null), carCycle: 0,
   rosterFilter: 'all', logFilter: 'all',
+  // bara gränssnittet: kamerans mål (världs-y), hur länge kameran håller kvar det man klickat på, spårlappen behöver ritas om
+  camTarget: /** @type {number|null} */ (null), followHold: 0, trackDirty: false,
   // incidenter
   // slumpen: hur ofta incidenterna kommer av sig själva (av/lugn/normal/kaos, se INC_LEVELS i incidents.js)
   incLevel: 'normal', power: true, fire: /** @type {import('./incidents.js').Fire|null} */ (null), outage: /** @type {import('./incidents.js').Outage|null} */ (null),
@@ -31,6 +43,13 @@ export const S = {
   move: /** @type {import('./visits.js').Move|null} */ (null), medic: /** @type {import('./visits.js').Medic|null} */ (null),
   // Stadsturen: turistbussen och den guidade gruppen (tour.js)
   tour: /** @type {import('./tour.js').Tour|null} */ (null),
+  // tunnelbanan (train.js): tåget som är inne, nästa och förra avgången, förseningen och om sista tåget har gått
+  train: /** @type {import('./train.js').Train|null} */ (null), trainNext: 0, trainLast: /** @type {number|null} */ (null),
+  trainDelay: /** @type {{ t0: number, until: number }|null} */ (null), trainDone: false,
+  // garaget, leveransbilen, VIP-helikoptern och ambulansens klockslag (life.js, visits.js)
+  autos: /** @type {import('./life.js').Auto[]} */ ([]), nextAutoId: 1, truck: /** @type {import('./life.js').Truck|null} */ (null),
+  heli: /** @type {import('./life.js').Heli|null} */ (null), vipVisits: /** @type {import('./life.js').VipVisit[]} */ ([]),
+  medicAt: /** @type {number|null} */ (null),
   // takskenan: fönsterputsarens gondol och hissbalken (hoist.js)
   cleaner: /** @type {import('./hoist.js').Cleaner|null} */ (null), hoist: /** @type {import('./hoist.js').Hoist|null} */ (null),
   notices: /** @type {Notice[]} */ ([]), noticeId: 1,
@@ -38,7 +57,13 @@ export const S = {
   learnToday: /** @type {number[][]|null} */ (null), learnMem: /** @type {number[][]|null} */ (null),
   // bara gränssnittet: informationsrutor som spelaren har stängt (läses aldrig av simuleringen)
   dismissed: /** @type {Set<string>} */ (new Set()),
+  // vem som sitter på vilken plats (plats i SPOTS → personens id). Ligger i tillståndet, inte i config,
+  // så att config förblir ren data och flera simuleringar i samma process inte delar beläggning.
+  occ: /** @type {Map<import('./config.js').Spot, number>} */ (new Map()),
 };
+/** (mappad typ: typeof INIT ensam är öppen i en JS-fil och godtar vilket fält som helst) @typedef {{ [K in keyof typeof INIT]: (typeof INIT)[K] }} GameState */
+/** Speltillståndet. @type {GameState} */
+export const S = INIT;
 /**
  * En händelse som spelaren bara informeras om (snubbel, kall dag …). Ritas som en ruta i incidentpanelen.
  * @typedef {{ id: number, kind: string, title: string, text: string, t0: number, floor: number|null, car: number|null, act?: string, actLabel?: string }} Notice
@@ -58,10 +83,6 @@ export function incidentOver(type, title, text, opts = {}) {
   dayEvent(type, title, text);
   S.lastInc = { id: S.noticeId, type, t: S.t };
 }
-// Vem som sitter på vilken plats (plats i SPOTS → personens id). Ligger i tillståndet, inte i config,
-// så att config förblir ren data och flera simuleringar i samma process inte delar beläggning.
-/** @type {Map<import('./config.js').Spot, number>} */
-S.occ = new Map();
 /** id för den som sitter på platsen, eller null */
 export const occOf = s => S.occ.get(s) ?? null;
 /** sätt (id) eller töm (null) platsen */
@@ -69,7 +90,9 @@ export function setOcc(s, id) { if (id === null) S.occ.delete(s); else S.occ.set
 // Krokar som gränssnittet kopplar in sig på. Simuleringen rör aldrig DOM själv.
 /** @type {{ incident: (floor: number|null) => void, dayEnd: () => void }} */
 export const hooks = { incident() {}, dayEnd() {} };
-/** Dygnets siffror (S.stats). Delsystemen lägger till egna räknare vid behov (t.ex. panoStuck). @typedef {ReturnType<typeof newStats>} Stats */
+/** @typedef {ReturnType<typeof newStats>} NewStats */
+/** Dygnets siffror (S.stats). Alla räknare deklareras i newStats – en ny räknare = en ny rad där (mappad typ, se GameState).
+ * @typedef {{ [K in keyof NewStats]: NewStats[K] }} Stats */
 export function newStats() {
   return { served: 0, waitSum: 0, waitN: 0, waitMax: 0, rideSum: 0, rideN: 0, angry: 0,
     smoked: 0, trappedSec: 0, stairs: 0, evacuated: 0, incidents: 0, overloads: 0, transfers: 0, carsIn: 0, deliveries: 0, vips: 0,
@@ -78,7 +101,7 @@ export function newStats() {
     gripes: 0, cups: 0, holds: 0, chats: 0,
     crowdSkips: 0, closePresses: 0, heatStops: 0, relevels: 0, stumbles: 0, doorFights: 0,
     medical: 0, medicSec: 0, moveLoads: 0, moves: 0, moveBroken: 0, stormFaults: 0, learnedParks: 0, upperDeck: 0, escalator: 0,
-    trains: 0, trainIn: 0, trainOut: 0,
+    trains: 0, trainIn: 0, trainOut: 0, panoStuck: 0,
     // styrningens förutsagda väntan (vid senaste tilldelningen) mot den faktiska: summa fel, summa |fel|, antal
     etaErr: 0, etaAbs: 0, etaN: 0,
     // dygnets händelser i tidsordning (dayEvent): det sammanfattningen berättar om

@@ -75,7 +75,7 @@ export function panoStick(e) {
   S.pano = { car: e.id, t0: S.t, ph: 'stuck', how: null, by: '', setup: '', crew: false, crewAt: S.t + PANO_CREW_S,
     n: e.passengers.length, out: 0, t: 0, next: 0, t1: 0, toF: high ? TERRACE_F : LOBBY, noted: '',
     rider: null };
-  S.stats.faults++; S.stats.panoStuck = (S.stats.panoStuck || 0) + 1;
+  S.stats.faults++; S.stats.panoStuck++;
   for (const p of e.passengers) pev(p, `Hiss ${e.name} tvärstannade utanpå huset – vi hänger på fasaden! (hydrauliken)`);
   log(`🛗 ${e.name} sitter fast på fasaden mellan två våningar – ${e.passengers.length} instängda, räddningstjänsten larmas`, 'alert', e.color);
   S.fx.push({ x: shaftCX(e.id), y: floorY(e.pos) - CAR_H - 30, text: 'KLONK!', color: '#ff9f1c', life: 1.6 });

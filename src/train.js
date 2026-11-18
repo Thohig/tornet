@@ -28,6 +28,8 @@ export function headway(h) {
 /** finns det fler tåg i dag? */
 export const trainsRunning = (h = hour()) => STATION >= 0 && h >= FIRST_H - 0.3 && h < LAST_H;
 
+/** Tåget vid perrongen (S.train): läge och fart, tid i läget, hur många som ska av (n, varav emp anställda) och har klivit av
+ * @typedef {{ x: number, v: number, state: 'in'|'stop'|'out', t: number, off: number, spawned: number, n: number, emp?: number, nextOff?: number }} Train */
 export function trainReset() {
   S.train = null;
   S.trainNext = 0; // första tåget går när klockan når FIRST_H
@@ -82,7 +84,7 @@ function arrive(T, h, rate) {
   T.state = 'stop'; T.t = 0; T.v = 0;
   S.stats.trains++;
   // tidtabellen räknas från ankomst till ankomst; med sig har tåget dem som samlats sedan förra tåget
-  const since = S.trainLast !== undefined && S.trainLast !== null ? S.t - S.trainLast : headway(h);
+  const since = S.trainLast !== null ? S.t - S.trainLast : headway(h);
   S.trainLast = S.t; S.trainNext = S.t + headway(h);
   if (S.fire) { T.n = 0; log('🚇 Tåget stannar men ingen kliver av – brandlarm i huset', 'alert'); return; }
   // anställda: tågets andel av det som annars hade kommit genom entrén sedan förra tåget

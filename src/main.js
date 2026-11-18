@@ -9,6 +9,7 @@ import { slowmo, updateDirector } from './director.js';
 import { updatePanel } from './panels.js';
 import { menuDemo, menuTick, showMenu } from './menu.js';
 import { introOn, introTick } from './intro.js';
+import { lap, profFrame } from './prof.js';
 
 // ---------- Start ----------
 // Startmenyn (menu.js) väljer frö, tempo, slumpen … Adressen går före: ?seed=123 spelar om exakt samma dag
@@ -32,17 +33,23 @@ if (direct) showIntro('start'); else showMenu();
 let last = performance.now(), hudT = 0;
 function frame(now) {
   const dt = Math.min(0.25, (now - last) / 1000); last = now;
+  profFrame(); // ?prof=1: tid per del, ritas i bilden (prof.js)
   const slow = slowmo(dt);
   menuTick();
   introTick();
+  lap('meny/rundvisning');
   if ((S.started || menuDemo()) && !S.paused) advance(dt, S.speed * slow);
   S.anim += dt;
+  lap('simulering');
   updateDirector();
   updateCamera(dt);
+  lap('regissör/kamera');
   render(dt);
   updateSound(introOn());
+  lap('ljud');
   hudT -= dt;
   if (hudT <= 0) { hudT = 0.15; updatePanel(); }
+  lap('panelen');
   requestAnimationFrame(frame);
 }
 document.fonts && document.fonts.ready.then(resize);

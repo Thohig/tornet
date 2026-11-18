@@ -384,7 +384,7 @@ export function movingResNext(p) {
 
 // ---------- Ambulans ----------
 function medicTick() {
-  if (S.medicAt !== null && S.medicAt !== undefined && !S.medic && hour() >= S.medicAt) {
+  if (S.medicAt !== null && !S.medic && hour() >= S.medicAt) {
     S.medicAt = null;
     if (!S.fire) startMedical();
   }

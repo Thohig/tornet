@@ -7,6 +7,7 @@ import { H } from './config.js';
 import { clamp } from './util.js';
 import { cv, nightness, VIEW } from './view.js';
 import { S } from './state.js';
+import { profLayer, profOn } from './prof.js';
 /** @typedef {import('./elevators.js').Elevator} Elevator */
 /** @typedef {import('./people.js').Person} Person */
 
@@ -40,7 +41,9 @@ export function layer(name, key, draw) {
     L.key = full;
     const kLo = lo, kG = g, kCY = CY;
     lo = L.c; g = L.g; CY = 0; g.imageSmoothingEnabled = false;
+    const t0 = profOn() ? performance.now() : 0;
     try { draw(); } finally { lo = kLo; g = kG; CY = kCY; }
+    if (t0) profLayer(performance.now() - t0);
   }
   // bara den synliga biten kopieras
   const sy = clamp(CY, 0, L.c.height), sh = Math.min(LO.height, L.c.height - sy);
