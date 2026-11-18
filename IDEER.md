@@ -16,13 +16,35 @@ Startmenyn har vuxit till en uppsättning lägen (scenarier, Ny dag med Egenskap
 
 - **Spela om:** raden ”Senast: dag n · betyg … ↻ Spela om” (`lastLine`, `replay` i `pickItem`, `.mn-last` i CSS) och det som bara finns för den: `rememberDay` (anropas från hud.js när dygnet tar slut) och `KEY.last` i `localStorage`. Med mjuka skiften finns inget naturligt ”förra dygnet” att spela om, och ett dygn ska kännas som en del av husets liv, inte en omgång.
 
-**Kvar i startmenyn:** ▶ KÖR!, 🛎️ Rundvisning och ? Hur funkar det. (Fundera på om menyn då behövs alls som egen vy första gången – uppstarten i DOS-svart och KÖR! kan räcka, med rundvisningen erbjuden som i dag.)
+**Ingen startmeny:** spelet startar direkt efter uppstarten i DOS-svart (första gången). Hur funkar det finns redan som ?-knappen i panelen, och rundvisningen sker i husets vanliga gång (se nästa förslag). Bort: hela `menu.js` utom uppstarten, och menyvyn bakom (`menuDemo`).
 
 **Kvar i panelen** (det enda stället att ställa in något): styrlogiken (blocket Styrning), slumpen (Av/Lugnt/Normalt/Kaos, gäller resten av dygnet och följer med nästa), driftchefen på/rast, framkalla (ersätter scenarierna) och inställningarna ⚙️ (felknappar, underhåll). Valen sparas i `localStorage` som i dag och används av nästa KÖR!.
 
 **Kvar för utvecklaren:** `?seed=` (ett bestämt frö utan meny) – bra för felsökning och för att dela ett dygn.
 
 **Att tänka på:** README (startmenyn, scenarierna, tempot), CLAUDE.md (raderna om `menu.js`, Dygnsskiftet och Dygnets tempo), `showIntro` i hud.js (nämner dygnets längd – blir alltid ~15 min) och testerna för menyn om några finns. Rundvisningen (`intro.js`) har egna stopp och påverkas inte.
+
+## Rundvisningen i husets vanliga gång
+
+I dag är rundvisningen ett eget dygn med fast frö (`INTRO_SEED`) som spolas fram till klockslag, framkallar ett hissfel och en VIP och sedan slängs. Förslag: **Berit visar runt på riktigt, i det dygn som pågår**, och huset fortsätter som vanligt omkring henne. Det blir dockhusprincipen fullt ut – det man ser på rundvisningen är det som faktiskt händer just nu.
+
+**Hur den börjar.** Spelaren beställer den med `act('rundvisning')` från två ställen: en knapp i ?-rutan (”🛎️ Be Berit visa runt”) och Berits block i panelen när man följer henne. Första gången spelet startas erbjuder Berit det själv när hon kommer till disken (informationsrutan ”Berit: Vill du att jag visar runt?” med Ja/Nej). Utanför hennes skift (07–19) står beställningen kvar och hon börjar när hon kommer på morgonen (rutan säger det).
+
+**Vikarien.** Berit lämnar inte disken obemannad: hon ringer bemanningen (samma telefonsamtal i grafiken som teknikerns `S.techCall`) och en vikarie kommer – ny post i `CREW`, t.ex. **Kicki från Kontorsservice**, med egna repliker (`'Berit är på rundvisning, kan jag hjälpa till?'`, `'Hur funkar den här telefonen?'`). Kicki kommer genom karuselldörren (eller med tåget), sätter sig i receptionen och Berit går först när Kicki sitter – samma regel som `cover` i crew.js. När rundvisningen är slut tackar Berit, Kicki går hem. Ett larm under rundvisningen (`alarm()`) gör att Berit avbryter och går till sin post som vanligt.
+
+**Berit går rutten.** Hon är en person med en rutt, som guiden i tour.js: entrén → driftcentralen (P1) → perrongen (TB) → expressen till Sky Café (6) → takterrassen → tillbaka till entrén. Kameran följer henne (`VIEW.follow`, regissören av under tiden). Stoppen i `introStops.js` blir **platser i stället för klockslag**: varje stopp har en text som börjar när hon kommer fram, och texter för vägen (”Medan vi åker expressen …”). Inga framkallade händelser – i stället läser stoppen av huset just nu:
+
+- står tåget inne / kommer tåget snart / är tunnelbanan stängd för natten
+- vilket beslut chefen fattade senast (`S.chief.log`) och vem som sitter där (Gun-Britt eller Rune)
+- om en hiss är trasig och var teknikern är (”Ser du L2? Där jobbar Bosse just nu”)
+- dagens händelser hittills (`S.stats.events`): ”I morse brann det på 9:an, du skulle ha sett det”
+- har inget hänt: hon visar framkalla-blocket och säger att man kan prova själv
+
+Knapparna i berättelseblocket (`setTour`) blir ”Gå vidare” (hon slutar prata och går till nästa stopp), ”Säg igen” och ”Avsluta” (hon går tillbaka till disken). Panelblocken som lyfts fram (`focus`, `spot`) finns kvar.
+
+**Berit pratar högt.** Repliken läses upp med **Web Speech API** (`speechSynthesis` i webbläsaren). På en Mac använder den samma röster som `say` – svenska Alva/Klara – utan att servern behöver göra något, och den fungerar likadant i Safari på mobilen. Välj en `sv-SE`-röst om det finns, annars är rundvisningen bara text. Ljudknappen styr den som de andra ljuden; hissmusiken och husmusiken (score.js) sänks medan hon pratar. Pratbubblan över Berit och textraden i panelen följer uppläsningen (`onboundary`), och ”Gå vidare” avbryter talet (`speechSynthesis.cancel()`). Alternativet att låta `serve.py` köra macOS `say` och skicka ljudet fungerar bara på Mac och bara lokalt – Web Speech räcker. (Senare: stamgästerna kan få var sin röst för sina repliker.)
+
+**Regler:** rundvisningen är simulering (Berit och Kicki är personer) och går därför via `act()`, finns i `PLAYER_ACTIONS`, drar inga slumptal (`blankPerson`, eller en egen ström `rundvisning`) och följer med över dygnsskiftet (`crewRoll`). Talet och kameran är bara gränssnitt. Test: rundvisningen tar slut av sig själv inom en viss tid även om spelaren inte trycker på något; `watcher()`: receptionen är aldrig tom under Berits skift (Berit eller Kicki sitter där, utom vid larm). Bort: `INTRO_SEED`, `INTRO_OPTS`, fram-spolningen i intro.js och de framkallade händelserna i stoppen.
 
 ## Kuppen på 5:an (actionincident)
 
