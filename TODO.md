@@ -8,11 +8,5 @@ Förslag som inte är gjorda än, ungefär i den ordning de ger mest. Stryk det 
 ## Stäng `S` för typkontrollen
 `Person`, `Elevator` och incidenternas tillstånd (`S.fire`, `S.pano`, `S.move` …) har typer, men `S` själv är ett öppet objekt i en JS-fil: `tsc` godtar vilket fält som helst på `S` (även `S.felstavat`), och fält som `S.train`, `S.autos` och `S.heli` läggs till utanför `state.js`. En handskriven typ för hela `S` (ungefär 110 fält) stänger det. Även `S.stats` (`ReturnType<typeof newStats>`) är öppen. På sikt kan `strict` slås på fil för fil.
 
-## Spara och spela upp ett dygn
-Simuleringen är deterministisk, så ett dygn kan sparas som frö + inställningar + en lista med `act()`-anrop och tidpunkter. Det ger:
-- **Fortsätt där du var** efter omladdning (i dag sparas bara inställningarna i `localStorage`).
-- **Dela ett dygn** – någon annan ser exakt samma sak.
-- **Felrapporter som går att återskapa** – spelaren skickar loggen, den spelas upp headless i Node.
-
 ## Mät ritningen
 `npm run bench` mäter simuleringen men inte grafiken, och `renderPixel` gör mycket per bildruta. Ett profilläge (t.ex. `?prof=1`) som visar tid per del (hallar, folk, text, lager) direkt i bilden – särskilt nyttigt på mobilen.
