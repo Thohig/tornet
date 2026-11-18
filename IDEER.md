@@ -2,11 +2,22 @@
 
 Idéer som vi har pratat om men inte byggt. Stryk det som blir gjort eller som du inte vill ha. De tekniska förbättringarna står i `TODO.md`.
 
-## Kuppen på 5:an (actionfilmsscenario)
+## Ta bort scenarierna – allt kommer av sig självt
+
+Scenarierna i startmenyn bryter dockhusprincipen: de spolar fram till ett klockslag, stänger av slumpen och framkallar en färdig händelse. Allt de visar kan redan hända på en vanlig dag (utom Stadsturen, som spelaren skickar själv), och allt kan framkallas från panelen. Förslag:
+
+- **Bort:** `SCENARIOS`, scenariovyn (`scenHtml`, knappen i huvudmenyn, `s:`-valen i `pickItem`), fram-spolningen (`M.spin`, `SPIN_MS`, `.mn-spin`/`.mn-bar` i `style.css`) och händelselistan (`M.plan` i `menuTick`). `start(o)` tar inget scenario längre. Stryk scenarierna i README och i CLAUDE.md (raden om `menu.js`).
+- **Kvar i menyn:** KÖR!, Ny dag, Dagens Torn, Spela om förra dygnet, rundvisningen. Menyn blir kortare och varje dygn börjar 06.
+- **Ersättning för den som vill se något särskilt:** slumpen *Kaos* i Ny dag, och framkalla-blocket i panelen (det finns redan för allt). Möjligen ett nytt val i Egenskaper, ”Första incidenten: när som helst / snart”, som bara flyttar den första posten i `S.incPlan` till en timme in i dygnet – ingen spolning och ingen avstängd slump.
+- Rundvisningen (`intro.js`) använder egna stopp och påverkas inte.
+
+## Kuppen på 5:an (actionincident)
+
+**Kommer när som helst**, som de andra incidenterna: en post i `chooseIncident` (incidents.js) med låg vikt (~0,2, som fasaden), bara på dagtid när banken har öppet eller på kvällen efter stängning – aldrig samtidigt som brand eller pågående flytt, och högst en gång per dygn. Förvarningen (`WARN`) är en skåpbil som står för länge vid lastkajen: ”🚐 En skåpbil från Fasad & Fönster AB har stått vid lastkajen länge…”. Med slumpen på Kaos blir den vanligare; med Av kommer den bara om den framkallas (`act('trigger', 'heist')`). Mjukt dygnsskifte: en kupp som pågår kl 06 fortsätter (`heistRoll`). Brasklapp: om rånarna kommer på dagen är det fler i huset som blir gisslan – samlingen i Sky Café måste klara ett fullt hus (köer i trappan, några stannar på sin våning).
 
 En kväll tar ett rånargäng över tornet för att tömma valvet i Guldbanken – och en enda person som rånarna missat smyger runt i huset och sätter käppar i hjulet. Lånar genrens upplägg (huset är fällan, hjälten är ensam och barfota, polisen står utanför och gör fel), inte någon films figurer eller repliker. Tonen är tornets: ingen skjuter, ingen dör – rånarna är klantiga yrkesmän i overall från ”Fasad & Fönster AB”, gisslan sitter och fikar i Sky Café och tycker att det är spännande.
 
-**Förlopp** (scenario i `SCENARIOS`, kl ~20, helst en fredag med firmafest i Sky Café):
+**Förlopp** (här på kvällen, med firmafest i Sky Café):
 
 1. **Ankomsten.** En skåpbil backar in vid lastkajen (`DOCK`). Fem rånare åker varuhissen upp; en stannar i kontrollrummet (P1). Driftchefen blir bunden vid stolen (`S.chief.on = false`, repliken i fönstret byts mot rånarledarens) – **spelaren förlorar Hiss-O-Matic**: rånarna låser alla hissar utom varuhissen i oberoende drift (`e.indep`, nytt läge `hijack` i `outReason`).
 2. **Gisslan.** Alla i huset kallas till Sky Café (6) – samma rörelse som utrymningen men uppåt (`assembly` på en annan plats). De boende på 12–14 låser in sig.
@@ -31,4 +42,4 @@ Spelaren kan, som alltid, ta över ett beslut via `act('heist', …)`. Gör spel
 - Firmafestens gäster i Sky Café byter repliker (`say`) om hur det går – stamgästerna har egna.
 - Sammanfattningen dagen efter: ”Guldtackor kvar i valvet: 412 av 412”, ”Trappsteg barfota: 1 340”.
 
-**Teknik:** egen modul `heist.js` med typen `Heist` i `S.heist`, egen slumpström `kuppen` (ankomsten får inte påverka andra strömmar), `heistReset`/`heistRoll`, en post i `TRIGGERS` och `INC_LEVELS` bara i kaosnivån (eller enbart som scenario och framkallning). Regler i `watcher()`: en hiss i `hijack` tar aldrig folk ur `assembly`; gisslan lämnar aldrig Sky Café förrän `S.heist.ph === 'done'`; ingen dör. Dockhustestet: kuppen ska ta slut av sig själv.
+**Teknik:** egen modul `heist.js` med typen `Heist` i `S.heist`, egen slumpström `kuppen` (ankomsten får inte påverka andra strömmar), `heistReset`/`heistRoll`, en post i `TRIGGERS` och i `chooseIncident`. Regler i `watcher()`: en hiss i `hijack` tar aldrig folk ur `assembly`; gisslan lämnar aldrig Sky Café förrän `S.heist.ph === 'done'`; ingen dör. Dockhustestet: kuppen ska ta slut av sig själv.
