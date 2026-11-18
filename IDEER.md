@@ -2,14 +2,25 @@
 
 Idéer som vi har pratat om men inte byggt. Stryk det som blir gjort eller som du inte vill ha. De tekniska förbättringarna står i `TODO.md`.
 
-## Ta bort scenarierna – allt kommer av sig självt
+## En enklare start – huset bara går
 
-Scenarierna i startmenyn bryter dockhusprincipen: de spolar fram till ett klockslag, stänger av slumpen och framkallar en färdig händelse. Allt de visar kan redan hända på en vanlig dag (utom Stadsturen, som spelaren skickar själv), och allt kan framkallas från panelen. Förslag:
+Startmenyn har vuxit till en uppsättning lägen (scenarier, Ny dag med Egenskaper, Dagens Torn, två tempon, två sorters dygnsskifte). Dockhusprincipen säger att huset sköter sig självt: man trycker på KÖR! och tittar, och allt annat görs i kontrollpanelen medan huset går. Scenarierna bryter dessutom principen – de spolar fram, stänger av slumpen och framkallar en färdig händelse – trots att allt de visar kan hända på en vanlig dag eller framkallas från panelen.
 
-- **Bort:** `SCENARIOS`, scenariovyn (`scenHtml`, knappen i huvudmenyn, `s:`-valen i `pickItem`), fram-spolningen (`M.spin`, `SPIN_MS`, `.mn-spin`/`.mn-bar` i `style.css`) och händelselistan (`M.plan` i `menuTick`). `start(o)` tar inget scenario längre. Stryk scenarierna i README och i CLAUDE.md (raden om `menu.js`).
-- **Kvar i menyn:** KÖR!, Ny dag, Dagens Torn, Spela om förra dygnet, rundvisningen. Menyn blir kortare och varje dygn börjar 06.
-- **Ersättning för den som vill se något särskilt:** slumpen *Kaos* i Ny dag, och framkalla-blocket i panelen (det finns redan för allt). Möjligen ett nytt val i Egenskaper, ”Första incidenten: när som helst / snart”, som bara flyttar den första posten i `S.incPlan` till en timme in i dygnet – ingen spolning och ingen avstängd slump.
-- Rundvisningen (`intro.js`) använder egna stopp och påverkas inte.
+**Bort ur spelet:**
+
+- **Scenarierna:** `SCENARIOS`, `scenHtml`, `s:`-valen i `pickItem`, fram-spolningen (`M.spin`, `SPIN_MS`, `.mn-spin`/`.mn-bar` i `style.css`) och händelselistan (`M.plan` i `menuTick`). `start(o)` tar inget scenario längre.
+- **Ny dag:** `newHtml` (Egenskaper), `opts`, `dice`/`go`/`back` i `pickItem`, `.mn-props`/`.mn-radios`/`.mn-seed` i CSS. `defaults()` blir bara de sparade valen från panelen plus ett slumpat frö.
+- **Dagens Torn:** `todaySeed` och `today` i `pickItem`.
+- **Det korta dygnet i gränssnittet:** `?tempo=` i main.js och tempovalet. Det långa dygnet (`lang`) är det enda spelet visar. **Kvar i `TEMPOS`** för testerna, ligan och `npm run bench`, som kör det korta för att gå fort (alternativt: döp om det till ett testtempo så att det syns att det inte är ett spelval).
+- **Dygnsskiftet ”Börjar om”:** spelet rullar alltid vidare (`'mjuk'`). Bort: valet `roll` i panelens inställningar (panels.js), radion i menyn, `?dygn=ny` i main.js och grenen i hud.js som stannar spelet för sammanfattningen när dygnet tar slut. Sammanfattningen visas fortfarande som vyn `yesterday` och informationsrutan ”Dag n börjar”. **`'ny'` finns kvar i simuleringen** (`newSim`s standard, `resetDay`) – testerna och ligan kör ett dygn i taget och behöver det. Rubriken i CLAUDE.md om dygnsskiftet ändras: spelet = alltid mjukt, `'ny'` = bara tester/liga.
+
+**Kvar i startmenyn:** ▶ KÖR!, 🛎️ Rundvisning, ? Hur funkar det och raden ”Senast: dag n · betyg … ↻ Spela om”. Spela om börjar om från dag 1 med samma frö (med mjuka skiften är ”förra dygnet” oftast dag 5 eller 12 – raden bör säga ”Börja om från dag 1 med samma frö” och inte lova något annat).
+
+**Kvar i panelen** (det enda stället att ställa in något): styrlogiken (blocket Styrning), slumpen (Av/Lugnt/Normalt/Kaos, gäller resten av dygnet och följer med nästa), driftchefen på/rast, framkalla (ersätter scenarierna) och inställningarna ⚙️ (felknappar, underhåll). Valen sparas i `localStorage` som i dag och används av nästa KÖR!.
+
+**Kvar för utvecklaren:** `?seed=` (ett bestämt frö utan meny) – bra för felsökning och för att dela ett dygn.
+
+**Att tänka på:** README (startmenyn, scenarierna, tempot), CLAUDE.md (raderna om `menu.js`, Dygnsskiftet och Dygnets tempo), `showIntro` i hud.js (nämner dygnets längd – blir alltid ~15 min) och testerna för menyn om några finns. Rundvisningen (`intro.js`) har egna stopp och påverkas inte.
 
 ## Kuppen på 5:an (actionincident)
 
