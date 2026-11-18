@@ -17,6 +17,7 @@ import { chiefOnDuty } from './chief.js';
 import { $, ikon, carHtml, dayNumbers, drawPortrait, incidentPanel, logHtml, personHtml, rosterHtml, statsHtml } from './hud.js';
 import { peopleBehindDoor } from './render.js';
 import { soundOn } from './sound.js';
+import { getLang, trDom } from './lang.js';
 import { musicOn } from './music.js';
 import { lastDay, summaryHtml } from './summary.js';
 import { SPEEDS, extraActions, uiHooks } from './input.js';
@@ -199,6 +200,7 @@ function viewHtml(v) {
     + `<div class="hint">Hur ofta folk trycker på fel knapp (och barn på alla) – syns med styrlogiken Knappar.</div>`
     + `<div class="lbl">Underhåll</div>${set('maint', [['natt', 'Nattservice'], ['fel', 'Bara vid fel']])}`
     + `<div class="hint">Nattservice håller nere slitaget – utan den slits hissarna dag för dag och går oftare sönder.</div>`
+    + `<div class="lbl">Language / Språk</div><div class="row">${btn('lang:en', 'English', getLang() === 'en')}${btn('lang:sv', 'Svenska', getLang() === 'sv')}</div>`
     + `<div class="lbl">Visa</div><div class="row">${btn('tags', 'Namnbrickor (T)', S.tags)}${btn('sound', `Ljud (M) ${soundOn() ? '🔊' : '🔇'}`, soundOn())}${btn('music', 'Musik ♪', musicOn())}</div>`
     + `<div class="hint">När ljudet är på: husmusiken följer dygnet (ragtime i rusningen, vals på förmiddagen, jazz till lunch, lounge på kvällen, speldosa på natten) med korta inslag när något händer. Följer du en hiss hörs i stället kassetten i korgen.</div>`;
 }
@@ -239,7 +241,7 @@ function paint(k, cls, html) {
   const e = el(k);
   if (e.className !== cls) e.className = cls;
   const shape = html.replace(LV, '<span class="lv"></span>');
-  if (shape !== last[k]) { last[k] = shape; e.innerHTML = html; return true; }
+  if (shape !== last[k]) { last[k] = shape; e.innerHTML = html; trDom(e); return true; }
   const vals = [...html.matchAll(LV)].map(m => m[1]);
   e.querySelectorAll('.lv').forEach((x, i) => { if (x.textContent !== vals[i]) x.textContent = vals[i]; });
   return false;
@@ -322,7 +324,7 @@ const hintAt = () => /** @type {HTMLElement|null} */ (document.elementFromPoint(
 function showTip() {
   const t = hintAt();
   if (!t) { hideTip(); return; }
-  tip.innerHTML = t.dataset.hint; tip.hidden = false;
+  tip.innerHTML = t.dataset.hint; trDom(tip); tip.hidden = false;
   const r = t.getBoundingClientRect(), w = tip.offsetWidth, hh = tip.offsetHeight;
   const x = Math.max(4, Math.min(window.innerWidth - w - 4, r.left + r.width / 2 - w / 2));
   const y = r.bottom + 6 + hh <= window.innerHeight ? r.bottom + 6 : Math.max(4, r.top - hh - 6);
@@ -357,6 +359,12 @@ export function setCinema(v) {
 }
 extraActions.cinema = () => setCinema(!cinema);
 let lowerKey = '';
+/** Språket byttes (lang.js): rita om hela panelen och textskylten nästa gång. */
+export function repaintAll() {
+  for (const k of Object.keys(last)) delete last[k];
+  lowerKey = ''; UI.key = '';
+  updatePanel();
+}
 function updateLower() {
   const e = $('lower'), c = S.started && !S.summaryShown ? crewNow() : null;
   if (e.hidden === !!c) e.hidden = !c;
@@ -369,7 +377,7 @@ function updateLower() {
   // nertill i bilden (syns hela huset är bilden lägre än spelytan)
   const cv = $('game'), gap = Math.max(0, cv.parentElement.clientHeight - cv.offsetTop - cv.offsetHeight), b = `${gap + (cinema ? 24 : 6)}px`;
   if (e.style.bottom !== b) e.style.bottom = b;
-  if (html !== lowerKey) { lowerKey = html; e.innerHTML = html; }
+  if (html !== lowerKey) { lowerKey = html; e.innerHTML = html; trDom(e); }
 }
 // H slår av/på biografläget; Esc lämnar biografläget eller vyn (fångas före input.js, som annars slutar följa)
 window.addEventListener('keydown', ev => {

@@ -9,8 +9,11 @@ import { INC_LEVELS } from './incidents.js';
 import { fl } from './util.js';
 import { showIntro, showOverlay, hideOverlay } from './hud.js';
 import { offerVisning } from './intro.js';
+import { getLang, setLang, tr } from './lang.js';
+import { extraActions } from './input.js';
+import { repaintAll } from './panels.js';
 
-const KEY = { boot: 'tornet.boot', seen: 'tornet.intro', offer: 'tornet.visning', prefs: 'tornet.val' };
+const KEY = { boot: 'tornet.boot', seen: 'tornet.intro', offer: 'tornet.visning', prefs: 'tornet.val', lang: 'tornet.lang' };
 const store = {
   get(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch { return null; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* privat fönster m.m. */ } },
@@ -43,6 +46,9 @@ export function rememberPrefs() {
  * @param {number|null} seed
  */
 export function startGame(seed) {
+  // språket: engelska om inget annat är valt (?lang=sv i adressen går före)
+  const q = new URLSearchParams(location.search).get('lang'), saved = store.get(KEY.lang);
+  useLang(q === 'sv' || q === 'en' ? q : saved === 'sv' ? 'sv' : 'en');
   const o = prefs();
   newSim(seed ?? Math.floor(Math.random() * 1e6), { roll: 'mjuk', strategy: o.strategy, incLevel: o.incLevel, chief: o.chief,
     ...(o.mistakes ? { mistakes: o.mistakes } : {}), ...(o.maint ? { maint: o.maint } : {}) });
@@ -58,13 +64,27 @@ function go() {
   if (!store.get(KEY.offer)) { store.set(KEY.offer, 1); offerVisning(); }
 }
 
+// ---------- Språket ----------
+/** byt språk i gränssnittet (bara det som visas – simuleringen påverkas inte) @param {'en'|'sv'} l */
+function useLang(l) {
+  setLang(l);
+  document.documentElement.lang = l;
+  document.title = l === 'sv' ? 'Tornet – Hiss-O-Matic 3000' : 'The Tower – Hiss-O-Matic 3000';
+}
+extraActions.lang = l => {
+  if (l !== 'en' && l !== 'sv' || l === getLang()) return;
+  useLang(l);
+  store.set(KEY.lang, l);
+  repaintAll();
+};
+
 // ---------- Uppstarten (en gång) ----------
 function bootLines() {
   const cars = BUILDING.elevators.map(e => e.name);
   return ['HISS-O-MATIC 3000 BIOS v3.11  (C) Tornet Fastighets AB 1995', '',
     `Minnestest ......... 640K OK`, `Våningar ........... ${FL.length} (${fl(0)}–${fl(FL.length - 1)})`,
     ...cars.map(n => `Kontrollerar hiss ${n.padEnd(3)} ..... OK`),
-    'Laddar KONTOR95.PAL ........ OK', 'Driftchefen ............ på plats', '', 'Startar Hiss-O-Matic 3000_'];
+    'Laddar KONTOR95.PAL ........ OK', 'Driftchefen ............ på plats', '', 'Startar Hiss-O-Matic 3000_'].map(l => tr(l));
 }
 function boot(done) {
   if (store.get(KEY.boot)) { done(); return; }

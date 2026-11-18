@@ -90,7 +90,8 @@ const talkS = t => Math.max(STAY_MIN, t.split(/\s+/).length / WPS + 3);
 // ---------- Texterna vid stoppen: det som händer just nu ----------
 function driftText() {
   const c = chiefOnDuty(), last = S.chief && S.chief.log.filter(d => !d.info).slice(-1)[0];
-  const said = last ? ` Senast bestämde hen: "${last.text}" – ${last.why.charAt(0).toLowerCase()}${last.why.slice(1)}` : ' I dag har hen inte behövt bestämma något stort än – men skärmarna har hen koll på.';
+  const why = last ? last.why.charAt(0).toLowerCase() + last.why.slice(1) : '';
+  const said = last ? ` Senast bestämde hen: "${last.text}" – ${why}` : ' I dag har hen inte behövt bestämma något stort än – men skärmarna har hen koll på.';
   const away = S.chief && !S.chief.on ? ' Fast just nu har du tagit över besluten själv – chefen fikar.' : '';
   return `Här sitter ${c.name}, driftchefen. När något händer – brand, storm, strömavbrott – bestämmer hen och säger varför; det står på skylten längst ner i bilden.${said}.${away} Bredvid sitter bildproducenten som klipper bilden när regissören 🎬 är på.`.replace('..', '.');
 }

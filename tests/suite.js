@@ -30,9 +30,11 @@ import { CONTROL, BREAK } from '../src/config.js';
 import { goldenDiff } from './goldendiff.js';
 import { CHIEFS, chiefPerson, setChief } from '../src/chief.js';
 import { CREW_BY, atPost, crewPerson, postFloor } from '../src/crew.js';
-import { CREW } from '../src/config.js';
+import { CREW, NAMES, CAST } from '../src/config.js';
 import { PANO, ladderReach, PANO_CREW_S, PANO_DEFAULT_S } from '../src/pano.js';
 import { STOPS as VSTOPS, LAST_START } from '../src/visning.js';
+import { getLang, setLang, tr } from '../src/lang.js';
+import EN_TEXTS from '../src/lang-en.js';
 import { CUES, PIECES, layout, partOf } from '../src/scoreData.js';
 import { hz, onGrid } from '../src/music.js';
 /** @typedef {import('../src/elevators.js').Elevator} Elevator */
@@ -2639,6 +2641,36 @@ test('Kuppen under rundvisningen: Berit och gästen blir över, smyger i trappor
   assert(lines.some(l => /var var vi/.test(l)), 'Berit fortsatte aldrig rundvisningen');
   assert(S.people.some(p => p.id === berit) || hour() >= 19, 'Berit försvann');
   return `${seen.caught ? 'gripna' : 'borta'} · ${lines.length} repliker efteråt`;
+});
+
+test('Språket: engelska är standard, loggen och dagböckerna blir engelska och svenska visar allt som det är', () => {
+  assert(getLang() === 'en', `standardspråket är ${getLang()}`);
+  // varje engelsk mall har samma värden som den svenska
+  const ph = t => (t.match(/\{\w+\}/g) || []).sort().join();
+  const bad = Object.entries(EN_TEXTS).filter(([sv, en]) => en && ph(sv) !== ph(en));
+  assert(!bad.length, `fel värden i ${bad.length} mallar, t.ex. ${bad.slice(0, 2).map(b => b.join(' → ')).join(' | ')}`);
+  // ett kaosdygn med rundvisning och kupp: allt som skrivs i loggen och dagböckerna översätts
+  sim(3, { roll: 'mjuk', incLevel: 'kaos', chief: true, tempo: 'kort' });
+  const lines = new Set();
+  let t = 0;
+  while (hour() < 29.5) {
+    step(DT);
+    if (++t % 30 === 0) { for (const l of S.log.slice(0, 20)) lines.add(l.text); for (const p of S.people) if (p.hist[0]) lines.add(p.hist[0].text); }
+    if (t === 30 * 120) act('visning', 'start');
+    if (t === 30 * 500) act('trigger', 'heist');
+  }
+  const names = new Set([...NAMES, ...CAST.map(c => c.name), ...CREW.map(c => c.name), 'Gästen', 'Stig', 'Ronny', 'Roger', 'Tompa', 'Benke', 'Jojje']);
+  const strip = x => x.replace(/\p{Lu}[\p{L}-]*/gu, w => (names.has(w) ? '' : w))
+    .replace(/Guldbanken|Glada Tanden Tandvård|Spelstudio|Rymdkakan|Reklambyrå|Kvarnström|Advokater|Modemkungen|Vovve|Laboratorium|Fasad & Fönster|Lyft & Bär|Klart Glas|Tornplan T-bana|Svettis|Kontorsservice|Hiss-O-Matic/g, '');
+  const swedish = x => /[åäöÅÄÖ]|\b(och|är|på|med|för|går|hiss|våning|inte|kliver|ska)\b/.test(strip(x));
+  const all = [...lines], left = all.filter(x => swedish(tr(x)));
+  assert(left.length <= all.length * 0.01, `${left.length} av ${all.length} texter är kvar på svenska, t.ex.\n    ${left.slice(0, 8).join('\n    ')}`);
+  // svenska: ingenting översätts
+  setLang('sv');
+  const same = all.every(x => tr(x) === x);
+  setLang('en');
+  assert(same, 'på svenska ändrades en text');
+  return `${Object.keys(EN_TEXTS).length} mallar · ${all.length} texter, ${left.length} kvar på svenska`;
 });
 
 test('Rytmen i huset: engångsljuden hamnar på musikens sextondelar', () => {

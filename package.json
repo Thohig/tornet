@@ -10,9 +10,12 @@
     "bench": "node tests/bench.mjs",
     "typecheck": "tsc -p jsconfig.json",
     "check": "npm run typecheck && npm test",
-    "league": "node tests/league.mjs"
+    "league": "node tests/league.mjs",
+    "lang": "node tools/lang.mjs"
   },
   "devDependencies": {
+    "acorn": "^8.19.0",
+    "acorn-walk": "^8.3.5",
     "typescript": "^7.0.2"
   }
 }

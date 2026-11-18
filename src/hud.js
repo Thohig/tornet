@@ -22,6 +22,7 @@ import { INSATS, chiefOnDuty } from './chief.js';
 import { BANK, GOLD, VAN_NAME } from './heist.js';
 import { CREW_BY } from './crew.js';
 import { doAction, extraActions } from './input.js';
+import { trDom } from './lang.js';
 import { allStatsHtml, avgWait, grade, lastDay, safetyGrade } from './summary.js';
 /** @typedef {import('./elevators.js').Elevator} Elevator */
 /** @typedef {import('./people.js').Person} Person */
@@ -520,7 +521,7 @@ export function select(p) {
 }
 
 // ---------- Overlays ----------
-export function showOverlay(html) { const o = $('overlay'); o.innerHTML = html; o.classList.add('show'); }
+export function showOverlay(html) { const o = $('overlay'); o.innerHTML = html; trDom(o); o.classList.add('show'); }
 export function hideOverlay() { $('overlay').classList.remove('show'); }
 // Välkomstrutan är kort så att KÖR! alltid syns: vad man tittar på, de tre viktigaste handgreppen och
 // tangenterna. Resten ligger under "Mer om huset". Samma ruta är hjälpen (?) under spelet – då pausas

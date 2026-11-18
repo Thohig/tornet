@@ -12,6 +12,7 @@ import { extraActions, followPerson } from './input.js';
 import { setTour } from './panels.js';
 import { soundOn } from './sound.js';
 import { esc } from './util.js';
+import { getLang, tr } from './lang.js';
 
 const U = {
   /** Berit erbjuder en rundvisning (första gången spelet startas) */
@@ -95,22 +96,25 @@ function mark() {
   const el = document.getElementById('tour-txt'), v = S.visning;
   if (!el || !v || !v.line) return;
   const i = U.speaking && U.at >= 0 ? U.at : -1;
-  el.innerHTML = i > 0 ? `<span class="said">${esc(v.line.slice(0, i))}</span>${esc(v.line.slice(i))}` : esc(v.line);
+  const line = tr(v.line); // (rösten läser den översatta repliken, så tecknen stämmer)
+  el.innerHTML = i > 0 ? `<span class="said">${esc(line.slice(0, i))}</span>${esc(line.slice(i))}` : esc(line);
 }
 
 // ---------- Rösten ----------
 const SYN = typeof speechSynthesis !== 'undefined' ? speechSynthesis : null;
-/** @type {SpeechSynthesisVoice|null|undefined} */
-let sv;
-/** en svensk röst (helst Alva eller Klara, som på en Mac), null = ingen finns */
+/** @type {Record<string, SpeechSynthesisVoice|null>} */
+const voices = {};
+/** en röst på spelarens språk: svenska (helst Alva eller Klara, som på en Mac) eller brittisk engelska; null = ingen finns */
 function swedish() {
   if (!SYN) return null;
-  if (sv) return sv;
+  const l = getLang();
+  if (voices[l]) return voices[l];
   const all = SYN.getVoices();
   if (!all.length) return null; // (rösterna laddas när sidan startat – försök igen nästa gång)
-  const se = all.filter(x => /^sv([-_]|$)/i.test(x.lang));
-  sv = se.find(x => /alva/i.test(x.name)) || se.find(x => /klara/i.test(x.name)) || se.find(x => x.localService) || se[0] || null;
-  return sv;
+  const mine = all.filter(x => (l === 'sv' ? /^sv([-_]|$)/i : /^en([-_]|$)/i).test(x.lang));
+  voices[l] = l === 'sv' ? mine.find(x => /alva/i.test(x.name)) || mine.find(x => /klara/i.test(x.name)) || mine.find(x => x.localService) || mine[0] || null
+    : mine.find(x => /en[-_]GB/i.test(x.lang) && x.localService) || mine.find(x => /en[-_]GB/i.test(x.lang)) || mine.find(x => x.localService) || mine[0] || null;
+  return voices[l];
 }
 function hush() {
   if (SYN && (U.speaking || SYN.speaking)) SYN.cancel();
@@ -126,7 +130,7 @@ function voice(v) {
   const vo = swedish();
   hush();
   if (!vo) return;
-  const u = new SpeechSynthesisUtterance(v.line);
+  const u = new SpeechSynthesisUtterance(tr(v.line));
   u.voice = vo; u.lang = vo.lang; u.rate = 1.02; u.pitch = 1.08;
   u.onstart = () => { U.speaking = true; U.at = 0; };
   u.onboundary = e => { U.at = e.charIndex; mark(); };

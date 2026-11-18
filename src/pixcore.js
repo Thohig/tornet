@@ -8,6 +8,7 @@ import { clamp } from './util.js';
 import { cv, nightness, VIEW } from './view.js';
 import { S } from './state.js';
 import { profLayer, profOn } from './prof.js';
+import { getLang } from './lang.js';
 /** @typedef {import('./elevators.js').Elevator} Elevator */
 /** @typedef {import('./people.js').Person} Person */
 
@@ -34,7 +35,7 @@ export const R = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(x, y, w, h); }
 const layers = new Map();
 export function layer(name, key, draw) {
   let L = layers.get(name);
-  const full = `${key}|${LO.width}|${X0}`;
+  const full = `${key}|${LO.width}|${X0}|${getLang()}`; // (språket: skyltarna i lagren ritas om när det byts)
   if (!L || L.key !== full) {
     if (!L) { const c = document.createElement('canvas'); L = { c, g: /** @type {CanvasRenderingContext2D} */ (c.getContext('2d')), key: '' }; layers.set(name, L); }
     L.c.width = LO.width; L.c.height = Math.ceil(H / PX) + 4; // (att sätta storleken tömmer lagret)

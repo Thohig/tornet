@@ -3,6 +3,7 @@
 // som gränsar till en fylld blir kontur) – så ser alla figurer ut att höra ihop.
 // Bara grafik: rör aldrig simuleringens tillstånd och använder ingen simuleringsslump.
 import { PAL } from './pixpal.js';
+import { tr } from './lang.js';
 
 const INK = PAL.ink;
 
@@ -124,6 +125,7 @@ function glyph(ch) {
 }
 /** textens bredd i pixlar */
 export function textW(str) {
+  str = tr(str); // (texten visas på spelarens språk, lang.js)
   let w = 0, n = 0;
   for (const ch of str) { const gl = glyph(ch); if (!gl) continue; w += gl.rows[0].length + 1; n++; }
   return Math.max(0, w - (n ? 1 : 0));
@@ -134,6 +136,7 @@ const TEXT_CACHE = new Map();
  * Höjd: (5 + 1 accentrad) × scale, + kontur.
  */
 export function textSprite(str, color = INK, scale = 1, outline = null) {
+  str = tr(str);
   const key = `${str}|${color}|${scale}|${outline}`;
   let c = TEXT_CACHE.get(key);
   if (c) return c;
