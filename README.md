@@ -36,7 +36,7 @@ Med adressparametrar hoppar du över menyn:
 - **Folket:** anställda, besökare, boende, nattpersonal och stamgäster med egna egenheter. Bland stamgästerna finns Gunnar som hatar att vänta, Doris som håller upp dörren och Majken, 87, som pratar med alla i hissen.
 - **Personalen:** driftchefer, bildproducenter, en receptionist och en fönsterputsare. De har skift, raster och poster.
 - **Händelser:** brand med brandkår och återsamlingsplats, strömavbrott med reservkraft, storm och blixtar, hissfel och linbrott, överhettade motorer, panoramahissen som fastnar på fasaden (räddningstjänsten firar ner folk eller tar dem med stegbilen), ambulans, flyttdag med hissbalke, VIP-helikopter och tunnelbanetåg som kommer i klump. Du kan också skicka en turistbuss: en guide leder en grupp på stadstur upp till takterrassen och Sky Café.
-- **Musik:** husmusik som följer dygnet (ragtime i rusningen, vals, lunchjazz, lounge, speldosa) med korta inslag när något händer, och en egen hissmusik inne i hissen du följer. Musiken är avstängd tills du slår på den i panelen.
+- **Musik:** husmusik som följer dygnet (ragtime i rusningen, vals, lunchjazz, lounge, speldosa) med korta inslag när något händer, och en egen hissmusik inne i hissen du följer. Dörrarna och plingen hamnar i musikens takt, så hela huset spelar med. Musiken är avstängd tills du slår på den i panelen.
 
 Styrlogiken kan bytas medan huset kör:
 
