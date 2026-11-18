@@ -15,6 +15,7 @@ import { cableCandidate, triggerCable, triggerFault, triggerHeat } from './servi
 import { startStorm } from './weather.js';
 import { startMedical } from './visits.js';
 import { PANO, panoCandidate, triggerPano } from './pano.js';
+import { BANK, HEIST_WARN, heistPossible, startHeist } from './heist.js';
 /** @typedef {import('./elevators.js').Elevator} Elevator */
 /** @typedef {import('./people.js').Person} Person */
 
@@ -32,6 +33,7 @@ export function trigger(type, target = null) {
   if (type === 'cable') triggerCable(e);
   if (type === 'medical') startMedical(); // (ingen incident – bara en händelse som rutan berättar om)
   if (type === 'pano') triggerPano();
+  if (type === 'heist') startHeist();
 }
 export function incidentStarted(floor) {
   S.stats.incidents++;
@@ -71,6 +73,8 @@ export function setFireMode(m) {
   F.mode = m;
   // först: hissar som var låsta/återkallade får köra igen
   for (const e of S.elevators) { e.zoneLock = false; if (e.mode === 'recall' || e.mode === 'locked') restoreElevator(e); }
+  // (brandzonen strök de stopp som låg i zonen: de som fortfarande är ombord ska av där – zonläget stryker dem igen nedan)
+  for (const e of S.elevators) if (e.mode === 'normal') for (const p of e.passengers) if (p.state === 'ride') e.carCalls.add(posOf(e, p.dest));
   if (m === 'recall') {
     for (const e of S.elevators) if (e.mode === 'normal' && !e.ffCar) recallCar(e); // (brandhissen kör brandkåren)
     for (const p of S.people) if (p.state === 'wait') p.assigned = null;
@@ -298,7 +302,7 @@ export function endOutage() {
 /** hur troligt en incident börjar vid klockan h (rusningarna och lunchen mest) */
 const INC_WEIGHT = h => (h < 7 ? 0 : h < 7.5 ? 0.6 : h < 9.5 ? 1.6 : h < 11 ? 1 : h < 13 ? 1.5 : h < 15.5 ? 1 : h < 18.5 ? 1.6 : h < 22 ? 0.7 : 0);
 /** förvarningens längd i sekunder (verklig tid) per incidenttyp */
-export const WARN_S = { fire: 10, power: 6, storm: 14, heat: 10, fault: 8, cable: 40, pano: 10 };
+export const WARN_S = { fire: 10, power: 6, storm: 14, heat: 10, fault: 8, cable: 40, pano: 10, heist: 18 };
 /** minsta avstånd mellan två planerade incidenter (speltimmar) */
 const INC_GAP = 1.2;
 /** dygnets tidtabell (anropas av resetDay) */
@@ -357,6 +361,8 @@ function chooseIncident(night) {
   // panoramahissen kan fastna på fasaden (bara när den kör med folk)
   const P = PANO ? S.elevators[PANO.id] : null;
   if (panoCandidate(P) && P.passengers.length && !S.pano) opts.push(['pano', 0.3]);
+  // Kuppen på 5:an: sällsynt, högst en gång per dygn, när lastkajen är ledig (heist.js)
+  if (heistPossible() && S.heistDay !== S.day) opts.push(['heist', S.incLevel === 'kaos' ? 0.5 : 0.2]);
   if (!opts.length) return null;
   let r = rng() * opts.reduce((a, o) => a + o[1], 0), type = opts[0][0];
   for (const [k, w] of opts) { r -= w; if (r <= 0) { type = k; break; } }
@@ -365,6 +371,7 @@ function chooseIncident(night) {
   if (type === 'heat') return { type, car: [...busy].sort((a, b) => b.heat - a.heat || b.passengers.length - a.passengers.length)[0].id };
   if (type === 'cable') return { type, car: /** @type {{ e: any }} */ (cr).e.id };
   if (type === 'pano') return { type, car: P.id };
+  if (type === 'heist') return { type, floor: BANK };
   return { type };
 }
 const WARN_LOG = {
@@ -375,6 +382,7 @@ const WARN_LOG = {
   fault: e => `🔩 ${e.name} låter konstigt – det gnisslar i korgen…`,
   cable: e => `🪢 Det knarrar i bärlinorna på ${e.name} – de är slitna (${Math.round(e.wear * 100)} %)…`,
   pano: e => `🔩 ${e.name} hackar på fasaden – det luktar hydraulolja…`,
+  heist: () => HEIST_WARN,
 };
 /** En incident i tidtabellen som ska bryta ut: typen och var (våning för brand, hiss för fel/värme/linbrott/panorama)
  * @typedef {{ type: string, floor?: number, car?: number }} IncPick */
@@ -397,6 +405,7 @@ function fireWarn(W) {
   else if (W.type === 'heat' && e) triggerHeat(e);
   else if (W.type === 'cable' && e) { e.creak = false; if (cableCandidate(e)) triggerCable(e); }
   else if (W.type === 'pano' && e && panoCandidate(e) && !S.pano) e.panoNext = true;
+  else if (W.type === 'heist') { if (startHeist(true)) S.heistDay = S.day; }
 }
 export function incidentTick(dt) {
   if (S.fire) fireTick();

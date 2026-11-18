@@ -6,7 +6,7 @@ import { S, hour, log, phaseName } from './state.js';
 import { liftsAvailable } from './people.js';
 import { costBased, costLine, eta, isFull, pickTotal, pickersAt, loadKg, cabinKg, slotsFull } from './dispatch.js';
 import { canRescue } from './incidents.js';
-import { plannedRoute, resetDay } from './sim.js';
+import { plannedRoute } from './sim.js';
 import { VIEW, pctx } from './view.js';
 import { personSprite } from './pixpeople.js';
 import { PAL } from './pixpal.js';
@@ -18,11 +18,11 @@ import { FAN_KW, jobFloor, tech, techOf, cableStatus } from './service.js';
 import { LADDER_MAX, ladderReach, ropeWindy } from './pano.js';
 import { hoistHalt, hoistStatus } from './hoist.js';
 import { BLANKET_T } from './visits.js';
-import { chiefOnDuty } from './chief.js';
+import { INSATS, chiefOnDuty } from './chief.js';
+import { BANK, GOLD, VAN_NAME } from './heist.js';
 import { CREW_BY } from './crew.js';
-import { extraActions } from './input.js';
-import { rememberDay, showMenu } from './menu.js';
-import { allStatsHtml, avgWait, grade, lastDay, safetyGrade, saveDay, summaryHtml } from './summary.js';
+import { doAction, extraActions } from './input.js';
+import { allStatsHtml, avgWait, grade, lastDay, safetyGrade } from './summary.js';
 /** @typedef {import('./elevators.js').Elevator} Elevator */
 /** @typedef {import('./people.js').Person} Person */
 export { grade, safetyGrade };
@@ -214,10 +214,12 @@ function chiefLine(key, q) {
   const C = S.chief, d = C && C.dec[key];
   if (C && C.manual[key]) return `<div class="inc-chief you">👤 <b>Du bestämmer:</b> ${esc(d ? d.text : '')}`
     + ` <button class="btn xs" data-act="chief:${key}" data-hint="Driftchefen tar över beslutet igen">🧑‍💼 Låt driftchefen bestämma</button></div>`;
-  if (!C || !C.on) return `<div class="inc-q">${q}</div>`;
-  const who = esc(chiefOnDuty().name);
-  return (d ? `<div class="inc-chief">🧑‍💼 <b>${who}:</b> ${esc(d.text)}${d.why ? ` <span class="why">– ${esc(d.why)}</span>` : ''}</div>`
-    : `<div class="inc-chief">🧑‍💼 <b>${who}</b> håller ögonen på skärmarna…</div>`) + '<div class="inc-q">Ta över beslutet:</div>';
+  // (kuppen: polisens insatsledare bestämmer – chefen sitter bunden i driftcentralen)
+  const police = key === 'heist';
+  if (!C || (!C.on && !police)) return `<div class="inc-q">${q}</div>`;
+  const who = esc(police ? INSATS : chiefOnDuty().name), ico = police ? '🚓' : '🧑‍💼';
+  return (d ? `<div class="inc-chief">${ico} <b>${who}:</b> ${esc(d.text)}${d.why ? ` <span class="why">– ${esc(d.why)}</span>` : ''}</div>`
+    : `<div class="inc-chief">${ico} <b>${who}</b> ${police ? 'är på väg…' : 'håller ögonen på skärmarna…'}</div>`) + '<div class="inc-q">Ta över beslutet:</div>';
 }
 const chiefOn = () => !!(S.chief && S.chief.on);
 export function incidentHtml() {
@@ -258,6 +260,25 @@ export function incidentHtml() {
       ${chiefLine('pano', 'Hur ska de instängda ut?')}
       <div class="inc-acts">${b('rope', '🧗 Rep från taket', true, `Räddarna firar ner en i taget ${Pn.toF === LOBBY ? 'till gatan' : 'till takterrassen'} – stannar i hård vind`)}${b('ladder', '🚒 Stegbilen', reach, reach ? 'Stegen från gatan – fungerar i blåst' : `Stegen når bara ${LADDER_MAX} våningar upp`)}${ikon(`follow:${e.id}`, '📹', 'Visa hissen', 'Kameran följer hissen')}</div>
       <div class="inc-hint">Repet går fortare när det är lugnt; stegbilen klarar blåsten men når inte högt. Teknikern kan inte laga hydrauliken förrän alla är ute.</div>`, true));
+  }
+  // ---------- Kuppen på 5:an (incident med val: polisens insatsledare – eller du) ----------
+  const Hs = S.heist;
+  if (Hs && Hs.ph !== 'done') {
+    const gang = S.people.filter(p => p.robber && !p.dead).length, host = S.people.filter(p => p.hostage).length;
+    const hero = S.people.find(p => p.id === Hs.hero && !p.dead);
+    const status = Hs.ph === 'in' ? `En skåpbil från ${esc(VAN_NAME)} vid lastkajen – fem män i overall är på väg in.`
+      : Hs.ph === 'flee' ? `<b>Valvet är öppet!</b> Gänget flyr med ${GOLD} guldtackor.`
+      : `Gänget har driftcentralen och hissarna. Borren i valvet: <span class="lv">${Math.round(Hs.drill * 100)}</span> %${S.t < Hs.drillOff ? ' – <b>tyst</b>, någon har slagit av strömmen till den!' : ''}`;
+    const pol = !Hs.police ? 'Polisen är på väg.' : `Polisen spärrar gatan – insatsstyrkan går in via ${Hs.plan === 'garage' ? 'garaget' : 'taket'} om ~${cd(Hs.stormAt - S.t)}s.`;
+    const b = (a, txt, on, hint, dis = false) => `<button class="btn sm${on ? ' on' : ''}" data-act="heist:${a}" ${dis ? 'disabled' : ''} data-hint="${hint}">${txt}</button>`;
+    const off = !Hs.police;
+    parts.push(card('heist', 'heist', `🚐 Rån i Tornet – ${gang} rånare, ${host} gisslan`, `
+      <div class="inc-s">${status} ${pol}${hero ? ` <b>${esc(hero.name)}</b> blev över och smyger i trapporna.` : ''}</div>
+      ${chiefLine('heist', 'Vad ska polisen göra?')}
+      <div class="inc-acts">${b('wait', '⏳ Vänta ut dem', Hs.power === 'wait', 'Strömmen stannar på – borren tar tid', off)}${b('cut', '🔌 Klipp strömmen', Hs.power === 'cut', 'Hissarna stannar – men valvets magnetlås släpper också!', off || Hs.power === 'cut')}</div>
+      <div class="inc-acts">${b('garage', '🚓 In via garaget', Hs.plan === 'garage', 'Insatsstyrkan går in vid lastkajen – skåpbilen kommer ingenstans', off)}${b('tak', '🚁 In via taket', Hs.plan === 'tak', 'Polishelikoptern på taket – ingen flykt den vägen', off)}${b('storm', '⚡ Gå in nu!', false, 'Insatsstyrkan går in direkt', off)}</div>
+      <div class="inc-acts">${b('stop', '🚇 Stoppa tåget', Hs.train === 'stop', 'Tunnelbanan stannar i tunneln – ingen flykt den vägen', off || Hs.train === 'stop')}${ikon(`show:${BANK}`, '💰', 'Visa valvet', 'Kameran visar banken')}${hero ? ikon(`person:${hero.id}`, '🤫', `Följ ${esc(hero.name)}`, 'Kameran följer den som blev över') : ''}</div>
+      <div class="inc-hint">Gänget flyr med skåpbilen, en helikopter på taket eller tunnelbanan – den väg som inte är spärrad. Ingen skjuter och ingen dör.</div>`, true));
   }
   // ---------- händelser som spelaren bara informeras om ----------
   const V = S.elevators.find(e => e.freight);
@@ -505,7 +526,7 @@ export function hideOverlay() { $('overlay').classList.remove('show'); }
 // tangenterna. Resten ligger under "Mer om huset". Samma ruta är hjälpen (?) under spelet – då pausas
 // tiden medan den är öppen. Enter, mellanslag och Esc stänger den.
 let introKeys = /** @type {((ev: KeyboardEvent) => void)|null} */ (null);
-/** mode: 'start' = innan dygnet börjar (KÖR! → then), 'help' = under spelet (pausar), 'menu' = från startmenyn (tillbaka dit) */
+/** mode: 'start' = första gången, innan huset börjar (KÖR! → then), 'help' = under spelet (pausar) */
 export function showIntro(mode = S.started ? 'help' : 'start', then = /** @type {(() => void)|null} */ (null)) {
   const help = mode !== 'start', wasPaused = S.paused;
   // pekskärm (telefon, surfplatta): inga tangenter och ingen mus att hålla över
@@ -520,7 +541,7 @@ export function showIntro(mode = S.started ? 'help' : 'start', then = /** @type 
       <li>Knapparna är <b>ikoner</b> – ${touch ? 'håll fingret på en' : 'vila musen på en'} så står det vad den gör.</li>
       ${touch ? '<li><b>Dra</b> i bilden med ett finger för att se resten av huset; två fingrar zoomar.</li>' : `<li class="intro-keys"><kbd>Mellanslag</kbd> paus · <kbd>−</kbd>/<kbd>+</kbd> hastighet · <kbd>H</kbd> biografläge · <kbd>S</kbd> styrlogik · <kbd>T</kbd> namnbrickor · <kbd>F</kbd> koppla loss/på kameran · <kbd>A</kbd> regissör (kameran väljer själv) · <kbd>Esc</kbd> sluta följa/tillbaka</li>`}
     </ul>
-    <button class="btn" id="go">${help ? 'TILLBAKA' : 'KÖR!'}</button>
+    <button class="btn" id="go">${help ? 'TILLBAKA' : 'KÖR!'}</button>${help ? `<button class="btn" id="tour-go"${S.visning ? ' disabled' : ''}>🛎️ BE BERIT VISA RUNT</button>` : ''}
     <details class="intro-more"><summary>Mer om huset</summary>
     <ul>
       <li>Det finns <b>inga knappar</b> på våningarna. Varje person har ett eget mål och får en egen hiss. Tankebubblan visar målet och hissen.</li>
@@ -538,12 +559,13 @@ export function showIntro(mode = S.started ? 'help' : 'start', then = /** @type 
   const go = () => {
     if (introKeys) { removeEventListener('keydown', introKeys, true); introKeys = null; }
     hideOverlay();
-    if (mode === 'menu') { showMenu(); return; }
     if (help) { S.paused = wasPaused; return; }
     if (then) { then(); return; }
     S.started = true; log('Dag 1 börjar – dörrarna öppnas!', 'sys');
   };
   $('go').onclick = go;
+  // (rundvisningen: Berit visar runt i huset som det är just nu, visning.js)
+  if ($('tour-go')) $('tour-go').onclick = () => { go(); doAction('visning:start'); };
   /** @type {HTMLElement} */ ($('go')).focus();
   // fångas före spelets tangenter (annars pausar mellanslaget och Esc kopplar loss kameran)
   if (introKeys) removeEventListener('keydown', introKeys, true);
@@ -555,20 +577,3 @@ export function showIntro(mode = S.started ? 'help' : 'start', then = /** @type 
   addEventListener('keydown', introKeys, true);
 }
 extraActions.help = () => { if (S.started && !$('overlay').classList.contains('show')) showIntro('help'); };
-/** Dygnet är slut: det sparas (summary.js). Mjukt dygnsskifte: huset rullar vidare och gårdagen finns som vy i
- *  panelen; annars stannar spelet för sammanfattningen och NÄSTA DAG börjar om från början. */
-export function showSummary() {
-  saveDay();
-  const D = lastDay();
-  rememberDay({ day: D.day, letter: D.st.waitN ? grade(avgWait(D.st)).letter : '–', served: D.st.served, incidents: D.st.incidents });
-  if (S.roll === 'mjuk') return;
-  S.summaryShown = true; S.paused = true;
-  showOverlay(`<div class="card sumcard"><h1>DAG ${S.day} ÄR SLUT</h1>${summaryHtml()}<button class="btn" id="next">NÄSTA DAG ▶</button></div>`);
-  $('next').onclick = () => { hideOverlay(); newDay(); };
-}
-export function newDay() {
-  S.day++;
-  resetDay();
-  S.paused = false;
-  log(`Dag ${S.day} börjar!`, 'sys');
-}

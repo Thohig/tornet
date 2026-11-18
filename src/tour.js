@@ -179,6 +179,8 @@ export function tourTick(dt) {
     return;
   }
   if (T.ph === 'out') { T.x -= BUS_V * dt; if (T.x < BX1 - BUS_LEN - 20) S.tour = null; return; }
+  // (kuppen: gruppen är gisslan i Sky Café som alla andra – turen står still tills det är över, heist.js)
+  if (S.heist && S.heist.ph !== 'done') return;
   let live = crew(T);
   // de som hunnit gå ut ur huset på väg till bussen är ombord
   if (T.ph === 'back') T.aboard = T.n0 - T.lost.length - live.length;

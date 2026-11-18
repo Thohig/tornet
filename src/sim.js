@@ -22,6 +22,8 @@ import { hoistReset, hoistTick } from './hoist.js';
 import { chiefReset, chiefRoll, chiefTick } from './chief.js';
 import { panoTick } from './pano.js';
 import { tourReset, tourTick } from './tour.js';
+import { visningReset, visningTick } from './visning.js';
+import { heistReset, heistTick } from './heist.js';
 import { crewArrivals, crewRoll, crewStart, spawnCrew } from './crew.js';
 /** @typedef {import('./elevators.js').Elevator} Elevator */
 
@@ -147,6 +149,8 @@ export function step(dt) {
   trainTick(dt, arrivalRate);
   visitsTick(dt);
   tourTick(dt);
+  visningTick(dt);
+  heistTick(dt);
   hoistTick(dt);
   stormTick(dt);
   nightModeTick(dt);
@@ -162,6 +166,8 @@ export function step(dt) {
     wl[p.floor][K(p.dir)].push(p);
     // KNAPPAR: folk trycker på knappar; VIP-gruppen har nyckel och styrs som vanligt
     if (buttonsMode() && !keyed(p)) { buttonWaitTick(p, dt); continue; }
+    // (en tilldelning som inte längre går – brandmännen ska ta brandhissen när den går igen – släpps)
+    if (p.assigned !== null && !canTake(S.elevators[p.assigned], p)) p.assigned = null;
     if (p.assigned === null && !(p.retypeAt > S.t)) dispatchPerson(p);
   }
   if (buttonsMode()) dispatchCalls();
@@ -243,6 +249,8 @@ export function resetDay() {
   weatherReset();
   visitsReset();
   tourReset();
+  visningReset();
+  heistReset();
   hoistReset();
   planIncidents(); // (sist: tidtabellen slumpas när allt annat är på plats)
   S.lastInc = null;

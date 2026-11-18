@@ -2,6 +2,7 @@
 // Rent gränssnitt: läser S, ändrar aldrig simuleringen (slumpen är vrand). Kameran rör sig via S.camTarget
 // precis som när man följer en hiss. Allt manuellt (scrolla, följa, klicka på någon) stänger av regissören.
 import { BREAK, BX1, CONTROL, CREW, DOCK, FLOOR_H, GROUND_Y, LOBBY, ROOF, STATION, TOP, floorY, shaftCX } from './config.js';
+import { BANK } from './heist.js';
 import { alarm, chiefOnDuty } from './chief.js';
 import { CREW_BY, atPost, crewPerson, postFloor } from './crew.js';
 import { S, hour } from './state.js';
@@ -86,6 +87,7 @@ function shots() {
     if (W.type === 'fire') add('warn', 90, 'floor', W.floor, `👃 Det luktar bränt på ${fl(W.floor)}`, true);
     else if (W.type === 'power') add('warn', 80, 'floor', LOBBY, '💡 Lamporna flimrar…', true);
     else if (W.type === 'storm') add('warn', 80, 'floor', top, '🌥️ Ovädret drar in', true);
+    else if (W.type === 'heist') add('warn', 84, 'floor', DOCK, '🚐 En skåpbil vid lastkajen…', true);
     else if (W.type === 'heat') add('warn', 82, 'floor', Math.min(top, S.elevators[W.car].maxF), `🌡️ Motorn i ${S.elevators[W.car].name} brummar`, true);
     else add('warn', 86, 'car', W.car, W.type === 'cable' ? `🪢 Linorna i ${S.elevators[W.car].name} knarrar`
       : W.type === 'pano' ? `🔩 ${S.elevators[W.car].name} hackar på fasaden` : `🔩 ${S.elevators[W.car].name} gnisslar`, true);
@@ -95,6 +97,21 @@ function shots() {
   const C = S.chief, lowering = S.elevators.some(e => e.mode === 'rescue');
   if (C && C.on && C.say && C.say.dec && CONTROL >= 0 && S.t - C.say.t0 < 3 && !lowering)
     add('chief', 88, 'floor', CONTROL, `🧑‍💼 ${chiefOnDuty().name}: ${C.say.text}`, S.t - C.say.t0 < 1);
+  // kuppen: skåpbilen och gänget, borren i valvet, den som blev över i trapporna, flykten och polisen
+  const Hs = S.heist;
+  if (Hs) {
+    const hero = S.people.find(p => p.id === Hs.hero && !p.dead);
+    if (Hs.ph === 'in') add('heist', 99, 'floor', DOCK, '🚐 Fem män i overall vid lastkajen', S.t - Hs.t0 < 1);
+    else if (Hs.ph === 'hold' && S.t - Hs.holdT < 6) add('heist', 100, 'floor', CONTROL, '🚐 RÅN! Gänget tar driftcentralen', S.t - Hs.holdT < 1);
+    else if (Hs.ph === 'flee') add('heist', 100, 'floor', Hs.fleeF, '💰 Gänget flyr med guldet', S.t - Hs.fleeT < 1);
+    else if (Hs.ph === 'done' && Hs.caught) add('heist', 70, 'floor', LOBBY, '🚓 Gänget leds ut i handfängsel');
+    else if (Hs.ph === 'hold') {
+      if (hero && hero.state !== 'office' && visible(hero)) add('hero', 94, 'person', hero.id, `🤫 ${name1(hero)} smyger i trapporna`);
+      else if (hero && Hs.heroStep === 4) add('hero', 92, 'person', hero.id, `🔦 ${name1(hero)} signalerar till polisen`);
+      add('vault', 80, 'floor', BANK, S.t < Hs.drillOff ? '🔌 Borren har tystnat!' : `💰 Borren i valvet: ${Math.round(Hs.drill * 100)} %`);
+      if (Hs.police && Hs.stormAt - S.t < 8) add('storm', 98, 'floor', Hs.plan === 'garage' ? DOCK : ROOF >= 0 ? ROOF : TOP, '🚓 Insatsstyrkan går in!', true);
+    }
+  }
   // (samma nyckel hela branden: när brandmännen är framme visar våningen dem med slangen – eller stegbilens stege)
   if (S.fire) add('fire', 100, 'floor', S.fire.floor, S.fire.outAt === null ? `🔥 Brand på ${fl(S.fire.floor)}`
     : S.people.some(p => p.ff && p.state === 'office' && p.floor === S.fire.floor) ? `🚒 Brandmännen släcker på ${fl(S.fire.floor)}`

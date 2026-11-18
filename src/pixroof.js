@@ -344,6 +344,20 @@ export function drawLightningPx() {
     while (by < ty) { const nx = bx + Math.round(vrand(-5, 5)), ny = Math.min(ty, by + Math.round(vrand(4, 9))); line(bx, by, nx, ny, '#ffffff'); bx = nx; by = ny; }
   } else if (vrand(0, 1) < 0.006) R(0, 0, lo.width, lo.height, 'rgba(255,255,255,.25)'); // blixtar långt borta
 }
+/** Kuppen: polisens blåljus i entrén (och vid lastkajen när insatsstyrkan väntar i garaget) */
+export function drawPolicePx() {
+  const Hs = S.heist;
+  if (!Hs || !Hs.police || (Hs.ph === 'done' && !Hs.caught)) return;
+  const on = Math.sin(S.anim * 10) > 0;
+  for (const f of Hs.plan === 'garage' && DOCK >= 0 ? [LOBBY, DOCK] : [LOBBY]) {
+    const top = Y(floorY(f + 1) + 4), bot = Y(floorY(f) - 4);
+    if (bot < 0 || top > lo.height) continue;
+    const x0 = X(LAND_X0), x1 = X(INNER_X1);
+    R(x0, top, x1 - x0, bot - top, on ? 'rgba(60,120,255,.12)' : 'rgba(60,120,255,.04)');
+    box(x1 - 32, top + 3, 7, 5, on ? '#3f7cff' : '#1b2a6e'); box(x1 - 22, top + 3, 7, 5, on ? '#1b2a6e' : '#3f7cff');
+    label(f === LOBBY ? 'POLISEN' : 'INSATSSTYRKAN', x1 - (f === LOBBY ? 50 : 66), top + 12, '#ffffff', '#2a5db0');
+  }
+}
 /** Brandkåren: blåljus i entrén och folket på återsamlingsplatsen utanför entrédörren */
 export function drawBrigadePx() {
   const top = Y(floorY(LOBBY + 1) + 4), bot = Y(floorY(LOBBY) - 4);

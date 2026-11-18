@@ -89,7 +89,7 @@ export const allowedPos = (e, g) => (e.ffCar ? ffAllowed(g) : allowed(g)) && (!e
  *  och då stannar korgen inte där – målet måste läggas om) @param {Person} p @param {Elevator} e */
 export const allowedDest = (e, p) => allowedPos(e, posOf(e, p.dest));
 /** hissen tar inga nya resenärer: ur drift (spelaren), stängd för vinden eller överhettad motor @param {Elevator} e */
-export const benched = e => !!(e.off || e.windLock || e.hot);
+export const benched = e => !!(e.off || e.windLock || e.hot || e.hijack);
 // ---------- Tillgänglighet ----------
 // Alla frågor om en hiss kan ta folk utgår från outReason. Undantagen är uttalade:
 //   operational – styrningen: även strömmen och nattvilan (en sovande hiss väcks, den tilldelas inte)
@@ -101,6 +101,7 @@ export function outReason(e) {
   if (e.hot) return 'hot';
   if (e.windLock) return 'wind';
   if (e.off) return 'off';
+  if (e.hijack) return 'hijack';
   if (e.hold) return 'hold';
   if (e.liftWant) return 'liftwant';
   if (e.zoneLock) return 'zone';
@@ -108,7 +109,7 @@ export function outReason(e) {
 }
 /** hur orsaken skrivs i loggen och i personernas dagbok ("Hiss L1 …") */
 export const OUT_TEXT = /** @type {Record<string, string>} */ ({
-  hot: 'har överhettad motor', wind: 'stängs för vinden', off: 'är ur drift', hold: 'ska på service', zone: 'spärras av branden',
+  hot: 'har överhettad motor', wind: 'stängs för vinden', off: 'är ur drift', hijack: 'är kapad av rånarna', hold: 'ska på service', zone: 'spärras av branden',
   broken: 'gick sönder', service: 'är på service', recall: 'kallas ner av brandlarmet', locked: 'är låst (brand)',
   rescue: 'nödsänks', dead: 'är strömlös', snapped: 'fick linbrott', lift: 'kör ett flyttlass', liftwant: 'ska köra ett flyttlass',
 });

@@ -29,7 +29,7 @@ import { peakHold } from './dispatch.js';
  *   liftWant: boolean, state: string, doorPhase: 'opening'|'open'|'closing'|null, door: number, dwell: number, dwellNeed: number,
  *   floor: number, passengers: import('./people.js').Person[], reserved: number, carCalls: Set<number>,
  *   parkTarget: number|null, idleTime: number, distance: number, trips: number, lastOff: number, lastOn: number,
- *   target: number|null, targetKind: string|null, fullFlash: number, mode: string, off: boolean, rs: string|null,
+ *   target: number|null, targetKind: string|null, fullFlash: number, mode: string, off: boolean, hijack: boolean, rs: string|null,
  *   rescueTarget: number, snapNext: boolean, snap: Snap|null, wear: number, wearTrips: number, wearDist: number,
  *   fault: Fault|null, hold: boolean, homeT: number, techId: number|null, breakNext: boolean, serviceNeed: number,
  *   kw: number, kwh: number, cap: number, heat: number, hot: boolean, fan: boolean, level: number, lvKg: number,
@@ -51,7 +51,7 @@ export function makeElevator(i) {
     state: 'idle', doorPhase: null, door: 0, dwell: 0, dwellNeed: DWELL, floor: pos,
     passengers: [], reserved: 0, carCalls: new Set(), parkTarget: null, idleTime: 0,
     distance: 0, trips: 0, lastOff: 0, lastOn: 0, target: null, targetKind: null, fullFlash: 0,
-    mode: 'normal', off: false, rs: null, rescueTarget: 0,
+    mode: 'normal', off: false, hijack: false, rs: null, rescueTarget: 0,
     // linbrott: snapNext = linorna går av vid nästa åktur, snap = förloppet (fall → fast → utrymning)
     snapNext: false, snap: null,
     // drift: slitage 0–1+, fel, hållen för service, tekniker, energi (kW just nu, kWh i dag)

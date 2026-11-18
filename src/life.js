@@ -70,6 +70,8 @@ export function leaveBuilding(p) {
 /** Branden är släckt: tillbaka in från återsamlingsplatsen – dit man var på väg, eller hem om det har blivit sent @param {Person} p */
 export function backFromAssembly(p) {
   p.evac = false; p.state = 'toQueue'; p.floor = LOBBY; p.x = -30 - rand(0, 30);
+  // (gästen på rundvisningen går in i entrén igen – Berit väntar där, visning.js)
+  if (p.guest && p.touring) { p.evacFrom = undefined; setTrip(p, LOBBY, 'Tillbaka in efter branden – Berit väntar', false); return; }
   if (!fireReturn(p, 'Tillbaka in efter branden')) leaveBuilding(p);
 }
 /** Efter branden: p går tillbaka dit hen var (evacFrom). Falskt om det inte finns något att gå tillbaka till –

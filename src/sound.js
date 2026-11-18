@@ -195,7 +195,7 @@ function strain(kind) {
   else if (kind === 'fault') sweep(g, 2200, 3400, t, 0.7, 0.8);
   else for (let i = 0; i < 3; i++) sweep(g, 320, 170, t + i * 0.35, 0.3, 0.9); // knarr
 }
-let heardWarn = -1, heardFire = -1, heardBrigade = -1, heardStrike = -1;
+let heardWarn = -1, heardFire = -1, heardBrigade = -1, heardStrike = -1, heardPolice = -1;
 function incidentSounds() {
   const W = S.warn;
   if (W && W.t0 !== heardWarn) {
@@ -206,6 +206,7 @@ function incidentSounds() {
   }
   if (S.fire && S.fire.t0 !== heardFire) { heardFire = S.fire.t0; alarm(); }
   if (S.brigade && S.brigade.t0 !== heardBrigade) { heardBrigade = S.brigade.t0; siren(); }
+  if (S.heist && S.heist.police && S.heist.policeAt !== heardPolice) { heardPolice = S.heist.policeAt; siren(); } // (polisen, heist.js)
   if (S.storm && S.storm.struck !== null && S.storm.struck !== heardStrike) { heardStrike = S.storm.struck; thunder(true); }
 }
 
@@ -218,14 +219,15 @@ function listenCar() {
 }
 
 // ---------- Varje bildruta ----------
-/** @param {boolean} [intro] rundvisningen pågår (Berit nynnar) */
-export function updateSound(intro = false) {
+/** @param {boolean} [intro] rundvisningen pågår (Berit nynnar) @param {boolean} [talking] Berit pratar (musiken sänks) */
+export function updateSound(intro = false, talking = false) {
   if (!on || !ac || ac.state !== 'running') return;
   ensureCars();
   incidentSounds();
   const lc = listenCar();
-  updateMusic(ac, master, lc, lc ? panOf(lc) : 0, musicHush());
-  updateScore(ac, master, musicOn(), !lc, intro);
+  const duck = talking ? 0.3 : 1;
+  updateMusic(ac, master, lc, lc ? panOf(lc) : 0, musicHush() * duck);
+  updateScore(ac, master, musicOn(), !lc, intro, duck);
   const now = ac.currentTime;
   // musikens rutnät: kassetten i hissen man följer, annars husmusiken (null = ingen musik, ljuden låter genast)
   const grid = !musicOn() ? null : lc ? musicGrid() : scoreGrid();

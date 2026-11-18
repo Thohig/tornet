@@ -32,7 +32,7 @@ import { CHIEFS, chiefPerson, setChief } from '../src/chief.js';
 import { CREW_BY, atPost, crewPerson, postFloor } from '../src/crew.js';
 import { CREW } from '../src/config.js';
 import { PANO, ladderReach, PANO_CREW_S, PANO_DEFAULT_S } from '../src/pano.js';
-import { INTRO_OPTS, INTRO_SEED, STOPS, introPerson } from '../src/introStops.js';
+import { STOPS as VSTOPS, LAST_START } from '../src/visning.js';
 import { CUES, PIECES, layout, partOf } from '../src/scoreData.js';
 import { hz, onGrid } from '../src/music.js';
 /** @typedef {import('../src/elevators.js').Elevator} Elevator */
@@ -56,11 +56,13 @@ function watcher() {
   const w = { passes: 0, maxRide: 0, maxWait: 0, n: 0, overweight: 0, maxKg: 0, bypassBroken: 0, prev: [],
     outOfRange: 0, wrongDoor: 0, liftPass: 0, railClash: 0, moveBad: 0, badLeg: 0, badFreight: 0, vipMixed: 0, vipSet: [], selfDest: 0, brokenUse: 0, snapUse: 0, prevSnapN: [], holdBoard: 0, prevN: [], prevHold: [],
     jumps: 0, orphanService: 0, techClash: 0, badReserved: 0, dupNames: 0, dupEx: '', idleWait: new Map(), idleWaitMax: 0, badPlatform: 0,
-    deadAssign: new Map(), deadAssignMax: 0, deadAssignEx: '', prevMode: [], late: [],
+    deadAssign: new Map(), deadAssignMax: 0, deadAssignEx: '', prevMode: [], prevFM: [], late: [],
     // dockhuset: hur länge någon har suttit instängd, och hur länge en incident har pågått
     maxTrap: 0, maxStorm: 0, maxFire: 0, maxOutage: 0,
     // en korg vänder aldrig i fart, ingen går trappan in i brandzonen, och ingen tekniker står kvar med ett jobb på fel våning
-    flips: 0, prevVel: [], intoFire: 0, prevState: new Map(), techLost: new Map(), techLostMax: 0 };
+    flips: 0, prevVel: [], intoFire: 0, prevState: new Map(), techLost: new Map(), techLostMax: 0,
+    // kuppen: ingen kliver på en kapad hiss, och gisslan lämnar inte Sky Café förrän det är över
+    hijackBoard: 0, hostageLeft: 0 };
   w.before = () => S.elevators.map(e => e.pos);
   w.check = before => {
     for (const e of S.elevators) for (const p of e.passengers) if ((p.trapT || 0) > w.maxTrap) w.maxTrap = p.trapT;
@@ -70,6 +72,8 @@ function watcher() {
     for (const p of S.people) {
       // (den som redan gick i trappan när larmet gick räknas inte)
       if (S.fire && S.t > S.fire.t0 && !p.role && !p.vip && !p.evac && p.state === 'stairs' && w.prevState.get(p.id) !== 'stairs' && !p.escalator && !inFireZone(p.floor) && inFireZone(p.dest)) w.intoFire++;
+      if (p.state === 'boarding' && p.car && p.car.hijack && w.prevState.get(p.id) !== 'boarding') w.hijackBoard++;
+      if (p.hostage && S.heist && S.heist.ph !== 'done' && p.floor === CAFE && !inFireZone(CAFE) && p.state === 'toQueue' && w.prevState.get(p.id) === 'office') w.hostageLeft++; // (brand: utrymningen går före)
       w.prevState.set(p.id, p.state);
       if (p.role === 'hisstekniker' && !p.offDuty && p.job !== null && p.job !== undefined && p.state === 'office' && p.floor !== jobFloor(S.elevators[p.job]) && !inFireZone(p.floor)) {
         const since = w.techLost.get(p.id) ?? S.t; w.techLost.set(p.id, since); w.techLostMax = Math.max(w.techLostMax, S.t - since);
@@ -122,6 +126,10 @@ function watcher() {
       /** @param {Person} p */
       const pdOf = p => posOf(e, p.dest), crossed = pd => (a < pd && b > pd) || (a > pd && b < pd);
       if (e.mode !== 'normal' || e.state !== 'moving') w.late[i] = null;
+      // (likaså när spelaren byter brandläge mitt i farten: brandzonen flyttas eller försvinner)
+      const fm = S.fire ? S.fire.mode : '', fmChanged = (w.prevFM[i] ?? fm) !== fm;
+      w.prevFM[i] = fm;
+      if (e.mode === 'normal' && e.state === 'moving' && fmChanged) w.late[i] = new Set(e.passengers.map(pdOf).filter(pd => crossed(pd) || !canBrakeTo(e, pd)));
       else if ((w.prevMode[i] ?? 'normal') !== 'normal') w.late[i] = new Set(e.passengers.map(pdOf).filter(pd => crossed(pd) || !canBrakeTo(e, pd)));
       // linbrott: korgen faller bara nedåt, står sedan helt still, och ingen ny kliver på (de instängda tas bara ut)
       if (e.mode === 'snapped' && w.prevMode[i] === 'snapped') {
@@ -1772,6 +1780,8 @@ function newInvariantFails(w, tag) {
   if (w.idleWaitMax > 15) f.push(`${tag}: någon stod ${w.idleWaitMax.toFixed(0)} s utan tilldelad hiss medan en ledig hiss som kunde ta hen stod still`);
   if (w.flips) f.push(`${tag}: en korg bytte riktning i fart ${w.flips} gånger`);
   if (w.intoFire) f.push(`${tag}: ${w.intoFire} gick trappan in i brandzonen`);
+  if (w.hijackBoard) f.push(`${tag}: ${w.hijackBoard} klev på en hiss som rånarna hade kapat`);
+  if (w.hostageLeft) f.push(`${tag}: gisslan lämnade Sky Café mitt i kuppen ${w.hostageLeft} gånger`);
   if (w.techLostMax > 60) f.push(`${tag}: en tekniker stod ${w.techLostMax.toFixed(0)} s på fel våning med ett jobb`);
   return f;
 }
@@ -1851,6 +1861,9 @@ export const PLAYER_ACTIONS = {
   carTrigger: r => act('trigger', ['fault', 'heat', 'cable'][Math.floor(r() * 3)], Math.floor(r() * S.elevators.length)),
   incLevel: r => act('incLevel', ['av', 'lugn', 'normal', 'kaos'][Math.floor(r() * 4)]),
   chief: r => act('chief', r() < 0.7),
+  visning: r => act('visning', ['start', 'start', 'next', 'end'][Math.floor(r() * 4)]),
+  heistTrig: () => act('trigger', 'heist'),
+  heist: r => act('heist', ['cut', 'wait', 'garage', 'tak', 'stop', 'go', 'storm'][Math.floor(r() * 7)]),
   chiefBack: r => act('chiefBack', ['storm', 'fire', 'power', 'strategy', 'move', 'pano', `heat${Math.floor(r() * S.elevators.length)}`][Math.floor(r() * 7)]),
 };
 // 24 dygn i fyra tester om sex, så att de går parallellt
@@ -2461,24 +2474,171 @@ test('Hissteknikern sitter själv fast mellan två våningar: hissjouren skickar
   return `${t.name} satt fast i ${e.name} · en kollega kom och fick igång den (${n} tekniker i huset)`;
 });
 
-test('Rundvisningen: varje stopp hinner fram, händelserna går att framkalla och det finns någon att följa', () => {
-  // samma väg som intro.js: spola fram till stoppet, framkalla händelserna och stå kvar en stund (som spelaren läser)
-  sim(INTRO_SEED, { ...INTRO_OPTS });
-  const out = [];
-  for (const s of STOPS) {
-    if (s.at !== undefined) { assert(hour() < s.at + 0.2, `${s.k}: dygnet har redan gått förbi kl ${s.at}`); while (hour() < s.at) step(DT); }
-    if (s.until) { const to = hour() + (s.max ?? 0.5); while (!s.until() && hour() < to) step(DT); assert(s.until(), `${s.k}: väntade förgäves`); }
-    for (const [name, ...args] of s.ev || []) assert(act(name, ...args) !== false, `${s.k}: ${name} ${args.join(' ')} gick inte att framkalla`);
-    if (s.cam.car !== undefined) assert(s.cam.car >= 0, `${s.k}: hissen finns inte`);
-    if (s.cam.floor !== undefined) assert(s.cam.floor >= 0, `${s.k}: våningen finns inte`);
-    if (s.cam.person) { const p = introPerson(); assert(p, `${s.k}: ingen att följa`); out.push(p.name); }
-    assert(s.text({ who: 'X' }).length > 20, `${s.k}: ingen text`);
-    for (let i = 0; i < 20 / DT; i++) step(DT);
-    const car = s.cam.car !== undefined ? S.elevators[s.cam.car] : null;
-    if (s.k === 'fel') assert(car && (car.mode === 'broken' || car.breakNext || car.trapNext), `${s.k}: ${car && car.name} gick inte sönder`);
-    if (s.k === 'framkalla') assert(S.heli, `${s.k}: ingen helikopter`);
+/** spola tills rundvisningen är över (eller max sekunder): vakar över receptionen och brandzonen under tiden
+ * @param {number} max @param {(v: any) => void} [each] */
+function runVisning(max, each = () => {}) {
+  const w = { unmanned: 0, fireZone: 0, kicki: false, lines: [], stops: [], t0: S.t };
+  let lastN = -1;
+  while (S.visning && S.t - w.t0 < max) {
+    step(DT);
+    const v = S.visning;
+    if (!v) break;
+    each(v);
+    const b = crewPerson('berit');
+    if (crewPerson('kicki')) w.kicki = true;
+    // Berit går aldrig från disken förrän vikarien är i huset
+    if ((v.ph === 'go' || v.ph === 'at') && b && !atPost(b) && !crewPerson('kicki')) w.unmanned++;
+    // ingen på rundvisningen går in i brandzonen (utom ut därifrån)
+    for (const p of S.people) if (p.touring && S.fire && p.goal !== undefined && inFireZone(p.goal) && !p.evac && p.state !== 'office') w.fireZone++;
+    if (v.lineN !== lastN) { lastN = v.lineN; w.lines.push(v.line); }
+    for (const k of v.seenStops) if (!w.stops.includes(k)) w.stops.push(k);
   }
-  return `${STOPS.length} stopp till kl ${hour().toFixed(2)} · följde ${out.join(', ')}`;
+  return w;
+}
+
+test('Rundvisningen: Berit ringer en vikarie, visar runt i husets vanliga gång och sätter sig vid disken igen', () => {
+  sim(5, { roll: 'mjuk' });
+  while (hour() < 8.6) step(DT);
+  assert(act('visning', 'start') === true, 'rundvisningen gick inte att beställa');
+  assert(act('visning', 'start') === false, 'två rundvisningar samtidigt');
+  const w = runVisning(1200);
+  assert(!S.visning, `rundvisningen tog inte slut (${S.visning && S.visning.ph}, stopp ${S.visning && S.visning.si})`);
+  assert(w.kicki, 'vikarien Kicki kom aldrig');
+  assert(!w.unmanned, `receptionen stod tom i ${(w.unmanned * DT).toFixed(1)} s`);
+  for (const s of VSTOPS) if (s.k !== 'tak') assert(w.stops.includes(s.k), `stoppet ${s.k} blev aldrig av (${w.stops.join(', ')})`);
+  assert(w.lines.every(l => l.length > 10 && !/undefined|NaN|\[object/.test(l)), `konstig replik: ${w.lines.find(l => /undefined|NaN|\[object/.test(l))}`);
+  const b = crewPerson('berit');
+  assert(b && (atPost(b) || hour() >= 19), 'Berit satt inte vid disken efteråt');
+  assert(!crewPerson('kicki'), 'Kicki gick aldrig hem');
+  assert(!S.people.some(p => p.guest), 'gästen gick aldrig');
+  assert(!S.people.some(p => p.touring), 'någon är kvar på rundvisning');
+  return `${w.stops.length} stopp på ${((S.t - w.t0) / 60).toFixed(1)} min · ${w.lines.length} repliker`;
+});
+
+test('Rundvisningen anpassar sig efter larmen: Berit visar händelsen, Kicki tar larmet, ingen går in i brandzonen', () => {
+  const out = [];
+  /** @type {[number, string[]][]} */
+  const cases = [[11, ['storm', 'fault']], [14, ['fire']], [13, ['power']], [16, ['cable']]];
+  for (const [seed, what] of cases) {
+    sim(seed, { roll: 'mjuk', chief: true });
+    while (hour() < 9) step(DT);
+    act('visning', 'start');
+    let done = false;
+    const w = runVisning(1500, v => { if (!done && v.ph === 'at' && v.si === 1) { done = true; for (const t of what) act('trigger', t); } });
+    assert(done, `${what}: rundvisningen kom aldrig till driftcentralen`);
+    assert(!S.visning, `${what}: rundvisningen tog inte slut`);
+    assert(!w.unmanned, `${what}: receptionen stod tom`);
+    assert(!w.fireZone, `${what}: någon på rundvisningen gick in i brandzonen`);
+    const seen = w.lines.some(l => /^(Oj|Hör du|Brandlarm|Panoramahissen|Flyttbilen)/.test(l));
+    assert(seen, `${what}: Berit lade aldrig om rutten (${w.lines.slice(0, 6).join(' | ')})`);
+    out.push(`${what.join('+')} ✓`);
+  }
+  return out.join(' · ');
+});
+
+test('Rundvisningen beställd på kvällen börjar när Berit kommer på morgonen (även över dygnsskiftet)', () => {
+  sim(8, { roll: 'mjuk' });
+  while (hour() < LAST_START + 0.5) step(DT);
+  act('visning', 'start');
+  assert(S.visning && S.visning.ph === 'order', 'beställningen syns inte');
+  let g = 0;
+  while (S.visning && S.visning.ph === 'order' && ++g < 4000 / DT) step(DT);
+  assert(S.visning && S.visning.ph !== 'order', 'rundvisningen började aldrig');
+  assert(S.day === 2 && hour() >= 7 && hour() < 8, `började dag ${S.day} kl ${hour().toFixed(2)} (ska vara dag 2 strax efter 07)`);
+  const w = runVisning(1500);
+  assert(!S.visning && w.stops.length >= 4, `rundvisningen blev inte av (${w.stops.join(', ')})`);
+  return `började dag 2 kl ${(7).toFixed(0)}–08 · ${w.stops.length} stopp`;
+});
+
+test('Rundvisningen: avbeställd och avslutad – Berit tillbaka vid disken, Kicki och gästen går', () => {
+  sim(21, { roll: 'mjuk' });
+  while (hour() < 9) step(DT);
+  act('visning', 'start'); act('visning', 'end');
+  assert(!S.visning, 'avbeställningen tog inte');
+  act('visning', 'start');
+  let g = 0;
+  while (S.visning && S.visning.ph !== 'at' && ++g < 400 / DT) step(DT);
+  act('visning', 'next'); act('visning', 'next'); act('visning', 'end');
+  const w = runVisning(900);
+  assert(!S.visning, 'rundvisningen tog inte slut efter Avsluta');
+  assert(w.stops.includes('slut'), 'Berit sade aldrig adjö i entrén');
+  assert(!crewPerson('kicki') && !S.people.some(p => p.guest || p.touring), 'någon blev kvar');
+  return `${w.stops.join(' → ')}`;
+});
+
+/** framkalla kuppen och spola tills den är över: vakar över de kapade hissarna och gisslan
+ * @param {number} max @param {(H: any) => void} [each] */
+function runHeist(max, each = () => {}) {
+  const w = watcher(), seen = { hold: false, hijacked: 0, cafe: 0, heroStep: 0, route: '', caught: false, outcome: '', policeSiren: false };
+  const t0 = S.t;
+  while (S.heist && S.t - t0 < max) {
+    const b = w.before(); step(DT); w.check(b);
+    const H = S.heist;
+    if (!H) break;
+    each(H);
+    if (H.ph === 'hold') { seen.hold = true; seen.hijacked = Math.max(seen.hijacked, S.elevators.filter(e => e.hijack).length); }
+    seen.cafe = Math.max(seen.cafe, S.people.filter(p => p.hostage && p.floor === CAFE && p.state === 'office').length);
+    seen.heroStep = Math.max(seen.heroStep, H.heroStep);
+    if (H.route) seen.route = H.route;
+    if (H.ph === 'done') { seen.caught = H.caught; seen.outcome = H.outcome; }
+  }
+  return { w, seen, s: S.t - t0 };
+}
+test('Kuppen på 5:an: gänget kapar hissarna, gisslan samlas i Sky Café, hjälten smyger och polisen griper dem – av sig själv', () => {
+  sim(7, { roll: 'mjuk', chief: true });
+  while (hour() < 14.2) step(DT);
+  assert(act('trigger', 'heist') === true, 'kuppen gick inte att framkalla');
+  assert(act('trigger', 'heist') === false, 'två kupper samtidigt');
+  const { w, seen, s } = runHeist(1200);
+  assert(!S.heist, `kuppen tog inte slut (${S.heist && S.heist.ph})`);
+  assert(seen.hold, 'gänget tog aldrig driftcentralen');
+  assert(seen.hijacked === S.elevators.filter(e => !e.freight).length, `bara ${seen.hijacked} hissar kapades`);
+  assert(seen.cafe >= 20, `bara ${seen.cafe} av gisslan kom fram till Sky Café`);
+  assert(seen.heroStep >= 5, `hjälten kom bara till steg ${seen.heroStep}`);
+  assert(seen.caught && /412 av 412/.test(seen.outcome), `gänget greps inte: ${seen.outcome}`);
+  assert(!w.hijackBoard && !w.hostageLeft, `regelbrott: kapad ${w.hijackBoard}, gisslan ${w.hostageLeft}`);
+  assert(!S.elevators.some(e => e.hijack) && !S.people.some(p => p.hostage || p.robber || p.hero), 'något hängde kvar efter kuppen');
+  assert(S.stats.events.some(e => e.type === 'heist'), 'kuppen kom inte med i dagens händelser');
+  return `${(s / 60).toFixed(1)} min · ${seen.cafe} i Sky Café · ${seen.outcome.split('.')[0]}`;
+});
+
+test('Kuppen: klipps strömmen öppnas valvet och gänget flyr – aldrig den väg polisen har spärrat', () => {
+  const out = [];
+  /** @type {[string[], (r: string) => boolean][]} */
+  const cases = [[['cut'], r => r !== 'van'], [['cut', 'tak', 'stop'], r => r === 'van'], [['cut', 'stop'], r => r === 'heli']];
+  for (const [acts, ok] of cases) {
+    sim(7, { roll: 'mjuk', chief: true });
+    while (hour() < 14.2) step(DT);
+    act('trigger', 'heist');
+    const todo = [...acts];
+    const { seen } = runHeist(1200, H => { if (H.police && todo.length) assert(act('heist', todo.shift()) === true, 'polisens val gick inte att göra'); });
+    assert(!S.heist, `${acts}: kuppen tog inte slut`);
+    assert(seen.route && ok(seen.route), `${acts}: flydde med ${seen.route || 'inget'} (${seen.outcome})`);
+    out.push(`${acts.join('+')} → ${seen.route}${seen.caught ? ' (gripna)' : ''}`);
+  }
+  return out.join(' · ');
+});
+
+test('Kuppen under rundvisningen: Berit och gästen blir över, smyger i trapporna och rundvisningen fortsätter efteråt', () => {
+  sim(12, { roll: 'mjuk', chief: true });
+  while (hour() < 14.4) step(DT);
+  act('visning', 'start');
+  let g = 0;
+  while (!(S.visning && S.visning.ph === 'at' && S.visning.si >= 1) && ++g < 900 / DT) step(DT);
+  assert(S.visning && S.visning.ph === 'at', 'rundvisningen kom aldrig igång');
+  const berit = S.visning.berit;
+  assert(act('trigger', 'heist') === true, 'kuppen gick inte att framkalla');
+  const lines = [];
+  let n = -1;
+  const { seen } = runHeist(1200, () => { if (S.visning && S.visning.lineN !== n) { n = S.visning.lineN; lines.push(S.visning.line); } });
+  assert(seen.hold, 'gänget tog aldrig huset');
+  assert(seen.heroStep >= 5, `Berit kom bara till steg ${seen.heroStep}`);
+  assert(/Berit blev över/.test(seen.outcome), `Berit var inte hjälten: ${seen.outcome}`);
+  while (S.visning && ++g < 3000 / DT) { step(DT); if (S.visning && S.visning.lineN !== n) { n = S.visning.lineN; lines.push(S.visning.line); } }
+  assert(!S.visning, 'rundvisningen tog aldrig slut efter kuppen');
+  assert(lines.some(l => /var var vi/.test(l)), 'Berit fortsatte aldrig rundvisningen');
+  assert(S.people.some(p => p.id === berit) || hour() >= 19, 'Berit försvann');
+  return `${seen.caught ? 'gripna' : 'borta'} · ${lines.length} repliker efteråt`;
 });
 
 test('Rytmen i huset: engångsljuden hamnar på musikens sextondelar', () => {

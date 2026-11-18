@@ -17,6 +17,7 @@ import { setFireMode, startGenerator, toggleAutoRescue } from './incidents.js';
 import { orderService, startFan, WARM_AT } from './service.js';
 import { setMoveWind } from './visits.js';
 import { hoistHalt } from './hoist.js';
+import { heistChoice } from './heist.js';
 import { changeStrategy } from './actions.js';
 import { STRAT_NAMES } from './config.js';
 
@@ -66,7 +67,7 @@ function record(key, text, why, by, o = {}) {
 }
 /** chefen bestämmer något och säger varför (loggen, kontrollrummets pratbubbla och incidentkortet) */
 function decide(key, text, why, o = {}) {
-  const C = S.chief, who = chiefOnDuty().name;
+  const C = S.chief, who = o.who || chiefOnDuty().name;
   record(key, text, why, 'chief', o);
   C.say = { text: o.say || text, t0: S.t, until: S.t + 10, dec: !o.info };
   const color = o.car !== undefined && o.car !== null ? S.elevators[o.car].color : null;
@@ -120,6 +121,10 @@ export function chiefTick(dt) {
   for (const e of S.elevators) if (!e.hot && !e.fan && (C.dec[`heat${e.id}`] || C.manual[`heat${e.id}`])) clear(`heat${e.id}`);
   if (!S.move || S.move.state === 'done') clear('move');
   if (!S.pano || S.pano.ph === 'done') clear('pano');
+  if (!S.heist || S.heist.ph === 'done') { clear('heist'); delete C.seen.heistWait; delete C.seen.heistPlan; delete C.seen.heistSignal; }
+  // kuppen: polisens insatsledare bestämmer (chefen sitter bunden i driftcentralen och tar inga egna beslut)
+  if (S.heist && S.heist.police && S.heist.ph !== 'done') heistChiefTick();
+  if (S.heist && S.heist.tied) return;
   if (!C.on) return;
   stormTick();
   fireTick();
@@ -268,6 +273,26 @@ function panoChiefTick() {
   if (how === 'ladder') decide('pano', 'Stegbilen från gatan', `${windMs()} m/s är för blåsigt för repet, och stegen når upp till ${e.name}`, { inc: 'pano', car: e.id, say: 'Stegbilen – det blåser för mycket för rep!' });
   else if (windy) decide('pano', 'Firas ner – när vinden mojnar', `stegbilen når inte upp till ${e.name}, och i ${windMs()} m/s kan räddarna inte fira någon – de väntar på taket`, { inc: 'pano', car: e.id, say: 'Vi får vänta ut vinden…' });
   else decide('pano', 'Firas ner med rep från taket', `hydrauliken går inte att veva – räddningstjänsten firar ner dem en i taget ${where}`, { inc: 'pano', car: e.id, say: `Fira ner dem från taket!` });
+}
+
+// --- Kuppen: polisens insatsledare – vänta ut dem (strömmen klipps inte), gå in via garaget där skåpbilen står ---
+/** den som bestämmer under kuppen (visas på incidentkortet) */
+export const INSATS = 'Insatsledaren';
+function heistChiefTick() {
+  const Hs = S.heist, C = S.chief;
+  if (!Hs || !free('heist')) return;
+  const o = { inc: 'heist', who: INSATS };
+  if (!C.seen.heistWait) {
+    C.seen.heistWait = true;
+    heistChoice('wait'); heistChoice('garage');
+    decide('heist', 'Vi väntar ut dem – strömmen stannar på', 'klipper vi strömmen släpper valvets magnetlås, och det är precis vad de vill', { ...o, say: 'Ingen klipper strömmen!' });
+  } else if (!C.seen.heistPlan && S.t - Hs.policeAt > 12) {
+    C.seen.heistPlan = true;
+    decide('heist', 'Insatsstyrkan går in via garaget', 'skåpbilen står vid lastkajen – utan den kommer de ingenstans', { ...o, say: 'Vi tar dem vid lastkajen.' });
+  } else if (Hs.signal && !C.seen.heistSignal) {
+    C.seen.heistSignal = true;
+    decide('heist', 'Ljussignal från taket – vi går in tidigare', `${Hs.heroWho || 'någon'} vet var de är`, { ...o, say: 'Vi har kontakt – snart går vi in!' });
+  }
 }
 
 // --- Det chefen ser på skärmarna och berättar (inga beslut) ---

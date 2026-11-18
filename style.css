@@ -333,68 +333,23 @@ body.cinema #side{display:none !important}
   .btn{min-height:32px}
 }
 
-/* ---------- Startmenyn (menu.js): ett fönster på skrivbordet med huset levande bakom ---------- */
-body.menu #side,body.menu #lower{display:none}
-.overlay.menu{background:linear-gradient(90deg,rgba(0,40,40,.55),rgba(0,40,40,.05) 70%);justify-content:flex-start;padding:16px 16px 16px 6vw}
-.card.mn{max-width:420px;text-align:left}
-.card.mn.mn-props{max-width:500px}
-.card.mn.mn-scen{max-width:620px}
-.mn-logo{font-family:'VT323',monospace;font-size:64px;line-height:1;letter-spacing:10px;text-align:center;margin:8px 0 0;
-  color:var(--navy);text-shadow:3px 3px 0 var(--shade),-1px -1px 0 var(--hi)}
-.mn-tag{text-align:center;font-size:11.5px;color:#303030;margin:0 0 10px}
-.mn-list{display:flex;flex-direction:column;gap:3px;background:#fff;box-shadow:var(--sunken);padding:4px}
-.mn-item,.mn-cart{display:flex;align-items:center;gap:10px;width:100%;text-align:left;font-family:var(--ui);color:var(--ink);
-  background:transparent;border:0;padding:5px 8px;cursor:pointer}
-.mn-item b,.mn-cart b{display:block;font-size:13px}
-.mn-item small,.mn-cart small{display:block;font-size:11px;color:#404040;line-height:1.35}
-.mn-item:hover,.mn-item:focus,.mn-cart:hover,.mn-cart:focus{background:var(--navy);color:#fff;outline:1px dotted var(--vga-y);outline-offset:-2px}
-.mn-item:hover small,.mn-item:focus small,.mn-cart:hover small,.mn-cart:focus small{color:#dfe8ff}
-.mn-ico{flex:none;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;
-  background:var(--face);color:var(--ink);box-shadow:var(--raised)}
-.mn-last{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;font-size:11.5px;padding:4px 6px;box-shadow:var(--sunken);background:var(--note)}
-.card .mn-last .btn{margin:0;padding:2px 8px;font-size:11px;outline:0}
-.mn-props fieldset{border:0;box-shadow:var(--sunken),inset 0 0 0 3px var(--face);margin:8px 0;padding:10px 10px 8px}
-.mn-props legend{font-weight:700;font-size:12px;padding:0 4px}
-.mn-radios{display:flex;flex-wrap:wrap;gap:2px 12px;margin:2px 0}
-.mn-radio{font-size:12px;cursor:pointer;padding:1px 2px}
-.mn-radio.on{font-weight:700}
-.mn-radio input:focus-visible{outline:1px dotted var(--ink)}
-.mn-seed{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.mn-seed input{width:90px;font-family:'VT323',monospace;font-size:18px;border:0;box-shadow:var(--sunken);padding:2px 5px;background:#fff}
-.card .mn-seed .btn{margin:0;padding:3px 8px;outline:0}
-.mn-seed small{color:#404040}
-.mn-btns{display:flex;justify-content:flex-end;gap:6px}
-.card .mn-btns .btn{padding:5px 16px}
-.mn-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:3px;background:#fff;box-shadow:var(--sunken);padding:4px}
-.mn-cart{align-items:flex-start;padding:7px 8px}
-.mn-cart i{display:block;font-style:normal;font-family:'VT323',monospace;font-size:15px;color:var(--shade);margin-top:2px}
-.mn-cart:hover i,.mn-cart:focus i{color:var(--vga-c)}
-.mn-spin p{font-size:12.5px}
-.mn-bar{height:16px;box-shadow:var(--sunken);background:#fff;padding:2px;margin:8px 0 4px}
-.mn-bar i{display:block;height:100%;width:0;background:repeating-linear-gradient(90deg,var(--navy) 0 9px,transparent 9px 11px)}
-.mn-spin small{font-size:11px;color:#404040}
-/* uppstarten: DOS-svart, en gång */
+/* ---------- Uppstarten (start.js): DOS-svart, första gången ---------- */
 .mn-boot{position:fixed;inset:0;background:var(--dos);color:var(--dos-txt);padding:24px 28px;font-family:'VT323',monospace;font-size:20px;line-height:1.15;cursor:pointer}
 .mn-boot pre{margin:0;font:inherit;white-space:pre-wrap}
 .mn-skip{position:absolute;right:20px;bottom:14px;color:var(--shade);font-size:16px}
-@media (max-width:800px){
-  .overlay.menu{justify-content:center;padding:12px;background:rgba(0,40,40,.4)}
-  .mn-logo{font-size:48px}
-  .mn-cards{grid-template-columns:1fr}
-}
 
 /* ---------- Rundvisningen (intro.js): Berit berättar i ett block överst i panelen; det hon pratar om
    lyfts fram (tour-hi) och blinkar (tour-spot), resten av panelen tonas ner ---------- */
 .b-tour{background:var(--face)}
 .tour-say{background:var(--note);box-shadow:var(--sunken);padding:5px 7px;margin:2px 0 4px;font-size:12px;line-height:1.4;min-height:5.6em}
 .tour-say b{color:var(--navy)}
+.tour-say .said{color:#5a5a5a}
 .tour-dots{display:flex;gap:3px;justify-content:center;margin:2px 0}
 .tour-dots i{width:7px;height:7px;background:var(--face);box-shadow:var(--sunken)}
 .tour-dots i.was{background:var(--shade)}
 .tour-dots i.now{background:var(--navy)}
 .tour-nav{margin-bottom:0}
 .tour-next,.tour-go{font-weight:700;min-width:84px}
-#side.touring>.blk:not(.tour-hi):not(.b-tour){opacity:.45}
 .tour-hi{outline:2px solid var(--vga-y);outline-offset:-1px}
 .tour-spot{animation:tourspot .7s infinite alternate}
 @keyframes tourspot{from{outline:2px solid transparent;outline-offset:1px}to{outline:2px solid #ff8c00;outline-offset:1px}}

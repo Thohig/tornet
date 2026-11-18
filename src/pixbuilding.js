@@ -251,13 +251,14 @@ const DOCK_DRIVE_S = 3;
  // (flyttbilen: så länge den syns köra ner för rampen eller upp igen)
 /** en bil vid lastkajen: x = bilens vänsterkant (bakdörrarna), yb = golvet under hjulen; open = bakdörrarna öppna */
 function dockTruck(x, yb, kind, open) {
-  const flytt = kind === 'flytt', body = flytt ? '#f4f1e8' : '#ffd23f', w = flytt ? 40 : 32, hgt = flytt ? 15 : 12;
+  const flytt = kind === 'flytt', kupp = kind === 'kupp', body = flytt || kupp ? '#f4f1e8' : '#ffd23f', w = flytt ? 40 : 32, hgt = flytt ? 15 : 12;
   // skåpet (bak, till vänster) och hytten (fram, till höger)
   box(x, yb - hgt - 3, w - 9, hgt, body);
-  box(x + w - 10, yb - 12, 10, 9, flytt ? '#ff8c42' : '#d4a017'); R(x + w - 8, yb - 11, 6, 4, '#bfeaff');
+  box(x + w - 10, yb - 12, 10, 9, flytt ? '#ff8c42' : kupp ? '#5b6b3a' : '#d4a017'); R(x + w - 8, yb - 11, 6, 4, '#bfeaff');
   R(x + 1, yb - 5, w - 2, 2, INK);
   for (const wx of [x + 3, x + w - 8]) { R(wx, yb - 4, 5, 4, INK); R(wx + 1, yb - 3, 3, 2, '#5a5a5a'); }
   if (flytt) { R(x + 2, yb - hgt + 1, w - 13, 3, '#ff8c42'); text(g, 'FLYTT', x + (w - 9) / 2, yb - hgt + 5, '#ff8c42', 'center'); }
+  else if (kupp) { R(x + 2, yb - hgt - 1, w - 13, 1, '#5b6b3a'); text(g, 'FASAD', x + (w - 9) / 2, yb - hgt + 2, '#5b6b3a', 'center'); } // (Fasad & Fönster AB, heist.js)
   else { R(x + 2, yb - hgt - 1, w - 13, 1, '#c81e3a'); text(g, 'PAKET', x + (w - 9) / 2, yb - hgt + 2, INK, 'center'); }
   // bakdörrarna står öppna mot kajen
   if (open) { R(x - 1, yb - hgt - 3, 2, hgt, INK); R(x - 3, yb - hgt - 2, 2, hgt - 2, dark(body, 0.25)); }
@@ -279,6 +280,10 @@ function drawDockTrucksPx() {
   // leveransbilen: x i simuleringen går från −260 (gatan) till 70 (vid kajen)
   const T = S.truck;
   if (T) draw((T.x + 260) / 330, 'paket', T.state === 'parked');
+  // kuppen: skåpbilen från Fasad & Fönster AB (förvarningen: den backar in och blir stående med motorn igång)
+  const Hs = S.heist, W = S.warn && S.warn.type === 'heist' ? S.warn : null;
+  if (Hs && Hs.van !== 'gone') draw((Hs.vanX + 260) / 330, 'kupp', Hs.van === 'park');
+  else if (W) draw(Math.min(1, (S.t - W.t0) / 4), 'kupp', false);
   // flyttbilen: står vid kajen medan flytten pågår (och kör ner/upp precis i början och slutet)
   const M = S.move;
   if (M && M.state === 'on') draw(Math.min(1, (S.t - M.t0) / DOCK_DRIVE_S), 'flytt', true);

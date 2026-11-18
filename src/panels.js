@@ -106,7 +106,7 @@ function warnHtml() {
   if (!W) return '';
   const car = W.car !== undefined && W.car !== null ? S.elevators[W.car] : null;
   const text = { fire: `👃 Det luktar bränt på ${fl(W.floor)}`, power: '💡 Lamporna flimrar …', storm: '🌥️ Ett oväder drar in',
-    heat: `🌡️ Motorn i ${car ? car.name : 'en hiss'} brummar`, cable: `🪢 Linorna i ${car ? car.name : 'en hiss'} knarrar`, fault: `🔩 ${car ? car.name : 'En hiss'} gnisslar` }[W.type] || '⚠️ Något är på gång';
+    heat: `🌡️ Motorn i ${car ? car.name : 'en hiss'} brummar`, cable: `🪢 Linorna i ${car ? car.name : 'en hiss'} knarrar`, fault: `🔩 ${car ? car.name : 'En hiss'} gnisslar`, heist: '🚐 En skåpbil står vid lastkajen med motorn igång' }[W.type] || '⚠️ Något är på gång';
   const act = car ? `follow:${car.id}` : `show:${W.floor ?? (W.type === 'storm' ? (ROOF >= 0 ? ROOF : TOP) : LOBBY)}`;
   return `<button class="warnrow" data-act="${act}" data-hint="<b>Förvarning:</b> något är på gång – klicka för att visa var">${esc(text)}<span>visa</span></button>`;
 }
@@ -155,13 +155,14 @@ function followHtml(F) {
       inside ? ikon(`inside:${f}`, '👤', 'Följ någon därinne', `${inside} är inne på våningen – klicka igen för nästa`) : '',
       FIRE_FLOORS.includes(f) ? ikon(`trig:fire:${f}`, '🔥', 'Brand här', 'Det börjar brinna på den här våningen', false, S.fire ? ' disabled' : '') : '',
       ikon(`visit:${f}`, '🚶', 'Släpp in en besökare', 'En besökare kommer till våningen', false, S.fire ? ' disabled' : ''),
+      f === LOBBY ? ikon('visning:start', '🛎️', 'Be Berit visa runt', 'Berit ringer efter en vikarie till disken och visar en gäst runt i huset – du följer med', false, S.visning ? ' disabled' : '') : '',
       f === LOBBY ? ikon('bus', '🚌', 'Turistbuss!', 'Stadsturen: en guide och fjorton turister ska se takterrassen och Sky Café. Kommer bara när de har öppet (ungefär 07:30–16)', false, S.fire || S.tour ? ' disabled' : '') : '',
     ].join('');
     return { head: `📹 Våning ${fl(f)} · ${esc(FL[f].name)}`, body: `<div class="fl-info">${w} väntar på hiss · ${inside} inne${f === CONTROL ? ' · driftcentralen' : ''}</div><div class="row">${acts}</div>` };
   }
   const p = F.p, cam = VIEW.camSel;
   return { head: `${cam ? '📹 Följer' : '🔎 Spårar'} ${esc(p.name)}`,
-    body: personHtml(p) + (cam ? '' : `<div class="row">${ikon(`person:${p.id}`, '📹', 'Följ med kameran', 'Kameran håller personen i bild (F)')}</div>`) };
+    body: personHtml(p) + `<div class="row">${cam ? '' : ikon(`person:${p.id}`, '📹', 'Följ med kameran', 'Kameran håller personen i bild (F)')}${p.crewId === 'berit' ? ikon('visning:start', '🛎️', 'Be Berit visa runt', 'Berit ringer efter en vikarie till disken och visar en gäst runt i huset – du följer med', false, S.visning ? ' disabled' : '') : ''}</div>` };
 }
 function trigHtml() {
   const fire = `<select name="fireFloor" data-hint="<b>Brandvåning</b><br>Våningen som börjar brinna"><option value="">slumpad</option>${FIRE_FLOORS.map(f => `<option value="${f}"${String(f) === UI.fireFloor ? ' selected' : ''}>${fl(f)} · ${esc(FL[f].short)}</option>`).join('')}</select>`;
@@ -173,7 +174,7 @@ function trigHtml() {
     + t('cable', '🪢', 'Linbrott', 'Linorna går av i en hiss') + t('pano', '🧗', 'Fast på fasaden', 'Panoramahissen fastnar utanför huset – de instängda måste firas ner')
     + t('medical', '🚑', 'Ambulans', 'Någon svimmar') + t('move', '🚚', 'Flytt', 'Ett hushåll flyttar') + t('vip', '🚁', 'VIP', 'VIP-helikoptern landar')
     + t('train', '🚇', 'Tågstörning', 'Tåget blir försenat') + t('cold', '❄️', 'Kyla', 'En kall dag: dörrarna i entrén tar emot')
-    + t('heatwave', '☀️', 'Värmebölja', 'Motorerna kyls sämre') + ikon('bus', '🚌', 'Turistbuss!', 'Stadsturen: en guide och fjorton turister ska se takterrassen och Sky Café. Kommer bara när de har öppet (ungefär 07:30–16)', false, S.fire || S.tour ? ' disabled' : '')
+    + t('heatwave', '☀️', 'Värmebölja', 'Motorerna kyls sämre') + ikon('trig:heist', '🚐', 'Kupp!', 'Ett rånargäng tar över huset för att tömma valvet på 5:an. Kräver en ledig lastkaj', false, S.heist || S.fire ? ' disabled' : '') + ikon('bus', '🚌', 'Turistbuss!', 'Stadsturen: en guide och fjorton turister ska se takterrassen och Sky Café. Kommer bara när de har öppet (ungefär 07:30–16)', false, S.fire || S.tour ? ' disabled' : '')
     + `</div><div class="dim small">Följ en hiss eller våning för att framkalla något just där.</div>`;
 }
 function stratHtml() {
@@ -198,8 +199,6 @@ function viewHtml(v) {
     + `<div class="hint">Hur ofta folk trycker på fel knapp (och barn på alla) – syns med styrlogiken Knappar.</div>`
     + `<div class="lbl">Underhåll</div>${set('maint', [['natt', 'Nattservice'], ['fel', 'Bara vid fel']])}`
     + `<div class="hint">Nattservice håller nere slitaget – utan den slits hissarna dag för dag och går oftare sönder.</div>`
-    + `<div class="lbl">Nytt dygn</div>${set('roll', [['mjuk', 'Rullar vidare'], ['ny', 'Börjar om']])}`
-    + `<div class="hint">Rullar vidare: kl 06 fortsätter huset som det är – reparationer, incidenter och folk följer med. Börjar om: spelet stannar för dagens resultat och nästa dygn börjar från början (bara slitage och pågående hissfel följer med).</div>`
     + `<div class="lbl">Visa</div><div class="row">${btn('tags', 'Namnbrickor (T)', S.tags)}${btn('sound', `Ljud (M) ${soundOn() ? '🔊' : '🔇'}`, soundOn())}${btn('music', 'Musik ♪', musicOn())}</div>`
     + `<div class="hint">När ljudet är på: husmusiken följer dygnet (ragtime i rusningen, vals på förmiddagen, jazz till lunch, lounge på kvällen, speldosa på natten) med korta inslag när något händer. Följer du en hiss hörs i stället kassetten i korgen.</div>`;
 }

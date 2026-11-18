@@ -149,6 +149,8 @@ function cue(name, t) {
 // ---------- Vad som ska höras ----------
 /** Vilket stycke som spelar just nu. */
 function current(intro) {
+  // kuppen: ragtime som i en stumfilmsjakt (heist.js)
+  if (S.heist && S.heist.ph !== 'done') return 'rag';
   if (intro) return 'hum';
   const H = S.hoist;
   if (S.move && H && H.phase !== 'idle' && !H.halted) return 'tuba';
@@ -181,10 +183,10 @@ export const musicHush = () => (ac && ac.currentTime < hushUntil ? 0 : 1);
 
 /**
  * Anropas varje bildruta från sound.js. house = husmusiken får höras (ingen hissmusik spelar),
- * on = musiken är påslagen, intro = rundvisningen pågår.
- * @param {AudioContext} ctx @param {AudioNode} dest @param {boolean} on @param {boolean} house @param {boolean} intro
+ * on = musiken är påslagen, intro = rundvisningen pågår, duck = musikens nivå medan Berit pratar (1 = som vanligt).
+ * @param {AudioContext} ctx @param {AudioNode} dest @param {boolean} on @param {boolean} house @param {boolean} intro @param {number} [duck]
  */
-export function updateScore(ctx, dest, on, house, intro) {
+export function updateScore(ctx, dest, on, house, intro, duck = 1) {
   init(ctx, dest);
   const m = /** @type {NonNullable<typeof M>} */ (M);
   const now = ctx.currentTime, dt = Math.min(0.1, Math.max(0, now - lastNow)); lastNow = now;
@@ -207,7 +209,7 @@ export function updateScore(ctx, dest, on, house, intro) {
   for (const [k, sl] of Object.entries(m.slots)) {
     const target = k === want ? 1 : 0;
     sl.lvl = target > sl.lvl ? Math.min(1, sl.lvl + dt / FADE_S) : Math.max(0, sl.lvl - dt / (now < hushUntil ? 0.4 : FADE_S));
-    sl.gain.gain.setTargetAtTime(sl.lvl * sl.lvl, now, 0.05);
+    sl.gain.gain.setTargetAtTime(sl.lvl * sl.lvl * duck, now, 0.15);
     if (!live || (sl.lvl === 0 && !target)) { sl.next = null; continue; }
     schedule(k, sl, now);
   }

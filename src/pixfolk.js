@@ -129,7 +129,9 @@ function thought(p, x, y, n = 1) {
 let callAt = /** @type {{ x: number, y: number }|null} */ (null);
 export const resetCallAt = () => { callAt = null; };
 /** @param {Person} p */
-const calling = p => !!S.techCall && S.techCall.by === p.id && S.t < S.techCall.until;
+// (Berit ringer också – efter en vikarie när hon ska visa runt, visning.js)
+const calling = p => (!!S.techCall && S.techCall.by === p.id && S.t < S.techCall.until)
+  || (!!S.visning && S.visning.berit === p.id && S.visning.ph === 'call' && S.t < S.visning.callUntil);
 /** mobiltelefonen vid örat; (px, py) = figurens övre vänstra hörn, dir = sidovyns riktning (0 = framifrån) @param {Person} p */
 export function phoneOn(p, px, py, dir = 0) {
   if (!calling(p)) return;
@@ -258,7 +260,7 @@ export function drawGagsPx(dt) {
       const lo2 = VIEW.camY, hi = VIEW.camY + VIEW.viewH;
       // (vid kontrollbordet pratar chefen själv – S.chief.say; personalen och andra i tjänst bara om jobbet)
       const cands = S.people.filter(p => p.state === 'office' && !p.sleeping && p.spot && p.spot.k !== 'door' && p.spot.post !== 'chief'
-        && (workLines(p) === null || workLines(p).length > 0)
+        && !p.touring && (workLines(p) === null || workLines(p).length > 0)
         && floorY(p.floor) > lo2 + 40 && floorY(p.floor) < hi + 40 && !gags.some(q => q.p.floor === p.floor));
       if (cands.length) {
         const p = vpick(cands), work = workLines(p), th = FL[p.floor].theme;

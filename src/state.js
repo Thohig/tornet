@@ -43,6 +43,10 @@ const INIT = {
   move: /** @type {import('./visits.js').Move|null} */ (null), medic: /** @type {import('./visits.js').Medic|null} */ (null),
   // Stadsturen: turistbussen och den guidade gruppen (tour.js)
   tour: /** @type {import('./tour.js').Tour|null} */ (null),
+  // rundvisningen: Berit visar en gäst runt i huset medan vikarien Kicki sköter disken (visning.js)
+  visning: /** @type {import('./visning.js').Visning|null} */ (null),
+  // Kuppen på 5:an: rånargänget, gisslan, hjälten och polisen (heist.js)
+  heist: /** @type {import('./heist.js').Heist|null} */ (null), heistDay: 0, // (dygnet då slumpen senast gav en kupp: högst en per dygn)
   // tunnelbanan (train.js): tåget som är inne, nästa och förra avgången, förseningen och om sista tåget har gått
   train: /** @type {import('./train.js').Train|null} */ (null), trainNext: 0, trainLast: /** @type {number|null} */ (null),
   trainDelay: /** @type {{ t0: number, until: number }|null} */ (null), trainDone: false,

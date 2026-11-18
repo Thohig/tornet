@@ -4,6 +4,8 @@ import { STRAT_NAMES } from './config.js';
 import { S, log } from './state.js';
 import { pev, spawnVisitor } from './people.js';
 import { spawnBus } from './tour.js';
+import { endVisning, nextVisning, orderVisning } from './visning.js';
+import { heistChoice, startHeist } from './heist.js';
 import { rebuildPicks } from './dispatch.js';
 import { setFireMode, setIncLevel, startGenerator, startRescue, toggleAutoRescue, toggleOff, trigger } from './incidents.js';
 import { setStormMode, setWeather, strikeNow } from './weather.js';
@@ -26,15 +28,16 @@ export function changeStrategy(k) {
   log(`Styrlogik bytt till ${STRAT_NAMES[k]} – alla väntande fördelas om`, 'sys');
 }
 /** inställningar som spelaren kan ändra under dygnet */
-const SETTINGS = ['mistakes', 'maint', 'roll'];
+const SETTINGS = ['mistakes', 'maint'];
 /** Allt spelaren kan framkalla. target = våning (brand) eller hiss (hissfel, het motor, linbrott); utelämnat = slumpen väljer. */
-export const TRIGGERS = ['fire', 'power', 'fault', 'storm', 'heat', 'cable', 'pano', 'medical', 'move', 'lightning', 'cold', 'heatwave', 'train', 'vip'];
+export const TRIGGERS = ['fire', 'power', 'fault', 'storm', 'heat', 'cable', 'pano', 'medical', 'move', 'lightning', 'cold', 'heatwave', 'train', 'vip', 'heist'];
 function triggerAny(type, target = null) {
   if (type === 'move') return moveNow();
   if (type === 'lightning') return strikeNow();
   if (type === 'cold' || type === 'heatwave') return setWeather(type);
   if (type === 'train') return delayTrain();
   if (type === 'vip') return vipNow();
+  if (type === 'heist') return startHeist();
   return trigger(type, target);
 }
 const FIRE_TEXT = { recall: 'Brandåterkallning', zone: 'Brandzon', none: 'Normal drift i branden' };
@@ -58,6 +61,11 @@ export const ACTIONS = {
   service: id => orderService(car(id)),
   visitor: (f, x) => spawnVisitor(f, x),
   bus: () => spawnBus(),
+  // rundvisningen med Berit: beställ (start), gå vidare till nästa stopp (next), avsluta (end)
+  // kuppen: polisens val – strömmen (cut/wait), var insatsstyrkan går in (garage/tak), tåget (stop/go), gå in nu (storm)
+  heist: what => { const H = S.heist; if (!heistChoice(what)) return false; if (what === 'stop') delayTrain();
+    playerChose('heist', { cut: 'Klipp strömmen', wait: 'Vänta ut dem', garage: 'Storma via garaget', tak: 'Storma via taket', stop: 'Stoppa tunnelbanan', go: 'Låt tåget gå', storm: 'Gå in nu!' }[what], { inc: 'heist', floor: H ? null : null }); return true; },
+  visning: what => (what === 'start' ? orderVisning() : what === 'next' ? nextVisning() : what === 'end' ? endVisning() : undefined),
   moveRoute: r => { if (!S.move) return; setMoveRoute(r); playerChose('move', `Flytten: ${{ auto: 'låt styrningen planera', varu: 'allt i varuhissen', balk: 'tungt med hissbalken' }[r]}`); },
   moveBlankets: on => setMoveBlankets(on),
   panoRescue: how => { if (!S.pano || !setPanoHow(how, 'player')) return; playerChose('pano', panoText(how), { inc: 'pano', car: S.pano.car }); },

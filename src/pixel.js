@@ -21,7 +21,7 @@ import { countOcc, deckSign, drawChiefPx, drawEscalatorPx, drawHall, floorOverla
 import { drawGroundPx, drawLanternsPx, drawShell, drawSkyAll, drawSlabsPx, drawStreetPx, drawTerracePx, terminal } from './pixbuilding.js';
 import { drawCarPx, drawPanoPx, drawRopesPx } from './pixcars.js';
 import { drawProf, lap } from './prof.js';
-import { drawBannersPx, drawBrigadePx, drawCleanerPx, drawHeliPx, drawHoistPx, drawLightningPx, drawMedicPx, drawMovePilesPx, drawOutagePx, drawRoofPx, drawSmokePx, drawSnowPx, drawWeatherPx } from './pixroof.js';
+import { drawBannersPx, drawBrigadePx, drawPolicePx, drawCleanerPx, drawHeliPx, drawHoistPx, drawLightningPx, drawMedicPx, drawMovePilesPx, drawOutagePx, drawRoofPx, drawSmokePx, drawSnowPx, drawWeatherPx } from './pixroof.js';
 
 // ---------- Hela bilden ----------
 export function renderPixel(dt) {
@@ -57,6 +57,7 @@ export function renderPixel(dt) {
   drawWeatherPx();
   drawMedicPx();
   drawBrigadePx();
+  drawPolicePx();
   drawSmokePx();
   drawOutagePx();
   drawLightningPx();
