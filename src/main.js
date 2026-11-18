@@ -8,7 +8,7 @@ import { updateSound } from './sound.js';
 import { slowmo, updateDirector } from './director.js';
 import { updatePanel } from './panels.js';
 import { menuDemo, menuTick, showMenu } from './menu.js';
-import { introTick } from './intro.js';
+import { introOn, introTick } from './intro.js';
 
 // ---------- Start ----------
 // Startmenyn (menu.js) väljer frö, tempo, slumpen … Adressen går före: ?seed=123 spelar om exakt samma dag
@@ -40,7 +40,7 @@ function frame(now) {
   updateDirector();
   updateCamera(dt);
   render(dt);
-  updateSound();
+  updateSound(introOn());
   hudT -= dt;
   if (hudT <= 0) { hudT = 0.15; updatePanel(); }
   requestAnimationFrame(frame);

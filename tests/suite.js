@@ -33,6 +33,8 @@ import { CREW_BY, atPost, crewPerson, postFloor } from '../src/crew.js';
 import { CREW } from '../src/config.js';
 import { PANO, ladderReach, PANO_CREW_S, PANO_DEFAULT_S } from '../src/pano.js';
 import { INTRO_OPTS, INTRO_SEED, STOPS, introPerson } from '../src/introStops.js';
+import { CUES, PIECES, layout, partOf } from '../src/scoreData.js';
+import { hz } from '../src/music.js';
 /** @typedef {import('../src/elevators.js').Elevator} Elevator */
 /** @typedef {import('../src/people.js').Person} Person */
 
@@ -2459,4 +2461,24 @@ test('Rundvisningen: varje stopp hinner fram, händelserna går att framkalla oc
     if (s.k === 'framkalla') assert(S.heli, `${s.k}: ingen helikopter`);
   }
   return `${STOPS.length} stopp till kl ${hour().toFixed(2)} · följde ${out.join(', ')}`;
+});
+
+test('Husmusiken: alla stycken går att lägga ut och dygnet har musik i varje del', () => {
+  // noterna i scoreData.js: varje ton finns, ligger inom takten och har ett instrument (layout kastar annars)
+  const out = [];
+  for (const [k, P] of Object.entries(PIECES)) {
+    const ev = layout(P);
+    assert(ev.length === P.bars.length * P.bar, `${k}: fel längd`);
+    const n = ev.flat().filter(e => e.f.length).length;
+    assert(n > P.bars.length, `${k}: nästan inga toner`);
+    for (const e of ev.flat()) for (const f of e.f) assert(f > 40 && f < 2000, `${k}: tonen ${f.toFixed(0)} Hz är orimlig`);
+    for (const a of P.ans) assert(hz(a) > 0, `${k}: svaret ${a}`);
+    out.push(`${k} ${n}`);
+  }
+  for (const c of Object.values(CUES)) for (const [, n] of c) assert(hz(n) > 0, `inslaget ${n}`);
+  // dygnets delar: rusning, lunch, kväll och natt får var sitt stycke
+  const parts = new Set();
+  for (let h = 6; h < 30; h += 0.25) { const p = partOf(h, trafficMode(h)); assert(PIECES[p], `kl ${h}: ${p}`); parts.add(p); }
+  for (const p of ['rag', 'waltz', 'jazz', 'lounge', 'box']) assert(parts.has(p), `${p} spelas aldrig`);
+  return out.join(' · ');
 });

@@ -200,8 +200,8 @@ function viewHtml(v) {
     + `<div class="hint">Nattservice håller nere slitaget – utan den slits hissarna dag för dag och går oftare sönder.</div>`
     + `<div class="lbl">Nytt dygn</div>${set('roll', [['mjuk', 'Rullar vidare'], ['ny', 'Börjar om']])}`
     + `<div class="hint">Rullar vidare: kl 06 fortsätter huset som det är – reparationer, incidenter och folk följer med. Börjar om: spelet stannar för dagens resultat och nästa dygn börjar från början (bara slitage och pågående hissfel följer med).</div>`
-    + `<div class="lbl">Visa</div><div class="row">${btn('tags', 'Namnbrickor (T)', S.tags)}${btn('sound', `Ljud (M) ${soundOn() ? '🔊' : '🔇'}`, soundOn())}${btn('music', 'Hissmusik ♪', musicOn())}</div>`
-    + `<div class="hint">Hissmusiken spelas inne i hissen du följer (eller som den du följer åker med) när ljudet är på.</div>`;
+    + `<div class="lbl">Visa</div><div class="row">${btn('tags', 'Namnbrickor (T)', S.tags)}${btn('sound', `Ljud (M) ${soundOn() ? '🔊' : '🔇'}`, soundOn())}${btn('music', 'Musik ♪', musicOn())}</div>`
+    + `<div class="hint">När ljudet är på: husmusiken följer dygnet (ragtime i rusningen, vals på förmiddagen, jazz till lunch, lounge på kvällen, speldosa på natten) med korta inslag när något händer. Följer du en hiss hörs i stället kassetten i korgen.</div>`;
 }
 /** blocken som kan bli länkar: ikon, namn och förklaring */
 const BLOCKS = { chief: ['📻', 'Driftradion', 'Det senaste som hänt i huset'], trig: ['⚡', 'Framkalla', 'Brand, strömavbrott, storm, hissfel …'],

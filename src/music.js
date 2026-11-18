@@ -14,18 +14,18 @@ const AHEAD = 0.2;           // så långt i förväg tonerna läggs ut (sekunde
 const VOL = 0.26;
 
 // ---------- Låten ----------
-const SEMI = { C: 0, 'C#': 1, Db: 1, D: 2, Eb: 3, E: 4, F: 5, 'F#': 6, G: 7, Ab: 8, A: 9, Bb: 10, B: 11 };
+const SEMI = { C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3, E: 4, F: 5, 'F#': 6, Gb: 6, G: 7, 'G#': 8, Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11 };
 /** 'A4' → Hz */
-const hz = n => {
+export const hz = n => {
   const m = /^([A-G][b#]?)(\d)$/.exec(n);
   if (!m) throw new Error(`okänd ton ${n}`);
   return 440 * 2 ** ((SEMI[m[1]] + 12 * (+m[2] + 1) - 69) / 12);
 };
 /** 'A4:0:3 C5:3:3' → [ton, steg, längd i steg] */
-const mel = s => s.split(' ').map(t => { const [n, a, b] = t.split(':'); return /** @type {[string, number, number]} */ ([n, +a, +b]); });
+export const mel = s => s.split(' ').map(t => { const [n, a, b] = t.split(':'); return /** @type {[string, number, number]} */ ([n, +a, +b]); });
 
-/** Åtta takter: ackord (mellanläge), bas (grundton, kvint) och melodi i sextondelar. */
-const SONG = [
+/** Huvudtemat (husmusiken i score.js lånar melodin). Åtta takter: ackord (mellanläge), bas (grundton, kvint) och melodi i sextondelar. */
+export const SONG = [
   { chord: ['F3', 'A3', 'C4', 'E4'], bass: ['F2', 'C3'], mel: mel('A4:0:3 C5:3:3 E5:6:4 D5:10:2 C5:12:4') },
   { chord: ['F3', 'A3', 'C4', 'E4'], bass: ['F2', 'C3'], mel: mel('A4:2:2 G4:4:2 A4:6:6') },
   { chord: ['G3', 'Bb3', 'D4', 'F4'], bass: ['G2', 'D3'], mel: mel('Bb4:0:3 D5:3:3 F5:6:4 E5:10:2 D5:12:4') },
@@ -150,9 +150,10 @@ const keyOf = e => 2 ** ((e.freight ? -5 : e.express ? 2 : 0) / 12);
 
 /**
  * Anropas varje bildruta från sound.js med hissen man lyssnar på (null = ingen).
- * @param {AudioContext} ctx @param {AudioNode} dest @param {any} e @param {number} panTo
+ * hush = 0 när all musik ska tystna (brandkåren kommer, score.js).
+ * @param {AudioContext} ctx @param {AudioNode} dest @param {any} e @param {number} panTo @param {number} [hush]
  */
-export function updateMusic(ctx, dest, e, panTo) {
+export function updateMusic(ctx, dest, e, panTo, hush = 1) {
   init(ctx, dest);
   const m = /** @type {NonNullable<typeof M>} */ (M);
   const now = ctx.currentTime, dt = Math.min(0.1, Math.max(0, now - lastNow)); lastNow = now;
@@ -185,7 +186,7 @@ export function updateMusic(ctx, dest, e, panTo) {
   // stängda dörrar dämpar musiken, öppna släpper ut den
   m.lp.frequency.setTargetAtTime(e.doorPhase ? 5000 : 1300, now, 0.12);
   m.pan.pan.setTargetAtTime(panTo, now, 0.1);
-  m.fade.gain.setTargetAtTime(VOL * Math.min(1, tape * 2), now, 0.2);
+  m.fade.gain.setTargetAtTime(VOL * Math.min(1, tape * 2) * hush, now, hush ? 0.2 : 0.08);
 
   const k = keyOf(e);
   while (tape > 0.08 && next < now + AHEAD) {

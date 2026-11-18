@@ -4,7 +4,8 @@
 import { CAR_H, FLOOR_H, VMAX, W, floorY, shaftCX } from './config.js';
 import { S } from './state.js';
 import { VIEW, camTarget } from './view.js';
-import { updateMusic } from './music.js';
+import { musicOn, updateMusic } from './music.js';
+import { musicHush, updateScore } from './score.js';
 import { vrand } from './rng.js';
 
 const KEY = 'hiss.sound';
@@ -216,12 +217,14 @@ function listenCar() {
 }
 
 // ---------- Varje bildruta ----------
-export function updateSound() {
+/** @param {boolean} [intro] rundvisningen pågår (Berit nynnar) */
+export function updateSound(intro = false) {
   if (!on || !ac || ac.state !== 'running') return;
   ensureCars();
   incidentSounds();
   const lc = listenCar();
-  updateMusic(ac, master, lc, lc ? panOf(lc) : 0);
+  updateMusic(ac, master, lc, lc ? panOf(lc) : 0, musicHush());
+  updateScore(ac, master, musicOn(), !lc, intro);
   const now = ac.currentTime;
   const still = S.paused || !S.started;
   for (const e of S.elevators) {
