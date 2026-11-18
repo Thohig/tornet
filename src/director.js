@@ -96,7 +96,7 @@ function shots() {
   // medan en hiss nödsänks: då visas sänkningen och beslutet syns i kontrollrumspanelen
   const C = S.chief, lowering = S.elevators.some(e => e.mode === 'rescue');
   if (C && C.on && C.say && C.say.dec && CONTROL >= 0 && S.t - C.say.t0 < 3 && !lowering)
-    add('chief', 88, 'floor', CONTROL, `🧑‍💼 ${chiefOnDuty().name}: ${C.say.text}`, S.t - C.say.t0 < 1);
+    add('chief', 88, 'floor', CONTROL, `${C.say.who ? '🚓' : '🧑‍💼'} ${C.say.who || chiefOnDuty().name}: ${C.say.text}`, S.t - C.say.t0 < 1);
   // kuppen: skåpbilen och gänget, borren i valvet, den som blev över i trapporna, flykten och polisen
   const Hs = S.heist;
   if (Hs) {

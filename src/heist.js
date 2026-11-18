@@ -114,7 +114,7 @@ export function robberNext(p) {
 /** var gänget står: synligt i hallen (ledaren vid kontrollbordet, borrarna vid valvet, vakten vid caféets dörr) @param {Person} p */
 export function heistSpot(p, f) {
   const j = jobOf(p), i = GANG.findIndex(g => g.name === p.name);
-  const x = j === 'borr' && f === BANK ? 160 + i * 22 : j === 'ledare' && f === CONTROL ? 300 : j === 'vakt' && f === CAFE ? DOOR_X + 30 : j === 'bil' && f === DOCK ? 160 : 200 + i * 20;
+  const x = DOOR_X + (j === 'borr' && f === BANK ? 22 + i * 22 : j === 'ledare' && f === CONTROL ? 70 : j === 'vakt' && f === CAFE ? 30 : j === 'bil' && f === DOCK ? 120 : 40 + i * 18);
   const desc = p.caught ? 'Gripen – väntar på polisen' : f === postOf(j) ? (GANG[i] || GANG[0]).task : 'Smyger med bytet';
   return { x, k: 'stand', face: j === 'borr' ? -1 : 1, desc, temp: true, win: 'hall' };
 }

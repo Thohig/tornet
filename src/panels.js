@@ -362,7 +362,7 @@ function updateLower() {
   if (e.hidden === !!c) e.hidden = !c;
   if (!c) return;
   const C = S.chief, dec = C && C.on && C.say && C.say.dec && S.t < C.say.until;
-  const chief = dec ? `<div class="lw-sub">🧑‍💼 <b>${esc(chiefOnDuty().name)}:</b> ${esc(C.say.text)}</div>` : '';
+  const chief = dec ? `<div class="lw-sub">${C.say.who ? '🚓' : '🧑‍💼'} <b>${esc(C.say.who || chiefOnDuty().name)}:</b> ${esc(C.say.text)}</div>` : '';
   const close = !cinema ? '' : matchMedia('(pointer: coarse)').matches ? '<button class="lw-key lw-x btn" data-act="cinema">✕ Tillbaka</button>' : '<div class="lw-key">H / Esc = tillbaka</div>';
   const html = `<div class="lw-show"><span class="lw-tag">${c.auto ? '● LIVE' : '❚❚'} ${esc(c.who.name)}</span> ${esc(c.show)}</div>${chief}${close}`;
   e.classList.toggle('quiet', !c.auto && !dec);

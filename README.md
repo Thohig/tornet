@@ -17,13 +17,13 @@ python3 serve.py
 - `python3 serve.py --lan` släpper in andra på nätverket, till exempel mobilen på samma wifi.
 - `python3 serve.py --auto-stop` stänger av servern själv en stund efter att spelet stängts.
 
-Spelet börjar med startmenyn: **KÖR!**, **Ny dag** (tempo, dygnsskifte, slumpen, driftchefen, styrlogik och frö), färdiga **scenarier** (morgonrusningen, brand, stormnatten, flyttdagen, linbrottet, fast på fasaden, stadsturen och mörkt vid hemgång), **Dagens Torn** (samma dygn för alla i dag) och **Spela om** förra dygnet. Första gången erbjuds en **rundvisning** där receptionisten Berit visar runt i huset.
+Det finns ingen startmeny – det finns ett enda Tornet, och det går hela tiden. Första gången visas uppstarten i DOS-svart och en kort välkomstruta, och sedan erbjuder receptionisten **Berit** en **rundvisning**. Den sker i dygnet som pågår: Berit ringer efter vikarien Kicki till disken och visar en gäst (du) runt i huset, och händer det något – en brand, ett hissfel, en storm – går ni dit och tittar. Berit pratar högt med webbläsarens svenska talsyntes när ljudet är på. Du kan be henne visa runt igen från hjälpen (?), entrén eller hennes ruta när du följer henne.
 
-Med adressparametrar hoppar du över menyn:
+Allt som går att ställa in görs i kontrollpanelen medan huset går: styrlogik, slumpen (hur ofta incidenter kommer), driftchefen, felknappar och underhåll. Valen minns till nästa gång. Dygnet rullar alltid vidare kl 06.
 
-- `?seed=123` ger samma dygn varje gång.
-- `?tempo=kort` ger ett 6-minutersdygn i stället för det långa på ungefär 15 minuter.
-- `?dygn=ny` börjar om från kl 06 varje dygn i stället för att huset rullar vidare.
+Adressparametrar:
+
+- `?seed=123` ger samma dygn varje gång (bra för felsökning och för att dela ett dygn).
 - `?prof=1` visar hur lång tid varje del av bildrutan tar att rita.
 
 ## Huset
@@ -34,8 +34,8 @@ Med adressparametrar hoppar du över menyn:
 - **Varuhissen V** tar städvagnar, paket, flyttlass och brandkåren.
 - **Panoramahissen P** åker i ett glasrör utanpå fasaden, hela vägen från perrongen upp till taket.
 - **Folket:** anställda, besökare, boende, nattpersonal och stamgäster med egna egenheter. Bland stamgästerna finns Gunnar som hatar att vänta, Doris som håller upp dörren och Majken, 87, som pratar med alla i hissen.
-- **Personalen:** driftchefer, bildproducenter, en receptionist och en fönsterputsare. De har skift, raster och poster.
-- **Händelser:** brand med brandkår och återsamlingsplats, strömavbrott med reservkraft, storm och blixtar, hissfel och linbrott, överhettade motorer, panoramahissen som fastnar på fasaden (räddningstjänsten firar ner folk eller tar dem med stegbilen), ambulans, flyttdag med hissbalke, VIP-helikopter och tunnelbanetåg som kommer i klump. Du kan också skicka en turistbuss: en guide leder en grupp på stadstur upp till takterrassen och Sky Café.
+- **Personalen:** driftchefer, bildproducenter, en receptionist (med vikarien Kicki när hon visar runt) och en fönsterputsare. De har skift, raster och poster.
+- **Händelser:** brand med brandkår och återsamlingsplats, strömavbrott med reservkraft, storm och blixtar, hissfel och linbrott, överhettade motorer, panoramahissen som fastnar på fasaden (räddningstjänsten firar ner folk eller tar dem med stegbilen), ambulans, flyttdag med hissbalke, VIP-helikopter, tunnelbanetåg som kommer i klump – och ibland **Kuppen på 5:an**: ett rånargäng från ”Fasad & Fönster AB” kapar hissarna för att tömma valvet i Guldbanken, gisslan samlas i Sky Café, den som blev över smyger i trapporna och polisens insatsledare bestämmer (ingen skjuter och ingen dör). Du kan också skicka en turistbuss: en guide leder en grupp på stadstur upp till takterrassen och Sky Café.
 - **Musik:** husmusik som följer dygnet (ragtime i rusningen, vals, lunchjazz, lounge, speldosa) med korta inslag när något händer, och en egen hissmusik inne i hissen du följer. Dörrarna och plingen hamnar i musikens takt, så hela huset spelar med. Musiken är avstängd tills du slår på den i panelen.
 
 Styrlogiken kan bytas medan huset kör:

@@ -366,7 +366,7 @@ function controlRoom(top, bot) {
  *  sekunderna – sedan står det kvar i textremsan */
 export function drawChiefPx() {
   const C = S.chief;
-  if (!C || !C.on || !C.say || S.t - C.say.t0 > 3.5) return;
+  if (!C || !C.on || !C.say || C.say.who || S.t - C.say.t0 > 3.5) return;
   const who = chiefOnDuty();
   let at = chiefAt;
   // chefen är inte vid bordet (fikar, är på väg): det sägs i walkie-talkien där hen är

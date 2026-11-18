@@ -35,7 +35,7 @@ export const chiefOnDuty = (h = hour()) => (h >= CHIEFS[1].from ? CHIEFS[1] : CH
 /**
  * Driftchefens tillstånd i S.chief: på/rast, gällande beslut, dagens beslut och repliken i kontrollrummet.
  * @typedef {{ on: boolean, strat: boolean, manual: Record<string, boolean>, dec: Record<string, Decision>, log: Decision[],
- *   say: { text: string, t0: number, until: number, dec: boolean }|null, stormT: number, fireT0: number|null,
+ *   say: { text: string, t0: number, until: number, dec: boolean, who?: string }|null, stormT: number, fireT0: number|null,
  *   svcN: number, svcT: number, rushT: number, stratBy: string|null, seen: Record<string, boolean>, incSeen: number|null,
  *   alarmed?: boolean }} Chief
  */
@@ -44,7 +44,7 @@ export function chiefReset() {
   const C = S.chief;
   S.chief = { on: C ? C.on : true, strat: C ? C.strat : true,
     manual: /** @type {Record<string, boolean>} */ ({}), dec: /** @type {Record<string, Decision>} */ ({}),
-    log: /** @type {Decision[]} */ ([]), say: /** @type {{ text: string, t0: number, until: number, dec: boolean }|null} */ (null),
+    log: /** @type {Decision[]} */ ([]), say: /** @type {{ text: string, t0: number, until: number, dec: boolean, who?: string }|null} */ (null),
     stormT: -99, fireT0: null, svcN: 0, svcT: 0, rushT: 0, stratBy: /** @type {string|null} */ (null),
     seen: /** @type {Record<string, boolean>} */ ({}), incSeen: /** @type {number|null} */ (null) };
 }
@@ -69,7 +69,8 @@ function record(key, text, why, by, o = {}) {
 function decide(key, text, why, o = {}) {
   const C = S.chief, who = o.who || chiefOnDuty().name;
   record(key, text, why, 'chief', o);
-  C.say = { text: o.say || text, t0: S.t, until: S.t + 10, dec: !o.info };
+  // (who = någon annan än chefen – polisens insatsledare under kuppen: det står på skylten, inte i chefens pratbubbla)
+  C.say = { text: o.say || text, t0: S.t, until: S.t + 10, dec: !o.info, ...(o.who ? { who: o.who } : {}) };
   const color = o.car !== undefined && o.car !== null ? S.elevators[o.car].color : null;
   log(`🧑‍💼 ${who}: ${text}${why ? ` – ${why}` : ''}`, 'chief', color);
 }
