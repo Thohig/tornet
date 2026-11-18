@@ -58,8 +58,9 @@ const EVENTS = Array.from({ length: LEN }, (_, i) => {
 });
 
 // ---------- På/av ----------
-let on = true;
-try { on = localStorage.getItem(KEY) !== '0'; } catch { /* privat fönster m.m. */ }
+// av som standard: på bara om spelaren har slagit på den
+let on = false;
+try { on = localStorage.getItem(KEY) === '1'; } catch { /* privat fönster m.m. */ }
 export const musicOn = () => on;
 export function toggleMusic() {
   on = !on;
