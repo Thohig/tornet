@@ -88,3 +88,5 @@ Samma testsvit körs i webbläsaren på `/tests.html`. På GitHub kör `npm run 
 **Upplägg.** Simuleringen i `src/` rör aldrig DOM eller canvas och kör headless i Node med fast tidssteg och seedad slump i namngivna strömmar. Samma frö ger alltid exakt samma dygn. Grafiken läser bara simuleringens tillstånd, och allt spelaren gör går via `act()`. Huset beskrivs som data i `BUILDING` i `config.js`, och resten räknas ut därifrån. Mer om arkitekturen och reglerna finns i [CLAUDE.md](CLAUDE.md).
 
 All text i spelet och i koden är på svenska.
+
+Vad som har ändrats står i [CHANGELOG.md](CHANGELOG.md).
