@@ -38,7 +38,7 @@ const G = stream('gestalt'), G2 = stream('inkallade');
  *   trapT?: number, trapNoted?: boolean, darkNoted?: number, noLiftNoted?: boolean, angryNoted?: boolean, collapsed?: boolean,
  *   job?: number|null, workT?: number, extra?: boolean, route?: number[], ri?: number,
  *   medic?: boolean, mover?: boolean, loader?: boolean, item?: number|null, rescue?: boolean, ropeF?: number,
- *   guide?: boolean, tour?: boolean, guest?: boolean, touring?: boolean, robber?: boolean, caught?: boolean, hostage?: boolean, hero?: boolean,
+ *   guide?: boolean, tour?: boolean, guest?: boolean, touring?: boolean, keys?: number|null, robber?: boolean, caught?: boolean, hostage?: boolean, hero?: boolean,
  *   say?: { text: string, until: number }, sayLater?: string|null, gripes?: number, talkedInc?: number,
  * }} Person
  */
@@ -56,7 +56,7 @@ import { CREW_LOOK, crewNext, crewSpot } from './crew.js';
 import { rescueNext } from './pano.js';
 import { buttonsMode, carButtonMistakes } from './buttons.js';
 import { tourNext, tourSpot } from './tour.js';
-import { guestNext, visningSpot } from './visning.js';
+import { guestNext, keyNext, visningSpot } from './visning.js';
 import { heistOn, heistSpot, hostageNext, robberNext } from './heist.js';
 
 // ---------- Människor ----------
@@ -146,7 +146,7 @@ export const mayUseFreight = p => needsFreight(p) || p.kind === 'staff';
 /** får personen åka den här hisstypen? */
 // (ambulanspersonalen med båren och flyttgubbarna åker bara varuhiss)
 /** @param {Person} p */
-// (Berit och gästen på rundvisningen åker samma hissar – inte personalens varuhiss)
+// (guiden och gästen på rundvisningen åker samma hissar – inte personalens varuhiss)
 export const elevatorAllows = (d, p) => (p.medic || p.mover || (p.robber && !p.caught) ? !!d.freight : d.freight ? mayUseFreight(p) && !p.touring : !needsFreight(p));
 /**
  * Nästa delmål på vägen mot goal: direkt om någon hiss går hela vägen, annars dit där man byter hiss
@@ -244,8 +244,8 @@ export function pickSpot(p, f) {
   if (p.crewId) return crewSpot(p, f);
   // (kuppen: gänget står synligt i hallen, heist.js)
   if (p.robber) return heistSpot(p, f);
-  // (rundvisningen: gästen står bredvid Berit i hallen, visning.js)
-  const vs = p.guest ? visningSpot(p, f) : null;
+  // (rundvisningen: gästen står bredvid guiden i hallen, visning.js)
+  const vs = p.guest || p.touring ? visningSpot(p, f) : null;
   if (vs) return vs;
   // nattpersonal: egna platser
   if (p.kind === 'res' && f === p.home) return homeSpot(p);
@@ -604,11 +604,13 @@ export function decideNext(p) {
   // (kuppen: hjälten går dit kuppen säger, gisslan samlas i Sky Café – heist.js)
   if (p.hero && heistOn()) return null;
   if (p.hostage) { const r = hostageNext(p); if (r !== undefined) return r; }
+  // (väktaren som visar runt: rundvisningen bestämmer vart han går, visning.js)
+  if (p.touring && p.role && !p.crewId) return null;
   if (p.role) return roleNext(p, h);
   if (p.collapsed) { p.timer = 1e9; return null; } // ligger kvar tills ambulansen kommer
   if (p.kind === 'res') return resNext(p, h);
   if (p.tour || p.guide) return tourNext(p);
-  if (p.guest) return guestNext(p); // (rundvisningen: Berit säger till när de går vidare, visning.js) // (Stadsturen: guiden säger till när gruppen går vidare, tour.js)
+  if (p.guest) return guestNext(p); // (rundvisningen: guiden säger till när de går vidare, visning.js) // (Stadsturen: guiden säger till när gruppen går vidare, tour.js)
   if (h >= 27.5) return [p.exitFloor, 'Natten är slut – äntligen hem']; // natten går fort: hemresan tar ett par speltimmar
   if (p.kind === 'vis') {
     // i hundsalongen hämtar man sin pudel och har den med sig ut (kopplet syns i hallen och i hissen)
@@ -675,6 +677,8 @@ export function spawnStaff(role, extra = false, o = null) {
 /** @param {Person} p */
 function roleNext(p, h) {
   if (p.crewId) return crewNext(p, h);
+  // (nyckelbäraren låser upp ett stängt stopp åt rundvisningen, visning.js)
+  if (p.keys !== undefined && p.keys !== null) { const r = keyNext(p); if (r !== undefined) return r; }
   switch (p.role) {
     case 'bud': return [p.exitFloor, 'Paketet levererat – tillbaka till lastbilen'];
     case 'hisstekniker': return techNext(p);

@@ -76,6 +76,8 @@ function decide(key, text, why, o = {}) {
 }
 /** chefen konstaterar något (inget beslut, men det berättas) */
 const note = (key, text, why = '', o = {}) => decide(key, text, why, { ...o, info: true });
+/** chefen berättar något som ett annat delsystem bestämde (rundvisningens reservguide, visning.js) – bara när chefen är på */
+export function chiefNote(key, text, why = '') { if (S.chief && S.chief.on) note(key, text, why); }
 
 /** Spelaren tog ett beslut (anropas av act()): det gäller tills incidenten är över. */
 export function playerChose(key, text, o = {}) {

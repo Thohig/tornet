@@ -1,30 +1,126 @@
-// Rundvisningen: receptionisten Berit visar en gäst runt i huset, i det dygn som pågår. Spelaren beställer den
-// (act('visning', 'start')); Berit ringer bemanningen och vikarien Kicki tar över receptionen – även larmen – medan
-// Berit och gästen går rutten: entrén, driftcentralen, perrongen, Sky Café, takterrassen och tillbaka. Stoppen är
-// platser, inte klockslag, och Berit berättar om det som händer där just nu. Händer något i huset under tiden lägger
-// hon om rutten dit (aldrig in i brandzonen) och fortsätter sedan där hon var. Läget ligger i S.visning; Berit, gästen
+// Rundvisningen: den som sitter i receptionen visar en gäst runt i huset, i det dygn som pågår – receptionisten
+// Berit på dagen och kvällsvärden Yvonne på kvällen och natten (guide i CREW). Spelaren beställer den
+// (act('visning', 'start')); guiden ringer bemanningen och vikarien Kicki tar över receptionen – även larmen – medan
+// guiden och gästen går rutten: entrén, driftcentralen, perrongen, Sky Café, takterrassen och tillbaka. Stoppen är
+// platser, inte klockslag, och guiden berättar om det som händer där just nu. Händer något i huset under tiden lägger
+// hon om rutten dit (aldrig in i brandzonen) och fortsätter sedan där hon var. Läget ligger i S.visning; guiden, gästen
 // och Kicki är personer i huset. Drar inga slumptal – allt bestäms av huset och spelaren. Repliken i S.visning.line
 // läses upp och visas av gränssnittet (intro.js).
-import { CAFE, CONTROL, DOCK, DOOR_X, FL, LOBBY, ROOF, STATION, BUILDING, floorOpen } from './config.js';
+import { CAFE, CONTROL, CREW, DOCK, DOOR_X, FL, FLOOR_HOURS, LOBBY, ROOF, STATION, BUILDING, floorOpen } from './config.js';
 import { S, dayEvent, hour, log, notice } from './state.js';
-import { blankPerson, pev, releaseSpot, setTrip } from './people.js';
+import { blankPerson, pev, releaseSpot, setTrip, spawnStaff } from './people.js';
 import { inFireZone } from './dispatch.js';
 import { speak } from './cast.js';
 import { CREW_BY, alarm, atPost, crewPerson, spawnCrew } from './crew.js';
-import { chiefOnDuty } from './chief.js';
+import { chiefNote, chiefOnDuty } from './chief.js';
 import { nextTrainMin } from './train.js';
 import { techOf } from './service.js';
 import { fl } from './util.js';
 /** @typedef {import('./people.js').Person} Person */
 /** @typedef {import('./elevators.js').Elevator} Elevator */
 
-/** den sista timmen Berit börjar en rundvisning (hennes pass slutar kl 19) */
-export const LAST_START = 17.25;
+/** hur många timmar före passets slut guiden senast börjar en rundvisning (Berit: kl 17.15, passet slutar kl 19) */
+const TOUR_H = 1.75;
+/** de som ger rundvisningar (Berit och kvällsvärden) */
+const GUIDES = CREW.filter(c => c.guide);
+/** sista timmen c börjar en rundvisning (den som går hela natten: dygnets slut) @param {import('./config.js').CrewDef} c */
+const lastStart = c => (c.until === null ? 31 : c.until - TOUR_H);
+/** Den som visar runt härnäst vid klockan h: den som har passet nu (och hinner), annars den som börjar härnäst.
+ *  @returns {import('./config.js').CrewDef} */
+export function nextGuide(h) {
+  return GUIDES.find(c => h >= c.from && h < lastStart(c)) || GUIDES.filter(c => c.from > h).sort((a, b) => a.from - b.from)[0]
+    || [...GUIDES].sort((a, b) => a.from - b.from)[0];
+}
+/** kan p lämna det hen gör och gå med på en rundvisning (i huset, inte på väg hem, inte utrymd)? @param {Person} p */
+const free = p => !!p && !p.dead && p.state !== 'away' && !p.leaving && !p.evac && p.state !== 'assembly' && !p.hero && !p.hostage;
+/** Guiden som kan börja nu, eller null. Beställd: den som sitter i receptionen (inte den som snart går hem).
+ *  Framkallad (now): även den som har rast – och finns ingen av dem i huset tar väktaren eller driftchefen den. */
+function guideNow(h, now = false) {
+  for (const c of GUIDES) {
+    const p = crewPerson(c.id);
+    if (p && atPost(p) && !p.shiftEnd && h < lastStart(c)) return p;
+  }
+  if (!now) return null;
+  const inHouse = GUIDES.map(c => crewPerson(c.id)).filter(free);
+  return inHouse.find(p => !p.shiftEnd) || inHouse[0] || null;
+}
+/** Ingen guide i huset: väktaren (han har nycklarna och går ändå runt) eller driftchefen som har passet */
+function standIn() {
+  const guard = S.people.find(p => p.role === 'väktare' && !p.crewId && free(p));
+  if (guard) return { p: guard, why: 'Berit och kvällsvärden är inte i huset – väktaren går ändå runt i huset och har alla nycklar' };
+  const c = chiefOnDuty(), chief = crewPerson(c.id);
+  if (free(chief)) return { p: chief, why: 'ingen receptionist eller väktare i huset – chefen tar den själv och har skärmarna i telefonen' };
+  return null;
+}
+/** behöver guiden en vikarie i receptionen (Berit och kvällsvärden – inte väktaren eller chefen)? @param {Person} p */
+const needsSub = p => !!p.crewId && CREW_BY[p.crewId].post === 'reception';
+/** guidens namn (under rundvisningen den som visar runt, annars den som gör det härnäst) */
+export const guideName = () => { const p = S.visning && S.people.find(q => q.id === S.visning.host); return p ? p.name : nextGuide(hour()).name; };
+
+// ---------- Nycklarna: stängda stopp låses upp ----------
+/** Ett stopp som har stängt (takterrassen, Sky Café, perrongen när tågen inte går) låses upp åt rundvisningen av
+ *  den som har nycklarna: vaktmästaren, väktaren eller – finns ingen av dem i huset – jourvaktmästaren som rings in.
+ *  ph: come (på väg) → open (upplåst – gallret är uppe, bara för gruppen) */
+/** @typedef {{ f: number, by: number, who: string, ph: string }} Unlock */
+/** har stoppet på våning f stängt just nu? */
+export function closedStop(f, h = hour()) {
+  if (f < 0) return false;
+  if (FLOOR_HOURS[f] && !floorOpen(f, h)) return true;
+  return f === STATION && nextTrainMin() === null;
+}
+/** våningen som är upplåst åt rundvisningen just nu (gallret ritas inte där), annars -1 */
+export const unlockedFloor = () => (S.visning && S.visning.unlock && S.visning.unlock.ph === 'open' ? S.visning.unlock.f : -1);
+const placeName = f => (f === ROOF ? 'takterrassen' : f === STATION ? 'spärrarna till perrongen' : f === CAFE ? 'Sky Café' : FL[f].name);
+/** den som har nycklarna och kan komma (inte guiden själv om det finns någon annan) */
+function keyHolder(v) {
+  for (const role of ['vaktmästare', 'väktare']) {
+    const p = S.people.find(q => q.role === role && !q.crewId && q.id !== v.host && free(q) && (q.keys === undefined || q.keys === null));
+    if (p) return p;
+  }
+  return null;
+}
+/** stoppet på våning f har stängt: ring den som har nycklarna. Returnerar vad guiden säger. */
+function startUnlock(v, f) {
+  const b = byId(v.host);
+  // (väktaren som guidar har nycklarna själv)
+  if (b && b.role === 'väktare' && !b.crewId) { v.unlock = { f, by: b.id, who: b.name, ph: 'open' }; return `${cap(placeName(f))} har stängt – men jag har nycklarna.`; }
+  let k = keyHolder(v), called = false;
+  // (jourvaktmästaren: uppdraget finns redan när hen kliver in, så att första resan går dit – keyNext)
+  v.unlock = { f, by: k ? k.id : -1, who: k ? k.name : '', ph: 'come' };
+  if (!k) { k = spawnStaff('vaktmästare', false, { keys: f, title: 'Jourvaktmästare (inringd med nycklarna)' }); called = true; }
+  k.keys = f; v.unlock.by = k.id; v.unlock.who = k.name;
+  if (k.state === 'office') k.timer = 0;
+  pev(k, `Ska låsa upp ${placeName(f)} åt rundvisningen`);
+  log(`🔑 ${k.name} (${called ? 'jourvaktmästare' : k.role}) låser upp ${placeName(f)} åt rundvisningen`, 'person', null, k.id);
+  return called ? `${cap(placeName(f))} har stängt nu – jag ringer jourvaktmästaren, som har nycklarna.`
+    : `${cap(placeName(f))} har stängt nu – jag ringer ${k.name}, som har nycklarna.`;
+}
+/** gruppen går vidare: nyckelbäraren låser efter dem och återgår till det hen gjorde */
+function relock(v) {
+  const u = v.unlock;
+  if (!u) return;
+  v.unlock = null;
+  const k = byId(u.by);
+  if (!k || k.id === v.host) return;
+  k.keys = null;
+  if (u.ph === 'open') speak(k, 'Då låser jag efter er!');
+  if (k.state === 'office') k.timer = 0;
+}
+/** vart nyckelbäraren ska (roleNext i people.js): till stoppet, och stå kvar tills gruppen har gått vidare.
+ *  undefined = inget uppdrag längre (vanliga sysslor). @param {Person} p */
+export function keyNext(p) {
+  const u = S.visning && S.visning.unlock;
+  if (u && u.by === -1 && p.keys === u.f) u.by = p.id;
+  if (!u || u.by !== p.id) { p.keys = null; return undefined; }
+  if (p.floor !== u.f) return [u.f, `Låser upp ${placeName(u.f)} åt rundvisningen`, false];
+  return null;
+}
+const cap = t => t.charAt(0).toUpperCase() + t.slice(1);
 /** hur länge (verkliga sekunder) innan vikarien kliver in i entrén efter samtalet */
 const KICKI_S = 20;
-/** hur länge Berit pratar vid ett stopp: ord per sekund (uppläst) och minst så här många sekunder */
+/** hur länge guiden pratar vid ett stopp: ord per sekund (uppläst) och minst så här många sekunder */
 const WPS = 2.4, STAY_MIN = 9;
-/** längst tid en förflyttning får ta innan Berit ger upp och går vidare (verkliga sekunder) */
+/** längst tid en förflyttning får ta innan guiden ger upp och går vidare (verkliga sekunder) */
 const GO_MAX = 260;
 /** hur länge de stannar vid en händelse (verkliga sekunder, minst) och längst (om den inte är över) */
 const DETOUR_MIN = 22, DETOUR_MAX = 90;
@@ -32,25 +128,26 @@ const DETOUR_MIN = 22, DETOUR_MAX = 90;
 const DETOURS = 3;
 
 /**
- * Rundvisningen (S.visning). ph: order (beställd, väntar på Berit) → call (ringer vikarien) → swap (väntar på Kicki)
- * → go/at (på väg till / vid ett stopp) → done (slut: Kicki går hem, Berit sätter sig). stop = stoppet (index i
- * STOPS) eller händelsen (detour) som gruppen är på väg till eller står vid; line/lineN = Berits replik.
- * @typedef {{ ph: string, t0: number, berit: number, guest: number, kicki: number, si: number, goT: number, stay: number,
- *   callAt: number, callUntil: number, detour: Detour|null, seen: string[], seenStops: string[], line: string, lineN: number,
+ * Rundvisningen (S.visning). ph: order (beställd, väntar på guiden) → call (ringer vikarien) → swap (väntar på Kicki)
+ * – now = framkallad (börjar direkt, guiden avbryter rasten), sub = Kicki behövs i receptionen –
+ * → go/at (på väg till / vid ett stopp) → done (slut: Kicki går hem, guiden sätter sig). stop = stoppet (index i
+ * STOPS) eller händelsen (detour) som gruppen är på väg till eller står vid; line/lineN = guidens replik.
+ * @typedef {{ ph: string, t0: number, host: number, guest: number, kicki: number, si: number, goT: number, stay: number,
+ *   callAt: number, callUntil: number, now: boolean, sub: boolean, unlock: Unlock|null, detour: Detour|null, seen: string[], seenStops: string[], line: string, lineN: number,
  *   lineK: string, focus: string[], spot: string[], log: string[], ended: string, kickiSaid: boolean, paused: boolean }} Visning
  */
-/** En händelse som Berit lägger om rutten för: oj = vad hon utbrister, hold = stanna tills den är över (brand,
+/** En händelse som guiden lägger om rutten för: oj = vad hon utbrister, hold = stanna tills den är över (brand,
  *  strömavbrott – då går ändå inga hissar) @typedef {{ k: string, f: number, title: string, oj: string, there: () => string, over: () => boolean, missed: string, hold: boolean, at: boolean, t: number }} Detour */
 
 /**
- * Rutten. f = våningen (eller -1 = finns inte i huset), text = vad Berit säger där (läser av huset just nu),
+ * Rutten. f = våningen (eller -1 = finns inte i huset), text = vad guiden säger där (läser av huset just nu),
  * way = vad hon säger på väg dit, focus/spot = panelens block som lyfts fram och det som blinkar (bara gränssnitt).
  * @typedef {{ k: string, title: string, f: () => number, way: () => string, text: () => string, focus?: string[], spot?: string[] }} Stop
  */
 /** @type {Stop[]} */
 export const STOPS = [
   { k: 'entre', title: 'Entrén', f: () => LOBBY, way: () => '',
-    text: () => `Välkommen till Tornet! Det här är entrén – karuselldörren, min disk och rulltrappan upp till mellanplanet. Här finns inga hissknappar: man säger vart man ska, och Hiss-O-Matic 3000 ger en en egen hiss. Bubblan över huvudet visar målet och hissen. ${BUILDING.elevators.length} hissar, ${FL.length} våningar – och i dag sköter ${kickiName()} disken medan jag visar dig runt.`,
+    text: () => `Välkommen till Tornet! Det här är entrén – karuselldörren, receptionen och rulltrappan upp till mellanplanet. Här finns inga hissknappar: man säger vart man ska, och Hiss-O-Matic 3000 ger en en egen hiss. Bubblan över huvudet visar målet och hissen. ${BUILDING.elevators.length} hissar, ${FL.length} våningar – ${V() && V().sub ? `och i dag sköter ${kickiName()} disken medan jag visar dig runt.` : 'och i dag är det jag som visar dig runt.'}`,
     focus: ['follow'] },
   { k: 'drift', title: 'Driftcentralen', f: () => CONTROL, way: () => 'Först ner till driftcentralen på P1 – hjärtat i huset.',
     text: () => driftText(), spot: ['#lower'] },
@@ -58,7 +155,7 @@ export const STOPS = [
     text: () => perrongText() },
   { k: 'sky', title: 'Sky Café', f: () => CAFE, way: () => 'Upp till sky lobbyn på 6:an! Expressen går raka vägen – där byter man till H-hissarna i höga zonen.',
     text: () => skyText(), focus: ['strat'] },
-  { k: 'tak', title: 'Takterrassen', f: () => (ROOF >= 0 && floorOpen(ROOF, hour()) ? ROOF : -1), way: () => 'Sista biten upp till taket – H-hissarna går ända upp.',
+  { k: 'tak', title: 'Takterrassen', f: () => ROOF, way: () => 'Sista biten upp till taket – H-hissarna går ända upp.',
     text: () => takText(), focus: ['trig'] },
   { k: 'slut', title: 'Tillbaka i entrén', f: () => LOBBY, way: () => 'Nu åker vi ner till entrén igen.',
     text: () => slutText(), focus: ['trig', 'strat', 'links'] },
@@ -67,24 +164,24 @@ export const STOPS = [
 const kickiName = () => CREW_BY.kicki.name;
 const V = () => S.visning;
 const byId = id => S.people.find(p => p.id === id && !p.dead) || null;
-/** alla i gruppen: Berit och gästen (de som finns kvar) */
-const group = v => [byId(v.berit), byId(v.guest)].filter(p => p);
+/** alla i gruppen: guiden och gästen (de som finns kvar) */
+const group = v => [byId(v.host), byId(v.guest)].filter(p => p);
 /** framme på våning f (den som har utrymts vid brand och står på återsamlingsplatsen utanför entrén räknas) @param {Person} p */
 const there = (p, f) => p.floor === f && ((p.state === 'office' && !p.evac) || p.state === 'assembly');
-/** går rundvisningen just nu (Berit är ute med gästen)? */
+/** går rundvisningen just nu (guiden är ute med gästen)? */
 export const touring = () => !!S.visning && (S.visning.ph === 'go' || S.visning.ph === 'at');
-/** är p Berit eller gästen under en rundvisning? @param {Person} p */
-export const onTour = p => touring() && (p.id === S.visning.berit || p.id === S.visning.guest);
+/** är p guiden eller gästen under en rundvisning? @param {Person} p */
+export const onTour = p => touring() && (p.id === S.visning.host || p.id === S.visning.guest);
 
 /** ny replik (gränssnittet läser upp den) */
 function line(v, text, k = '') {
   v.line = text; v.lineN++; v.lineK = k;
-  const b = byId(v.berit);
+  const b = byId(v.host);
   if (b) speak(b, short(text));
 }
 /** första meningen (pratbubblan i bilden); hela repliken står i panelen */
 const short = t => { const m = t.match(/^.*?[.!?…](\s|$)/); const s = (m ? m[0] : t).trim(); return s.length > 70 ? `${s.slice(0, 67)}…` : s; };
-/** hur länge Berit pratar (verkliga sekunder) */
+/** hur länge guiden pratar (verkliga sekunder) */
 const talkS = t => Math.max(STAY_MIN, t.split(/\s+/).length / WPS + 3);
 
 // ---------- Texterna vid stoppen: det som händer just nu ----------
@@ -120,9 +217,9 @@ function slutText() {
   return `Det var allt – tack för sällskapet!${ev} Huset sköter sig självt, så luta dig tillbaka och titta, eller ställ till det lite. Vill du gå runt igen frågar du bara mig. Välkommen åter!`;
 }
 
-// ---------- Händelserna som Berit lägger om rutten för ----------
-/** brand, storm, strömavbrott, hissfel … som pågår och som Berit kan visa just nu (första som passar). urgent = bara
- *  det som inte kan vänta (brand, strömavbrott, kuppen): Berit pratar klart vid stoppet först. @returns {Detour|null} */
+// ---------- Händelserna som guiden lägger om rutten för ----------
+/** brand, storm, strömavbrott, hissfel … som pågår och som guiden kan visa just nu (första som passar). urgent = bara
+ *  det som inte kan vänta (brand, strömavbrott, kuppen): guiden pratar klart vid stoppet först. @returns {Detour|null} */
 function happening(v, here, urgent) {
   const mk = (k, f, title, oj, txt, over, missed, hold = false) => ({ k, f, title, oj, there: txt, over, missed, hold, at: false, t: S.t });
   /** @type {Detour[]} */
@@ -180,18 +277,24 @@ function nearStop(e) {
 
 // ---------- Spelarens åtgärder ----------
 /** Beställ en rundvisning. Returnerar false om en redan pågår. */
-export function orderVisning() {
+export function orderVisning(now = false) {
+  // (en beställd rundvisning som väntar kan framkallas: då börjar den direkt)
+  if (S.visning && now && S.visning.ph === 'order' && !S.visning.now) { S.visning.now = true; return true; }
   if (S.visning) return false;
-  S.visning = { ph: 'order', t0: S.t, berit: -1, guest: -1, kicki: -1, si: 0, goT: 0, stay: 0, callAt: 0, callUntil: 0,
-    detour: null, seen: [], seenStops: [], line: '', lineN: 0, lineK: '', focus: [], spot: [], log: [], ended: '', kickiSaid: false, paused: false };
-  const h = hour(), soon = startable(h);
-  const when = soon ? 'Hon ringer efter en vikarie till disken och börjar sedan.' : h < 7 ? 'Hon börjar när hon kommer till disken i morgon bitti.'
-    : h < LAST_START ? 'Hon börjar så fort hon sitter i receptionen.' : 'Det är för sent i dag – hon börjar när hon kommer till disken i morgon bitti.';
-  notice('visning', '🛎️ Rundvisning beställd', `Berit visar runt. ${when}`, { floor: LOBBY });
-  log('🛎️ En rundvisning är beställd hos Berit i receptionen', 'sys');
+  S.visning = { ph: 'order', t0: S.t, host: -1, guest: -1, kicki: -1, si: 0, goT: 0, stay: 0, callAt: 0, callUntil: 0,
+    now, sub: false, unlock: null, detour: null, seen: [], seenStops: [], line: '', lineN: 0, lineK: '', focus: [], spot: [], log: [], ended: '', kickiSaid: false, paused: false };
+  const h = hour(), soon = startable(h), c = nextGuide(h);
+  if (now) {
+    log('🛎️ Rundvisning framkallad – den som kan tar den direkt', 'sys');
+    return true;
+  }
+  const when = soon ? 'Hon ringer efter en vikarie till disken och börjar sedan.' : h < c.from ? `Hon börjar när hon kommer till disken kl ${Math.floor(c.from)}.`
+    : 'Hon börjar så fort hon sitter i receptionen.';
+  notice('visning', '🛎️ Rundvisning beställd', `${c.name} visar runt. ${when}`, { floor: LOBBY });
+  log(`🛎️ En rundvisning är beställd hos ${c.name} i receptionen`, 'sys');
   return true;
 }
-/** Gå vidare till nästa stopp (Berit slutar prata) */
+/** Gå vidare till nästa stopp (guiden slutar prata) */
 export function nextVisning() {
   const v = V();
   if (!v) return;
@@ -211,10 +314,11 @@ export function endVisning() {
 }
 
 // ---------- Förloppet ----------
-/** kan Berit börja just nu? */
-function startable(h) {
-  const b = crewPerson('berit');
-  return !!b && atPost(b) && h >= 7 && h < LAST_START && !S.fire && !alarmHeist();
+/** kan guiden börja just nu? */
+function startable(h, now = false) {
+  // (förra gästen är fortfarande på väg ut: nästa får vänta en stund)
+  if (S.people.some(p => p.guest && !p.dead)) return false;
+  return !!(guideNow(h, now) || (now && standIn())) && !S.fire && !alarmHeist();
 }
 const alarmHeist = () => !!S.heist && S.heist.ph !== 'done';
 /** gästen kliver in i entrén */
@@ -223,15 +327,18 @@ function spawnGuest() {
     walkPhase: 1, speedMul: 1, depth: -2, patience: 30, kg: 75, fit: 0, space: 9, polite: true });
   g.guest = true; g.touring = true; g.title = 'Gäst på rundvisning (du)';
   S.people.push(g);
-  setTrip(g, LOBBY, 'Rundvisning med Berit', false);
-  pev(g, 'Kliver in i entrén · ska gå på rundvisning med Berit');
+  setTrip(g, LOBBY, `Rundvisning med ${guideName()}`, false);
+  pev(g, `Kliver in i entrén · ska gå på rundvisning med ${guideName()}`);
   return g;
 }
-/** Berit och gästen går till stoppet (eller händelsen) – de som redan är där står kvar */
+/** guiden och gästen går till stoppet (eller händelsen) – de som redan är där står kvar */
 function toStop(v, say) {
   const d = v.detour, st = STOPS[v.si];
   const f = d ? d.f : st.f();
   v.ph = 'go'; v.goT = 0;
+  // nästa ställe: nyckelbäraren låser efter oss – och har nästa stopp stängt ringer guiden efter nycklarna
+  if (v.unlock && v.unlock.f !== f) relock(v);
+  if (!d && !v.unlock && f >= 0 && !inFireZone(f) && closedStop(f)) say = `${say ? `${say} ` : ''}${startUnlock(v, f)}`;
   for (const p of group(v)) {
     if (p.evac || p.state === 'assembly') continue;
     if (there(p, f) && p.spot && p.spot.temp && p.spot.tour) continue;
@@ -244,7 +351,7 @@ function toStop(v, say) {
   }
   if (say) line(v, say, d ? `way:${d.k}` : `way:${st.k}`);
 }
-/** gruppen är framme: Berit berättar */
+/** gruppen är framme: guiden berättar */
 function arrived(v) {
   const d = v.detour;
   v.ph = 'at';
@@ -255,15 +362,16 @@ function arrived(v) {
     v.stay = Math.max(talkS(txt), DETOUR_MIN);
     v.log.push(d.title);
     v.focus = ['events', 'follow']; v.spot = [];
-    log(`🛎️ Rundvisningen: Berit visar ${d.title.toLowerCase()}`, 'person', null, v.berit);
+    log(`🛎️ Rundvisningen: ${guideName()} visar ${d.title.toLowerCase()}`, 'person', null, v.host);
     return;
   }
-  const st = STOPS[v.si], txt = st.text();
+  const st = STOPS[v.si], u = v.unlock && v.unlock.f === st.f() && v.unlock.ph === 'open' ? v.unlock : null;
+  const txt = (u && u.by !== v.host ? `Tack, ${u.who}, för att du låste upp! ` : '') + st.text();
   v.seenStops.push(st.k);
   line(v, txt, `at:${st.k}`);
   v.stay = talkS(txt);
   v.focus = st.focus || []; v.spot = st.spot || [];
-  log(`🛎️ Rundvisningen: ${st.title} (${fl(st.f())})`, 'person', null, v.berit);
+  log(`🛎️ Rundvisningen: ${st.title} (${fl(st.f())})`, 'person', null, v.host);
 }
 /** nästa stopp på rutten (hoppar över dem som inte finns just nu) */
 function nextStop(from) {
@@ -271,17 +379,18 @@ function nextStop(from) {
   while (i < STOPS.length - 1 && STOPS[i].f() < 0) i++;
   return i;
 }
-/** rundvisningen är slut: gästen går, Berit tillbaka till disken, Kicki går hem när Berit sitter */
+/** rundvisningen är slut: gästen går, guiden tillbaka till disken, Kicki går hem när guiden sitter */
 function finish(v, how) {
   v.ph = 'done'; v.ended = v.ended || how;
-  const g = byId(v.guest), b = byId(v.berit);
+  relock(v);
+  const g = byId(v.guest), b = byId(v.host);
   if (g) {
     g.touring = false;
     if (g.state === 'office' && !g.evac) { releaseSpot(g); setTrip(g, g.exitFloor, 'Tackar för rundvisningen och går', true); }
   }
   if (b) { b.touring = false; b.timer = Math.min(b.timer, 1); }
   const what = v.log.length ? ` och fick se ${v.log.map(s => s.toLowerCase()).join(', ')}` : '';
-  if (v.seenStops.length) dayEvent('visning', '🛎️ Rundvisningen', `Berit visade runt: ${v.seenStops.length} stopp${what}. ${kickiName()} skötte disken under tiden.`);
+  if (v.seenStops.length) dayEvent('visning', '🛎️ Rundvisningen', `${b ? b.name : guideName()} visade runt: ${v.seenStops.length} stopp${what}.${v.sub ? ` ${kickiName()} skötte disken under tiden.` : ''}`);
   log(`🛎️ Rundvisningen är ${how === 'klar' ? 'slut' : how}`, 'sys');
 }
 
@@ -291,46 +400,62 @@ export function visningTick(dt) {
   if (!v) return;
   const h = hour();
   if (v.ph === 'order') {
-    if (!startable(h)) return;
-    const b = /** @type {Person} */ (crewPerson('berit'));
-    // (Berit lämnar inte disken för en rast nu – rundvisningen bestämmer vart hon går)
-    v.berit = b.id; v.ph = 'call'; b.touring = true; v.callAt = S.t + KICKI_S; v.callUntil = S.t + 7;
-    speak(b, 'Hej, Berit på Tornet – kan ni skicka en vikarie till disken?');
-    v.line = 'Hej! Jag ringer bara efter en vikarie till disken – sedan går vi.'; v.lineN++; v.lineK = 'call';
+    if (!startable(h, v.now)) return;
+    let b = guideNow(h, v.now);
+    if (!b) {
+      // ingen guide i huset: väktaren eller driftchefen tar den (chefen säger varför)
+      const si = /** @type {{ p: Person, why: string }} */ (standIn());
+      b = si.p;
+      chiefNote('visning', `${b.name} tar rundvisningen`, si.why);
+    }
+    // (guiden lämnar disken eller rasten – rundvisningen bestämmer vart hen går)
+    if (b.onBreak) { b.onBreak = false; b.breakWhere = ''; speak(b, 'Rundvisning nu? Rasten får vänta!'); }
+    v.host = b.id; v.ph = 'call'; b.touring = true; v.callAt = S.t + KICKI_S; v.callUntil = S.t + 7;
+    v.sub = needsSub(b);
     v.guest = spawnGuest().id;
-    log(`☎️ Berit ringer Kontorsservice: ${kickiName()} ska sköta receptionen under rundvisningen`, 'person', null, b.id);
+    if (v.sub) {
+      speak(b, `Hej, ${b.name} på Tornet – kan ni skicka en vikarie till disken?`);
+      v.line = 'Hej! Jag ringer bara efter en vikarie till disken – sedan går vi.'; v.lineN++; v.lineK = 'call';
+      log(`☎️ ${b.name} ringer Kontorsservice: ${kickiName()} ska sköta receptionen under rundvisningen`, 'person', null, b.id);
+    } else {
+      v.callUntil = S.t;
+      v.line = `Hej! Jag heter ${b.name} – i dag är det jag som visar dig runt. Vi börjar i entrén.`; v.lineN++; v.lineK = 'call';
+      log(`🛎️ ${b.name} tar rundvisningen`, 'person', null, b.id);
+    }
     return;
   }
   if (v.ph === 'call') {
+    if (!v.sub) { v.ph = 'swap'; return; }
     if (S.t < v.callAt) return;
     const k = crewPerson('kicki') || spawnCrew('kicki');
-    if (k) { v.kicki = k.id; pev(k, 'Ska sköta receptionen medan Berit visar runt'); }
+    if (k) { v.kicki = k.id; pev(k, `Ska sköta receptionen medan ${guideName()} visar runt`); }
     v.ph = 'swap';
     return;
   }
-  const b = byId(v.berit), g = byId(v.guest), k = crewPerson('kicki');
+  const b = byId(v.host), g = byId(v.guest), k = crewPerson('kicki');
   if (v.ph === 'swap') {
-    // Berit går inte från disken förrän Kicki står i entrén
+    // guiden går inte från disken förrän Kicki står i entrén
     if (!b || !g) { finish(v, 'avbruten'); return; }
-    if (!k || k.floor !== LOBBY || k.state !== 'office' || S.fire || alarmHeist()) return;
+    if (S.fire || alarmHeist()) return;
+    if (v.sub && (!k || k.floor !== LOBBY || k.state !== 'office')) return;
     b.touring = true; g.touring = true; b.onBreak = false;
-    speak(k, 'Hej! Kicki från Kontorsservice – jag tar disken!');
+    if (v.sub && k) speak(k, 'Hej! Kicki från Kontorsservice – jag tar disken!');
     v.si = 0; v.detour = null;
     toStop(v, '');
     return;
   }
   if (v.ph === 'done') {
-    // Kicki går när Berit sitter på sin post igen (crew.js), sedan är rundvisningen över
-    if (!k && (!b || atPost(b) || b.state === 'away')) S.visning = null;
+    // Kicki går när guiden sitter på sin post igen (crew.js), sedan är rundvisningen över
+    if (!k && (!b || !v.sub || atPost(b) || b.state === 'away')) S.visning = null;
     return;
   }
   // ---- go / at ----
   if (!b) { finish(v, 'avbruten'); return; }
   if (!g || g.state === 'away' || (g.leaving && !g.evac && g.state !== 'assembly')) { finish(v, 'avbruten'); return; }
   // Kicki tar hand om larmen i entrén (en replik när larmet går)
-  if (k && alarm() && !v.kickiSaid && k.floor === LOBBY) { v.kickiSaid = true; speak(k, S.fire ? 'Lugnt, lugnt – den här vägen ut!' : 'Oj, larm! Jag har koll här – Berit, fortsätt du!'); }
+  if (k && alarm() && !v.kickiSaid && k.floor === LOBBY) { v.kickiSaid = true; speak(k, S.fire ? 'Lugnt, lugnt – den här vägen ut!' : `Oj, larm! Jag har koll här – ${b ? b.name : guideName()}, fortsätt du!`); }
   if (!alarm()) v.kickiSaid = false;
-  // kuppen: Berit och gästen gömmer sig och smyger (heist.js flyttar dem) – rundvisningen fortsätter efteråt
+  // kuppen: guiden och gästen gömmer sig och smyger (heist.js flyttar dem) – rundvisningen fortsätter efteråt
   if (alarmHeist()) { v.paused = true; return; }
   if (v.paused) { v.paused = false; v.detour = null; toStop(v, 'Puh! Det var nog det mest spännande som hänt i det här huset. Nå – var var vi?'); return; }
   const d = v.detour, here = b.floor;
@@ -361,9 +486,18 @@ export function visningTick(dt) {
     for (const p of group(v)) if (p.state === 'office' && !there(p, f) && !p.evac && !inFireZone(f)) {
       releaseSpot(p); setTrip(p, f, d ? `Rundvisning: ${d.title}` : `Rundvisning: ${STOPS[v.si].title}`, false);
     }
-    if (group(v).every(p => there(p, f))) { arrived(v); return; }
+    // (stoppet hann stänga medan vi var på väg: guiden ringer efter nycklarna nu)
+    if (!d && !v.unlock && closedStop(f)) line(v, startUnlock(v, f), `way:${STOPS[v.si].k}`);
+    // stängt: vänta på nyckelbäraren (finns hen inte längre lånar guiden huvudnyckeln i receptionen)
+    const u = v.unlock && !d && v.unlock.f === f && v.unlock.ph !== 'open' ? v.unlock : null;
+    if (u) {
+      const kp = byId(u.by);
+      if (!kp || !free(kp)) { u.ph = 'open'; u.by = v.host; }
+      else if (there(kp, f)) { u.ph = 'open'; speak(kp, f === STATION ? 'Så – spärrarna är öppna!' : 'Så där, nu är det öppet – för er!'); }
+    }
+    if (group(v).every(p => there(p, f)) && (!u || u.ph === 'open')) { arrived(v); return; }
     if (v.goT > GO_MAX) {
-      // det tar för lång tid (någon sitter fast, en kö …): Berit börjar ändå om hon själv är framme
+      // det tar för lång tid (någon sitter fast, en kö …): guiden börjar ändå om hon själv är framme
       if (there(b, f)) { arrived(v); return; }
       if (v.goT > GO_MAX * 3) { finish(v, 'avbruten'); return; }
     }
@@ -371,7 +505,7 @@ export function visningTick(dt) {
   }
   // ---- at ----
   if (d) {
-    // vid händelsen: stå kvar tills Berit har sagt sitt – vid brand och strömavbrott tills det är över
+    // vid händelsen: stå kvar tills guiden har sagt sitt – vid brand och strömavbrott tills det är över
     v.stay -= dt;
     if (d.over() || (v.stay <= 0 && !d.hold) || v.stay <= -DETOUR_MAX * 4) {
       v.detour = null;
@@ -386,14 +520,14 @@ export function visningTick(dt) {
   toStop(v, STOPS[v.si].way());
 }
 
-/** Var Berit och gästen står vid ett stopp: synligt i hallen, Berit närmast korridoren och gästen bredvid. @param {Person} p */
+/** Var guiden och gästen står vid ett stopp: synligt i hallen, guiden närmast korridoren och gästen bredvid. @param {Person} p */
 export function visningSpot(p, f) {
   const v = V();
   if (!v || !onTour(p)) return null;
-  const isB = p.id === v.berit;
+  const isB = p.id === v.host;
   const x = f === LOBBY ? (isB ? 300 : 322) : DOOR_X + (isB ? 26 : 48);
   return { x, k: 'stand', face: isB ? 1 : -1, temp: true, win: 'hall', tour: true,
-    desc: isB ? 'Visar runt – berättar för gästen' : 'Lyssnar på Berit' };
+    desc: isB ? 'Visar runt – berättar för gästen' : `Lyssnar på ${guideName()}` };
 }
 /** vad gästen bestämmer sig för i ett rum (decideNext i people.js): stannar så länge rundvisningen pågår @param {Person} p */
 export function guestNext(p) {

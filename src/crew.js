@@ -1,4 +1,4 @@
-// Husets personal: driftcheferna, bildproducenterna, receptionisten, fönsterputsaren och lastaren (CREW i config).
+// Husets personal: driftcheferna, bildproducenterna, receptionisten och kvällsvärden, fönsterputsaren och lastaren (CREW i config).
 // Var och en är en person i huset med en egen post (en plats i SPOTS med post), ett skift och raster på bestämda
 // ställen (personalrummet, Sky Café, takträdgården, kiosken, godisautomaten, perrongen). Raster tas bara när det är
 // lugnt; den som är "urgent" (kontrollrummet) skyndar tillbaka när larmet går, och den som ska täcka för någon
@@ -77,7 +77,7 @@ export function spawnCrew(id, atStart = false, from = LOBBY) {
  *  annars stående i hallen. Drar inga slumptal. @param {Person} p */
 export function crewSpot(p, f) {
   const c = CREW_BY[p.crewId], mine = s => occOf(s) === null || occOf(s) === p.id;
-  // (Berit på rundvisning står med gästen i hallen, visning.js)
+  // (guiden på rundvisning står med gästen i hallen, visning.js)
   const vs = p.touring ? visningSpot(p, f) : null;
   if (vs) return vs;
   const post = SPOTS[f].find(s => s.post === c.post);
@@ -109,12 +109,18 @@ function gondolaOff() {
 function offReason(p, h) {
   const c = CREW_BY[p.crewId];
   if (c.post === 'chief' && S.chief && !S.chief.on) return 'Går på rast – du får ta besluten så länge';
-  if (h < c.from) return `Hänger av sig jackan i personalrummet – passet börjar kl ${Math.floor(c.from)}`;
+  // (nattskiftet efter ett mjukt dygnsskifte sitter kvar på posten tills avlösaren är i huset)
+  if (h < c.from && !(p.shiftEnd && !relieved(c))) return `Hänger av sig jackan i personalrummet – passet börjar kl ${Math.floor(c.from)}`;
   if (c.post === 'gondola') return gondolaOff();
   return '';
 }
-/** den som tar över posten när c:s pass är slut (nattskiftet: dagskiftet som börjar kl 06) */
-const relief = c => CREW.find(x => x !== c && x.post === c.post && x.from === (c.until ?? START_H)) || null;
+/** den som tar över posten när c:s pass är slut (nattskiftet: dagskiftet som börjar kl 06, annars den första som
+ *  kommer på morgonen – kvällsvärden lämnar receptionen till Berit) */
+const relief = c => {
+  const same = CREW.filter(x => x !== c && !x.sub && x.post === c.post);
+  return same.find(x => x.from === (c.until ?? START_H))
+    || (c.until === null ? same.filter(x => x.until !== null).sort((a, b) => a.from - b.from)[0] : null) || null;
+};
 /**
  * Mjukt dygnsskifte: nattskiftet går hem när dagskiftet har kommit, och dagskiftet (som annars sitter på posten
  * när dygnet börjar) kommer in genom entrén.
@@ -123,16 +129,24 @@ export function crewRoll() {
   for (const p of S.people) if (p.crewId && CREW_BY[p.crewId].until === null && !CREW_BY[p.crewId].sub) { p.shiftEnd = true; p.timer = Math.min(p.timer, CREW_LOOK); }
   for (const c of CREW) if (c.arrive === null && !crewPerson(c.id)) spawnCrew(c.id);
 }
+/** någon annan på vikariens post har passet och är i huset (inte ute och visar runt) */
+const deskRelief = (c, h) => CREW.some(x => x !== c && !x.sub && x.post === c.post && h >= x.from && h < (x.until ?? 31)
+  && (q => !!q && !q.touring && !q.shiftEnd)(crewPerson(x.id)));
+/** är c:s avlösare i huset (eller har c ingen)? */
+const relieved = c => { const nx = relief(c); return !nx || !!crewPerson(nx.id); };
 /** passet är slut? @param {Person} p */
 function shiftOver(p, h, busy) {
   const c = CREW_BY[p.crewId];
   if (c.post === 'terrace') return !S.move || S.move.state === 'done' || !S.move.hoist;
-  // vikarien går när den hon vikarierar för inte behöver henne längre (rundvisningen är slut, visning.js)
-  if (c.sub) return !S.visning || S.visning.ph === 'done';
+  // vikarien går när hon inte behövs längre: rundvisningen är slut (visning.js), eller nästa skift i receptionen har
+  // kommit medan guiden fortfarande är ute (kvällsvärden visar runt när Berit kommer på morgonen)
+  if (c.sub) return !S.visning || S.visning.ph === 'done' || deskRelief(c, h);
   // nattskiftet efter ett mjukt dygnsskifte: går när avlösaren är i huset (inte mitt i ett larm)
-  if (p.shiftEnd) { const nx = relief(c); return (!nx || !!crewPerson(nx.id)) && !(busy && c.urgent); }
+  if (p.shiftEnd) return relieved(c) && !(busy && c.urgent);
   return c.until !== null && h >= c.until && (!busy || !c.urgent || h >= c.until + 0.5);
 }
+/** den vikarien har vikarierat för: guiden på rundvisningen (visning.js) */
+const subFor = () => { const id = S.visning ? S.visning.host : -1, g = S.people.find(q => q.id === id); return g ? g.name : 'Receptionisten'; };
 /** får personen lämna posten just nu? fönsterputsaren måste först hissas upp till taket @param {Person} p */
 function mayLeave(p) {
   if (CREW_BY[p.crewId].post !== 'gondola' || !atPost(p)) return true;
@@ -148,7 +162,7 @@ function mayLeave(p) {
  */
 export function crewNext(p, h) {
   const c = CREW_BY[p.crewId], busy = alarm(), pf = postFloor(c.post);
-  // (Berit på rundvisning: rundvisningen bestämmer vart hon går, visning.js; under kuppen sitter personalen still)
+  // (guiden på rundvisning: rundvisningen bestämmer vart hen går, visning.js; under kuppen sitter personalen still)
   if (p.touring || (S.heist && S.heist.tied)) return null;
   const ok = f => f >= 0 && !inFireZone(f);
   // (resor inom huset: entrén är personalens utgång, men dit går man också på rast – det är ingen hemgång)
@@ -156,7 +170,7 @@ export function crewNext(p, h) {
   if (shiftOver(p, h, busy)) {
     if (!mayLeave(p)) return null;
     const next = relief(c);
-    return [p.exitFloor, c.post === 'terrace' ? 'Flytten är klar – åker med flyttbilen' : c.sub ? `${CREW_BY[c.sub].name} är tillbaka – tackar för sig och går` : `Passet är slut${next ? ` – ${next.name} tar över` : ''}`];
+    return [p.exitFloor, c.post === 'terrace' ? 'Flytten är klar – åker med flyttbilen' : c.sub ? `${subFor()} är tillbaka – tackar för sig och går` : `Passet är slut${next ? ` – ${next.name} tar över` : ''}`];
   }
   // rasten är slut (eller larmet går för den som behövs i kontrollrummet)
   if (p.onBreak && ((busy && c.urgent) || S.t >= p.breakUntil)) {

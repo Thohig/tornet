@@ -1,7 +1,7 @@
 // Kuppen på 5:an: ett rånargäng tar över tornet för att tömma valvet i Guldbanken. En skåpbil från "Fasad &
 // Fönster AB" backar in vid lastkajen; ledaren tar driftcentralen och kapar hissarna (alla utom varuhissen, som
 // gänget själva åker), två borrar i valvet, en vaktar gisslan i Sky Café och en sitter kvar i bilen. Den som
-// var på fel ställe – Berit på rundvisning, en boende som var hemma, en tekniker – blir över och smyger runt i
+// var på fel ställe – guiden på rundvisning, en boende som var hemma, en tekniker – blir över och smyger runt i
 // trapporna: slår av strömmen till borren och signalerar till polisen från taket. Polisens insatsledare
 // bestämmer (chief.js): klippa strömmen eller vänta, storma via garaget eller taket, stoppa tunnelbanan eller
 // inte. Klipps strömmen släpper valvets magnetlås – precis vad rånarna vill. Ingen skjuter och ingen dör.
@@ -157,7 +157,7 @@ function newcomers() {
 // ---------- Hjälten: den som rånarna missade ----------
 function pickHero() {
   const v = S.visning;
-  if (touring() && v) { const b = byId(v.berit); if (b) return b; }
+  if (touring() && v) { const b = byId(v.host); if (b) return b; }
   const res = S.people.find(p => p.kind === 'res' && p.state === 'office' && p.floor === p.home && !p.sleeping && !p.dead);
   if (res) return res;
   const other = S.people.find(p => p.role === 'hisstekniker' && (p.job === null || p.job === undefined) && p.state === 'office' && !p.dead)
@@ -174,7 +174,7 @@ function heroGo(p, f, why) {
   if (inFireZone(f)) return; // (ingen går in dit det brinner – hjälten väntar)
   const mates = [p];
   const v = S.visning;
-  if (v && p.id === v.berit) { const g = byId(v.guest); if (g) mates.push(g); }
+  if (v && p.id === v.host) { const g = byId(v.guest); if (g) mates.push(g); }
   for (const q of mates) {
     if (q.state !== 'office' || q.floor === f) continue;
     Hs.steps += q === p ? Math.abs(f - q.floor) * STEPS : 0;
@@ -184,10 +184,10 @@ function heroGo(p, f, why) {
     if (/** @type {string} */ (q.state) === 'toQueue') toStairs(q, why);
   }
 }
-/** Berit berättar för gästen (rundvisningen läser upp det) */
+/** Guiden berättar för gästen (rundvisningen läser upp det) */
 function tell(text) {
   const v = S.visning, Hs = H();
-  if (!v || !Hs || Hs.hero !== v.berit) return;
+  if (!v || !Hs || Hs.hero !== v.host) return;
   v.line = text; v.lineN++; v.lineK = 'heist';
 }
 function heroTick() {
@@ -231,10 +231,10 @@ function hold() {
   if (h) {
     Hs.hero = h.id; Hs.heroWho = h.name; Hs.heroStep = 1;
     const v = S.visning;
-    if (v && h.id === v.berit) {
+    if (v && h.id === v.host) {
       tell('Psst – rånare! De har tagit driftcentralen och kapat hissarna. Men mig har de missat, och dig. Följ med – jag kan trapporna i det här huset utan och innan.');
       const k = crewPerson('kicki');
-      if (k) speak(k, 'Berit?! Det är rånare här! … Ja, jag sitter under disken.');
+      if (k) speak(k, `${h.name}?! Det är rånare här! … Ja, jag sitter under disken.`);
     } else speak(h, 'Vad var det där? … Rånare?! Inte i mitt hus.');
     log(`🤫 ${pn(h)} blev över – rånarna missade hen`, 'alert', null, h.id);
   }

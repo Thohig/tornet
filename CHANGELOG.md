@@ -13,8 +13,15 @@
 - Hon ringer bemanningen, och vikarien **Kicki** sköter receptionen under tiden – även larmen.
 - Stoppen är platser, inte klockslag, och Berit berättar om det som händer där just då (tåget, chefens senaste beslut, trasiga hissar, dagens händelser).
 - Händer något lägger hon om rutten dit – brand, storm, strömavbrott, hissfel, linbrott, panoramahissen på fasaden, flytten – aldrig in i brandzonen, och fortsätter sedan.
-- Beställs från ?-rutan, entrén eller Berits ruta; beställd på kvällen börjar den nästa morgon.
+- Beställs från ?-rutan, entrén eller Berits ruta.
 - Berit pratar högt med webbläsarens talsyntes (svensk eller engelsk röst efter språket); musiken sänks medan hon pratar.
+
+### Rundvisningen dygnet runt
+- Kvällsvärden **Yvonne** (19–07) sitter i receptionen när Berit har gått hem och tar rundvisningarna då. Hon sitter kvar på morgonen tills Berit är i huset, och Kicki lämnar över till nästa skift om guiden fortfarande är ute.
+- Rundvisningen går att framkalla (🛎️ under Framkalla): den börjar direkt, och guiden avbryter rasten. Finns ingen receptionist i huset tar väktaren eller driftchefen den – chefen säger varför.
+- Stängda stopp – takterrassen, Sky Café, perrongen när tågen inte går – låses upp av den som har nycklarna: vaktmästaren, väktaren eller en inringd jourvaktmästare. Gallret är uppe bara för gruppen, och nyckelbäraren låser efter dem.
+- Knappar, repliker och loggen visar guidens namn. Yvonne har också en kvinnlig röst.
+- Nästa rundvisning börjar först när förra gästen har lämnat huset, så att två gäster aldrig är ute samtidigt.
 
 ### Kuppen på 5:an (`src/heist.js`)
 - En sällsynt incident i slumpen (högst en per dygn, kräver ledig lastkaj) och en knapp under Framkalla.

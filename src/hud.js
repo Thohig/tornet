@@ -21,6 +21,7 @@ import { BLANKET_T } from './visits.js';
 import { INSATS, chiefOnDuty } from './chief.js';
 import { BANK, GOLD, VAN_NAME } from './heist.js';
 import { CREW_BY } from './crew.js';
+import { guideName } from './visning.js';
 import { doAction, extraActions } from './input.js';
 import { trDom } from './lang.js';
 import { allStatsHtml, avgWait, grade, lastDay, safetyGrade } from './summary.js';
@@ -542,7 +543,7 @@ export function showIntro(mode = S.started ? 'help' : 'start', then = /** @type 
       <li>Knapparna är <b>ikoner</b> – ${touch ? 'håll fingret på en' : 'vila musen på en'} så står det vad den gör.</li>
       ${touch ? '<li><b>Dra</b> i bilden med ett finger för att se resten av huset; två fingrar zoomar.</li>' : `<li class="intro-keys"><kbd>Mellanslag</kbd> paus · <kbd>−</kbd>/<kbd>+</kbd> hastighet · <kbd>H</kbd> biografläge · <kbd>S</kbd> styrlogik · <kbd>T</kbd> namnbrickor · <kbd>F</kbd> koppla loss/på kameran · <kbd>A</kbd> regissör (kameran väljer själv) · <kbd>Esc</kbd> sluta följa/tillbaka</li>`}
     </ul>
-    <button class="btn" id="go">${help ? 'TILLBAKA' : 'KÖR!'}</button>${help ? `<button class="btn" id="tour-go"${S.visning ? ' disabled' : ''}>🛎️ BE BERIT VISA RUNT</button>` : ''}
+    <button class="btn" id="go">${help ? 'TILLBAKA' : 'KÖR!'}</button>${help ? `<button class="btn" id="tour-go"${S.visning ? ' disabled' : ''}>🛎️ BE ${guideName().toUpperCase()} VISA RUNT</button>` : ''}
     <details class="intro-more"><summary>Mer om huset</summary>
     <ul>
       <li>Det finns <b>inga knappar</b> på våningarna. Varje person har ett eget mål och får en egen hiss. Tankebubblan visar målet och hissen.</li>
@@ -565,7 +566,7 @@ export function showIntro(mode = S.started ? 'help' : 'start', then = /** @type 
     S.started = true; log('Dag 1 börjar – dörrarna öppnas!', 'sys');
   };
   $('go').onclick = go;
-  // (rundvisningen: Berit visar runt i huset som det är just nu, visning.js)
+  // (rundvisningen: guiden visar runt i huset som det är just nu, visning.js)
   if ($('tour-go')) $('tour-go').onclick = () => { go(); doAction('visning:start'); };
   /** @type {HTMLElement} */ ($('go')).focus();
   // fångas före spelets tangenter (annars pausar mellanslaget och Esc kopplar loss kameran)

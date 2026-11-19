@@ -30,7 +30,7 @@ export function changeStrategy(k) {
 /** inställningar som spelaren kan ändra under dygnet */
 const SETTINGS = ['mistakes', 'maint'];
 /** Allt spelaren kan framkalla. target = våning (brand) eller hiss (hissfel, het motor, linbrott); utelämnat = slumpen väljer. */
-export const TRIGGERS = ['fire', 'power', 'fault', 'storm', 'heat', 'cable', 'pano', 'medical', 'move', 'lightning', 'cold', 'heatwave', 'train', 'vip', 'heist'];
+export const TRIGGERS = ['fire', 'power', 'fault', 'storm', 'heat', 'cable', 'pano', 'medical', 'move', 'lightning', 'cold', 'heatwave', 'train', 'vip', 'heist', 'visning'];
 function triggerAny(type, target = null) {
   if (type === 'move') return moveNow();
   if (type === 'lightning') return strikeNow();
@@ -38,6 +38,7 @@ function triggerAny(type, target = null) {
   if (type === 'train') return delayTrain();
   if (type === 'vip') return vipNow();
   if (type === 'heist') return startHeist();
+  if (type === 'visning') return orderVisning(true); // (rundvisningen direkt – guiden avbryter rasten, visning.js)
   return trigger(type, target);
 }
 const FIRE_TEXT = { recall: 'Brandåterkallning', zone: 'Brandzon', none: 'Normal drift i branden' };

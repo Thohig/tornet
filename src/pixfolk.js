@@ -129,9 +129,9 @@ function thought(p, x, y, n = 1) {
 let callAt = /** @type {{ x: number, y: number }|null} */ (null);
 export const resetCallAt = () => { callAt = null; };
 /** @param {Person} p */
-// (Berit ringer också – efter en vikarie när hon ska visa runt, visning.js)
+// (guiden ringer också – efter en vikarie när hon ska visa runt, visning.js)
 const calling = p => (!!S.techCall && S.techCall.by === p.id && S.t < S.techCall.until)
-  || (!!S.visning && S.visning.berit === p.id && S.visning.ph === 'call' && S.t < S.visning.callUntil);
+  || (!!S.visning && S.visning.host === p.id && S.visning.ph === 'call' && S.t < S.visning.callUntil);
 /** mobiltelefonen vid örat; (px, py) = figurens övre vänstra hörn, dir = sidovyns riktning (0 = framifrån) @param {Person} p */
 export function phoneOn(p, px, py, dir = 0) {
   if (!calling(p)) return;

@@ -32,7 +32,7 @@ import { CHIEFS, chiefPerson, setChief } from '../src/chief.js';
 import { CREW_BY, atPost, crewPerson, postFloor } from '../src/crew.js';
 import { CREW, NAMES, CAST } from '../src/config.js';
 import { PANO, ladderReach, PANO_CREW_S, PANO_DEFAULT_S } from '../src/pano.js';
-import { STOPS as VSTOPS, LAST_START } from '../src/visning.js';
+import { STOPS as VSTOPS } from '../src/visning.js';
 import { getLang, setLang, tr } from '../src/lang.js';
 import EN_TEXTS from '../src/lang-en.js';
 import { CUES, PIECES, layout, partOf } from '../src/scoreData.js';
@@ -1858,7 +1858,7 @@ export const PLAYER_ACTIONS = {
   moveBlankets: r => act('moveBlankets', r() < 0.5),
   moveWind: r => act('moveWind', r() < 0.5 ? 'wait' : 'varu'),
   // framkalla händelser (även på en viss våning eller hiss), slumpen och driftchefen
-  trigger: r => act('trigger', ['move', 'lightning', 'cold', 'heatwave', 'train', 'vip'][Math.floor(r() * 6)]),
+  trigger: r => act('trigger', ['move', 'lightning', 'cold', 'heatwave', 'train', 'vip', 'visning'][Math.floor(r() * 7)]),
   fireAt: r => act('trigger', 'fire', FIRE_FLOORS[Math.floor(r() * FIRE_FLOORS.length)]),
   carTrigger: r => act('trigger', ['fault', 'heat', 'cable'][Math.floor(r() * 3)], Math.floor(r() * S.elevators.length)),
   incLevel: r => act('incLevel', ['av', 'lugn', 'normal', 'kaos'][Math.floor(r() * 4)]),
@@ -2320,7 +2320,7 @@ test('Mjukt dygnsskifte: huset rullar vidare kl 06 – fel, brand och folk följ
   assert(!S.fire, 'branden släcktes aldrig');
   assert(!e.fault, `${e.name} lagades aldrig efter skiftet`);
   for (const c of CREW.filter(x => x.until === null)) assert(!crewPerson(c.id), `${c.name} (nattskiftet) gick aldrig hem`);
-  for (const c of CREW.filter(x => x.arrive === null)) assert(atPost(crewPerson(c.id)), `${c.name} (dagskiftet) kom aldrig till sin post`);
+  for (const c of CREW.filter(x => x.arrive === null)) { const p = crewPerson(c.id); assert(p && (atPost(p) || p.onBreak), `${c.name} (dagskiftet) kom aldrig till sin post`); }
   assert(!S.people.some(p => ['väktare', 'nattdj', 'nattekniker'].includes(p.role)), 'nattpersonalen är kvar på förmiddagen');
   assert(S.people.filter(p => p.kind === 'emp').length > 20, 'de anställda kom inte till jobbet dag 2');
   const res = S.people.filter(p => p.kind === 'res');
@@ -2486,10 +2486,11 @@ function runVisning(max, each = () => {}) {
     const v = S.visning;
     if (!v) break;
     each(v);
-    const b = crewPerson('berit');
+    const b = v.host >= 0 ? S.people.find(p => p.id === v.host && !p.dead) : null;
     if (crewPerson('kicki')) w.kicki = true;
-    // Berit går aldrig från disken förrän vikarien är i huset
-    if ((v.ph === 'go' || v.ph === 'at') && b && !atPost(b) && !crewPerson('kicki')) w.unmanned++;
+    // guiden går aldrig från disken förrän vikarien är i huset (och vikarien går först när nästa skift är i huset)
+    const desk = S.people.some(p => p.crewId && !p.touring && CREW_BY[p.crewId].post === 'reception');
+    if ((v.ph === 'go' || v.ph === 'at') && v.sub && b && !atPost(b) && !desk) w.unmanned++;
     // ingen på rundvisningen går in i brandzonen (utom ut därifrån)
     for (const p of S.people) if (p.touring && S.fire && p.goal !== undefined && inFireZone(p.goal) && !p.evac && p.state !== 'office') w.fireZone++;
     if (v.lineN !== lastN) { lastN = v.lineN; w.lines.push(v.line); }
@@ -2510,7 +2511,7 @@ test('Rundvisningen: Berit ringer en vikarie, visar runt i husets vanliga gång 
   for (const s of VSTOPS) if (s.k !== 'tak') assert(w.stops.includes(s.k), `stoppet ${s.k} blev aldrig av (${w.stops.join(', ')})`);
   assert(w.lines.every(l => l.length > 10 && !/undefined|NaN|\[object/.test(l)), `konstig replik: ${w.lines.find(l => /undefined|NaN|\[object/.test(l))}`);
   const b = crewPerson('berit');
-  assert(b && (atPost(b) || hour() >= 19), 'Berit satt inte vid disken efteråt');
+  assert(b ? atPost(b) : hour() >= 19, 'Berit satt inte vid disken efteråt (och passet var inte slut)');
   assert(!crewPerson('kicki'), 'Kicki gick aldrig hem');
   assert(!S.people.some(p => p.guest), 'gästen gick aldrig');
   assert(!S.people.some(p => p.touring), 'någon är kvar på rundvisning');
@@ -2538,18 +2539,60 @@ test('Rundvisningen anpassar sig efter larmen: Berit visar händelsen, Kicki tar
   return out.join(' · ');
 });
 
-test('Rundvisningen beställd på kvällen börjar när Berit kommer på morgonen (även över dygnsskiftet)', () => {
-  sim(8, { roll: 'mjuk' });
-  while (hour() < LAST_START + 0.5) step(DT);
-  act('visning', 'start');
-  assert(S.visning && S.visning.ph === 'order', 'beställningen syns inte');
-  let g = 0;
-  while (S.visning && S.visning.ph === 'order' && ++g < 4000 / DT) step(DT);
-  assert(S.visning && S.visning.ph !== 'order', 'rundvisningen började aldrig');
-  assert(S.day === 2 && hour() >= 7 && hour() < 8, `började dag ${S.day} kl ${hour().toFixed(2)} (ska vara dag 2 strax efter 07)`);
-  const w = runVisning(1500);
-  assert(!S.visning && w.stops.length >= 4, `rundvisningen blev inte av (${w.stops.join(', ')})`);
-  return `började dag 2 kl ${(7).toFixed(0)}–08 · ${w.stops.length} stopp`;
+test('Rundvisningen efter Berits pass: kvällsvärden Yvonne tar den på kvällen och mitt i natten', () => {
+  const out = [];
+  for (const [at, from, to] of [[17.75, 19, 19.6], [25, 25, 25.3]]) {
+    sim(8, { roll: 'mjuk' });
+    while (hour() < at) step(DT);
+    assert(act('visning', 'start') === true, `kl ${at}: rundvisningen gick inte att beställa`);
+    let g = 0;
+    while (S.visning && S.visning.ph === 'order' && ++g < 4000 / DT) step(DT);
+    assert(S.visning && S.visning.ph !== 'order', `kl ${at}: rundvisningen började aldrig`);
+    const host = S.people.find(p => p.id === S.visning.host);
+    assert(host && host.crewId === 'yvonne', `kl ${at}: guiden är ${host && host.name} (ska vara Yvonne)`);
+    assert(hour() >= from && hour() < to, `kl ${at}: började kl ${hour().toFixed(2)} (ska vara ${from}–${to})`);
+    const w = runVisning(1500);
+    assert(!S.visning && w.stops.length >= 4, `kl ${at}: rundvisningen blev inte av (${w.stops.join(', ')})`);
+    assert(!w.unmanned, `kl ${at}: receptionen stod tom`);
+    out.push(`beställd ${at} → Yvonne ${w.stops.length} stopp`);
+  }
+  // och Berit tar över receptionen på morgonen
+  while (!(S.day === 2 && hour() >= 9)) step(DT);
+  const b = crewPerson('berit');
+  assert(b && (atPost(b) || b.onBreak) && !crewPerson('yvonne'), 'Berit satt inte i receptionen på morgonen (eller Yvonne gick aldrig hem)');
+  return out.join(' · ');
+});
+
+test('Rundvisningen framkallad: börjar direkt med den som kan, stängda stopp låses upp av den som har nycklarna', () => {
+  const out = [];
+  /** @type {[number, string, string][]} */
+  const cases = [[6.2, 'ny', 'gunbritt'], [21, 'mjuk', 'yvonne']];
+  for (const [at, roll, who] of cases) {
+    sim(8, { roll, chief: true });
+    while (hour() < at) step(DT);
+    assert(act('trigger', 'visning') === true, `kl ${at}: rundvisningen gick inte att framkalla`);
+    assert(act('trigger', 'visning') === false, `kl ${at}: två rundvisningar samtidigt`);
+    let g = 0;
+    while (S.visning && S.visning.ph === 'order' && ++g < 60 / DT) step(DT);
+    assert(S.visning && S.visning.ph !== 'order', `kl ${at}: den framkallade rundvisningen började inte direkt`);
+    const host = S.people.find(p => p.id === S.visning.host);
+    assert(host && host.crewId === who, `kl ${at}: guiden är ${host && host.name} (ska vara ${who})`);
+    // (ingen receptionist i huset: driftchefen tar den och säger varför)
+    if (who === 'gunbritt') assert(S.chief.log.some(d => d.key === 'visning'), 'driftchefen sade inte varför hen tog rundvisningen');
+    const opened = new Set();
+    let locked = 0;
+    const w = runVisning(1500, v => {
+      const u = v.unlock;
+      if (u && u.ph === 'open') { opened.add(fl(u.f)); if (u.by !== v.host && !S.people.some(p => p.id === u.by && p.floor === u.f)) locked++; }
+    });
+    assert(!S.visning, `kl ${at}: rundvisningen tog inte slut`);
+    assert(w.stops.includes('tak'), `kl ${at}: takterrassen blev aldrig av (${w.stops.join(', ')})`);
+    assert(opened.size > 0, `kl ${at}: inget stängt stopp låstes upp`);
+    assert(!locked, `kl ${at}: ett stopp stod upplåst utan nyckelbäraren i ${(locked * DT).toFixed(1)} s`);
+    assert(!S.people.some(p => p.touring || (p.keys !== undefined && p.keys !== null)), `kl ${at}: någon har kvar sitt uppdrag`);
+    out.push(`kl ${at}: ${host.name}, upplåst ${[...opened].join('+')}`);
+  }
+  return out.join(' · ');
 });
 
 test('Rundvisningen: avbeställd och avslutad – Berit tillbaka vid disken, Kicki och gästen går', () => {
@@ -2628,7 +2671,7 @@ test('Kuppen under rundvisningen: Berit och gästen blir över, smyger i trappor
   let g = 0;
   while (!(S.visning && S.visning.ph === 'at' && S.visning.si >= 1) && ++g < 900 / DT) step(DT);
   assert(S.visning && S.visning.ph === 'at', 'rundvisningen kom aldrig igång');
-  const berit = S.visning.berit;
+  const berit = S.visning.host;
   assert(act('trigger', 'heist') === true, 'kuppen gick inte att framkalla');
   const lines = [];
   let n = -1;

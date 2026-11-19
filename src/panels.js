@@ -8,7 +8,7 @@
 // (register, logg, inställningar, resultat). Biografläget (H) döljer panelen och visar en textskylt i bilden.
 // Bara gränssnitt: läser tillståndet och går via doAction/act() för allt som ändrar något.
 import { esc, fl } from './util.js';
-import { CONTROL, END_H, FL, LOBBY, ROOF, START_H, STRAT_HINT, STRAT_NAMES, TEMPOS, TOP, tempoName } from './config.js';
+import { CONTROL, CREW, END_H, FL, LOBBY, ROOF, START_H, STRAT_HINT, STRAT_NAMES, TEMPOS, TOP, tempoName } from './config.js';
 import { S, hour, phaseName } from './state.js';
 import { FIRE_FLOORS, INC_LEVELS, INC_LEVEL_NAMES } from './incidents.js';
 import { VIEW, nightness, resize } from './view.js';
@@ -20,6 +20,7 @@ import { soundOn } from './sound.js';
 import { getLang, trDom } from './lang.js';
 import { musicOn } from './music.js';
 import { lastDay, summaryHtml } from './summary.js';
+import { guideName } from './visning.js';
 import { SPEEDS, extraActions, uiHooks } from './input.js';
 
 const side = $('side'), portrait = $('portrait');
@@ -28,6 +29,8 @@ const side = $('side'), portrait = $('portrait');
 /** @typedef {{ key: string, html: string, focus: string[], spot: string[] }} TourPanel */
 /** @type {{ view: null|'roster'|'log'|'stats'|'set'|'yesterday', open: Set<string>, fireFloor: string, squeezed: Set<string>, key: string, tour: TourPanel|null }} */
 const UI = { view: null, open: new Set(), fireFloor: '', squeezed: new Set(), key: '', tour: null };
+/** knappen som beställer en rundvisning hos den som guidar härnäst (Berit på dagen, kvällsvärden annars) */
+const tourBtn = () => { const n = guideName(); return ikon('visning:start', '🛎️', `Be ${n} visa runt`, `${n} ringer efter en vikarie till disken och visar en gäst runt i huset – du följer med`, false, S.visning ? ' disabled' : ''); };
 /** Rundvisningen (intro.js): ett eget block överst, blocken i focus fälls ut och lyfts fram, och det som
  *  matchar väljarna i spot blinkar (även textskylten i bilden). null = ingen rundvisning. */
 export function setTour(t) { UI.tour = t; UI.view = null; updatePanel(); }
@@ -156,14 +159,14 @@ function followHtml(F) {
       inside ? ikon(`inside:${f}`, '👤', 'Följ någon därinne', `${inside} är inne på våningen – klicka igen för nästa`) : '',
       FIRE_FLOORS.includes(f) ? ikon(`trig:fire:${f}`, '🔥', 'Brand här', 'Det börjar brinna på den här våningen', false, S.fire ? ' disabled' : '') : '',
       ikon(`visit:${f}`, '🚶', 'Släpp in en besökare', 'En besökare kommer till våningen', false, S.fire ? ' disabled' : ''),
-      f === LOBBY ? ikon('visning:start', '🛎️', 'Be Berit visa runt', 'Berit ringer efter en vikarie till disken och visar en gäst runt i huset – du följer med', false, S.visning ? ' disabled' : '') : '',
+      f === LOBBY ? tourBtn() : '',
       f === LOBBY ? ikon('bus', '🚌', 'Turistbuss!', 'Stadsturen: en guide och fjorton turister ska se takterrassen och Sky Café. Kommer bara när de har öppet (ungefär 07:30–16)', false, S.fire || S.tour ? ' disabled' : '') : '',
     ].join('');
     return { head: `📹 Våning ${fl(f)} · ${esc(FL[f].name)}`, body: `<div class="fl-info">${w} väntar på hiss · ${inside} inne${f === CONTROL ? ' · driftcentralen' : ''}</div><div class="row">${acts}</div>` };
   }
   const p = F.p, cam = VIEW.camSel;
   return { head: `${cam ? '📹 Följer' : '🔎 Spårar'} ${esc(p.name)}`,
-    body: personHtml(p) + `<div class="row">${cam ? '' : ikon(`person:${p.id}`, '📹', 'Följ med kameran', 'Kameran håller personen i bild (F)')}${p.crewId === 'berit' ? ikon('visning:start', '🛎️', 'Be Berit visa runt', 'Berit ringer efter en vikarie till disken och visar en gäst runt i huset – du följer med', false, S.visning ? ' disabled' : '') : ''}</div>` };
+    body: personHtml(p) + `<div class="row">${cam ? '' : ikon(`person:${p.id}`, '📹', 'Följ med kameran', 'Kameran håller personen i bild (F)')}${p.crewId && CREW.some(c => c.id === p.crewId && c.guide) ? tourBtn() : ''}</div>` };
 }
 function trigHtml() {
   const fire = `<select name="fireFloor" data-hint="<b>Brandvåning</b><br>Våningen som börjar brinna"><option value="">slumpad</option>${FIRE_FLOORS.map(f => `<option value="${f}"${String(f) === UI.fireFloor ? ' selected' : ''}>${fl(f)} · ${esc(FL[f].short)}</option>`).join('')}</select>`;
@@ -175,7 +178,7 @@ function trigHtml() {
     + t('cable', '🪢', 'Linbrott', 'Linorna går av i en hiss') + t('pano', '🧗', 'Fast på fasaden', 'Panoramahissen fastnar utanför huset – de instängda måste firas ner')
     + t('medical', '🚑', 'Ambulans', 'Någon svimmar') + t('move', '🚚', 'Flytt', 'Ett hushåll flyttar') + t('vip', '🚁', 'VIP', 'VIP-helikoptern landar')
     + t('train', '🚇', 'Tågstörning', 'Tåget blir försenat') + t('cold', '❄️', 'Kyla', 'En kall dag: dörrarna i entrén tar emot')
-    + t('heatwave', '☀️', 'Värmebölja', 'Motorerna kyls sämre') + ikon('trig:heist', '🚐', 'Kupp!', 'Ett rånargäng tar över huset för att tömma valvet på 5:an. Kräver en ledig lastkaj', false, S.heist || S.fire ? ' disabled' : '') + ikon('bus', '🚌', 'Turistbuss!', 'Stadsturen: en guide och fjorton turister ska se takterrassen och Sky Café. Kommer bara när de har öppet (ungefär 07:30–16)', false, S.fire || S.tour ? ' disabled' : '')
+    + t('heatwave', '☀️', 'Värmebölja', 'Motorerna kyls sämre') + ikon('trig:heist', '🚐', 'Kupp!', 'Ett rånargäng tar över huset för att tömma valvet på 5:an. Kräver en ledig lastkaj', false, S.heist || S.fire ? ' disabled' : '') + ikon('trig:visning', '🛎️', 'Rundvisning nu', 'Den som kan visar en gäst runt direkt – guiden avbryter rasten, och har något stängt ringer hen efter nycklarna', false, S.visning && S.visning.ph !== 'order' ? ' disabled' : '') + ikon('bus', '🚌', 'Turistbuss!', 'Stadsturen: en guide och fjorton turister ska se takterrassen och Sky Café. Kommer bara när de har öppet (ungefär 07:30–16)', false, S.fire || S.tour ? ' disabled' : '')
     + `</div><div class="dim small">Följ en hiss eller våning för att framkalla något just där.</div>`;
 }
 function stratHtml() {

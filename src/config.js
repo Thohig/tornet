@@ -385,7 +385,7 @@ export const BOHAG_BY_TYPE = {
   pensioner: ['sang', 'soffa', 'byra', 'piano'], vd: ['sang', 'soffa', 'kassaskap', 'hylla'], artist: ['sang', 'hylla', 'piano'],
 };
 export const ROLE_NAMES = { 'väktare': 'Väktare', 'städare': 'Städare', 'vaktmästare': 'Vaktmästare', 'nattdj': 'Natt-DJ på Kanal 97', 'nattekniker': 'Nattekniker på Modemkungen', 'bud': 'Bud', 'hisstekniker': 'Hisstekniker', 'flyttgubbe': 'Flyttgubbe på Lyft & Bär', 'ambulans': 'Ambulanssjukvårdare', 'driftchef': 'Driftchef',
-  'bildproducent': 'Bildproducent', 'receptionist': 'Receptionist', 'fönsterputsare': 'Fönsterputsare', 'lastare': 'Lastare på Lyft & Bär', 'arbetsledare': 'Arbetsledare på hissjouren', 'vikarie': 'Vikarie från Kontorsservice', 'rånare': 'Rånare i overall från "Fasad & Fönster AB"' };
+  'bildproducent': 'Bildproducent', 'receptionist': 'Receptionist', 'kvällsvärd': 'Kvällsvärd', 'fönsterputsare': 'Fönsterputsare', 'lastare': 'Lastare på Lyft & Bär', 'arbetsledare': 'Arbetsledare på hissjouren', 'vikarie': 'Vikarie från Kontorsservice', 'rånare': 'Rånare i overall från "Fasad & Fönster AB"' };
 
 // ---------- Stamgästerna ----------
 // Återkommande karaktärer: samma namn, utseende och egenheter varje dag (logiken finns i cast.js).
@@ -425,10 +425,11 @@ export const CAST = [
 // är break (personalrummet), cafe (Sky Café), roof (takträdgården), kiosk, vending (godisautomaten) eller platform.
 // cover = posten som måste vara bemannad innan man går på rast; urgent = går tillbaka till posten vid larm;
 // sub = vikarie för den med id:t (kommer när den personen behöver gå ifrån, går när hen är tillbaka).
+// guide = ger rundvisningen (visning.js) när hen sitter på sin post: Berit på dagen, kvällsvärden Yvonne resten av dygnet.
 // lines = vad de säger på posten och på rasten (pratbubblorna i pixfolk.js – aldrig kontorsrepliker).
 /** @typedef {{ id: string, name: string, role: string, title: string, post: string, from: number, until: number|null,
  *   arrive: number|null|'event', kg: number, fit: number, speed: number, space: number, polite: boolean, icon: string,
- *   breaks: [number, number, string, string][], cover?: string, urgent?: boolean, sub?: string, look: import('./people.js').Look,
+ *   breaks: [number, number, string, string][], cover?: string, urgent?: boolean, sub?: string, guide?: boolean, look: import('./people.js').Look,
  *   lines: { post: string[], break: string[] } }} CrewDef */
 /** @type {CrewDef[]} */
 export const CREW = [
@@ -453,7 +454,7 @@ export const CREW = [
     lines: { post: ['Natten är min', 'Skärm fyra flimrar igen', 'Inget rör sig. Bra.', 'Rune snarkar…', 'Ett ensamt fönster lyser på 13'], break: ['Där går sista tåget', 'Skönt med lite frisk luft', 'Perrongen är så tom på natten', 'En macka och en kopp te'] },
     look: { skin: '#a8693f', shirt: '#5a2a6e', pants: '#2b2d6e', hair: 4, hairC: '#1b1033', tie: false, tieC: '#ffe14d', stripe: false, acc: 0 } },
   { id: 'berit', name: 'Berit', role: 'receptionist', icon: '🛎️', title: 'Receptionist · 07–19', post: 'reception', from: 7, until: 19, arrive: 6.8,
-    kg: 64, fit: 0.4, speed: 1, space: 7, polite: true,
+    kg: 64, fit: 0.4, speed: 1, space: 7, polite: true, guide: true,
     breaks: [[10, 30, 'cafe', 'Förmiddagsfika i Sky Café'], [12.25, 45, 'break', 'Lunch i personalrummet'], [15, 25, 'cafe', 'En latte i Sky Café']],
     lines: { post: ['Välkommen till Tornet!', 'Hissarna finns till höger', 'Har du bokat tid?', 'Skriv på besökslistan, tack', 'Vem ska du träffa?', 'Tornet, Berit, god dag!'], break: ['En latte med extra skum, tack', 'Äntligen sitta ner', 'Telefonen får ringa en stund', 'Vilken utsikt härifrån!'] },
     look: { skin: '#ffe4c8', shirt: '#c0392b', pants: '#2b2f45', hair: 5, hairC: '#d9a441', tie: false, tieC: '#ffe14d', stripe: false, acc: 2 } },
@@ -468,8 +469,13 @@ export const CREW = [
     look: { skin: '#d9a066', shirt: '#ff8c42', pants: '#3a3a3a', hair: 1, hairC: '#2a1d14', tie: false, tieC: '#ffe14d', stripe: false, acc: 0 } },
   { id: 'kicki', name: 'Kicki', role: 'vikarie', icon: '☎️', title: 'Vikarie från Kontorsservice · receptionen', post: 'reception', from: 0, until: null, arrive: 'event', sub: 'berit',
     kg: 58, fit: 0.7, speed: 1.1, space: 6, polite: true, breaks: [],
-    lines: { post: ['Berit är på rundvisning – kan jag hjälpa till?', 'Hur funkar den här telefonen?', 'Tornet, Kicki … nej, Berit … god dag!', 'Vilken knapp var det nu?', 'Skriv på listan, tack!'], break: [] },
+    lines: { post: ['Det är rundvisning i dag – kan jag hjälpa till?', 'Hur funkar den här telefonen?', 'Tornet, Kicki … nej, receptionen … god dag!', 'Vilken knapp var det nu?', 'Skriv på listan, tack!'], break: [] },
     look: { skin: '#f6c48f', shirt: '#ff6fb5', pants: '#2b2d6e', hair: 2, hairC: '#2a1a10', tie: false, tieC: '#ffe14d', stripe: false, acc: 0 } },
+  { id: 'yvonne', name: 'Yvonne', role: 'kvällsvärd', icon: '🌙', title: 'Kvällsvärd · 19–07', post: 'reception', from: 19, until: null, arrive: 19,
+    kg: 66, fit: 0.65, speed: 1, space: 7, polite: true, guide: true,
+    breaks: [[21.6, 20, 'vending', 'Kvällsgodis ur automaten i entrén'], [25, 35, 'break', 'Nattfika i personalrummet – te och knäckebröd'], [28, 20, 'platform', 'Ut på perrongen – lyssnar efter första tåget']],
+    lines: { post: ['God kväll och välkommen till Tornet!', 'Sent ute i kväll?', 'Skriv på kvällslistan, tack', 'Tornet, Yvonne, god kväll!', 'Hissarna går hela natten'], break: ['Bara en Japp, sedan tillbaka', 'Så tyst huset är på natten', 'Te och knäckebröd – nattens lyx', 'Snart kommer Berit och tar över'] },
+    look: { skin: '#c68a5a', shirt: '#2a3f8f', pants: '#2b2d6e', hair: 2, hairC: '#1b1033', tie: false, tieC: '#ffe14d', stripe: false, acc: 0 } },
 ];
 export const STRAT_NAMES = { smart: 'SMART', peak: 'RUSNING', eco: 'ENERGISNÅL', nearest: 'NÄRMAST', random: 'KAOS', buttons: 'KNAPPAR' };
 export const STRAT_HINT = {

@@ -1,11 +1,13 @@
-// Rundvisningen i gränssnittet: Berits berättelse i ett block överst i panelen (setTour i panels.js), kameran som
+// Rundvisningen i gränssnittet: guidens (Berit eller kvällsvärden Yvonne) berättelse i ett block överst i panelen (setTour i panels.js), kameran som
 // följer henne och hennes röst. Själva rundvisningen är simulering (visning.js): spelaren beställer den med
 // act('visning', 'start') och den går i det dygn som pågår. Här visas och läses repliken i S.visning.line upp med
 // webbläsarens talsyntes (Web Speech API, en svensk röst – på en Mac samma röster som `say`). Finns ingen svensk
 // röst, eller är ljudet av, blir det bara text. Bara gränssnitt: ändrar aldrig simuleringen utom via act().
 import { S } from './state.js';
 import { act } from './actions.js';
-import { LAST_START, STOPS, touring } from './visning.js';
+import { STOPS, guideName, nextGuide, touring } from './visning.js';
+import { CREW } from './config.js';
+import { crewPerson, atPost } from './crew.js';
 import { VIEW } from './view.js';
 import { toggleAuto } from './director.js';
 import { extraActions, followPerson } from './input.js';
@@ -25,9 +27,9 @@ const U = {
   spoken: -1, at: -1, speaking: false, paused: false,
 };
 
-/** Pågår rundvisningen (Berit är ute med gästen)? Då nynnar hon i husmusiken (score.js). */
+/** Pågår rundvisningen (guiden är ute med gästen)? Då nynnar hon i husmusiken (score.js). */
 export const introOn = () => touring();
-/** Pratar Berit just nu? Musiken sänks under tiden (sound.js). */
+/** Pratar guiden just nu? Musiken sänks under tiden (sound.js). */
 export const beritTalking = () => U.speaking;
 /** Berit erbjuder en rundvisning i panelen (start.js, första gången). */
 export function offerVisning() { U.offer = true; paint(); }
@@ -41,12 +43,12 @@ extraActions.visning = b => {
   paint();
 };
 
-const beritP = () => (S.visning ? S.people.find(p => p.id === S.visning.berit && !p.dead) || null : null);
+const beritP = () => (S.visning ? S.people.find(p => p.id === S.visning.host && !p.dead) || null : null);
 
 /** Varje bildruta (main.js) */
 export function introTick() {
   const v = S.visning;
-  // rundvisningen börjar: kameran följer Berit (regissören av så länge)
+  // rundvisningen börjar: kameran följer guiden (regissören av så länge)
   if (v && v.ph === 'go' && U.followed !== v.t0) {
     U.followed = v.t0;
     const p = beritP();
@@ -56,20 +58,25 @@ export function introTick() {
   paint();
 }
 
+/** guiden som sitter i receptionen just nu (Berit eller kvällsvärden), eller null */
+const deskGuide = () => CREW.filter(c => c.guide).map(c => crewPerson(c.id)).find(p => p && atPost(p)) || null;
+
 // ---------- Panelen ----------
 function paint() {
   const v = S.visning;
   if (!v && !U.offer) { if (U.key) { U.key = ''; setTour(null); } return; }
   const btn = (a, t, hint, cls = '', dis = false) => `<button class="btn xs ${cls}" data-act="visning:${a}" data-hint="${hint}"${dis ? ' disabled' : ''}>${t}</button>`;
-  let head = '🛎️ Rundvisning', say = '', nav = '', dots = '', focus = [], spot = [], key = '';
+  let who = guideName(), head = '🛎️ Rundvisning', say = '', nav = '', dots = '', focus = [], spot = [], key = '';
   if (!v) {
     key = 'offer';
-    say = 'Hej och välkommen till Tornet! Jag heter Berit och sitter i receptionen. Vill du att jag visar dig runt? Huset fortsätter som vanligt under tiden – händer det något går vi och tittar.';
-    nav = `<span class="sp"></span>${btn('nej', 'Nej tack', 'Berit sitter kvar i receptionen – du kan fråga henne sedan (?)')}${btn('ja', 'Ja tack!', 'Berit ringer efter en vikarie och visar sedan runt', 'tour-go')}`;
+    say = `Hej och välkommen till Tornet! Jag heter ${who} och sitter i receptionen. Vill du att jag visar dig runt? Huset fortsätter som vanligt under tiden – händer det något går vi och tittar.`;
+    nav = `<span class="sp"></span>${btn('nej', 'Nej tack', `${who} sitter kvar i receptionen – du kan fråga henne sedan (?)`)}${btn('ja', 'Ja tack!', `${who} ringer efter en vikarie och visar sedan runt`, 'tour-go')}`;
   } else if (v.ph === 'order') {
     key = 'order';
-    const h = S.clock / 3600 + 6;
-    say = h >= 7 && h < LAST_START ? 'Det ordnar jag! Jag börjar så fort jag sitter i receptionen.' : 'Gärna! Men nu är det för sent – jag börjar när jag kommer till disken i morgon bitti.';
+    // den som sitter i receptionen svarar: guiden själv, eller den som går hem snart och lämnar över
+    const next = nextGuide(S.clock / 3600 + 6), desk = deskGuide();
+    if (!desk || desk.crewId === next.id) { who = next.name; say = 'Det ordnar jag! Jag börjar så fort jag sitter i receptionen.'; }
+    else { who = desk.name; say = `Gärna! Men mitt pass slutar snart – ${next.name} visar dig runt när hon har börjat.`; }
     nav = `<span class="sp"></span>${btn('end', 'Avbeställ', 'Ingen rundvisning den här gången')}`;
   } else if (v.ph === 'done') {
     if (U.key) { U.key = ''; setTour(null); }
@@ -80,18 +87,18 @@ function paint() {
     if (on) head = `🛎️ Rundvisning · ${v.detour ? v.detour.title : st.title}${v.ph === 'go' ? ' <span class="dim">· på väg</span>' : ''}`;
     say = v.line || '…';
     dots = `<div class="tour-dots">${STOPS.map((s, j) => `<i class="${v.seenStops.includes(s.k) ? 'was' : j === v.si && !v.detour ? 'now' : ''}"></i>`).join('')}</div>`;
-    nav = btn('follow', '📹', 'Följ Berit med kameran') + btn('again', '↻', 'Säg det igen', '', !v.line)
-      + `<span class="sp"></span>${on ? btn('next', 'Gå vidare ▶', 'Berit slutar prata och går till nästa stopp', 'tour-next', v.ph !== 'at' || !!v.detour) : ''}`;
+    nav = btn('follow', '📹', `Följ ${who} med kameran`) + btn('again', '↻', 'Säg det igen', '', !v.line)
+      + `<span class="sp"></span>${on ? btn('next', 'Gå vidare ▶', `${who} slutar prata och går till nästa stopp`, 'tour-next', v.ph !== 'at' || !!v.detour) : ''}`;
     if (v.ph === 'at') { focus = v.focus; spot = v.spot; }
   }
   if (key === U.key) return;
   U.key = key;
   const html = `<div class="blk-h"><span>${head}</span><button class="blk-x" data-act="visning:${v ? 'end' : 'nej'}" data-hint="${v ? 'Avsluta rundvisningen' : 'Nej tack'}">✕</button></div>`
-    + `<div class="tour-say"><b>Berit:</b> <span id="tour-txt">${esc(say)}</span></div>${dots}<div class="row tour-nav">${nav}</div>`;
+    + `<div class="tour-say"><b>${esc(who)}:</b> <span id="tour-txt">${esc(say)}</span></div>${dots}<div class="row tour-nav">${nav}</div>`;
   setTour({ key, html, focus, spot });
   mark();
 }
-/** stryk under det Berit redan har sagt (rösten berättar var den är) */
+/** stryk under det guiden redan har sagt (rösten berättar var den är) */
 function mark() {
   const el = document.getElementById('tour-txt'), v = S.visning;
   if (!el || !v || !v.line) return;
@@ -104,15 +111,15 @@ function mark() {
 const SYN = typeof speechSynthesis !== 'undefined' ? speechSynthesis : null;
 /** @type {Record<string, SpeechSynthesisVoice|null>} */
 const voices = {};
-// Berit är en kvinna: kvinnliga röster i önskeordning (Mac, Windows/Edge, Chrome, Android), och mansröster
-// (och Macens lekröster) som aldrig får bli Berit om det finns något annat.
+// Guiderna (Berit och Yvonne) är kvinnor: kvinnliga röster i önskeordning (Mac, Windows/Edge, Chrome, Android), och mansröster
+// (och Macens lekröster) som aldrig får bli guidens om det finns något annat.
 const FEMALE = {
   sv: ['alva', 'klara', 'sofie', 'hillevi', 'female', 'kvinna'],
   en: ['serena', 'kate', 'stephanie', 'martha', 'libby', 'sonia', 'maisie', 'hazel', 'susan', 'flo', 'shelley', 'sandy',
     'female', 'samantha', 'karen', 'moira', 'tessa', 'allison', 'ava', 'zira', 'aria', 'jenny', 'tara'],
 };
 const NOT_BERIT = /\b(male|man|daniel|oliver|arthur|george|thomas|ryan|eddy|reed|rocko|grandpa|grandma|alex|fred|ralph|albert|aaron|rishi|aman|david|mark|guy|bengt|mattias|oskar|bells|boing|bubbles|cellos|wobble|jester|junior|organ|superstar|trinoids|whisper|zarvox|bahh|bad news|good news)\b/i;
-/** Berits röst på spelarens språk: en kvinnlig röst på svenska eller (helst brittisk) engelska; null = ingen finns */
+/** Guidens röst på spelarens språk: en kvinnlig röst på svenska eller (helst brittisk) engelska; null = ingen finns */
 function beritVoice() {
   if (!SYN) return null;
   const l = getLang();
@@ -134,7 +141,7 @@ function beritVoice() {
     || ok.find(x => x.localService) || ok[0] || mine[0] || null;
   return voices[l];
 }
-/** ingen känd kvinnlig röst fanns: lyft tonläget lite mer så att det låter mer som Berit */
+/** ingen känd kvinnlig röst fanns: lyft tonläget lite mer så att det låter mer som guiden */
 const unsure = (/** @type {SpeechSynthesisVoice} */ vo) => !FEMALE[getLang() === 'sv' ? 'sv' : 'en'].some(n => new RegExp(`\\b${n}\\b`, 'i').test(vo.name));
 function hush() {
   if (SYN && (U.speaking || SYN.speaking)) SYN.cancel();

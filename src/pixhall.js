@@ -14,6 +14,7 @@ import { allowed } from './dispatch.js';
 import { ants, box, FLAMES, g, INK, line, lo, once, pill, R, reserve, STAIR_ICON, starSprite, X, Y } from './pixcore.js';
 import { blinkOf } from './pixcars.js';
 import { bubble } from './pixfolk.js';
+import { unlockedFloor } from './visning.js';
 import { fireProg } from './pixroof.js';
 /** @typedef {import('./people.js').Person} Person */
 
@@ -240,7 +241,8 @@ export function drawHall(f, h) {
     }
     line(cx, cy, ix, iy, PAL.corrEdge); line(cx + cw - 1, cy, ix + iw - 1, iy, PAL.corrEdge);
     // stängt: ett galler för korridoren och skylten på gallret (i stället för en lapp mitt i hallen)
-    if (FLOOR_HOURS[f] && !floorOpen(f, h)) closedGate(f, cx, cy, cw, ch);
+    // (upplåst åt rundvisningen: gallret är uppe, visning.js)
+    if (FLOOR_HOURS[f] && !floorOpen(f, h) && unlockedFloor() !== f) closedGate(f, cx, cy, cw, ch);
   }
   if (th === 'lobby') lobbyProps(top, bot);
   else if (f === CONTROL) controlRoom(top, bot);
