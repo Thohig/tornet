@@ -2,6 +2,7 @@
 
 ## November 2026 – skyltarna på engelska
 - Våningsskyltarna har engelska namn när spelet visas på engelska: namnet står kvar och verksamheten översätts (Glada Tanden Dental, Pixel & Planka Game Studio, Rymdkakan Advertising, Kvarnström Attorneys, Quasar Laboratory, Tornplan Metro). Gunnars och Doris titlar använder samma namn.
+- Språket byts med två pixelflaggor (svensk och brittisk) längst upp till höger i panelen, ovanför ?-knappen; den valda är intryckt med marinblå ram. Valet under Inställningar ⚙️ finns kvar.
 - Språkknappen heter Svenska på båda språken, och brandvåningens ”slumpad” under Framkalla heter ”random” på engelska.
 
 ## November 2026 – vaktmästaren och vardagsolyckorna

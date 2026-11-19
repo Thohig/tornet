@@ -142,10 +142,24 @@ function playHtml() {
   const wx = `${S.weather.cold > 0 ? '❄️ ' : S.weather.temp >= 20 ? '🌤️ ' : ''}${S.weather.temp} °C${S.storm ? ' · 🌬️ storm' : ''}`;
   const speeds = SPEEDS.map(v => { const t = { 0.25: '¼×', 0.5: '½×', 1: '1×', 2: '2×' }[v]; return ikon(`spd:${v}`, t, `Fart ${t}`, 'Snabbare och långsammare med + och −', S.speed === v); }).join('');
   return `<div class="pl-top"><span class="pl-logo" data-hint="Hissarna styrs av Hiss-O-Matic 3000">TORNET</span><span class="pl-sun">${night ? '🌙' : '☀️'}</span>`
-    + `<span class="pl-ph"><b>${phaseName(h)}</b> · ${wx}<br><span class="dim">Dag ${S.day} · ${S.people.length} i huset · frö ${S.seed}</span></span></div>`
+    + `<span class="pl-ph"><b>${phaseName(h)}</b> · ${wx}<br><span class="dim">Dag ${S.day} · ${S.people.length} i huset · frö ${S.seed}</span></span>${flagsHtml()}</div>`
     + `<div class="pl-ctl">${ikon('pause', S.paused ? '▶' : '❚❚', S.paused ? 'Spela' : 'Paus', 'Mellanslag', S.paused)}${speeds}<span class="sp"></span><span class="pl-cam">${camTools()}</span>`
     + `${ikon('help', '?', 'Hjälp', 'Handgreppen, tangenterna och mer om huset')}</div>${timelineHtml()}`;
 }
+// ---------- Språket: två pixelflaggor längst upp till höger ----------
+// (ritade som SVG i 16×10 rutor utan utjämning; texterna står på respektive språk och översätts inte)
+const FLAG_SV = '<rect width="16" height="10" fill="#006aa7"/><rect x="5" width="2" height="10" fill="#fecc00"/><rect y="4" width="16" height="2" fill="#fecc00"/>';
+const FLAG_EN = '<rect width="16" height="10" fill="#012169"/>'
+  + '<path d="M0 0L16 10M16 0L0 10" stroke="#fff" stroke-width="2.4"/><path d="M0 0L16 10M16 0L0 10" stroke="#c8102e" stroke-width="0.9"/>'
+  + '<rect x="6" width="4" height="10" fill="#fff"/><rect y="3" width="16" height="4" fill="#fff"/>'
+  + '<rect x="7" width="2" height="10" fill="#c8102e"/><rect y="4" width="16" height="2" fill="#c8102e"/>';
+/** @param {'sv'|'en'} l */
+function flagBtn(l) {
+  const on = getLang() === l, name = l === 'sv' ? 'Svenska' : 'English', hint = l === 'sv' ? 'Spelet på svenska' : 'The game in English';
+  return `<button class="btn flag${on ? ' on' : ''}" data-act="lang:${l}" lang="${l}" aria-label="${name}" aria-pressed="${on}" data-hint="<b>${name}</b><br>${hint}">`
+    + `<svg viewBox="0 0 16 10" shape-rendering="crispEdges" aria-hidden="true">${l === 'sv' ? FLAG_SV : FLAG_EN}</svg></button>`;
+}
+const flagsHtml = () => `<span class="pl-lang">${flagBtn('sv')}${flagBtn('en')}</span>`;
 /** kamerans verktyg: ikoner i uppspelningsraden (vad regissören visar står på textskylten i bilden) */
 function camTools() {
   const c = crewNow(), who = c ? esc(c.who.name) : 'Regissören';
