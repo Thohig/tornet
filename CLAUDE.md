@@ -25,7 +25,7 @@ npm run lang        # svenska texter i koden som saknar engelsk mall i lang-en.j
 npm run league      # styrlogikerna mot varandra: väntetid (p50/p95/p99), kWh, trappa, ETA-fel; --save=x / --cmp=x; --flytt --flyttval=auto|varu|balk; --utanchef
 ```
 
-Samma testsvit körs i webbläsaren på `/tests.html`. På GitHub kör `.github/workflows/check.yml` `npm run check` vid varje push och pull request.
+Samma testsvit körs i webbläsaren på `/tests.html`. På GitHub kör `.github/workflows/check.yml` `npm run check` vid push till `main` och vid pull request (inte när bara `.md`-filer ändrats) – Actions-minuterna räcker inte till mer, så CI är ingen ersättning för att köra testerna själv.
 
 ## Arkitektur
 
@@ -104,6 +104,7 @@ Det finns ingen topplist, statusrad, låda eller högerklicksmeny: hela gränssn
 
 ## Arbetssätt
 
+- **Kör `npm run check` lokalt före varje commit** (även när ändringen ser liten ut). CI körs bara på `main` och i pull requests och ska inte vara det som hittar felen.
 - Kör `npm run check` efter ändringar i simuleringen. Ändras beteendet avsiktligt larmar facit-testet – kontrollera skillnaden och kör sedan `npm run golden`.
 - Ändringar i styrningen mäts med `npm run league -- 40 --save=fore` före och `--cmp=fore` efter. Ett dygn sprider ±1,5 s i snittväntan, så små skillnader är brus. Mer exakt ETA ≠ kortare väntan (se kommentaren i `eta()`).
 - Typerna: personer är `Person` (people.js), hissar `Elevator` (elevators.js) och incidenternas tillstånd har var sin typ i sin modul (`Fire`, `Outage`, `Pano`, `Move` …, se `S` i state.js). `S` och `S.stats` är stängda: alla fält deklareras i `INIT` respektive `newStats()` i state.js (även de som bara ett delsystem använder, som `S.train` och `S.autos`). Ett nytt fält på `S`, i statistiken, på en person eller hiss läggs till där – annars larmar `npm run typecheck`. Funktioner som tar en person eller hiss får `@param {Person} p` / `@param {Elevator} e`.

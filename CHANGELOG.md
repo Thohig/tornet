@@ -1,5 +1,9 @@
 # Ändringar
 
+## November 2026 – färre CI-körningar
+- GitHub Actions (`.github/workflows/check.yml`) körs vid push bara på `main` (samma commit testades annars två gånger, på arbetsgrenen och på main) och vid pull request. Ändringar som bara rör `.md`-filer startar ingen körning (`paths-ignore`).
+- CLAUDE.md: `npm run check` körs lokalt före varje commit – CI ska inte vara det som hittar felen.
+
 ## November 2026 – skyltarna på engelska
 - Våningsskyltarna har engelska namn när spelet visas på engelska: namnet står kvar och verksamheten översätts (Glada Tanden Dental, Pixel & Planka Game Studio, Rymdkakan Advertising, Kvarnström Attorneys, Quasar Laboratory, Tornplan Metro). Gunnars och Doris titlar använder samma namn.
 - Språket byts med två pixelflaggor (svensk och brittisk) längst upp till höger i panelen, ovanför ?-knappen; den valda är intryckt med marinblå ram. Valet under Inställningar ⚙️ finns kvar.

@@ -1,10 +1,15 @@
-# Typkontroll och hela testsviten (npm run check) vid varje push och pull request.
+# Typkontroll och hela testsviten (npm run check) vid push till main och vid pull request.
+# Bara main vid push: annars testas samma commit två gånger (arbetsgrenen och main).
+# Ändringar som bara rör .md-filer startar ingen körning. Kör npm run check lokalt före commit.
 # Fångar brutet facit (tests/golden.json), typfel och brutna invarianter innan de hamnar på main.
 name: Kontroll
 
 on:
   push:
+    branches: [main]
+    paths-ignore: ['**.md']
   pull_request:
+    paths-ignore: ['**.md']
   workflow_dispatch:
 
 # En ny push på samma gren avbryter körningen som redan pågår.
