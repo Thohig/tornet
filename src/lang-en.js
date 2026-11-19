@@ -2,6 +2,15 @@
 // Genereras ur källkodens texter; nya svenska texter läggs till här (testet Språket larmar för det som saknas).
 /** @type {Record<string, string>} */
 export default {
+  // skyltarna på våningarna (THEME_INFO i config): namnet står kvar, verksamheten översätts
+  "Glada Tanden Tandvård": "Glada Tanden Dental",
+  "Pixel & Planka Spelstudio": "Pixel & Planka Game Studio",
+  "Rymdkakan Reklambyrå": "Rymdkakan Advertising",
+  "Kvarnström Advokater": "Kvarnström Attorneys",
+  "Quasar Laboratorium": "Quasar Laboratory",
+  "Tornplan T-bana": "Tornplan Metro",
+  // brandvåningen i Framkalla (panels.js)
+  "slumpad": "random",
   "Styrlogiken byttes – får en ny hiss": "The control logic changed – gets a new elevator",
   "Styrlogik bytt till {0} – alla väntande fördelas om": "Control logic switched to {0} – all waiting passengers reassigned",
   "Brandåterkallning": "Fire recall",
@@ -296,7 +305,7 @@ export default {
   "Arbetsledare på hissjouren": "Supervisor at the elevator call-out line",
   "Vikarie från Kontorsservice": "Temp from Kontorsservice",
   "Rånare i overall från \"Fasad & Fönster AB\"": "Robber in overalls from \"Fasad & Fönster AB\"",
-  "Delägare på Kvarnström Advokater – hatar att vänta": "Partner at Kvarnström Advokater – hates waiting",
+  "Delägare på Kvarnström Advokater – hatar att vänta": "Partner at Kvarnström Attorneys – hates waiting",
   "Jag har ett möte om fem minuter!": "I have a meeting in five minutes!",
   "Det här kommer hissbolaget att få betala för!": "The elevator company is going to pay for this!",
   "Vet ni vad min tid kostar?!": "Do you know what my time costs?!",
@@ -311,7 +320,7 @@ export default {
   "Äntligen.": "Finally.",
   "Det var på tiden.": "About time.",
   "Mitt kaffe hann kallna.": "My coffee went cold.",
-  "AD på Rymdkakan Reklambyrå – håller alltid upp dörren": "Art director at Rymdkakan Reklambyrå – always holds the door",
+  "AD på Rymdkakan Reklambyrå – håller alltid upp dörren": "Art director at Rymdkakan Advertising – always holds the door",
   "Andas lugnt, allihop. Vi tar det tillsammans.": "Breathe calmly, everyone. We'll get through this together.",
   "Ingen fara – jag håller er sällskap!": "No worries – I'll keep you company!",
   "Alla kom ut, det är huvudsaken!": "Everyone got out, that's what matters!",
@@ -2498,7 +2507,6 @@ export default {
   "lastare": "loader",
   "vikarie": "temp",
   "English": "English",
-  "Svenska": "Swedish",
   "Language / Språk": "Language / Språk",
   "tyst": "silent",
   "säng": "bed",
