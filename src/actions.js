@@ -15,6 +15,7 @@ import { delayTrain } from './train.js';
 import { vipNow } from './life.js';
 import { chiefBack, playerChose, setChief } from './chief.js';
 import { panoText, setPanoHow } from './pano.js';
+import { startChaos } from './chaos.js';
 
 /** Byt styrlogik: hallknapparna nollställs och alla väntande fördelas om. */
 export function changeStrategy(k) {
@@ -62,6 +63,8 @@ export const ACTIONS = {
   service: id => orderService(car(id)),
   visitor: (f, x) => spawnVisitor(f, x),
   bus: () => spawnBus(),
+  // Murphys lag: kaosknappen – allt som kan gå fel går fel, en gång per dygn (chaos.js)
+  chaos: () => startChaos(),
   // rundvisningen med Berit: beställ (start), gå vidare till nästa stopp (next), avsluta (end)
   // kuppen: polisens val – strömmen (cut/wait), var insatsstyrkan går in (garage/tak), tåget (stop/go), gå in nu (storm)
   heist: what => { const H = S.heist; if (!heistChoice(what)) return false; if (what === 'stop') delayTrain();

@@ -1,5 +1,11 @@
 # Ändringar
 
+## November 2026 – Murphys lag (kaosknappen)
+- En röd knapp under ett gul-svart plastlock i *Framkalla*: första klicket fäller upp locket (knappen blinkar), ett andra klick inom tre sekunder utlöser kaoset. Går att trycka **en gång per dygn**; locket plomberas om kl 06.
+- Allt går inte att ha igång samtidigt (kuppen kräver ström, ingen brand och en ledig lastkaj), så knappen startar en kedjereaktion (`src/chaos.js`, `S.chaos`): värmebölja, ambulans, tågstörning och VIP → storm med blixt som slår ut strömmen → het motor när strömmen är tillbaka → hissfel, linbrott och panoramahissen fast på fasaden → turistbuss och rundvisning → brand → kuppen som final → flyttbilen. Ett steg som inte kan börja inom sin väntetid hoppas över.
+- Driftchefen tar besluten som vanligt. När allt har lugnat sig sammanfattar en informationsruta (och dagens sammanfattning) vad som gick fel och vad som aldrig hann hända. En egen siren i husmusiken när kedjan startar.
+- `triggerFault`, `triggerHeat`, `triggerCable` och `triggerPano` returnerar nu om något hände.
+
 ## November 2026 – svenska som standard
 - Spelet visas på svenska igen om inget annat är valt; engelska väljs under Inställningar ⚙️ (eller `?lang=en`). Ett sparat val gäller som förut.
 

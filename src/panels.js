@@ -22,13 +22,15 @@ import { musicOn } from './music.js';
 import { lastDay, summaryHtml } from './summary.js';
 import { guideName } from './visning.js';
 import { SPEEDS, extraActions, uiHooks } from './input.js';
+import { act } from './actions.js';
+import { chaosReady } from './chaos.js';
 
 const side = $('side'), portrait = $('portrait');
 
 // ---------- Vyer och utfällda länkar (bara gränssnittets tillstånd) ----------
 /** @typedef {{ key: string, html: string, focus: string[], spot: string[] }} TourPanel */
-/** @type {{ view: null|'roster'|'log'|'stats'|'set'|'yesterday', open: Set<string>, fireFloor: string, squeezed: Set<string>, key: string, tour: TourPanel|null }} */
-const UI = { view: null, open: new Set(), fireFloor: '', squeezed: new Set(), key: '', tour: null };
+/** @type {{ view: null|'roster'|'log'|'stats'|'set'|'yesterday', open: Set<string>, fireFloor: string, squeezed: Set<string>, key: string, tour: TourPanel|null, chaosArm: number }} */
+const UI = { view: null, open: new Set(), fireFloor: '', squeezed: new Set(), key: '', tour: null, chaosArm: 0 };
 /** knappen som beställer en rundvisning hos den som guidar härnäst (Berit på dagen, kvällsvärden annars) */
 const tourBtn = () => { const n = guideName(); return ikon('visning:start', '🛎️', `Be ${n} visa runt`, `${n} ringer efter en vikarie till disken och visar en gäst runt i huset – du följer med`, false, S.visning ? ' disabled' : ''); };
 /** Rundvisningen (intro.js): ett eget block överst, blocken i focus fälls ut och lyfts fram, och det som
@@ -45,6 +47,13 @@ extraActions.yesterday = () => { if (lastDay()) { UI.view = 'yesterday'; S.logDi
 extraActions.open = b => { UI.open.add(b); UI.view = null; };
 extraActions.fold = b => { UI.open.delete(b); UI.squeezed.add(b); };
 extraActions.rf = b => { S.rosterFilter = b; };
+// Murphys lag: första klicket fäller upp plastlocket, ett andra klick inom ARM_MS trycker på knappen
+const ARM_MS = 3000;
+const armed = () => UI.chaosArm > 0 && performance.now() - UI.chaosArm < ARM_MS;
+extraActions.chaos = () => {
+  if (!S.started || !chaosReady()) return;
+  if (armed()) { UI.chaosArm = 0; act('chaos'); } else UI.chaosArm = performance.now();
+};
 extraActions.lf = b => { S.logFilter = b; S.logDirty = true; };
 side.addEventListener('change', ev => {
   const t = /** @type {HTMLSelectElement} */ (ev.target);
@@ -179,7 +188,15 @@ function trigHtml() {
     + t('medical', '🚑', 'Ambulans', 'Någon svimmar') + t('move', '🚚', 'Flytt', 'Ett hushåll flyttar') + t('vip', '🚁', 'VIP', 'VIP-helikoptern landar')
     + t('train', '🚇', 'Tågstörning', 'Tåget blir försenat') + t('cold', '❄️', 'Kyla', 'En kall dag: dörrarna i entrén tar emot')
     + t('heatwave', '☀️', 'Värmebölja', 'Motorerna kyls sämre') + ikon('trig:heist', '🚐', 'Kupp!', 'Ett rånargäng tar över huset för att tömma valvet på 5:an. Kräver en ledig lastkaj', false, S.heist || S.fire ? ' disabled' : '') + ikon('trig:visning', '🛎️', 'Rundvisning nu', 'Den som kan visar en gäst runt direkt – guiden avbryter rasten, och har något stängt ringer hen efter nycklarna', false, S.visning && S.visning.ph !== 'order' ? ' disabled' : '') + ikon('bus', '🚌', 'Turistbuss!', 'Stadsturen: en guide och fjorton turister ska se takterrassen och Sky Café. Kommer bara när de har öppet (ungefär 07:30–16)', false, S.fire || S.tour ? ' disabled' : '')
-    + `</div><div class="dim small">Följ en hiss eller våning för att framkalla något just där.</div>`;
+    + `</div><div class="row">${chaosBtn()}</div><div class="dim small">Följ en hiss eller våning för att framkalla något just där.</div>`;
+}
+/** kaosknappen under sitt plastlock: stängt, uppfällt (blinkar), använd i dag eller kedjan pågår */
+function chaosBtn() {
+  const hint = 'Allt som kan gå fel går fel – det ena efter det andra: storm, blixt, strömavbrott, hissfel, linbrott, brand, kupp … Går bara att trycka en gång per dygn';
+  if (S.chaos) return `<button class="btn chaos" disabled data-hint="<b>Murphys lag</b><br>Kedjan pågår – huset får klara sig så gott det går">💥 Murphys lag pågår…</button>`;
+  if (!chaosReady()) return `<button class="btn chaos" disabled data-hint="<b>Murphys lag</b><br>Redan använd i dag – locket plomberas om kl 06">💥 Murphys lag · använd i dag</button>`;
+  if (armed()) return `<button class="btn chaos armed" data-act="chaos" data-hint="<b>Murphys lag</b><br>Locket är uppfällt – tryck igen för att utlösa! (${hint})">💥 TRYCK FÖR KAOS!</button>`;
+  return `<button class="btn chaos lid" data-act="chaos" data-hint="<b>Murphys lag</b><br>Fäll upp locket – och tryck en gång till inom tre sekunder. ${hint}">🛡️ Murphys lag</button>`;
 }
 function stratHtml() {
   const chief = S.chief && S.chief.on;

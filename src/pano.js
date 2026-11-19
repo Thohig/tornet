@@ -45,9 +45,10 @@ export const panoDue = e => !!e.panoNext && e.mode === 'normal' && e.state === '
 /** Spelaren (eller slumpen) framkallar det: panoramahissen fastnar nästa gång den kör med folk mellan två våningar */
 export function triggerPano() {
   const e = PANO ? S.elevators[PANO.id] : null;
-  if (!panoCandidate(e) || S.pano) return;
+  if (!panoCandidate(e) || S.pano) return false;
   e.panoNext = true;
   log(`🔩 ${e.name} hackar på fasaden – det luktar hydraulolja…`, 'alert', e.color);
+  return true;
 }
 /** når stegbilen korgen? @param {Elevator} e */
 export const ladderReach = e => e.pos <= LOBBY + LADDER_MAX;

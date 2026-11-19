@@ -24,6 +24,7 @@ import { panoTick } from './pano.js';
 import { tourReset, tourTick } from './tour.js';
 import { visningReset, visningTick } from './visning.js';
 import { heistReset, heistTick } from './heist.js';
+import { chaosReset, chaosTick } from './chaos.js';
 import { crewArrivals, crewRoll, crewStart, spawnCrew } from './crew.js';
 /** @typedef {import('./elevators.js').Elevator} Elevator */
 
@@ -157,6 +158,7 @@ export function step(dt) {
   for (const p of S.people) updatePerson(p, dt);
   if (S.people.some(p => p.dead)) S.people = S.people.filter(p => !p.dead);
   incidentTick(dt);
+  chaosTick(dt);
   panoTick();
   chiefTick(dt);
   rebuildPicks();
@@ -251,6 +253,7 @@ export function resetDay() {
   tourReset();
   visningReset();
   heistReset();
+  chaosReset();
   hoistReset();
   planIncidents(); // (sist: tidtabellen slumpas när allt annat är på plats)
   S.lastInc = null;

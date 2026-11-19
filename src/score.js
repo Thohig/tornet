@@ -173,7 +173,7 @@ function guideSeen() {
 
 // ---------- Varje bildruta ----------
 let lastNow = 0, primed = false;
-let heardWarn = -1, heardInc = -1, heardBrigade = -1;
+let heardWarn = -1, heardInc = -1, heardBrigade = -1, heardChaos = -1;
 /** @type {object|null} */
 let heardTrain = null;
 let hushUntil = 0, whistleAt = 0;
@@ -193,11 +193,12 @@ export function updateScore(ctx, dest, on, house, intro, duck = 1) {
   const live = on && S.started && !S.paused;
   // det som redan hänt när musiken slås på (eller ett nytt dygn laddas) spelas inte upp i efterhand
   if (!live || !primed) {
-    heardWarn = S.warn ? S.warn.t0 : -1; heardInc = S.lastInc ? S.lastInc.id : -1;
+    heardWarn = S.warn ? S.warn.t0 : -1; heardChaos = S.chaos ? S.chaos.t0 : -1; heardInc = S.lastInc ? S.lastInc.id : -1;
     heardBrigade = S.brigade ? S.brigade.t0 : -1; heardTrain = S.train;
     primed = live;
   }
   if (live) {
+    if (S.chaos && S.chaos.t0 !== heardChaos) { heardChaos = S.chaos.t0; cue('chaos', now + 0.05); }
     if (S.warn && S.warn.t0 !== heardWarn) { heardWarn = S.warn.t0; cue('warn', now + 0.05); }
     if (S.lastInc && S.lastInc.id !== heardInc) { heardInc = S.lastInc.id; cue('clear', now + 0.05); }
     if (S.brigade && S.brigade.t0 !== heardBrigade) {

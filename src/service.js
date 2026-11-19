@@ -106,16 +106,18 @@ export function breakDown(e, what) {
   rebuildPicks();
 }
 /** Spelaren utlöser ett hissfel: en hiss som kör eller står öppen går sönder vid nästa stopp */
+/** @returns {boolean} gick hissen sönder (eller kommer den att göra det) */
 export function triggerFault(target = null) {
   const ok = S.elevators.filter(e => e.mode === 'normal' && !e.hold && !e.breakNext);
-  if (!ok.length) return;
+  if (!ok.length) return false;
   // helst en hiss med passagerare eller stopp kvar – då händer det snart
   const busy = ok.filter(e => e.passengers.length || e.carCalls.size);
   const e = target && ok.includes(target) ? target : pick(busy.length ? busy : ok);
   // ibland stannar korgen tvärt mellan två våningar med folk i (de sitter fast tills teknikern får igång den)
-  if (target && e.passengers.length && rng() < TRAP_CHANCE) { e.trapNext = true; log(`🔧 ${e.name} hackar och gnisslar…`, 'alert', e.color); return; }
+  if (target && e.passengers.length && rng() < TRAP_CHANCE) { e.trapNext = true; log(`🔧 ${e.name} hackar och gnisslar…`, 'alert', e.color); return true; }
   if (e.state === 'doors' && e.door >= 1 && e.stops.has(e.floor)) breakDown(e, pick(FAULTS));
   else { e.breakNext = true; log(`🔧 ${e.name} låter konstigt… den går sönder vid nästa stopp`, 'alert', e.color); }
+  return true;
 }
 /** andelen av de slumpade hissfelen (med folk ombord) där korgen stannar mellan två våningar */
 export const TRAP_CHANCE = 0.45;
@@ -450,15 +452,16 @@ const midFloor = e => { const fr = e.pos - Math.floor(e.pos); return fr > 0.35 &
 /** ska linorna (som knarrat) gå av just nu? @param {Elevator} e */
 export const snapDue = e => e.snapNext && e.mode === 'normal' && e.state === 'moving' && midFloor(e);
 /** Spelaren eller slumpen: linorna i en hiss i fart går av (helst en med folk i). Står alla still knarrar
- *  linorna i en hiss, och de går av mitt emellan två våningar på dess nästa åktur. */
+ *  linorna i en hiss, och de går av mitt emellan två våningar på dess nästa åktur. @returns {boolean} går linorna av */
 export function triggerCable(target = null) {
-  if (target) { if (cableCandidate(target)) { target.snapNext = true; log(`🪢 Linorna i ${target.name} fransar sig – de går av på nästa åktur!`, 'alert', target.color); } return; }
+  if (target) { if (!cableCandidate(target)) return false; target.snapNext = true; log(`🪢 Linorna i ${target.name} fransar sig – de går av på nästa åktur!`, 'alert', target.color); return true; }
   const ok = S.elevators.filter(cableCandidate);
-  if (!ok.length) return;
+  if (!ok.length) return false;
   const now = ok.filter(e => e.state === 'moving' && midFloor(e)), busy = now.filter(e => e.passengers.length);
-  if (now.length) { snapCable(pick(busy.length ? busy : now)); return; }
+  if (now.length) { snapCable(pick(busy.length ? busy : now)); return true; }
   const e = pick(ok); e.snapNext = true;
   log(`🪢 Det knarrar oroväckande i bärlinorna på ${e.name}…`, 'alert', e.color);
+  return true;
 }
 /** Linorna går av: korgen börjar falla (snapStep tar över tills fångapparaten griper). @param {Elevator} e */
 export function snapCable(e) {
@@ -629,13 +632,15 @@ export function startFan(e) {
   log(`🌀 Extrafläkten startas i ${e.name}s maskinrum – motorn kyls snabbare (drar ${FAN_KW} kW)`, 'alert', e.color);
 }
 /** Slumpad incident: kylfläkten hakar upp sig och motorn i en hiss som kör mycket blir het */
+/** @returns {boolean} blev någon motor het */
 export function triggerHeat(target = null) {
   const ok = S.elevators.filter(e => e.mode === 'normal' && !e.hot && !e.hold);
-  if (!ok.length) return;
+  if (!ok.length) return false;
   const busy = ok.filter(e => e.passengers.length || e.carCalls.size);
   const e = target && ok.includes(target) ? target : pick(busy.length ? busy : ok);
   e.heat = Math.max(e.heat, 1.05);
   log(`🌡️ Kylningen i ${e.name}s maskinrum hakar upp sig – motorn blir het`, 'alert', e.color);
+  return true;
 }
 
 // ---------- Nivåfel ----------

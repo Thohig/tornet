@@ -154,6 +154,9 @@ export const CUES = {
   // guidens visselmelodi
   whistle: [['whistle', 'G5', 0, 0.12], ['whistle', 'E5', 0.14, 0.12], ['whistle', 'G5', 0.28, 0.12], ['whistle', 'C6', 0.42, 0.3],
     ['whistle', 'B5', 0.76, 0.12], ['whistle', 'G5', 0.9, 0.12], ['whistle', 'A5', 1.04, 0.12], ['whistle', 'G5', 1.18, 0.45]],
+  // Murphys lag: sirenen går upp och ner, och sedan ett fallande ”oj oj oj”
+  chaos: [['sq', 'A5', 0, 0.18], ['sq', 'E5', 0.2, 0.18], ['sq', 'A5', 0.4, 0.18], ['sq', 'E5', 0.6, 0.18],
+    ['sq', 'C5', 0.9, 0.14], ['sq', 'A4', 1.06, 0.14], ['sq', 'F4', 1.22, 0.4], ['tuba', 'F1', 1.22, 0.5]],
   // tunnelbanetågets signal (två toner – musiken svarar med stycket ans)
   train: [['chime', 'E5', 0, 0.45], ['chime', 'C5', 0.5, 0.7]],
 };

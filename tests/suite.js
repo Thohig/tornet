@@ -37,6 +37,7 @@ import { getLang, setLang, tr } from '../src/lang.js';
 import EN_TEXTS from '../src/lang-en.js';
 import { CUES, PIECES, layout, partOf } from '../src/scoreData.js';
 import { hz, onGrid } from '../src/music.js';
+import { CHAOS_NAMES, chaosReady } from '../src/chaos.js';
 /** @typedef {import('../src/elevators.js').Elevator} Elevator */
 /** @typedef {import('../src/people.js').Person} Person */
 
@@ -1865,6 +1866,7 @@ export const PLAYER_ACTIONS = {
   chief: r => act('chief', r() < 0.7),
   visning: r => act('visning', ['start', 'start', 'next', 'end'][Math.floor(r() * 4)]),
   heistTrig: () => act('trigger', 'heist'),
+  chaos: () => act('chaos'),
   heist: r => act('heist', ['cut', 'wait', 'garage', 'tak', 'stop', 'go', 'storm'][Math.floor(r() * 7)]),
   chiefBack: r => act('chiefBack', ['storm', 'fire', 'power', 'strategy', 'move', 'pano', `heat${Math.floor(r() * S.elevators.length)}`][Math.floor(r() * 7)]),
 };
@@ -2059,6 +2061,42 @@ test(`Dockhuset: utan spelaren tar sig huset igenom kaosdygn – incidenterna ta
   assert(fails.length === 0, `${fails.length} fel:\n  ${fails.slice(0, 10).join('\n  ')}`);
   assert(decs > seeds.length, `bara ${decs} beslut av chefen på ${seeds.length} dygn`);
   return `${inc} incidenter · ${decs} beslut av chefen · längst: instängd ${Math.round(trap)} s, storm ${Math.round(storm)} s, brand ${Math.round(fire)} s, avbrott ${Math.round(out)} s`;
+});
+test('Murphys lag: kaosknappen startar en kedja av allt som kan gå fel, en gång per dygn – och huset tar sig igenom den själv', () => {
+  const fails = [], seeds = [2301, 2302, 2303];
+  let did = 0, missed = 0, trap = 0;
+  seeds.forEach((seed, i) => {
+    sim(seed, { chief: true });
+    const w = watcher();
+    try {
+      while (hour() < 9 + i * 2) { const b = w.before(); step(DT); w.check(b); }
+      if (!act('chaos')) fails.push(`frö ${seed}: knappen gick inte att trycka`);
+      if (act('chaos') || chaosReady()) fails.push(`frö ${seed}: knappen gick att trycka två gånger samma dygn`);
+      runDay(w);
+    } catch (e) { fails.push(`frö ${seed}: kraschade – ${e.message}`); return; }
+    const ev = S.stats.events.find(x => x.type === 'chaos');
+    if (S.chaos || !ev) { fails.push(`frö ${seed}: kedjan tog aldrig slut (steg ${S.chaos ? S.chaos.i : '?'})`); return; }
+    const n = +(ev.text.match(/^(\d+)/) || [0, 0])[1];
+    did += n; missed += Object.keys(CHAOS_NAMES).length - n;
+    if (n < 8) fails.push(`frö ${seed}: bara ${n} saker gick fel – ${ev.text}`);
+    trap = Math.max(trap, w.maxTrap);
+    if (w.maxTrap > DOCK_TRAP_S) fails.push(`frö ${seed}: någon satt instängd ${Math.round(w.maxTrap)} s`);
+    const stuck = S.elevators.filter(e => (!S.fire && (e.mode === 'recall' || e.mode === 'locked')) || (!S.outage && (e.mode === 'rescue' || e.mode === 'dead')));
+    if (stuck.length) fails.push(`frö ${seed}: hiss kvar i ${stuck.map(e => `${e.name}:${e.mode}`).join(' ')}`);
+    fails.push(...newInvariantFails(w, `frö ${seed}`));
+  });
+  assert(fails.length === 0, `${fails.length} fel:\n  ${fails.slice(0, 10).join('\n  ')}`);
+  // nästa dygn (mjukt dygnsskifte): locket är plomberat igen, och knappen går att trycka
+  sim(2304, { chief: true, roll: 'mjuk' });
+  while (hour() < 10) step(DT);
+  assert(act('chaos'), 'knappen gick inte att trycka');
+  let g = 0;
+  while (S.day < 2 && ++g < 400000) step(DT);
+  assert(S.day === 2, 'dygnet rullade aldrig över');
+  while (S.chaos && ++g < 500000) step(DT);
+  assert(!S.chaos && chaosReady(), 'knappen gick inte att trycka dag 2');
+  assert(act('chaos') && !act('chaos'), 'dag 2: knappen gick inte att trycka precis en gång');
+  return `${did} saker gick fel på ${seeds.length} dygn, ${missed} hann inte hända · längst instängd ${Math.round(trap)} s`;
 });
 test('Driftcheferna är personer: vid bordet, fikar när det är lugnt, skyndar tillbaka vid larm och byter skift kl 22', () => {
   sim(31, { chief: true });
