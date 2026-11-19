@@ -1,5 +1,8 @@
 # Ändringar
 
+## November 2026 – svenska som standard
+- Spelet visas på svenska igen om inget annat är valt; engelska väljs under Inställningar ⚙️ (eller `?lang=en`). Ett sparat val gäller som förut.
+
 ## November 2026 – huset bara går, rundvisningen, kuppen och engelska
 
 ### Ingen startmeny – ett enda Tornet

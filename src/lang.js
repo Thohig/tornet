@@ -1,4 +1,4 @@
-// Språket i gränssnittet: engelska är standard, svenska går att byta till – sömlöst, mitt i ett dygn.
+// Språket i gränssnittet: svenska är standard, engelska går att byta till – sömlöst, mitt i ett dygn.
 // Koden och simuleringen skriver svenska (loggen, dagböckerna, rutorna, besluten, replikerna); gränssnittet
 // översätter allt det visar i samma ögonblick som det visas: panelens text (trDom efter varje innerHTML),
 // verktygstipset, textskylten, rundvisningen och pixelgrafikens text (textW/textSprite i pixart.js). Därför byter
@@ -10,7 +10,7 @@
 import EN from './lang-en.js';
 
 /** @type {'en'|'sv'} */
-let lang = 'en';
+let lang = 'sv';
 export const getLang = () => lang;
 /** byt språk (bara gränssnittet – start.js sparar valet) @param {'en'|'sv'} l */
 export function setLang(l) { if (l !== 'en' && l !== 'sv') return; lang = l; }

@@ -2686,8 +2686,9 @@ test('Kuppen under rundvisningen: Berit och gästen blir över, smyger i trappor
   return `${seen.caught ? 'gripna' : 'borta'} · ${lines.length} repliker efteråt`;
 });
 
-test('Språket: engelska är standard, loggen och dagböckerna blir engelska och svenska visar allt som det är', () => {
-  assert(getLang() === 'en', `standardspråket är ${getLang()}`);
+test('Språket: svenska är standard, loggen och dagböckerna blir engelska och svenska visar allt som det är', () => {
+  assert(getLang() === 'sv', `standardspråket är ${getLang()}`);
+  setLang('en');
   // varje engelsk mall har samma värden som den svenska
   const ph = t => (t.match(/\{\w+\}/g) || []).sort().join();
   const bad = Object.entries(EN_TEXTS).filter(([sv, en]) => en && ph(sv) !== ph(en));
@@ -2711,7 +2712,6 @@ test('Språket: engelska är standard, loggen och dagböckerna blir engelska och
   // svenska: ingenting översätts
   setLang('sv');
   const same = all.every(x => tr(x) === x);
-  setLang('en');
   assert(same, 'på svenska ändrades en text');
   return `${Object.keys(EN_TEXTS).length} mallar · ${all.length} texter, ${left.length} kvar på svenska`;
 });

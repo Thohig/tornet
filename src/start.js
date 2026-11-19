@@ -46,9 +46,9 @@ export function rememberPrefs() {
  * @param {number|null} seed
  */
 export function startGame(seed) {
-  // språket: engelska om inget annat är valt (?lang=sv i adressen går före)
+  // språket: svenska om inget annat är valt (?lang=en i adressen går före)
   const q = new URLSearchParams(location.search).get('lang'), saved = store.get(KEY.lang);
-  useLang(q === 'sv' || q === 'en' ? q : saved === 'sv' ? 'sv' : 'en');
+  useLang(q === 'sv' || q === 'en' ? q : saved === 'en' ? 'en' : 'sv');
   const o = prefs();
   newSim(seed ?? Math.floor(Math.random() * 1e6), { roll: 'mjuk', strategy: o.strategy, incLevel: o.incLevel, chief: o.chief,
     ...(o.mistakes ? { mistakes: o.mistakes } : {}), ...(o.maint ? { maint: o.maint } : {}) });
