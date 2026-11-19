@@ -104,18 +104,38 @@ function mark() {
 const SYN = typeof speechSynthesis !== 'undefined' ? speechSynthesis : null;
 /** @type {Record<string, SpeechSynthesisVoice|null>} */
 const voices = {};
-/** en röst på spelarens språk: svenska (helst Alva eller Klara, som på en Mac) eller brittisk engelska; null = ingen finns */
-function swedish() {
+// Berit är en kvinna: kvinnliga röster i önskeordning (Mac, Windows/Edge, Chrome, Android), och mansröster
+// (och Macens lekröster) som aldrig får bli Berit om det finns något annat.
+const FEMALE = {
+  sv: ['alva', 'klara', 'sofie', 'hillevi', 'female', 'kvinna'],
+  en: ['serena', 'kate', 'stephanie', 'martha', 'libby', 'sonia', 'maisie', 'hazel', 'susan', 'flo', 'shelley', 'sandy',
+    'female', 'samantha', 'karen', 'moira', 'tessa', 'allison', 'ava', 'zira', 'aria', 'jenny', 'tara'],
+};
+const NOT_BERIT = /\b(male|man|daniel|oliver|arthur|george|thomas|ryan|eddy|reed|rocko|grandpa|grandma|alex|fred|ralph|albert|aaron|rishi|aman|david|mark|guy|bengt|mattias|oskar|bells|boing|bubbles|cellos|wobble|jester|junior|organ|superstar|trinoids|whisper|zarvox|bahh|bad news|good news)\b/i;
+/** Berits röst på spelarens språk: en kvinnlig röst på svenska eller (helst brittisk) engelska; null = ingen finns */
+function beritVoice() {
   if (!SYN) return null;
   const l = getLang();
   if (voices[l]) return voices[l];
   const all = SYN.getVoices();
   if (!all.length) return null; // (rösterna laddas när sidan startat – försök igen nästa gång)
   const mine = all.filter(x => (l === 'sv' ? /^sv([-_]|$)/i : /^en([-_]|$)/i).test(x.lang));
-  voices[l] = l === 'sv' ? mine.find(x => /alva/i.test(x.name)) || mine.find(x => /klara/i.test(x.name)) || mine.find(x => x.localService) || mine[0] || null
-    : mine.find(x => /en[-_]GB/i.test(x.lang) && x.localService) || mine.find(x => /en[-_]GB/i.test(x.lang)) || mine.find(x => x.localService) || mine[0] || null;
+  const gb = (/** @type {SpeechSynthesisVoice} */ x) => /en[-_]GB/i.test(x.lang);
+  const named = (/** @type {SpeechSynthesisVoice[]} */ list) => {
+    for (const n of FEMALE[l === 'sv' ? 'sv' : 'en']) {
+      const re = new RegExp(`\\b${n}\\b`, 'i');
+      const hit = list.find(x => re.test(x.name) && x.localService) || list.find(x => re.test(x.name));
+      if (hit) return hit;
+    }
+    return null;
+  };
+  const ok = mine.filter(x => !NOT_BERIT.test(x.name));
+  voices[l] = (l === 'sv' ? named(mine) : named(mine.filter(gb)) || named(mine))
+    || ok.find(x => x.localService) || ok[0] || mine[0] || null;
   return voices[l];
 }
+/** ingen känd kvinnlig röst fanns: lyft tonläget lite mer så att det låter mer som Berit */
+const unsure = (/** @type {SpeechSynthesisVoice} */ vo) => !FEMALE[getLang() === 'sv' ? 'sv' : 'en'].some(n => new RegExp(`\\b${n}\\b`, 'i').test(vo.name));
 function hush() {
   if (SYN && (U.speaking || SYN.speaking)) SYN.cancel();
   U.speaking = false; U.at = -1;
@@ -127,11 +147,11 @@ function voice(v) {
   if (S.paused !== U.paused) { U.paused = S.paused; if (S.paused) SYN.pause(); else SYN.resume(); }
   if (v.lineN === U.spoken) return;
   U.spoken = v.lineN;
-  const vo = swedish();
+  const vo = beritVoice();
   hush();
   if (!vo) return;
   const u = new SpeechSynthesisUtterance(tr(v.line));
-  u.voice = vo; u.lang = vo.lang; u.rate = 1.02; u.pitch = 1.08;
+  u.voice = vo; u.lang = vo.lang; u.rate = 1.02; u.pitch = unsure(vo) ? 1.3 : 1.08;
   u.onstart = () => { U.speaking = true; U.at = 0; };
   u.onboundary = e => { U.at = e.charIndex; mark(); };
   u.onend = () => { U.speaking = false; U.at = -1; mark(); };
