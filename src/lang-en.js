@@ -2569,4 +2569,6 @@ export default {
   "💥 TRYCK FÖR KAOS!": "💥 PRESS FOR CHAOS!",
   "TRYCK FÖR KAOS!": "PRESS FOR CHAOS!",
   "Fäll upp locket – och tryck en gång till inom tre sekunder. {0}": "Flip up the cover – then press once more within three seconds. {0}",
+  "allt själv: blixt, flyttdag, VIP, tågstörning, kyla … En gång per dygn kan du fälla upp locket över den röda knappen": "anything yourself: lightning, moving day, VIP, train delay, cold snap … Once a day you can flip up the cover over the red button",
+  "– då går allt som kan gå fel fel, det ena efter det andra.": "– then everything that can go wrong goes wrong, one thing after another.",
 };
