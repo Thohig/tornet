@@ -2838,4 +2838,6 @@ export default {
   "🚿 vattenläcka": "🚿 water leak",
   "🐕 {0} sliter sig ur kopplet hos {1} på {2} – hunden är lös i huset!": "🐕 {0} slips the leash of {1} on {2} – the dog is loose in the building!",
   "🐕 Pudeln {0} smiter ut ur kenneln på Vovve Spa ({1}) – hunden är lös i huset!": "🐕 The poodle {0} slips out of the kennel at Vovve Spa ({1}) – the dog is loose in the building!",
+  "Vaktmästaren": "The caretaker",
+  "Bosse har sin post vid pannrummet på P1 och rycker ut när något går snett i vardagen: när fönsterputsarens gondol fastnar på fasaden, när en pudel rymmer från hundsalongen och åker hiss runt huset, och när ett vattenrör spricker – då springer han ner och stänger huvudkranen. På kvällen sköter kvällsvaktmästaren det, och på natten rings jouren in.": "Bosse is stationed by the boiler room on P1 and steps in when everyday things go wrong: when the window cleaner's gondola gets stuck on the facade, when a poodle escapes from the dog salon and rides the elevators around the building, and when a water pipe bursts – then he runs down and shuts the main valve. In the evening the evening caretaker handles it, and at night the on-call caretaker is called in.",
 };
