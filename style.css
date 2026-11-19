@@ -134,6 +134,12 @@ body{background:var(--desk);font-family:var(--ui);font-size:12px;color:var(--ink
 .inc.storm .inc-h{background:linear-gradient(90deg,#1f4e79,#5b8fb9)}
 .inc.heat .inc-h{background:linear-gradient(90deg,#8a3a00,#d35400)}
 .inc.pano .inc-h{background:linear-gradient(90deg,#4a1f5a,#93379e)}
+.inc.gondola .inc-h{background:linear-gradient(90deg,#1f5a6e,#36c5d6)}
+.inc.dog .inc-h{background:linear-gradient(90deg,#5a2a6e,#a64eb3)}
+.inc.leak .inc-h{background:linear-gradient(90deg,#0f3a6e,#3f7cff)}
+.inc.info.gondola .inc-h{background:linear-gradient(90deg,#1f5a6e,#36c5d6)}
+.inc.info.dog .inc-h{background:linear-gradient(90deg,#5a2a6e,#a64eb3)}
+.inc.info.leak .inc-h{background:linear-gradient(90deg,#0f3a6e,#3f7cff)}
 .inc.info .inc-h{background:linear-gradient(90deg,#404040,#808080);display:flex;align-items:center;gap:6px}
 .inc.info.medic .inc-h{background:linear-gradient(90deg,#006060,#2ec4b6)}
 .inc.info.move .inc-h{background:linear-gradient(90deg,#7a4a00,#d4a017)}

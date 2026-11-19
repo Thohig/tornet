@@ -1,5 +1,14 @@
 # Ändringar
 
+## November 2026 – vaktmästaren och vardagsolyckorna
+- **Pannrummet och dagvaktmästaren Bosse** (07–16): pannrummets dörr syns i hallen på P1 (driftcentralens fönster flyttade en bit åt höger). Bosse står vid pannan, gör småjobb på våningarna, fikar och äter lunch på stationen. Kvällsvaktmästaren börjar sin runda vid pannan. Vid en olycka får husets vaktmästare ett uppdrag (`callJanitor` i crew.js) – finns ingen i huset rings en jourvaktmästare in.
+- **🪟 Fönsterputsaren fastnar** (`src/gondola.js`): vinschen kärvar mitt på fasaden. Vaktmästaren vevar upp gondolen för hand, öppnar lastluckan på 12–14 eller så firar räddningstjänsten ner Hasse till takterrassen. Hissbalken står så länge, och Hasse går av passet efteråt.
+- **🐕 Hunden som rymmer** (`src/dog.js`): en pudel sliter sig ur kopplet (eller smiter ut ur kenneln på Vovve Spa), springer och åker hiss. Ägaren eller hundfrisören och vaktmästaren jagar den. Driftchefen kan spärra hissarna på hundens våning – då får de som väntar där ta trappan.
+- **🚿 Vattenläckan** (`src/leak.js`): ett rör spricker och vattnet rinner nedåt våning för våning och in i schakten tills vaktmästaren stänger huvudkranen i pannrummet. De blöta hissarna står still eller kör vidare med risk för kortslutning. Pölar, dropp och VÅTT GOLV i hallarna, folk halkar, och från labbet är vattnet grönt.
+- Alla tre kommer i dygnets slumpade tidtabell med förvarning, kan framkallas i panelen (vattenläckan även på en vald våning) och ingår i Murphys lag. Var och en har ett incidentkort med driftchefens beslut, regissören klipper dit och sammanfattningen berättar hur det gick.
+- Rättat: en ny simulering nollställer `S.heistDay`, så att en kupp i en tidigare simulering i samma process (testerna, ligan) inte stänger av kuppen i nästa.
+- Den som är på uppdrag tar trappan när ingen hiss går. Två nya regler i testvakten: ingen kliver på en hiss som står still för vattnet, och ingen utom de som jagar kliver på där hissarna är spärrade för hunden.
+
 ## November 2026 – Murphys lag (kaosknappen)
 - En röd knapp under ett gul-svart plastlock i *Framkalla*: första klicket fäller upp locket (knappen blinkar), ett andra klick inom tre sekunder utlöser kaoset. Går att trycka **en gång per dygn**; locket plomberas om kl 06.
 - Allt går inte att ha igång samtidigt (kuppen kräver ström, ingen brand och en ledig lastkaj), så knappen startar en kedjereaktion (`src/chaos.js`, `S.chaos`): värmebölja, ambulans, tågstörning och VIP → storm med blixt som slår ut strömmen → het motor när strömmen är tillbaka → hissfel, linbrott och panoramahissen fast på fasaden → turistbuss och rundvisning → brand → kuppen som final → flyttbilen. Ett steg som inte kan börja inom sin väntetid hoppas över.

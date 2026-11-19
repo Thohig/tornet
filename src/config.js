@@ -87,7 +87,7 @@ export const THEME_INFO = {
     { x: 380, k: 'chair', face: 1, lift: 6, desc: 'Sitter på en bänk på perrongen' },
   ] },
   dock: { name: 'Garage & lastkaj', short: 'lastkajen', acc: '#6c6865', spots: [
-    { x: 262, k: 'door', staff: true, label: 'PANNRUM', role: 'vaktmästare', desc: 'Kollar pannan i pannrummet' },
+    { x: 262, k: 'door', staff: true, label: 'FÖRRÅD', desc: 'Letar i förrådet vid lastkajen' },
   ] },
   sky: { name: 'Sky Lobby & Sky Café', short: 'sky lobbyn', acc: '#4695b8', visit: 'Fika i Sky Café',
     spots: [250, 294, 360, 404].map((x, i) => ({ x, k: 'chair', face: i % 2 ? -1 : 1, lift: 12, desc: 'Fikar i Sky Café med utsikt' })) },
@@ -194,6 +194,8 @@ export const TERRACE_F = (() => { const e = BUILDING.elevators.find(d => d.terra
 // Utan win försvinner man in i korridoren som alla andra. x är var personen står (pixhall.js ritar runt dem).
 // (Platserna är bara för personalen – andra väljer dem aldrig, se pickSpot i people.js.)
 const INNER_X1_C = 619; // (= INNER_X1 längre ner: hallens innerkant mot schakten)
+/** pannrummets dörr i hallen på P1 (världens x, dörrens mitt) och där vaktmästaren står bredvid den */
+export const BOILER_X = 406, BOILER_STAND = 366;
 const crewSpot = (f, s) => { if (f >= 0) SPOTS[f].push(s); };
 crewSpot(CONTROL, { x: 452, k: 'desk', face: 1, post: 'chief', win: 'control', desc: 'Sitter vid kontrollbordet och håller ögonen på skärmarna' });
 crewSpot(CONTROL, { x: 540, k: 'desk', face: -1, post: 'producer', win: 'control', desc: 'Klipper bilden vid bevakningsskärmen' });
@@ -204,6 +206,9 @@ crewSpot(ROOF, { x: 300, k: 'chair', face: 1, where: 'roof', desc: 'Dricker term
 crewSpot(TERRACE_F, { x: INNER_X1_C - 12, k: 'stand', face: 1, post: 'terrace', win: 'terrace', desc: 'Tar emot möblerna från hissbalken på takterrassen' });
 crewSpot(STATION, { x: 470, k: 'stand', face: 1, where: 'platform', win: 'hall', desc: 'Står på perrongen och tittar på tågen' });
 crewSpot(STATION, { x: 150, k: 'door', where: 'kiosk', desc: 'Köper en korv med bröd i kiosken' });
+// pannrummet: dörren i hallen på P1 (pixhall.js) – dagvaktmästarens post, och dit går kvällsvaktmästaren och den som
+// ska stänga huvudkranen (vattenläckan, leak.js)
+crewSpot(DOCK, { x: BOILER_STAND, k: 'stand', face: 1, post: 'boiler', role: 'vaktmästare', win: 'hall', desc: 'Pysslar med pannan i pannrummet' });
 crewSpot(DOCK, { x: 200, k: 'stand', where: 'dock', desc: 'Sitter på flyttbilens bakgavel och delar en macka med flyttgubbarna' });
 // personalrummet: tre platser i soffan, två vid bordet och en vid kylskåpet
 for (const [x, k, face, desc] of [[414, 'chair', 1, 'Fikar i soffan i personalrummet'], [438, 'chair', 1, 'Läser kvällstidningen i soffan i personalrummet'],
@@ -463,6 +468,13 @@ export const CREW = [
     breaks: [[10.4, 25, 'roof', 'Termoskaffe i takträdgården'], [12.6, 40, 'kiosk', 'Lunch – korv med bröd i kiosken på stationen'], [14.9, 20, 'roof', 'En cigg och utsikten på taket']],
     lines: { post: ['Skrubba, skrubba…', 'Fläckfritt!', 'Titta inte ner, Hasse', 'Vem har kladdat på trettonde våningen?', 'Fönster nummer femtusen…'], break: ['Termoskaffe smakar bäst på taket', 'Korv med bröd och senap, tack', 'Blåser det upp får jag gå hem', 'Mina armar, mina armar…'] },
     look: { skin: '#f6c48f', shirt: '#2a5db0', pants: '#2a5db0', hair: 4, hairC: '#5a3a1a', tie: false, tieC: '#ffe14d', stripe: true, acc: 0 } },
+  { id: 'bosse', name: 'Bosse', role: 'vaktmästare', icon: '🔧', title: 'Vaktmästare · 07–16', post: 'boiler', from: 7, until: 16, arrive: 6.9,
+    kg: 88, fit: 0.55, speed: 0.95, space: 8, polite: true,
+    // (where 'job' = ett småjobb på en våning som crew.js väljer, inte en rast)
+    breaks: [[8.4, 30, 'job', 'Byter ett lysrör'], [9.9, 20, 'break', 'Kaffe och wienerbröd i personalrummet'], [11.1, 30, 'job', 'Lagar en knarrande dörr'],
+      [12.2, 40, 'kiosk', 'Lunch – korv med mos i kiosken på stationen'], [13.6, 30, 'job', 'Kollar ventilationen'], [14.8, 25, 'job', 'Smörjer dörrgångjärnen']],
+    lines: { post: ['Pannan går som en klocka', 'Var är skiftnyckeln?', '1,4 bar – fint så', 'Det knackar i rören igen', 'Den här pannan är äldre än jag'], break: ['Ett lysrör till…', 'Den där dörren har knarrat sen -87', 'Wienerbröd, äntligen', 'Vem har lånat min stege?'] },
+    look: { skin: '#e0ac7a', shirt: '#6b8e3a', pants: '#3a4a2a', hair: 1, hairC: '#8a8a8a', tie: false, tieC: '#ffe14d', stripe: false, acc: 4 } },
   { id: 'mona', name: 'Mona', role: 'lastare', icon: '🏗️', title: 'Lastare på Lyft & Bär · hissbalken', post: 'terrace', from: 0, until: null, arrive: 'event',
     kg: 70, fit: 0.6, speed: 1, space: 8, polite: false, breaks: [],
     lines: { post: ['Sakta i backarna!', 'Akta pianot!', 'Lite till … STOPP!', 'Rulla, rulla!', 'Hörru balken, mer slack!'], break: [] },

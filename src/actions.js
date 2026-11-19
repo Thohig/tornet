@@ -16,6 +16,9 @@ import { vipNow } from './life.js';
 import { chiefBack, playerChose, setChief } from './chief.js';
 import { panoText, setPanoHow } from './pano.js';
 import { startChaos } from './chaos.js';
+import { gondolaText, setGondolaHow } from './gondola.js';
+import { setDogLock } from './dog.js';
+import { setLeakMode } from './leak.js';
 
 /** Byt styrlogik: hallknapparna nollställs och alla väntande fördelas om. */
 export function changeStrategy(k) {
@@ -31,7 +34,7 @@ export function changeStrategy(k) {
 /** inställningar som spelaren kan ändra under dygnet */
 const SETTINGS = ['mistakes', 'maint'];
 /** Allt spelaren kan framkalla. target = våning (brand) eller hiss (hissfel, het motor, linbrott); utelämnat = slumpen väljer. */
-export const TRIGGERS = ['fire', 'power', 'fault', 'storm', 'heat', 'cable', 'pano', 'medical', 'move', 'lightning', 'cold', 'heatwave', 'train', 'vip', 'heist', 'visning'];
+export const TRIGGERS = ['fire', 'power', 'fault', 'storm', 'heat', 'cable', 'pano', 'medical', 'move', 'lightning', 'cold', 'heatwave', 'train', 'vip', 'heist', 'visning', 'gondola', 'dog', 'leak'];
 function triggerAny(type, target = null) {
   if (type === 'move') return moveNow();
   if (type === 'lightning') return strikeNow();
@@ -72,6 +75,12 @@ export const ACTIONS = {
   visning: what => (what === 'start' ? orderVisning() : what === 'next' ? nextVisning() : what === 'end' ? endVisning() : undefined),
   moveRoute: r => { if (!S.move) return; setMoveRoute(r); playerChose('move', `Flytten: ${{ auto: 'låt styrningen planera', varu: 'allt i varuhissen', balk: 'tungt med hissbalken' }[r]}`); },
   moveBlankets: on => setMoveBlankets(on),
+  // fönsterputsaren som sitter fast: vevas upp (crank), in genom lastluckan (hatch) eller räddningstjänstens rep (rope)
+  gondola: how => { if (!setGondolaHow(how, 'player')) return false; playerChose('gondola', gondolaText(how), { inc: 'gondola' }); return true; },
+  // den lösa hunden: spärra hissarna på hundens våning (lock) eller släpp dem (free)
+  dog: what => { if (!setDogLock(what === 'lock', 'player')) return false; playerChose('dog', what === 'lock' ? 'Spärra hissarna där hunden är' : 'Låt hunden åka', { inc: 'dog' }); return true; },
+  // vattenläckan: hissarna i de blöta schakten ur drift (stop) eller kör vidare (run)
+  leak: m => { if (!setLeakMode(m, 'player')) return false; playerChose('leak', m === 'stop' ? 'Hissarna i de blöta schakten står still' : 'Hissarna i de blöta schakten kör vidare', { inc: 'leak' }); return true; },
   panoRescue: how => { if (!S.pano || !setPanoHow(how, 'player')) return; playerChose('pano', panoText(how), { inc: 'pano', car: S.pano.car }); },
   moveWind: c => { if (!S.move) return; setMoveWind(c); playerChose('move', c === 'varu' ? 'Lasset vid luckan i varuhissen' : 'Lasset vid luckan väntar'); },
 };

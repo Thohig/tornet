@@ -24,7 +24,8 @@ const G = stream('gestalt'), G2 = stream('inkallade');
  *   patience: number, kg: number, cargo: Cargo|null, exitFloor: number, fit: number, space: number, polite: boolean,
  *   y?: number,
  *   role?: string, title?: string, task?: string, vip?: boolean, child?: boolean, quirk?: string, cast?: string,
- *   crewId?: string, onBreak?: boolean, breakUntil?: number, breakWhy?: string, breakWhere?: string, breaks?: CrewBreak[],
+ *   crewId?: string, onBreak?: boolean, breakUntil?: number, breakWhy?: string, breakWhere?: string, breakF?: number, breaks?: CrewBreak[],
+ *   duty?: import('./crew.js').Duty|null, jour?: boolean, gondola?: boolean, dog?: boolean, chase?: boolean,
  *   offDuty?: boolean, shiftEnd?: boolean, overtime?: boolean, homeSpot?: number, watch?: number,
  *   home?: number, apt?: number, rtype?: string, wake?: number, sleepAt?: number, sleeping?: boolean, sched?: RoutineEv[],
  *   returnAt?: number, hasCar?: boolean, auto?: import('./life.js').Auto|null, movedOut?: boolean,
@@ -43,7 +44,7 @@ const G = stream('gestalt'), G2 = stream('inkallade');
  * }} Person
  */
 import { fl } from './util.js';
-import { activityRate, roomUnits, FLOOR_HOURS, FL, NAMES, ROLE_NAMES, floorOpen, OFFICE_FLOORS, SPOTS, STAIR_X, VISIT_WHY, WAIT_X1, WALK, LOBBY, CAFE, MEZZ, floorWith, EL, SKY, CAST, STATION, TRAIN_X0, TRAIN_X1 } from './config.js';
+import { activityRate, roomUnits, FLOOR_HOURS, FL, NAMES, ROLE_NAMES, floorOpen, OFFICE_FLOORS, SPOTS, STAIR_X, VISIT_WHY, WAIT_X1, WALK, LOBBY, CAFE, MEZZ, floorWith, EL, SKY, CAST, CREW, STATION, TRAIN_X0, TRAIN_X1, DOCK } from './config.js';
 import { S, clockStr, hour, log, occOf, setOcc } from './state.js';
 import { inFireZone, requestRide, loadKg, personKg, eta, keyed, posOf, costBased, prio, outLong, servesNow } from './dispatch.js';
 import { techNext, maybeStumble, fireCrank, foremanNext } from './service.js';
@@ -52,8 +53,10 @@ import { alwaysStairs, castBoard, castNext, castPizza, castWaitTick, flushSay, i
 import { kickOff } from './elevators.js';
 import { arriveByCar, backFromAssembly, fireReturn, leaveBuilding, resNext, homeSpot } from './life.js';
 import { ffNext } from './incidents.js';
-import { CREW_LOOK, crewNext, crewSpot } from './crew.js';
+import { CREW_LOOK, crewNext, crewSpot, dutyNext, dutySpot } from './crew.js';
 import { rescueNext } from './pano.js';
+import { gondolaCrewNext } from './gondola.js';
+import { chaseNext, chaseSpot, dogArrived, dogNext, dogSpot, dogTimer, groomerNext } from './dog.js';
 import { buttonsMode, carButtonMistakes } from './buttons.js';
 import { tourNext, tourSpot } from './tour.js';
 import { guestNext, keyNext, visningSpot } from './visning.js';
@@ -76,8 +79,8 @@ export function makeLook(G = G2) {
 /** @param {Person} p */
 export const pn = p => `${p.name} (${p.id})`;
 // Namnen är unika i huset: en ny person får ett namn som ingen annan i huset bär just nu, och aldrig
-// ett stamgästnamn (inte heller delar som "Pelle" i Pizza-Pelle).
-const CAST_WORDS = new Set(CAST.flatMap(c => c.name.split(/[- ]/)));
+// ett stamgästnamn (inte heller delar som "Pelle" i Pizza-Pelle) eller ett namn ur husets personal (Bosse).
+const CAST_WORDS = new Set(CAST.flatMap(c => c.name.split(/[- ]/)).concat(CREW.map(c => c.name)));
 const POOL = NAMES.filter(n => !CAST_WORDS.has(n));
 const SUFFIX = 'BCDEFGHJKLMNOPRST';
 export function freeName(G = G2) {
@@ -244,6 +247,12 @@ export function pickSpot(p, f) {
   if (p.crewId) return crewSpot(p, f);
   // (kuppen: gänget står synligt i hallen, heist.js)
   if (p.robber) return heistSpot(p, f);
+  // (vaktmästaren på uppdrag står synligt i hallen, crew.js)
+  const ds = dutySpot(p, f);
+  if (ds) return ds;
+  // (den lösa hunden och de som jagar den syns i hallen, dog.js)
+  if (p.dog) return dogSpot(p);
+  if (p.chase) return chaseSpot(p);
   // (rundvisningen: gästen står bredvid guiden i hallen, visning.js)
   const vs = p.guest || p.touring ? visningSpot(p, f) : null;
   if (vs) return vs;
@@ -252,7 +261,7 @@ export function pickSpot(p, f) {
   const own = p.role && list.find(s => s.role === p.role);
   if (own) return own;
   // (räddningstjänsten står synligt i hallen eller på taket)
-  if (p.rescue) return { x: p.nearX, k: 'stand', face: 1, desc: p.task, temp: true, win: 'hall' };
+  if (p.rescue || p.gondola) return { x: p.nearX, k: 'stand', face: 1, desc: p.task, temp: true, win: 'hall' };
   // (Stadsturen står ute på takterrassen och syns, tour.js)
   const ts = p.tour ? tourSpot(p, f) : null;
   if (ts) return ts;
@@ -354,6 +363,8 @@ export function updatePerson(p, dt) {
       if (!liftsAvailable() && p.waited > p.patience && !(p.ff && S.elevators.some(e => e.ffCar && e.mode === 'normal'))) { toStairs(p, S.power ? 'Hissarna är avstängda – tar trapporna' : 'Hissarna står still (strömavbrott) – tar trapporna'); break; }
       // ingen hiss som går hit fungerar (trasig eller på service – sovande hissar vaknar ju): den som kan går
       if (p.waited > p.patience + 15 && S.power && stranded(p) && canWalk(p)) { toStairs(p, 'Ingen hiss går hit just nu (fel eller service) – tar trapporna'); break; }
+      // vaktmästaren på uppdrag (läckan, gondolen, hunden) väntar inte: ingen hiss går – springer i trappan med verktygslådan
+      if (p.duty && p.waited > 3 && (stranded(p) || !liftsAvailable())) { toStairs(p, 'Ingen hiss går – springer i trappan'); break; }
       if (stairsChoice(p, true)) break;
       // målet hann stänga medan man stod i kön: vänd
       if (p.goal !== undefined && p.goal !== p.floor && closedFor(p, p.goal)) { turnBack(p); break; }
@@ -405,7 +416,7 @@ export function rerouteStranded() {
 // på en kort resa tröttnar och går. Trappan går hela vägen till slutmålet (inga hissbyten).
 export const STAIRS_UP = 1, STAIRS_DOWN = 2, STAIRS_IMPATIENT_UP = 2, STAIRS_IMPATIENT_DOWN = 4;
 /** @param {Person} p */
-const canWalk = p => !p.vip && !p.evac && !(p.cargo && p.cargo.kg >= 15) && p.goal !== undefined;
+const canWalk = p => !p.vip && !p.evac && !p.dog && !(p.cargo && p.cargo.kg >= 15) && p.goal !== undefined;
 /** Tar personen trappan? impatient = har stått i kön en stund. Returnerar true om hen gick. @param {Person} p */
 export function stairsChoice(p, impatient) {
   if (!canWalk(p) || !liftsAvailable() || p.tour || p.touring) return false; // (turistgruppen och rundvisningen håller ihop – ingen tar trappan själv)
@@ -546,6 +557,8 @@ export function exitDone(p) {
   else if (p.kind === 'res') p.timer = p.floor === p.home ? rand(12, 25) : rand(25, 45);
   // framme vid tunnelbanan men inte på väg med tåget (sista tåget har gått): vidare upp till entrén
   else if (p.floor === STATION && !p.role) { p.timer = rand(0.3, 1.2); pev(p, S.trainDone ? 'Inga fler tåg i natt – går upp till entrén' : 'Tittar på tidtabellen'); }
+  else if (p.dog) { p.timer = dogTimer(); dogArrived(p); } // (den lösa hunden stannar en stund, dog.js)
+  else if (p.chase || p.role === 'hundfrisör') p.timer = 1.5;
   else if (p.role === 'bud') { p.timer = rand(8, 15); S.stats.deliveries++; }
   else if (p.role === 'flyttgubbe') p.timer = moverTimer(p); // (i lägenheten: packar eller skruvar isär nästa lass)
   else if (p.role === 'ambulans') p.timer = rand(5, 8);
@@ -606,6 +619,8 @@ export function decideNext(p) {
   if (p.hostage) { const r = hostageNext(p); if (r !== undefined) return r; }
   // (väktaren som visar runt: rundvisningen bestämmer vart han går, visning.js)
   if (p.touring && p.role && !p.crewId) return null;
+  // (den som jagar den lösa hunden går dit hunden är, dog.js)
+  if (p.chase && !p.role) return chaseNext(p);
   if (p.role) return roleNext(p, h);
   if (p.collapsed) { p.timer = 1e9; return null; } // ligger kvar tills ambulansen kommer
   if (p.kind === 'res') return resNext(p, h);
@@ -665,8 +680,9 @@ export function spawnStaff(role, extra = false, o = null) {
   const floors = OFFICE_FLOORS.concat(CAFE);
   if (role === 'väktare') { p.route = [...floors].reverse().concat(LOBBY); p.ri = -1; }
   if (role === 'städare') p.route = G.shuffle([...floors]).slice(0, 4); // tre städare delar på huset
-  if (role === 'vaktmästare') p.route = G.shuffle([...floors]).slice(0, 3);
-  const first = roleNext(p, hour()) || [p.exitFloor, 'Inget att göra i kväll – går hem'];
+  // (kvällsvaktmästaren börjar med att titta till pannan i pannrummet på P1; jourvaktmästaren kommer bara för sitt uppdrag)
+  if (role === 'vaktmästare') p.route = p.jour ? [] : (DOCK >= 0 ? [DOCK] : []).concat(G.shuffle([...floors]).slice(0, 3));
+  const first = roleNext(p, hour()) || (p.duty ? [p.duty.f, p.duty.why, false] : [p.exitFloor, 'Inget att göra i kväll – går hem']);
   setTrip(p, first[0], first[1], first[2]);
   S.people.push(p);
   const title = extra ? 'Extra hisstekniker (inringd)' : p.title || ROLE_NAMES[role];
@@ -683,7 +699,9 @@ function roleNext(p, h) {
     case 'bud': return [p.exitFloor, 'Paketet levererat – tillbaka till lastbilen'];
     case 'hisstekniker': return techNext(p);
     case 'arbetsledare': return foremanNext(p);
-    case 'räddare': return rescueNext(p);
+    case 'räddare': return p.gondola ? gondolaCrewNext(p) : rescueNext(p);
+    case 'hund': return dogNext(p);
+    case 'hundfrisör': return groomerNext(p);
     case 'flyttgubbe': return moverNext(p);
     case 'ambulans': return medicNext(p);
     case 'brandman': return ffNext(p);
@@ -701,8 +719,10 @@ function roleNext(p, h) {
       while (p.route.length && p.route[0] === p.floor) p.route.shift();
       return p.route.length ? [p.route.shift(), 'Städar nästa våning'] : [p.exitFloor, 'Klar med städningen – går hem'];
     case 'vaktmästare':
+      if (p.duty) return dutyNext(p);
       while (p.route.length && p.route[0] === p.floor) p.route.shift();
-      if (!p.route.length) return [p.exitFloor, 'Alla jobb fixade – går hem'];
+      if (!p.route.length) return [p.exitFloor, p.jour ? 'Uppdraget klart – åker hem igen' : 'Alla jobb fixade – går hem'];
+      if (p.route[0] === DOCK) { p.task = 'Tittar till pannan i pannrummet'; return [p.route.shift(), p.task]; }
       p.task = pick(JANITOR_TASKS);
       return [p.route.shift(), p.task];
     case 'nattdj':

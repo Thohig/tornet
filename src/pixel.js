@@ -17,7 +17,7 @@ import { ctx, VIEW } from './view.js';
 import { PX } from './pixart.js';
 import { beginFrame, CY, lo } from './pixcore.js';
 import { drawCallPx, drawFxPx, drawGagsPx, drawHallPeople, drawHoverPx, drawSelectionPx, resetCallAt } from './pixfolk.js';
-import { countOcc, deckSign, drawChiefPx, drawEscalatorPx, drawHall, floorOverlays, resetChiefAt } from './pixhall.js';
+import { countOcc, deckSign, drawChiefPx, drawEscalatorPx, drawHall, drawLeakPx, floorOverlays, resetChiefAt } from './pixhall.js';
 import { drawGroundPx, drawLanternsPx, drawShell, drawSkyAll, drawSlabsPx, drawStreetPx, drawTerracePx, terminal } from './pixbuilding.js';
 import { drawCarPx, drawPanoPx, drawRopesPx } from './pixcars.js';
 import { drawProf, lap } from './prof.js';
@@ -45,6 +45,7 @@ export function renderPixel(dt) {
   for (const e of S.elevators) drawRopesPx(e);
   drawLanternsPx();
   for (const e of S.elevators) drawCarPx(e);
+  drawLeakPx();
   lap('schakt/korgar');
   drawMovePilesPx();
   drawStreetPx(dt, hr);

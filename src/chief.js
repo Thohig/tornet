@@ -18,6 +18,9 @@ import { orderService, startFan, WARM_AT } from './service.js';
 import { setMoveWind } from './visits.js';
 import { hoistHalt } from './hoist.js';
 import { heistChoice } from './heist.js';
+import { gondolaWindy, setGondolaHow } from './gondola.js';
+import { setDogLock } from './dog.js';
+import { setLeakMode } from './leak.js';
 import { changeStrategy } from './actions.js';
 import { STRAT_NAMES } from './config.js';
 
@@ -124,6 +127,9 @@ export function chiefTick(dt) {
   for (const e of S.elevators) if (!e.hot && !e.fan && (C.dec[`heat${e.id}`] || C.manual[`heat${e.id}`])) clear(`heat${e.id}`);
   if (!S.move || S.move.state === 'done') clear('move');
   if (!S.pano || S.pano.ph === 'done') clear('pano');
+  if (!S.gondola || S.gondola.ph === 'done') clear('gondola');
+  if (!S.dog || S.dog.ph === 'done') clear('dog');
+  if (!S.leak) clear('leak');
   if (!S.heist || S.heist.ph === 'done') { clear('heist'); delete C.seen.heistWait; delete C.seen.heistPlan; delete C.seen.heistSignal; }
   // kuppen: polisens insatsledare bestämmer (chefen sitter bunden i driftcentralen och tar inga egna beslut)
   if (S.heist && S.heist.police && S.heist.ph !== 'done') heistChiefTick();
@@ -137,6 +143,9 @@ export function chiefTick(dt) {
   strategyTick(dt);
   moveTick();
   panoChiefTick();
+  gondolaChiefTick();
+  dogChiefTick();
+  leakChiefTick();
   watchTick();
 }
 
@@ -276,6 +285,58 @@ function panoChiefTick() {
   if (how === 'ladder') decide('pano', 'Stegbilen från gatan', `${windMs()} m/s är för blåsigt för repet, och stegen når upp till ${e.name}`, { inc: 'pano', car: e.id, say: 'Stegbilen – det blåser för mycket för rep!' });
   else if (windy) decide('pano', 'Firas ner – när vinden mojnar', `stegbilen når inte upp till ${e.name}, och i ${windMs()} m/s kan räddarna inte fira någon – de väntar på taket`, { inc: 'pano', car: e.id, say: 'Vi får vänta ut vinden…' });
   else decide('pano', 'Firas ner med rep från taket', `hydrauliken går inte att veva – räddningstjänsten firar ner dem en i taget ${where}`, { inc: 'pano', car: e.id, say: `Fira ner dem från taket!` });
+}
+
+// --- Fönsterputsaren sitter fast: lastluckan om gondolen hänger vid en och det är lugnt, annars vevar vaktmästaren
+//     upp den; tar det för lång tid (gondolen hänger långt ner) och det inte blåser ringer chefen räddningstjänsten ---
+const GONDOLA_SLOW_S = 70;
+function gondolaChiefTick() {
+  const G = S.gondola, C = S.chief;
+  if (!G || G.ph !== 'stuck' || !free('gondola')) return;
+  if (S.t - G.t0 < 2) return; // (chefen hinner se det på skärmen)
+  const windy = gondolaWindy(), where = `utanför ${fl(G.f)}`;
+  if (!C.dec.gondola) {
+    if (G.hatchF >= 0 && !windy && setGondolaHow('hatch', 'chief'))
+      decide('gondola', 'In genom lastluckan', `gondolen hänger vid lastluckan på ${fl(G.hatchF)} – vaktmästaren öppnar och Hasse kliver in`, { inc: 'gondola', floor: G.hatchF, say: 'Öppna lastluckan åt Hasse!' });
+    else if (setGondolaHow('crank', 'chief'))
+      decide('gondola', 'Vaktmästaren vevar upp gondolen', `${windy ? 'det blåser för mycket för rep och lucka – ' : ''}vinschen går att veva för hand från taket, en våning i taget`, { inc: 'gondola', floor: G.f, say: 'Upp på taket och veva!' });
+    return;
+  }
+  // vevandet tar för lång tid: räddningstjänsten (när det inte blåser)
+  if (G.how === 'crank' && !windy && S.t - G.t0 > GONDOLA_SLOW_S && setGondolaHow('rope', 'chief'))
+    decide('gondola', 'Räddningstjänsten firar ner honom', `vevandet går för långsamt – Hasse hänger fortfarande ${where}`, { inc: 'gondola', floor: G.f, say: 'Ring räddningstjänsten – det går för sakta!' });
+}
+
+// --- Hunden: låt den springa medan vaktmästaren och ägaren jagar den; springer den runt för länge spärras
+//     hissarna på våningen där den står, så att den inte kommer därifrån (den som väntar där får ta trappan) ---
+const DOG_LOCK_S = 60;
+function dogChiefTick() {
+  const D = S.dog, C = S.chief;
+  if (!D || D.ph !== 'loose' || !free('dog')) return;
+  if (S.t - D.t0 < 2) return;
+  if (!C.dec.dog) { decide('dog', 'Låter hunden springa', `vaktmästaren hjälper till att jaga ${D.name} – hissarna går som vanligt så länge`, { inc: 'dog', floor: D.f, say: `Fånga ${D.name}, någon!` }); return; }
+  const dog = S.people.find(p => p.id === D.dog && !p.dead);
+  if (!D.lock && S.t - D.t0 > DOG_LOCK_S && dog && dog.state === 'office' && setDogLock(true, 'chief'))
+    decide('dog', `Spärrar hissarna på ${fl(D.f)}`, `${D.name} har sprungit runt i över en minut – på en våning är hon lätt att fånga, och den som väntar där får ta trappan`, { inc: 'dog', floor: D.f, say: `Stäng hissarna på ${fl(D.f)}!` });
+}
+
+// --- Vattenläckan: hissarna i de blöta schakten står still – utom i rusningen när bara en våning är blöt, då
+//     kör de vidare tills kranen är stängd; når vattnet fler våningar eller kortsluts en hiss stoppas de ---
+const LEAK_BUSY = 12;
+function leakChiefTick() {
+  const L = S.leak, C = S.chief;
+  if (!L || L.ph !== 'leak' || L.shut || !free('leak')) return;
+  if (S.t - L.t0 < 2) return;
+  const waiting = S.people.filter(p => p.state === 'wait').length, cars = L.cars.map(id => S.elevators[id].name).join(', ') || 'inga';
+  if (!C.dec.leak) {
+    if (L.wet.length <= 1 && waiting >= LEAK_BUSY && setLeakMode('run', 'chief'))
+      decide('leak', 'Hissarna kör vidare tills kranen är stängd', `bara ${fl(L.src)} är blöt och ${waiting} väntar på hiss – vi chansar en stund`, { inc: 'leak', floor: L.src, say: 'Kör på – Bosse, kranen!' });
+    else if (setLeakMode('stop', 'chief'))
+      decide('leak', 'Hissarna i de blöta schakten står still', `vatten i schaktet kan kortsluta styrningen (${cars}) – folk får ta trappan en stund`, { inc: 'leak', floor: L.src, say: 'Stoppa de blöta hissarna!' });
+    return;
+  }
+  if (L.mode === 'run' && (L.wet.length >= 3 || L.shorts.length) && setLeakMode('stop', 'chief'))
+    decide('leak', 'Nu stoppas de blöta hissarna', L.shorts.length ? `${S.elevators[L.shorts[0]].name} har redan kortslutits` : `vattnet har nått ${L.wet.length} våningar`, { inc: 'leak', floor: L.src, say: 'Stopp! Det rinner för mycket.' });
 }
 
 // --- Kuppen: polisens insatsledare – vänta ut dem (strömmen klipps inte), gå in via garaget där skåpbilen står ---

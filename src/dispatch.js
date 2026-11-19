@@ -8,6 +8,7 @@ import { liftsAvailable, pev, pn, toStairs, elevatorAllows } from './people.js';
 import { buttonsMode, mistakeRate, pressHallButton } from './buttons.js';
 import { moveKwh, heatMul } from './service.js';
 import { windMul } from './weather.js';
+import { dogLockFloor } from './dog.js';
 /** @typedef {import('./elevators.js').Elevator} Elevator */
 /** @typedef {import('./people.js').Person} Person */
 
@@ -78,6 +79,8 @@ export const isFull = e => slotsFull(e) || loadKg(e) >= e.ratedKg * FULL_LOAD;
 // ambulansen har förtur även där; i zonläge går andra hissar också, men brandmännen åker bara brandhissen)
 /** @param {Person} p @param {Elevator} e */
 export const canTake = (e, p) => e.legs.some(l => l.includes(p.floor) && l.includes(p.dest)) && elevatorAllows(e, p) && (!e.indep || !!(p.mover || p.medic || p.ff))
+  // (driftchefen har spärrat hissarna på den lösa hundens våning – bara de som jagar den kommer därifrån, dog.js)
+  && !(p.floor === dogLockFloor() && p.state !== 'ride' && p.state !== 'boarding' && !p.chase && !p.duty)
   && (!p.ff || e.ffCar || !S.elevators.some(x => x.ffCar && x.mode === 'normal')); // (brandmännen åker brandhissen när det finns en)
 /** Dubbeldäck: korgens läge när den tar folk på våning f (övre däcket står en våning högre). Annars f. @param {Elevator} e */
 export const posOf = (e, f) => (e.deck2 && e.upper.has(f) ? f - 1 : f);
@@ -89,7 +92,7 @@ export const allowedPos = (e, g) => (e.ffCar ? ffAllowed(g) : allowed(g)) && (!e
  *  och då stannar korgen inte där – målet måste läggas om) @param {Person} p @param {Elevator} e */
 export const allowedDest = (e, p) => allowedPos(e, posOf(e, p.dest));
 /** hissen tar inga nya resenärer: ur drift (spelaren), stängd för vinden eller överhettad motor @param {Elevator} e */
-export const benched = e => !!(e.off || e.windLock || e.hot || e.hijack);
+export const benched = e => !!(e.off || e.windLock || e.wetLock || e.hot || e.hijack);
 // ---------- Tillgänglighet ----------
 // Alla frågor om en hiss kan ta folk utgår från outReason. Undantagen är uttalade:
 //   operational – styrningen: även strömmen och nattvilan (en sovande hiss väcks, den tilldelas inte)
@@ -100,6 +103,7 @@ export function outReason(e) {
   if (e.mode !== 'normal') return e.mode;
   if (e.hot) return 'hot';
   if (e.windLock) return 'wind';
+  if (e.wetLock) return 'wet'; // (vattenläckan: schaktet är blött, leak.js)
   if (e.off) return 'off';
   if (e.hijack) return 'hijack';
   if (e.hold) return 'hold';
@@ -109,7 +113,7 @@ export function outReason(e) {
 }
 /** hur orsaken skrivs i loggen och i personernas dagbok ("Hiss L1 …") */
 export const OUT_TEXT = /** @type {Record<string, string>} */ ({
-  hot: 'har överhettad motor', wind: 'stängs för vinden', off: 'är ur drift', hijack: 'är kapad av rånarna', hold: 'ska på service', zone: 'spärras av branden',
+  hot: 'har överhettad motor', wind: 'stängs för vinden', wet: 'står still – det rinner vatten i schaktet', off: 'är ur drift', hijack: 'är kapad av rånarna', hold: 'ska på service', zone: 'spärras av branden',
   broken: 'gick sönder', service: 'är på service', recall: 'kallas ner av brandlarmet', locked: 'är låst (brand)',
   rescue: 'nödsänks', dead: 'är strömlös', snapped: 'fick linbrott', lift: 'kör ett flyttlass', liftwant: 'ska köra ett flyttlass',
 });

@@ -4,7 +4,7 @@ const { pick, rand, rng } = stream('incidenter');
 // dygnets tidtabell har en egen ström: slumpens nivå (av/lugn/normal/kaos) ändrar inte hur incidenterna själva förlöper
 const T = stream('tidtabell');
 import { fl } from './util.js';
-import { FL, LOBBY, OFFICE_FLOORS, TOP } from './config.js';
+import { FL, LOBBY, OFFICE_FLOORS, TOP, floorOpen, floorWith } from './config.js';
 import { S, hooks, hour, incidentOver, log } from './state.js';
 import { trappedTalk } from './cast.js';
 import { arriveOnFloor, evacFloor, makePerson, pev, pn, setTrip, toStairs } from './people.js';
@@ -16,6 +16,9 @@ import { startStorm } from './weather.js';
 import { startMedical } from './visits.js';
 import { PANO, panoCandidate, triggerPano } from './pano.js';
 import { BANK, HEIST_WARN, heistPossible, startHeist } from './heist.js';
+import { gondolaCandidate, triggerGondola } from './gondola.js';
+import { dogPossible, startDog } from './dog.js';
+import { leakPossible, startLeak } from './leak.js';
 /** @typedef {import('./elevators.js').Elevator} Elevator */
 /** @typedef {import('./people.js').Person} Person */
 
@@ -34,6 +37,9 @@ export function trigger(type, target = null) {
   if (type === 'medical') startMedical(); // (ingen incident – bara en händelse som rutan berättar om)
   if (type === 'pano') triggerPano();
   if (type === 'heist') startHeist();
+  if (type === 'gondola') triggerGondola();
+  if (type === 'dog') startDog();
+  if (type === 'leak') startLeak(target);
 }
 export function incidentStarted(floor) {
   S.stats.incidents++;
@@ -302,7 +308,7 @@ export function endOutage() {
 /** hur troligt en incident börjar vid klockan h (rusningarna och lunchen mest) */
 const INC_WEIGHT = h => (h < 7 ? 0 : h < 7.5 ? 0.6 : h < 9.5 ? 1.6 : h < 11 ? 1 : h < 13 ? 1.5 : h < 15.5 ? 1 : h < 18.5 ? 1.6 : h < 22 ? 0.7 : 0);
 /** förvarningens längd i sekunder (verklig tid) per incidenttyp */
-export const WARN_S = { fire: 10, power: 6, storm: 14, heat: 10, fault: 8, cable: 40, pano: 10, heist: 18 };
+export const WARN_S = { fire: 10, power: 6, storm: 14, heat: 10, fault: 8, cable: 40, pano: 10, heist: 18, gondola: 8, dog: 6, leak: 10 };
 /** minsta avstånd mellan två planerade incidenter (speltimmar) */
 const INC_GAP = 1.2;
 /** dygnets tidtabell (anropas av resetDay) */
@@ -363,6 +369,12 @@ function chooseIncident(night) {
   if (panoCandidate(P) && P.passengers.length && !S.pano) opts.push(['pano', 0.3]);
   // Kuppen på 5:an: sällsynt, högst en gång per dygn, när lastkajen är ledig (heist.js)
   if (heistPossible() && S.heistDay !== S.day) opts.push(['heist', S.incLevel === 'kaos' ? 0.5 : 0.2]);
+  // fönsterputsarens gondol kärvar (bara när han är ute och putsar, gondola.js)
+  if (gondolaCandidate()) opts.push(['gondola', 0.35]);
+  // en pudel rymmer (dog.js)
+  if (dogPossible() && floorOpen(floorWith('spa'), hour())) opts.push(['dog', 0.4]);
+  // ett vattenrör spricker (leak.js)
+  if (leakPossible()) opts.push(['leak', 0.5]);
   if (!opts.length) return null;
   let r = rng() * opts.reduce((a, o) => a + o[1], 0), type = opts[0][0];
   for (const [k, w] of opts) { r -= w; if (r <= 0) { type = k; break; } }
@@ -383,6 +395,9 @@ const WARN_LOG = {
   cable: e => `🪢 Det knarrar i bärlinorna på ${e.name} – de är slitna (${Math.round(e.wear * 100)} %)…`,
   pano: e => `🔩 ${e.name} hackar på fasaden – det luktar hydraulolja…`,
   heist: () => HEIST_WARN,
+  gondola: () => '🔩 Det gnisslar i gondolens vinsch uppe på taket…',
+  dog: () => '🐕 Det skäller ilsket uppe på Vovve Spa…',
+  leak: () => '💧 Det droppar från taket någonstans… och det knackar i rören',
 };
 /** En incident i tidtabellen som ska bryta ut: typen och var (våning för brand, hiss för fel/värme/linbrott/panorama)
  * @typedef {{ type: string, floor?: number, car?: number }} IncPick */
@@ -406,6 +421,9 @@ function fireWarn(W) {
   else if (W.type === 'cable' && e) { e.creak = false; if (cableCandidate(e)) triggerCable(e); }
   else if (W.type === 'pano' && e && panoCandidate(e) && !S.pano) e.panoNext = true;
   else if (W.type === 'heist') { if (startHeist(true)) S.heistDay = S.day; }
+  else if (W.type === 'gondola') triggerGondola();
+  else if (W.type === 'dog') startDog();
+  else if (W.type === 'leak') startLeak();
 }
 export function incidentTick(dt) {
   if (S.fire) fireTick();

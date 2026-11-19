@@ -1,7 +1,7 @@
 // Regissören: automatisk kamera som letar upp det mest sevärda i huset och klipper dit.
 // Rent gränssnitt: läser S, ändrar aldrig simuleringen (slumpen är vrand). Kameran rör sig via S.camTarget
 // precis som när man följer en hiss. Allt manuellt (scrolla, följa, klicka på någon) stänger av regissören.
-import { BREAK, BX1, CONTROL, CREW, DOCK, FLOOR_H, GROUND_Y, LOBBY, ROOF, STATION, TOP, floorY, shaftCX } from './config.js';
+import { BREAK, BX1, CONTROL, CREW, DOCK, FLOOR_H, GROUND_Y, LOBBY, ROOF, STATION, TOP, floorWith, floorY, shaftCX } from './config.js';
 import { BANK } from './heist.js';
 import { alarm, chiefOnDuty } from './chief.js';
 import { CREW_BY, atPost, crewPerson, postFloor } from './crew.js';
@@ -88,6 +88,9 @@ function shots() {
     else if (W.type === 'power') add('warn', 80, 'floor', LOBBY, '💡 Lamporna flimrar…', true);
     else if (W.type === 'storm') add('warn', 80, 'floor', top, '🌥️ Ovädret drar in', true);
     else if (W.type === 'heist') add('warn', 84, 'floor', DOCK, '🚐 En skåpbil vid lastkajen…', true);
+    else if (W.type === 'gondola') add('warn', 82, 'cleaner', 0, '🔩 Det gnisslar i gondolens vinsch', true);
+    else if (W.type === 'dog') add('warn', 78, 'floor', floorWith('spa'), '🐕 Det skäller på Vovve Spa', true);
+    else if (W.type === 'leak') add('warn', 76, 'floor', DOCK, '💧 Det knackar i rören', true);
     else if (W.type === 'heat') add('warn', 82, 'floor', Math.min(top, S.elevators[W.car].maxF), `🌡️ Motorn i ${S.elevators[W.car].name} brummar`, true);
     else add('warn', 86, 'car', W.car, W.type === 'cable' ? `🪢 Linorna i ${S.elevators[W.car].name} knarrar`
       : W.type === 'pano' ? `🔩 ${S.elevators[W.car].name} hackar på fasaden` : `🔩 ${S.elevators[W.car].name} gnisslar`, true);
@@ -156,6 +159,27 @@ function shots() {
     if (rider) add('pano', 94, 'person', rider.id, `🧗 ${rider.name} ${Pn.setup === 'rope' ? 'firas ner längs fasaden' : 'klättrar nerför stegen'} (${Pn.out + 1}/${Pn.n})`, S.t - Pn.rider.t0 < 0.6);
     else add('pano', Pn.ph === 'stuck' ? 86 : 84, 'car', pe.id, Pn.ph === 'rig' ? (Pn.how === 'rope' ? `🧗 Räddarna riggar repet ovanför ${pe.name}` : `🚒 Stegbilen reser stegen mot ${pe.name}`)
       : `🛗 ${pe.name} sitter fast på fasaden · ${pe.passengers.length} instängda`, S.t - Pn.t0 < 2);
+  }
+  // fönsterputsaren som sitter fast (gondola.js): gondolen, och Hasse i repet
+  const Gs = S.gondola;
+  if (Gs && Gs.ph === 'stuck') {
+    const h = S.people.find(p => p.role === 'fönsterputsare' && p.crewId && !p.dead);
+    if (Gs.ropeY !== null && h) add('gondola', 92, 'person', h.id, `🧗 ${h.name} firas ner till takterrassen`);
+    else add('gondola', 84, 'cleaner', 0, Gs.how === 'crank' && S.t - Gs.t0 > 20 ? '🪟 Gondolen vevas upp – en våning i taget' : `🪟 ${h ? h.name : 'Fönsterputsaren'} sitter fast i gondolen`, S.t - Gs.t0 < 2);
+  }
+  // den lösa hunden (dog.js): följ pudeln
+  const Dg = S.dog;
+  if (Dg && Dg.ph === 'loose') {
+    const dog = S.people.find(p => p.id === Dg.dog && !p.dead);
+    if (dog) add('dog', 80, 'person', dog.id, `🐕 ${Dg.name} springer runt i huset${Dg.tired ? ' – nu ligger hon och flämtar' : ''}`, S.t - Dg.t0 < 2);
+  }
+  // vattenläckan (leak.js): där röret sprack, sedan vaktmästaren som springer till pannrummet
+  const Lk = S.leak;
+  if (Lk && Lk.ph === 'leak') {
+    const jan = S.people.find(p => p.id === Lk.jan && !p.dead);
+    if (S.t - Lk.t0 < 8) add('leak', 88, 'floor', Lk.src, `🚿 Ett rör har spruckit på ${fl(Lk.src)}`, S.t - Lk.t0 < 1);
+    else if (!Lk.shut && jan) add('leak', 80, 'person', jan.id, `🔧 ${jan.name} springer till huvudkranen`);
+    else add('leak', 50, 'floor', Math.min(...Lk.wet), '🚿 Det droppar fortfarande');
   }
   // husets personal (crew.js): skyndar tillbaka till kontrollrummet när larmet går, byter skift och tar rast
   for (const p of S.people) {
@@ -383,6 +407,9 @@ const THOUGHTS = {
   cable: ['Linbyte. Det här tar timmar.', 'Teknikern har det tungt i schaktet.'],
   broken: ['Hissen står still – folk sitter fast.', 'Kom igen, teknikern…'],
   hot: ['Motorn är het. Chefen borde kolla fläkten.', 'Det luktar bränd broms härifrån.'],
+  leak: ['Det forsar! Var är Bosse?', 'Halt som en skridskobana där nere.', 'Någon borde ta fram hinkarna.'],
+  dog: ['Pudeln är snabbare än alla vi andra.', 'VOFF! Där åkte hon igen.', 'Någon borde ta med en korv.'],
+  gondola: ['Hasse hänger kvar där uppe… han vinkar!', 'Det där är ingen plats att fastna på.', 'Veva, Bosse, veva!'],
   pano: ['Fast på fasaden – med utsikt, i alla fall.', 'Firas ner? Jag skulle aldrig våga.', 'Sakta, sakta…', 'Det här blir tv.'],
   over: ['Överlast! Någon får ta nästa.', 'Summern tjuter – det är alltid någon med en kartong.'],
   storm: ['Panoramahissen svajar i blåsten.', 'Inte för de höjdrädda i dag.'],

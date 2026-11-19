@@ -25,6 +25,9 @@ import { tourReset, tourTick } from './tour.js';
 import { visningReset, visningTick } from './visning.js';
 import { heistReset, heistTick } from './heist.js';
 import { chaosReset, chaosTick } from './chaos.js';
+import { gondolaReset, gondolaTick } from './gondola.js';
+import { dogReset, dogTick } from './dog.js';
+import { leakReset, leakTick } from './leak.js';
 import { crewArrivals, crewRoll, crewStart, spawnCrew } from './crew.js';
 /** @typedef {import('./elevators.js').Elevator} Elevator */
 
@@ -153,6 +156,9 @@ export function step(dt) {
   visningTick(dt);
   heistTick(dt);
   hoistTick(dt);
+  gondolaTick(dt);
+  dogTick(dt);
+  leakTick(dt);
   stormTick(dt);
   nightModeTick(dt);
   for (const p of S.people) updatePerson(p, dt);
@@ -254,6 +260,9 @@ export function resetDay() {
   visningReset();
   heistReset();
   chaosReset();
+  gondolaReset();
+  dogReset();
+  leakReset();
   hoistReset();
   planIncidents(); // (sist: tidtabellen slumpas när allt annat är på plats)
   S.lastInc = null;
@@ -298,6 +307,7 @@ export function rollDay() {
 export function newSim(seed, opts = {}) {
   S.seed = seed >>> 0; S.day = opts.day || 1; S.log = []; S.fx = []; S.elevators = [];
   S.learnMem = null; S.learnToday = null; S.notices = []; S.dismissed = new Set();
+  S.heistDay = 0; // (en ny simulering: ingen kupp har varit – annars följer en tidigare simulerings kupp med i samma process)
   if (opts.strategy) S.strategy = opts.strategy;
   // slumpen: incLevel (av/lugn/normal/kaos), eller autoInc (sant = normal, falskt = av) som förr
   if (opts.incLevel !== undefined) S.incLevel = opts.incLevel;

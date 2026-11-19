@@ -38,6 +38,8 @@ import EN_TEXTS from '../src/lang-en.js';
 import { CUES, PIECES, layout, partOf } from '../src/scoreData.js';
 import { hz, onGrid } from '../src/music.js';
 import { CHAOS_NAMES, chaosReady } from '../src/chaos.js';
+import { dogLockFloor } from '../src/dog.js';
+import { BOILER_STAND, DOCK } from '../src/config.js';
 /** @typedef {import('../src/elevators.js').Elevator} Elevator */
 /** @typedef {import('../src/people.js').Person} Person */
 
@@ -65,7 +67,10 @@ function watcher() {
     // en korg vänder aldrig i fart, ingen går trappan in i brandzonen, och ingen tekniker står kvar med ett jobb på fel våning
     flips: 0, prevVel: [], intoFire: 0, prevState: new Map(), techLost: new Map(), techLostMax: 0,
     // kuppen: ingen kliver på en kapad hiss, och gisslan lämnar inte Sky Café förrän det är över
-    hijackBoard: 0, hostageLeft: 0 };
+    hijackBoard: 0, hostageLeft: 0,
+    // vaktmästarens olyckor: ingen kliver på en hiss i ett blött schakt som tagits ur drift, och ingen utom de som
+    // jagar hunden kliver på där hissarna är spärrade för den
+    wetBoard: 0, dogLockBoard: 0 };
   w.before = () => S.elevators.map(e => e.pos);
   w.check = before => {
     for (const e of S.elevators) for (const p of e.passengers) if ((p.trapT || 0) > w.maxTrap) w.maxTrap = p.trapT;
@@ -76,6 +81,8 @@ function watcher() {
       // (den som redan gick i trappan när larmet gick räknas inte)
       if (S.fire && S.t > S.fire.t0 && !p.role && !p.vip && !p.evac && p.state === 'stairs' && w.prevState.get(p.id) !== 'stairs' && !p.escalator && !inFireZone(p.floor) && inFireZone(p.dest)) w.intoFire++;
       if (p.state === 'boarding' && p.car && p.car.hijack && w.prevState.get(p.id) !== 'boarding') w.hijackBoard++;
+      if (p.state === 'boarding' && p.car && p.car.wetLock && w.prevState.get(p.id) !== 'boarding') w.wetBoard++;
+      if (p.state === 'boarding' && w.prevState.get(p.id) !== 'boarding' && p.floor === dogLockFloor() && !p.chase && !p.duty) w.dogLockBoard++;
       if (p.hostage && S.heist && S.heist.ph !== 'done' && p.floor === CAFE && !inFireZone(CAFE) && p.state === 'toQueue' && w.prevState.get(p.id) === 'office') w.hostageLeft++; // (brand: utrymningen går före)
       w.prevState.set(p.id, p.state);
       if (p.role === 'hisstekniker' && !p.offDuty && p.job !== null && p.job !== undefined && p.state === 'office' && p.floor !== jobFloor(S.elevators[p.job]) && !inFireZone(p.floor)) {
@@ -1784,6 +1791,8 @@ function newInvariantFails(w, tag) {
   if (w.flips) f.push(`${tag}: en korg bytte riktning i fart ${w.flips} gånger`);
   if (w.intoFire) f.push(`${tag}: ${w.intoFire} gick trappan in i brandzonen`);
   if (w.hijackBoard) f.push(`${tag}: ${w.hijackBoard} klev på en hiss som rånarna hade kapat`);
+  if (w.wetBoard) f.push(`${tag}: ${w.wetBoard} klev på en hiss som stod still för vattenläckan`);
+  if (w.dogLockBoard) f.push(`${tag}: ${w.dogLockBoard} klev på där hissarna var spärrade för hunden`);
   if (w.hostageLeft) f.push(`${tag}: gisslan lämnade Sky Café mitt i kuppen ${w.hostageLeft} gånger`);
   if (w.techLostMax > 60) f.push(`${tag}: en tekniker stod ${w.techLostMax.toFixed(0)} s på fel våning med ett jobb`);
   return f;
@@ -1867,6 +1876,11 @@ export const PLAYER_ACTIONS = {
   visning: r => act('visning', ['start', 'start', 'next', 'end'][Math.floor(r() * 4)]),
   heistTrig: () => act('trigger', 'heist'),
   chaos: () => act('chaos'),
+  // vaktmästarens olyckor: gondolen, hunden, vattenläckan – och valen på korten
+  accident: r => act('trigger', ['gondola', 'dog', 'leak'][Math.floor(r() * 3)]),
+  gondola: r => act('gondola', ['crank', 'hatch', 'rope'][Math.floor(r() * 3)]),
+  dog: r => act('dog', r() < 0.5 ? 'lock' : 'free'),
+  leak: r => act('leak', r() < 0.5 ? 'stop' : 'run'),
   heist: r => act('heist', ['cut', 'wait', 'garage', 'tak', 'stop', 'go', 'storm'][Math.floor(r() * 7)]),
   chiefBack: r => act('chiefBack', ['storm', 'fire', 'power', 'strategy', 'move', 'pano', `heat${Math.floor(r() * S.elevators.length)}`][Math.floor(r() * 7)]),
 };
@@ -2097,6 +2111,113 @@ test('Murphys lag: kaosknappen startar en kedja av allt som kan gå fel, en gån
   assert(!S.chaos && chaosReady(), 'knappen gick inte att trycka dag 2');
   assert(act('chaos') && !act('chaos'), 'dag 2: knappen gick inte att trycka precis en gång');
   return `${did} saker gick fel på ${seeds.length} dygn, ${missed} hann inte hända · längst instängd ${Math.round(trap)} s`;
+});
+test('Vaktmästaren Bosse: posten vid pannrummet på P1, småjobb på våningarna, hem kl 16 – och kvällsvaktmästaren tittar till pannan', () => {
+  sim(7, { chief: true });
+  runUntil(7.6);
+  const b = crewPerson('bosse');
+  assert(b && atPost(b) && b.floor === DOCK && b.spot.x === BOILER_STAND, `Bosse står inte vid pannrummet (${b && `${b.state} på ${fl(b.floor)}`})`);
+  const jobs = new Set();
+  let evening = false;
+  while (hour() < 22) {
+    step(DT);
+    const q = crewPerson('bosse');
+    if (q && q.onBreak && q.breakWhere === 'job' && q.state === 'office') jobs.add(q.floor);
+    if (hour() > 16.8) assert(!q, 'Bosse gick aldrig hem');
+    if (S.people.some(p => p.role === 'vaktmästare' && !p.crewId && p.floor === DOCK && p.state === 'office')) evening = true;
+  }
+  assert(jobs.size >= 2, `Bosse gjorde bara småjobb på ${jobs.size} våningar`);
+  assert(evening, 'kvällsvaktmästaren tittade aldrig till pannan');
+  return `småjobb på ${[...jobs].map(fl).join(', ')} · hem före 16:48 · kvällsvaktmästaren vid pannan`;
+});
+test('Fönsterputsaren fastnar: vaktmästaren vevar upp gondolen, öppnar lastluckan eller räddningstjänsten firar ner honom', () => {
+  const out = [];
+  for (const [how, seed, at] of [['crank', 11, 13.4], ['hatch', 11, 9], ['rope', 11, 11]]) {
+    sim(seed, { chief: false });
+    runUntil(at);
+    let g = 0;
+    while (!S.gondola && ++g < 3000 / DT) { act('trigger', 'gondola'); if (!S.gondola) step(DT); }
+    assert(S.gondola, `${how}: gondolen fastnade aldrig`);
+    const y0 = S.cleaner.y, G = S.gondola;
+    if (how === 'hatch' && G.hatchF < 0) { out.push('hatch: ingen lucka i närheten'); continue; }
+    assert(act('gondola', how), `${how}: valet gick inte`);
+    const w = watcher();
+    g = 0;
+    let still = true;
+    while (S.gondola && S.gondola.ph === 'stuck' && ++g < 300 / DT) {
+      const b = w.before(); step(DT); w.check(b);
+      if (how !== 'crank' && S.gondola && S.gondola.ph === 'stuck' && Math.abs(S.cleaner.y - y0) > 1e-6) still = false;
+      assert(S.hoist.phase === 'idle', `${how}: hissbalken körde medan gondolen satt fast`);
+    }
+    assert(S.gondola === null || S.gondola.ph === 'done', `${how}: Hasse kom aldrig ner`);
+    assert(still, `${how}: gondolen rörde sig fast den satt fast`);
+    const h = crewPerson('hasse');
+    assert(h && h.offDuty, `${how}: Hasse gick inte av passet`);
+    run(60, w);
+    assert(h.floor === idx('P2') || h.goal === idx('P2') || h.dead, `${how}: Hasse gick inte till personalrummet (${h.state} på ${fl(h.floor)})`);
+    assert(!S.people.some(p => p.duty && p.duty.kind === 'gondola'), `${how}: vaktmästaren har kvar uppdraget`);
+    const ev = S.stats.events.find(e => e.type === 'gondola');
+    assert(ev, `${how}: ingen sammanfattning`);
+    const f = newInvariantFails(w, how);
+    assert(!f.length, f.join('; '));
+    out.push(`${how} ${Math.round(g * DT)} s`);
+  }
+  return out.join(' · ');
+});
+test('Hunden rymmer: pudeln springer och åker hiss, ägaren och vaktmästaren jagar den – den blir fångad', () => {
+  const out = [];
+  for (const [seed, at, lock] of [[3, 10, false], [4, 11.5, false], [6, 14, true], [8, 9.5, false]]) {
+    sim(seed, { chief: !lock });
+    runUntil(at);
+    act('trigger', 'dog');
+    assert(S.dog, `frö ${seed}: ingen hund`);
+    const D = S.dog, w = watcher();
+    let g = 0, locked = false;
+    while (S.dog && S.dog.ph === 'loose' && ++g < 500 / DT) {
+      const b = w.before(); step(DT); w.check(b);
+      const dog = S.people.find(p => p.dog);
+      if (lock && !locked && dog && dog.state === 'office' && g * DT > 15) locked = act('dog', 'lock');
+    }
+    assert(!S.dog || S.dog.ph === 'done', `frö ${seed}: hunden blev aldrig fångad (${Math.round(g * DT)} s)`);
+    assert(!S.people.some(p => p.dog && !p.dead), `frö ${seed}: hunden är kvar i huset`);
+    run(30, w);
+    assert(!S.people.some(p => p.chase), `frö ${seed}: någon jagar fortfarande`);
+    assert(!S.people.some(p => p.duty && p.duty.kind === 'dog'), `frö ${seed}: vaktmästaren har kvar uppdraget`);
+    assert(dogLockFloor() < 0, `frö ${seed}: hissarna är fortfarande spärrade`);
+    const f = newInvariantFails(w, `frö ${seed}`);
+    assert(!f.length, f.join('; '));
+    out.push(`${D.name} ${Math.round(D.t1 - D.t0)} s, ${D.floors.length} vån${lock ? ' (spärrad)' : ''}`);
+  }
+  return out.join(' · ');
+});
+test('Vattenläckan: vattnet rinner nedåt tills vaktmästaren stänger huvudkranen – de blöta hissarna står still eller kör vidare', () => {
+  const out = [];
+  for (const [seed, at, mode] of [[3, 9, 'stop'], [4, 11, 'run'], [5, 26, 'stop'], [6, 14, null]]) {
+    sim(seed, { chief: mode === null });
+    runUntil(at);
+    act('trigger', 'leak');
+    assert(S.leak, `frö ${seed}: ingen läcka`);
+    const L = S.leak, w = watcher();
+    { const b = w.before(); step(DT); w.check(b); } // (vakten ser först vilka som redan är på väg in)
+    if (mode) assert(act('leak', mode), `frö ${seed}: valet ${mode} gick inte`);
+    const jan = S.people.find(p => p.id === L.jan);
+    let g = 0, wetAtShut = -1, grew = false, lockedOk = true;
+    while (S.leak && ++g < 400 / DT) {
+      const b = w.before(); step(DT); w.check(b);
+      if (!S.leak) break;
+      if (S.leak.shut && wetAtShut < 0) wetAtShut = S.leak.wet.length;
+      if (wetAtShut >= 0 && S.leak.wet.length !== wetAtShut) grew = true;
+      if (mode === 'stop' && !S.leak.shut) for (const id of S.leak.cars) if (!S.elevators[id].wetLock && S.elevators[id].mode === 'normal') lockedOk = false;
+    }
+    assert(!S.leak, `frö ${seed}: läckan tog aldrig slut`);
+    assert(wetAtShut > 0 && !grew, `frö ${seed}: vattnet ${wetAtShut < 0 ? 'stängdes aldrig av' : 'fortsatte rinna efter att kranen stängts'}`);
+    assert(lockedOk, `frö ${seed}: en hiss i ett blött schakt körde fast den skulle stå still`);
+    assert(!S.elevators.some(e => e.wetLock), `frö ${seed}: en hiss står kvar ur drift`);
+    const f = newInvariantFails(w, `frö ${seed}`);
+    assert(!f.length, f.join('; '));
+    out.push(`${fl(L.src)}→${wetAtShut} vån (${jan.crewId ? jan.name : jan.jour ? 'jouren' : 'kvällsvaktmästaren'}${mode ? `, ${mode}` : ''})`);
+  }
+  return out.join(' · ');
 });
 test('Driftcheferna är personer: vid bordet, fikar när det är lugnt, skyndar tillbaka vid larm och byter skift kl 22', () => {
   sim(31, { chief: true });
@@ -2452,7 +2573,9 @@ test('Brand: husets personal som står i kön i brandzonen går ner till entrén
 });
 test('Hissteknikern: den som hamnar på fel våning med ett jobb går till jobbet (hissen blir lagad)', () => {
   sim(12); runUntil(10);
-  const e = S.elevators.find(x => x.mode === 'normal' && x.state === 'idle' && !x.passengers.length && Math.round(x.pos) > LOBBY + 1 && !x.facade);
+  const free = () => S.elevators.find(x => x.mode === 'normal' && x.state === 'idle' && !x.passengers.length && Math.round(x.pos) > LOBBY + 1 && !x.facade);
+  for (let g = 0; !free() && g < 300 / DT; g++) step(DT);
+  const e = free();
   assert(e, 'ingen ledig hiss en bit upp');
   breakDown(e, 'bromsen kärvar');
   let g = 0, t = null;
@@ -2551,6 +2674,8 @@ test('Rundvisningen: Berit ringer en vikarie, visar runt i husets vanliga gång 
   const b = crewPerson('berit');
   assert(b ? atPost(b) : hour() >= 19, 'Berit satt inte vid disken efteråt (och passet var inte slut)');
   assert(!crewPerson('kicki'), 'Kicki gick aldrig hem');
+  // (gästen som just tackat för sig hinner gå ut genom entrén)
+  for (let g = 0; S.people.some(p => p.guest) && g < 60 / DT; g++) step(DT);
   assert(!S.people.some(p => p.guest), 'gästen gick aldrig');
   assert(!S.people.some(p => p.touring), 'någon är kvar på rundvisning');
   return `${w.stops.length} stopp på ${((S.t - w.t0) / 60).toFixed(1)} min · ${w.lines.length} repliker`;

@@ -25,7 +25,11 @@ export const inWindow = p => p.state === 'office' && !!(p.spot && p.spot.win) &&
 export function winPos(p) {
   const s = p.spot;
   switch (s.win) {
-    case 'gondola': return { x: TOWER_X1[TOP] + 7 + PX * 7 + PERSON_W, y: (S.cleaner ? S.cleaner.y : surf(p.floor)) - PX * (PERSON_H - 1) };
+    case 'gondola': {
+      // (i repet bredvid gondolen när räddningstjänsten firar ner honom, gondola.js)
+      const rope = S.gondola && S.gondola.ph === 'stuck' ? S.gondola.ropeY : null;
+      return { x: TOWER_X1[TOP] + 7 + PX * 7 + PERSON_W + (rope !== null ? PX * 20 : 0), y: (rope ?? (S.cleaner ? S.cleaner.y : surf(p.floor))) - PX * (PERSON_H - 1) };
+    }
     case 'terrace': return { x: BX1 - PX * 22 + PERSON_W, y: TERRACE_Y - PX * (PERSON_H + 1) };
     case 'reception': return { x: s.x, y: surf(p.floor) - PX * 24 };
     default: return { x: s.x, y: surf(p.floor) - PX * (PERSON_H + (s.k === 'stand' ? 4 : s.win === 'control' ? -5 : -1)) };

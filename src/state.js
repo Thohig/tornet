@@ -58,6 +58,8 @@ const INIT = {
   medicAt: /** @type {number|null} */ (null),
   // takskenan: fönsterputsarens gondol och hissbalken (hoist.js)
   cleaner: /** @type {import('./hoist.js').Cleaner|null} */ (null), hoist: /** @type {import('./hoist.js').Hoist|null} */ (null),
+  // olyckorna som vaktmästaren rycker ut till: gondolen som fastnat (gondola.js), den lösa hunden (dog.js), vattenläckan (leak.js)
+  gondola: /** @type {import('./gondola.js').Gondola|null} */ (null), dog: /** @type {import('./dog.js').Dog|null} */ (null), leak: /** @type {import('./leak.js').Leak|null} */ (null),
   notices: /** @type {Notice[]} */ ([]), noticeId: 1,
   // lärande parkering: dagens anrop per timme och våning, och minnet från tidigare dygn (följer med som slitaget)
   learnToday: /** @type {number[][]|null} */ (null), learnMem: /** @type {number[][]|null} */ (null),

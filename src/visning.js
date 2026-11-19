@@ -87,7 +87,7 @@ function startUnlock(v, f) {
   let k = keyHolder(v), called = false;
   // (jourvaktmästaren: uppdraget finns redan när hen kliver in, så att första resan går dit – keyNext)
   v.unlock = { f, by: k ? k.id : -1, who: k ? k.name : '', ph: 'come' };
-  if (!k) { k = spawnStaff('vaktmästare', false, { keys: f, title: 'Jourvaktmästare (inringd med nycklarna)' }); called = true; }
+  if (!k) { k = spawnStaff('vaktmästare', false, { keys: f, jour: true, title: 'Jourvaktmästare (inringd med nycklarna)' }); called = true; }
   k.keys = f; v.unlock.by = k.id; v.unlock.who = k.name;
   if (k.state === 'office') k.timer = 0;
   pev(k, `Ska låsa upp ${placeName(f)} åt rundvisningen`);

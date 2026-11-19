@@ -4,7 +4,7 @@ import { cleanerAt, HOIST_OK, PARK_Y, TERRACE_Y } from './hoist.js';
 import { hour, S } from './state.js';
 import { BX1, CAR_H, CAR_W, DOCK, DOOR_X, EL, FL, FLOOR_H, FLOORS, floorY, GROUND_Y, H, HATCH_FLOORS, INNER_X1, LAND_X0, LOBBY, ROOF_Y, SHAFT_X0, shaftCX, shaftX, surf, TOP, W } from './config.js';
 import { windAt } from './weather.js';
-import { cargoSprite, PERSON_H, personSprite } from './pixpeople.js';
+import { cargoSprite, PERSON_H, PERSON_W, personSprite } from './pixpeople.js';
 import { inWindow } from './render.js';
 import { clamp, fl } from './util.js';
 import { PAL } from './pixpal.js';
@@ -177,7 +177,13 @@ export function drawCleanerPx() {
   for (const cx of [gx + 3, gx + gw - 4]) line(cx - sway, ay + 2, cx, gy - 12, '#3a3f4a');
   // putsaren (vänd mot fasaden) och hinken
   const hasse = G0.crew ? S.people.find(p => p.role === 'fönsterputsare' && inWindow(p)) : null;
-  if (hasse) {
+  // vinschen har kärvat (gondola.js): gondolen rycker till, och i repet firas Hasse ner bredvid den
+  const GS = S.gondola, ropeY = GS && GS.ph === 'stuck' ? GS.ropeY : null;
+  if (hasse && ropeY !== null) {
+    const ry = Y(ropeY), rx = gx + gw + 6;
+    line(rx, ay + 2, rx, ry - PERSON_H + 2, '#ff8c42');
+    g.drawImage(personSprite(winFig(hasse, 2), 'front', 0, 1, { blink: blinkOf(hasse) }), rx - PERSON_W / 2, ry - PERSON_H + 1);
+  } else if (hasse) {
     const bob = G0.scrub ? Math.round(Math.sin(S.anim * 5) * 1) : 0;
     g.drawImage(personSprite(winFig(hasse, wind > 0.5 ? 1 : 0), 'side', 0, -1, { blink: blinkOf(hasse) }), gx + 4, gy - PERSON_H + 1 + bob);
     if (G0.scrub && wind < 0.5) {
@@ -187,6 +193,7 @@ export function drawCleanerPx() {
       if (Math.sin(S.anim * 7) > 0.6) R(wall - 2 + Math.round(vrand(0, 3)), sy + Math.round(vrand(-8, 8)), 1, 1, '#ffffff');
     }
   }
+  if (GS && GS.ph === 'stuck') { box(gx + gw / 2 - 3, gy - 22, 7, 7, '#ffd23f'); text(g, '!', gx + gw / 2, gy - 21, INK, 'center'); }
   // korgen: räcke, golv och en hink
   R(gx, gy - 12, gw, 1, INK); R(gx, gy - 12, 1, 12, INK); R(gx + gw - 1, gy - 12, 1, 12, INK);
   R(gx + gw - 7, gy - 5, 4, 4, INK); R(gx + gw - 6, gy - 4, 2, 3, '#3f7cff');

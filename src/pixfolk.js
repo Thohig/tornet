@@ -35,6 +35,8 @@ export function drawHallPeople() {
     const frame = walking ? Math.floor(((p.walkPhase || 0) % (Math.PI * 2)) / (Math.PI / 2)) % 4 : 0;
     const fx = X(lp.x), fy = Y(surf(p.floor) + p.depth * 0.6);
     g.globalAlpha = lp.a;
+    // den lösa hunden (dog.js) är en person som ritas som en pudel
+    if (p.dog) { looseDog(p, fx, fy, dir, walking, frame); g.globalAlpha = 1; continue; }
     const dog = p.cargo ? DOGS[p.cargo.kind] : null;
     // (lasten syns även i kön – städvagnar och paketkärror vid varuhissen ska synas)
     const cg = dog ? cargoSprite(dog + (walking ? (frame % 2 ? '2' : '') : 'S'), dir) : p.cargo ? cargoSprite(p.cargo.kind, dir) : null;
@@ -87,6 +89,13 @@ function poodleExtras(p, fx, fy, dir, cg) {
   const cx = fx + cg.dx + (dir > 0 ? 6 : cg.c.width - 7), cy = fy - cg.c.height + 5;
   line(hx, hy, cx, cy, '#ff4fa3');
   if (Math.sin(S.anim * 0.8 + p.id * 2.3) > 0.97) bark(fx + cg.dx + Math.round(cg.c.width / 2), fy - cg.c.height - 1);
+}
+/** den lösa pudeln: springer (två gångsteg), sitter när den stannar, och skäller ibland @param {Person} p */
+function looseDog(p, fx, fy, dir, walking, frame) {
+  const d = cargoSprite(walking ? (frame % 2 ? 'pudel2' : 'pudel') : 'pudelS', dir);
+  if (!d) return;
+  g.drawImage(d.c, fx - Math.round(d.c.width / 2), fy - d.c.height + 1);
+  if (Math.sin(S.anim * 1.7 + p.id) > 0.9) bark(fx, fy - d.c.height);
 }
 export function bark(cx, y) { text(g, 'VOV!', cx, y - 6, '#ffffff', 'center', 1, INK); }
 /** @param {Person} p */
@@ -246,8 +255,17 @@ const ROLE_GAGS = {
   'brandman': ['Ur vägen!', 'Rökdykare på väg upp', 'Släckt här – vidare!'],
   'lastare': [],
 };
+const DUTY_GAGS = {
+  gondola: ['Håll i dig, Hasse!', 'Den här veven har inte rörts sen -79', 'En våning till…', 'Hasse, sluta vinka och håll i dig!'],
+  dog: ['Hit med dig, vovven!', 'Fifi! FIFI!', 'Någon har sett en pudel?', 'Den är snabbare än den ser ut'],
+  leak: ['Huvudkranen – var är den nu igen?', 'Medsols eller motsols…', 'Det forsar!', 'Hinkar! Någon!'],
+};
+const STUCK_GAGS = ['HALLÅ! Kan nån ringa nån?', 'Jag har i alla fall utsikt…', 'Titta inte ner, Hasse', 'Fönstren på 13:an är skinande rena nu iaf!', 'Kaffe vore inte fel nu'];
 /** vad den här personen kan säga i rummet, eller null = kontorets/våningens vanliga repliker @param {Person} p */
 function workLines(p) {
+  // (olyckorna: vaktmästaren på uppdrag och fönsterputsaren som sitter fast – gondola.js, dog.js, leak.js)
+  if (p.duty) return DUTY_GAGS[p.duty.kind] || ROLE_GAGS['vaktmästare'];
+  if (p.role === 'fönsterputsare' && S.gondola && S.gondola.ph === 'stuck') return STUCK_GAGS;
   if (p.crewId) { const L = CREW_BY[p.crewId].lines; return p.onBreak || (p.spot && p.spot.brk) ? L.break : L.post; }
   return p.role ? ROLE_GAGS[p.role] || [] : null;
 }

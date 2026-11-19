@@ -261,6 +261,7 @@ function cabinPx(e, k, x, yb, body, head) {
   const ps = e.passengers.filter(p => (!e.deck2 || (p.deck || 0) === k) && p !== out);
   const order = ps.map((p, i) => ({ p, s: carSlot(i) })).sort((a, b) => Number(a.s >= 4) - Number(b.s >= 4));
   for (const { p, s } of order) {
+    if (p.dog) continue; // (den lösa hunden sitter på golvet, nedan)
     // bakre raden står högre upp och lite i skugga, så att huvudena syns ovanför främre raden
     const back = s < 4, px = x + Math.round(carSlotX(s) / PX) - PERSON_W / 2 + (back ? 0 : 2), py = yb - (back ? 7 : 1) - PERSON_H;
     if (back) g.filter = 'brightness(0.82)';
@@ -276,7 +277,7 @@ function cabinPx(e, k, x, yb, body, head) {
   }
   // pudlar i korgen sitter längst fram vid matte/husses fötter
   for (const { p, s } of order) {
-    const dog = p.cargo ? DOGS[p.cargo.kind] : null; if (!dog) continue;
+    const dog = p.dog ? 'pudel' : p.cargo ? DOGS[p.cargo.kind] : null; if (!dog) continue;
     const d = cargoSprite(dog + 'F', 1); if (!d) continue;
     const px = x + Math.round(carSlotX(s) / PX) + 2, py = yb - 1 - d.c.height;
     g.drawImage(d.c, px, py);

@@ -33,7 +33,7 @@ import { peakHold } from './dispatch.js';
  *   rescueTarget: number, snapNext: boolean, snap: Snap|null, wear: number, wearTrips: number, wearDist: number,
  *   fault: Fault|null, hold: boolean, homeT: number, techId: number|null, breakNext: boolean, serviceNeed: number,
  *   kw: number, kwh: number, cap: number, heat: number, hot: boolean, fan: boolean, level: number, lvKg: number,
- *   windLock: boolean, serviceAsap: boolean, indep: boolean, medicHold: boolean, outWas: string, vipLock: boolean,
+ *   windLock: boolean, wetLock: boolean, serviceAsap: boolean, indep: boolean, medicHold: boolean, outWas: string, vipLock: boolean,
  *   sleep: boolean, zoneLock: boolean, creak: boolean, restartAt: number, ffCar: boolean, hotT0: number, trapNext: boolean,
  *   overloadFlash?: number, resKg?: number, pickKg?: number, panoNext?: boolean, bounce?: number, stormFault?: boolean,
  *   sleepT?: number, fightAt?: number, fought?: boolean, deckN?: number[], deckFull?: boolean[], stumbleNoted?: number,
@@ -60,7 +60,7 @@ export function makeElevator(i) {
     cap: d.deck2 ? CAP * 2 : CAP, // platser i korgen (dubbeldäck: CAP per däck)
     // motorvärme (0–1+, överhettad = hot), extrafläkt, nivåfel (våningar, negativt = för lågt), stängd för vinden,
     // beställd service, oberoende drift (flyttdag)
-    heat: 0, hot: false, fan: false, level: 0, lvKg: 0, windLock: false, serviceAsap: false, indep: false,
+    heat: 0, hot: false, fan: false, level: 0, lvKg: 0, windLock: false, wetLock: false, serviceAsap: false, indep: false,
     medicHold: false, // står kvar låst på patientens våning tills ambulanspersonalen kommer tillbaka (visits.js)
     outWas: '', // senaste orsaken till att hissen var ur trafiken (outReason) – hämtningarna släpps när den ändras
     vipLock: false, sleep: false, zoneLock: false,

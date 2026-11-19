@@ -3,13 +3,14 @@
 // ställen (personalrummet, Sky Café, takträdgården, kiosken, godisautomaten, perrongen). Raster tas bara när det är
 // lugnt; den som är "urgent" (kontrollrummet) skyndar tillbaka när larmet går, och den som ska täcka för någon
 // (cover) går inte förrän den andra sitter på sin post. Allt här är simulering och drar inga slumptal.
-import { BREAK, CAFE, CONTROL, CREW, DOCK, LOBBY, ROOF, SPOTS, START_H, STATION, TERRACE_F } from './config.js';
+import { BOILER_STAND, BREAK, CAFE, CONTROL, CREW, DOCK, LOBBY, OFFICE_FLOORS, ROOF, SPOTS, START_H, STATION, TERRACE_F, floorOpen } from './config.js';
 import { S, hour, log, occOf } from './state.js';
-import { blankPerson, gotoSpot, pev, pn, releaseSpot, setTrip } from './people.js';
+import { blankPerson, gotoSpot, pev, pn, releaseSpot, setTrip, spawnStaff } from './people.js';
 import { inFireZone } from './dispatch.js';
 import { windAt } from './weather.js';
 import { WIND_STOP } from './hoist.js';
 import { visningSpot } from './visning.js';
+import { gondolaStuck } from './gondola.js';
 /** @typedef {import('./people.js').Person} Person */
 
 /** @typedef {import('./config.js').CrewDef} CrewDef */
@@ -18,13 +19,14 @@ export const CREW_LOOK = 3;
 /** personalens data efter id */
 export const CREW_BY = Object.fromEntries(CREW.map(c => [c.id, c]));
 /** postens våning */
-const POST_F = { chief: CONTROL, producer: CONTROL, reception: LOBBY, gondola: ROOF, terrace: TERRACE_F };
+const POST_F = { chief: CONTROL, producer: CONTROL, reception: LOBBY, gondola: ROOF, terrace: TERRACE_F, boiler: DOCK };
 /** rastmålens våningar */
 const WHERE_F = { break: BREAK, cafe: CAFE, roof: ROOF, kiosk: STATION, vending: LOBBY, platform: STATION, dock: DOCK };
 export const postFloor = post => POST_F[post] ?? -1;
 export const postSpot = post => { const f = postFloor(post); return f >= 0 ? SPOTS[f].find(s => s.post === post) || null : null; };
 /** något som kontrollrummet är mitt uppe i (larmljuset snurrar, ingen där fikar) */
 export const alarm = () => !!(S.fire || S.outage || S.storm || S.warn
+  || (S.gondola && S.gondola.ph === 'stuck') || (S.leak && !S.leak.shut)
   || S.elevators.some(e => e.mode === 'snapped' || e.hot || (e.mode === 'broken' && e.fault && e.fault.trapped)));
 /** personen ur personalen med id, om hen är i huset */
 export const crewPerson = id => S.people.find(p => p.crewId === id && !p.dead) || null;
@@ -80,6 +82,10 @@ export function crewSpot(p, f) {
   // (guiden på rundvisning står med gästen i hallen, visning.js)
   const vs = p.touring ? visningSpot(p, f) : null;
   if (vs) return vs;
+  const ds = dutySpot(p, f);
+  if (ds) return ds;
+  // (vaktmästarens småjobb: står i hallen och skruvar)
+  if (p.onBreak && p.breakWhere === 'job') return { x: 452, k: 'stand', face: -1, temp: true, win: 'hall', desc: p.breakWhy || 'Fixar något i hallen' };
   const post = SPOTS[f].find(s => s.post === c.post);
   if (post && mine(post) && !p.onBreak && !offReason(p, hour())) return post;
   if (p.onBreak && p.breakWhere) {
@@ -111,6 +117,8 @@ function offReason(p, h) {
   if (c.post === 'chief' && S.chief && !S.chief.on) return 'Går på rast – du får ta besluten så länge';
   // (nattskiftet efter ett mjukt dygnsskifte sitter kvar på posten tills avlösaren är i huset)
   if (h < c.from && !(p.shiftEnd && !relieved(c))) return `Hänger av sig jackan i personalrummet – passet börjar kl ${Math.floor(c.from)}`;
+  // (fönsterputsaren som satt fast i gondolen tar inte gondolen mer i dag, gondola.js)
+  if (p.offDuty) return c.post === 'gondola' ? 'Tar inte gondolen mer i dag – kaffe i personalrummet' : 'Av passet – väntar i personalrummet';
   if (c.post === 'gondola') return gondolaOff();
   return '';
 }
@@ -164,6 +172,10 @@ export function crewNext(p, h) {
   const c = CREW_BY[p.crewId], busy = alarm(), pf = postFloor(c.post);
   // (guiden på rundvisning: rundvisningen bestämmer vart hen går, visning.js; under kuppen sitter personalen still)
   if (p.touring || (S.heist && S.heist.tied)) return null;
+  // (fönsterputsaren sitter fast i gondolen: han kommer ingenstans förrän han är nere, gondola.js)
+  if (c.post === 'gondola' && gondolaStuck() && atPost(p)) return null;
+  // (vaktmästaren på uppdrag: läckan, gondolen, hunden – går före allt annat)
+  if (p.duty) { p.onBreak = false; p.breakWhere = ''; return dutyNext(p); }
   const ok = f => f >= 0 && !inFireZone(f);
   // (resor inom huset: entrén är personalens utgång, men dit går man också på rast – det är ingen hemgång)
   const there = (f, why) => (p.floor === f || !ok(f) ? null : [f, why, false]);
@@ -174,10 +186,10 @@ export function crewNext(p, h) {
   }
   // rasten är slut (eller larmet går för den som behövs i kontrollrummet)
   if (p.onBreak && ((busy && c.urgent) || S.t >= p.breakUntil)) {
-    p.onBreak = false; p.breakWhere = '';
+    p.onBreak = false; p.breakWhere = ''; p.breakF = undefined;
     pev(p, busy && c.urgent ? 'Larm! Rasten får vänta' : 'Rasten är slut');
   }
-  if (p.onBreak) return there(WHERE_F[p.breakWhere] ?? BREAK, p.breakWhy);
+  if (p.onBreak) return there(p.breakF ?? WHERE_F[p.breakWhere] ?? BREAK, p.breakWhy);
   const off = offReason(p, h);
   if (off) {
     if (!mayLeave(p)) return null;
@@ -190,10 +202,10 @@ export function crewNext(p, h) {
     if (b && (!c.cover || manned(c.cover) || !CREW.some(x => x.post === c.cover && crewPerson(x.id)))) {
       if (!mayLeave(p)) return null;
       b.done = true;
-      const to = WHERE_F[b.where] ?? BREAK;
+      const to = b.where === 'job' ? jobFloor(p, b) : WHERE_F[b.where] ?? BREAK;
       // (en rast som skjutits upp för länge, eller som skulle gå in i nästa skift, blir inte av)
       if (h < b.at + 1 && (c.until === null || h < c.until - 0.5) && ok(to)) {
-        p.onBreak = true; p.breakUntil = S.t + b.len; p.breakWhy = b.why; p.breakWhere = b.where;
+        p.onBreak = true; p.breakUntil = S.t + b.len; p.breakWhy = b.why; p.breakWhere = b.where; p.breakF = to;
         return to === p.floor ? sitDown(p, to) : [to, b.why, false];
       }
     } else if (b && h >= b.at + 1) b.done = true;
@@ -212,4 +224,65 @@ function sitDown(p, f) {
   releaseSpot(p); p.state = 'exiting'; gotoSpot(p, f);
   pev(p, p.spot.desc);
   return null;
+}
+
+// ---------- Vaktmästaren ----------
+// Dagvaktmästaren Bosse (CREW) har sin post vid pannrummet på P1 och gör småjobb på våningarna (raster med
+// where 'job'). Vid en olycka får husets vaktmästare ett uppdrag (p.duty): Bosse på dagen, kvällsvaktmästaren
+// (rollen i people.js) på kvällen, annars rings en jourvaktmästare in. Den som har ett uppdrag går dit och stannar
+// där tills det är klart (dutyDone) – delsystemet som gav uppdraget läser av när hen är på plats (onDuty).
+/** våningen för ett småjobb: bestäms av dygnet och vilket jobb det är (drar inga slumptal) @param {Person} p */
+function jobFloor(p, b) {
+  const list = OFFICE_FLOORS.concat(CAFE).filter(f => !inFireZone(f) && floorOpen(f, hour()));
+  if (!list.length) return BREAK;
+  return list[(S.day * 5 + p.breaks.indexOf(b) * 3) % list.length];
+}
+/** Ett uppdrag åt vaktmästaren (p.duty): vart, varför (resan) och vad hen gör där (platsen); x = var i hallen hen står
+ * @typedef {{ kind: string, f: number, why: string, desc: string, x?: number }} Duty */
+/** platsen för den som är på uppdrag (synlig i hallen) @param {Person} p */
+export function dutySpot(p, f) {
+  const d = p.duty;
+  if (!d || d.f !== f) return null;
+  return { x: d.x ?? (f === DOCK ? BOILER_STAND : 440), k: 'stand', face: -1, temp: true, win: 'hall', desc: d.desc };
+}
+/** vart den som är på uppdrag ska (null = stanna, hen är framme) @param {Person} p */
+export function dutyNext(p) {
+  const d = /** @type {Duty} */ (p.duty);
+  if (p.floor === d.f || inFireZone(d.f)) return null;
+  return [d.f, d.why, false];
+}
+/** är p framme vid sitt uppdrag? @param {Person|null} p */
+export const onDuty = (p, kind) => !!p && !p.dead && !!p.duty && p.duty.kind === kind && p.floor === p.duty.f && p.state === 'office';
+/** vaktmästaren som kan ta ett uppdrag: Bosse, kvällsvaktmästaren – eller null */
+const freeJanitor = () => S.people.find(q => !q.dead && q.role === 'vaktmästare' && !q.duty && !q.offDuty && q.state !== 'away'
+  && (q.state === 'office' || !q.leaving)) || null;
+/**
+ * Ge husets vaktmästare ett uppdrag (finns ingen ledig rings en jourvaktmästare in). Returnerar personen.
+ * @param {string} kind @param {number} f @param {string} why @param {string} desc @param {number} [x]
+ */
+export function callJanitor(kind, f, why, desc, x) {
+  const duty = { kind, f, why, desc, x };
+  let p = freeJanitor();
+  if (p) {
+    p.duty = duty;
+    if (p.state === 'office') p.timer = 0;
+    pev(p, `Uppdrag: ${why}`);
+    log(`🔧 ${pn(p)} (vaktmästare): ${why}`, 'person', null, p.id);
+  } else {
+    p = spawnStaff('vaktmästare', false, { title: 'Jourvaktmästare (inringd)', jour: true, duty });
+    log(`☎️ Ingen vaktmästare i huset – jourvaktmästaren ${pn(p)} rings in: ${why}`, 'alert', null, p.id);
+  }
+  return p;
+}
+/** flytta uppdraget (hunden springer vidare) @param {Person|null} p */
+export function moveDuty(p, f, why, desc) {
+  if (!p || !p.duty || (p.duty.f === f && p.duty.desc === desc)) return;
+  p.duty = { ...p.duty, f, why, desc };
+  if (p.state === 'office') p.timer = 0;
+}
+/** uppdraget är klart: tillbaka till det hen höll på med (jourvaktmästaren åker hem) @param {Person|null} p */
+export function dutyDone(p) {
+  if (!p || !p.duty) return;
+  p.duty = null;
+  if (p.state === 'office') p.timer = 0;
 }

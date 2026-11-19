@@ -83,10 +83,12 @@ export function hoistTick(dt) {
   const aboard = S.people.some(p => p.role === 'fönsterputsare' && !p.dead && p.state === 'office' && p.spot && p.spot.post === 'gondola');
   if (!aboard) C.recall = false;
   const target = needRail || !aboard || C.recall ? PARK_Y : plan.y;
-  if (S.power) C.y = approach(C.y, target, CLEAN_V * dt);
+  // (vinschen har kärvat: gondolen hänger där den hänger tills den vevas upp, gondola.js)
+  const stuck = !!S.gondola && S.gondola.ph === 'stuck';
+  if (S.power && !stuck) C.y = approach(C.y, target, CLEAN_V * dt);
   C.crew = aboard;
   C.parked = Math.abs(C.y - PARK_Y) < 1e-6;
-  C.scrub = aboard && !C.recall && plan.scrub && !needRail && Math.abs(C.y - plan.y) < 1;
+  C.scrub = aboard && !stuck && !C.recall && plan.scrub && !needRail && Math.abs(C.y - plan.y) < 1;
   if (needRail && aboard && !C.waiting) { C.waiting = true; log('🧽 Fönsterputsaren hissas upp och parkerar – hissbalken behöver takskenan', 'move'); }
   if (!needRail && C.waiting) { C.waiting = false; log('🧽 Takskenan är ledig – putsaren kan fortsätta putsa', 'move'); }
   if (HOIST_OK) { balkTick(dt, work, C.parked); liftTick(); }

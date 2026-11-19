@@ -17,6 +17,9 @@ import { orderVisning } from './visning.js';
 import { heistPossible, startHeist } from './heist.js';
 import { triggerCable, triggerFault, triggerHeat } from './service.js';
 import { triggerPano } from './pano.js';
+import { triggerGondola } from './gondola.js';
+import { startDog } from './dog.js';
+import { startLeak } from './leak.js';
 import { chiefNote } from './chief.js';
 
 /** Kedjan som pågår (S.chaos): steget i tur, när det tidigast får börja och hur länge det har väntat, vad som
@@ -28,6 +31,7 @@ export const CHAOS_NAMES = {
   heatwave: '☀️ värmebölja', medical: '🚑 ambulans', train: '🚇 tågstörning', vip: '🚁 VIP', storm: '⛈️ storm och blixt',
   heat: '🌡️ het motor', fault: '🔧 hissfel', cable: '🪢 linbrott', pano: '🧗 fast på fasaden', bus: '🚌 turistbuss',
   visning: '🛎️ rundvisning', fire: '🔥 brand', heist: '🚐 kupp', move: '🚚 flytt',
+  gondola: '🪟 fönsterputsaren fast', dog: '🐕 lös hund', leak: '🚿 vattenläcka',
 };
 /** strömmen är tillbaka och blixten har slagit ner (hissfel och värme kräver ström) */
 const powered = () => S.power && !S.outage && (!S.storm || S.storm.strikeAt === null || S.storm.struck !== null);
@@ -47,8 +51,8 @@ const STEPS = [
   { k: 'storm', ready: () => !S.storm || S.storm.struck === null, wait: 60, run: () => [strikeNow() && 'storm'] },
   { k: 'heat', ready: () => powered() && S.elevators.some(e => e.mode === 'normal'), wait: 150, run: () => [triggerHeat() && 'heat'] },
   { k: 'cars', ready: () => powered() && S.elevators.some(e => e.mode === 'normal'), wait: 90,
-    run: () => [triggerFault() && 'fault', triggerCable() && 'cable', triggerPano() && 'pano'] },
-  { k: 'guests', ready: () => !S.fire, wait: 90, run: () => [spawnBus() > 0 && 'bus', orderVisning(true) && 'visning'] },
+    run: () => [triggerFault() && 'fault', triggerCable() && 'cable', triggerPano() && 'pano', triggerGondola() && 'gondola', startLeak() && 'leak'] },
+  { k: 'guests', ready: () => !S.fire, wait: 90, run: () => [spawnBus() > 0 && 'bus', orderVisning(true) && 'visning', startDog() && 'dog'] },
   { k: 'fire', ready: () => !S.fire, wait: 120, run: () => { startFire(pick(FIRE_FLOORS)); return ['fire']; } },
   // kuppen kan inte börja under branden eller strömavbrottet, och inte när flyttbilen står vid lastkajen:
   // den blir finalen när det har lugnat sig
@@ -56,8 +60,8 @@ const STEPS = [
   { k: 'move', ready: () => !S.move || S.move.state === 'planned', wait: 60, run: () => [moveNow() && 'move'] },
 ];
 /** stegen som kan hoppas över (de som startar något) */
-const STEP_KEYS = { start: ['heatwave', 'medical', 'train', 'vip'], storm: ['storm'], heat: ['heat'], cars: ['fault', 'cable', 'pano'],
-  guests: ['bus', 'visning'], fire: ['fire'], heist: ['heist'], move: ['move'] };
+const STEP_KEYS = { start: ['heatwave', 'medical', 'train', 'vip'], storm: ['storm'], heat: ['heat'], cars: ['fault', 'cable', 'pano', 'gondola', 'leak'],
+  guests: ['bus', 'visning', 'dog'], fire: ['fire'], heist: ['heist'], move: ['move'] };
 /** hur länge kedjan högst väntar på att det ska lugna sig efter sista steget (s) */
 const TAIL_MAX = 900;
 
@@ -71,7 +75,7 @@ export function startChaos() {
   return true;
 }
 /** det har lugnat sig: ingen incident pågår och ingen sitter instängd */
-const calm = () => !S.fire && !S.outage && !S.storm && !S.pano && !S.heist
+const calm = () => !S.fire && !S.outage && !S.storm && !S.pano && !S.heist && !S.gondola && !S.dog && !S.leak
   && !S.elevators.some(e => e.passengers.length && (e.mode === 'snapped' || e.mode === 'broken'));
 export function chaosTick(dt) {
   const C = S.chaos;

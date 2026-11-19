@@ -16,6 +16,8 @@ import { residentDesc } from './life.js';
 import { STORM_HINT, windMs } from './weather.js';
 import { FAN_KW, jobFloor, tech, techOf, cableStatus } from './service.js';
 import { LADDER_MAX, ladderReach, ropeWindy } from './pano.js';
+import { gondolaWindy } from './gondola.js';
+import { SPREAD_S } from './leak.js';
 import { hoistHalt, hoistStatus } from './hoist.js';
 import { BLANKET_T } from './visits.js';
 import { INSATS, chiefOnDuty } from './chief.js';
@@ -262,6 +264,52 @@ export function incidentHtml() {
       ${chiefLine('pano', 'Hur ska de instängda ut?')}
       <div class="inc-acts">${b('rope', '🧗 Rep från taket', true, `Räddarna firar ner en i taget ${Pn.toF === LOBBY ? 'till gatan' : 'till takterrassen'} – stannar i hård vind`)}${b('ladder', '🚒 Stegbilen', reach, reach ? 'Stegen från gatan – fungerar i blåst' : `Stegen når bara ${LADDER_MAX} våningar upp`)}${ikon(`follow:${e.id}`, '📹', 'Visa hissen', 'Kameran följer hissen')}</div>
       <div class="inc-hint">Repet går fortare när det är lugnt; stegbilen klarar blåsten men når inte högt. Teknikern kan inte laga hydrauliken förrän alla är ute.</div>`, true));
+  }
+  // ---------- fönsterputsaren sitter fast i gondolen (incident med val: veva, lastluckan eller rep) ----------
+  const Gd = S.gondola;
+  if (Gd && Gd.ph === 'stuck') {
+    const hn = esc((S.people.find(p => p.role === 'fönsterputsare' && p.crewId && !p.dead) || { name: 'Fönsterputsaren' }).name);
+    const jan = S.people.find(p => p.id === Gd.jan && !p.dead), windy = gondolaWindy();
+    const b = (h, txt, ok, hint) => `<button class="btn sm${Gd.how === h ? ' on' : ''}" data-act="gondola:${h}" ${ok ? '' : 'disabled'} data-hint="${hint}">${txt}</button>`;
+    const status = !Gd.how ? `${hn} väntar på besked – annars ringer han själv vaktmästaren om ~${cd(Gd.t0 + 16 - S.t)}s.`
+      : Gd.how === 'rope' ? (Gd.ropeY !== null ? `${hn} firas ner till takterrassen.` : !Gd.crew ? 'Räddningstjänsten är på väg.' : Gd.rigged ? (windy ? 'För blåsigt för repet – räddarna väntar.' : 'Repet är riggat.') : 'Räddarna riggar ett rep på taket.')
+      : !jan ? 'Vaktmästaren är på väg.'
+      : jan.floor !== jan.duty?.f || jan.state !== 'office' ? `${esc(jan.name)} är på väg ${Gd.how === 'hatch' ? `till lastluckan på ${fl(Gd.hatchF)}` : 'upp på taket'}.`
+      : Gd.how === 'hatch' ? (windy ? `För blåsigt för att öppna luckan – ${esc(jan.name)} väntar.` : `${esc(jan.name)} öppnar lastluckan.`) : `${esc(jan.name)} vevar upp gondolen för hand.`;
+    parts.push(card('gondola', 'gondola', `🪟 ${hn} sitter fast i gondolen`, `
+      <div class="inc-s">Vinschen har kärvat och gondolen hänger utanför våning ${fl(Gd.f)}. Stegbilen når inte så högt, och takskenan är upptagen så länge – hissbalken kan inte köra. ${status}</div>
+      ${chiefLine('gondola', 'Hur ska han ner?')}
+      <div class="inc-acts">${b('crank', '🔧 Veva upp', true, 'Vaktmästaren vevar upp gondolen för hand från taket – säkert men långsamt, går i blåst')}${b('hatch', '🪟 Lastluckan', Gd.hatchF >= 0, Gd.hatchF >= 0 ? `Vaktmästaren öppnar lastluckan på ${fl(Gd.hatchF)} och Hasse kliver in – snabbt, men inte i blåst` : 'Gondolen hänger inte vid någon lastlucka')}${b('rope', '🧗 Räddningstjänsten', true, 'Räddarna firar ner honom med rep från taket till takterrassen – stannar i hård vind')}</div>
+      <div class="inc-hint">När Hasse är nere går han av passet för dagen, och gondolen vevas upp tom.</div>`, true));
+  }
+  // ---------- den lösa hunden (incident med val: låt den åka eller spärra hissarna där den är) ----------
+  const Dg = S.dog;
+  if (Dg && Dg.ph === 'loose') {
+    const dog = S.people.find(p => p.id === Dg.dog && !p.dead);
+    const chasers = S.people.filter(p => !p.dead && (p.chase || (p.duty && p.duty.kind === 'dog')));
+    const where = dog && (dog.state === 'ride' || dog.state === 'boarding') ? `åker ${dog.car ? esc(dog.car.name) : 'hiss'} mot ${fl(dog.dest)}` : `är på ${fl(Dg.f)}${dog && dog.state === 'office' && dog.task ? ` – ${esc(dog.task)}` : ''}`;
+    const b = (w, txt, on, hint) => `<button class="btn sm${on ? ' on' : ''}" data-act="dog:${w}" data-hint="${hint}">${txt}</button>`;
+    parts.push(card('dog', 'dog', `🐕 ${esc(Dg.name)} är lös i huset`, `
+      <div class="inc-s">Pudeln ${where}. ${chasers.map(p => esc(p.name)).join(' och ') || 'Ingen'} jagar henne.${Dg.tired ? ' Hon är trött och har lagt sig.' : ''} Våningar: ${Dg.floors.length} · hissresor: ${Dg.rides}.</div>
+      ${chiefLine('dog', 'Ska hissarna spärras där hunden är?')}
+      <div class="inc-acts">${b('free', '🐕 Låt henne åka', !Dg.lock, 'Hissarna går som vanligt – jakten kan ta en stund')}${b('lock', `🚫 Spärra hissarna på ${fl(Dg.f)}`, Dg.lock, 'Ingen ny kliver på där hunden är – den kommer ingenstans, men den som väntar där får ta trappan')}${dog ? ikon(`person:${dog.id}`, '📹', `Följ ${esc(Dg.name)}`, 'Kameran följer hunden') : ''}</div>
+      <div class="inc-hint">Hunden fångas när någon som jagar henne hinner fram medan hon står still. Till slut blir hon trött och lägger sig.</div>`, true));
+  }
+  // ---------- vattenläckan (incident med val: de blöta hissarna står still eller kör vidare) ----------
+  const Lk = S.leak;
+  if (Lk && Lk.ph === 'leak') {
+    const jan = S.people.find(p => p.id === Lk.jan && !p.dead);
+    const cars = Lk.cars.map(id => esc(S.elevators[id].name)).join(', ') || 'inga';
+    const status = Lk.shut ? `Huvudkranen är stängd – golven torkar.${Lk.cars.length ? ' Teknikern går igenom de blöta schakten.' : ''}`
+      : !jan ? 'Vaktmästaren är på väg.'
+      : jan.floor === DOCK && jan.state === 'office' ? `${esc(jan.name)} vrider om huvudkranen i pannrummet.`
+      : `${esc(jan.name)} springer ner till pannrummet på ${fl(DOCK)} för att stänga huvudkranen. Vattnet når nästa våning om ~${cd(Lk.nextAt - S.t)}s.`;
+    const b = (m, txt, hint) => `<button class="btn sm${Lk.mode === m ? ' on' : ''}" data-act="leak:${m}" ${Lk.shut ? 'disabled' : ''} data-hint="${hint}">${txt}</button>`;
+    parts.push(card('leak', 'leak', `🚿 Vattenläcka på ${fl(Lk.src)}`, `
+      <div class="inc-s">Ett rör har spruckit${Lk.green ? ' i labbet – vattnet är grönt' : ''}. Blött: <b>${Lk.wet.map(fl).join(', ')}</b>. Hissar i blöta schakt: ${cars}.${Lk.shorts.length ? ` Kortslutna: <b>${Lk.shorts.map(id => esc(S.elevators[id].name)).join(', ')}</b>.` : ''} ${status}</div>
+      ${chiefLine('leak', 'Ska hissarna i de blöta schakten köra?')}
+      <div class="inc-acts">${b('stop', '🛑 Stoppa de blöta hissarna', 'De tas ur drift tills kranen är stängd – säkert, men köerna växer och fler tar trappan')}${b('run', '▶ Kör vidare', 'Bättre flöde – men vattnet kan kortsluta styrningen och ge ett riktigt hissfel')}${ikon(`show:${Lk.src}`, '📹', 'Visa läckan', 'Kameran visar våningen där röret sprack')}${ikon(`show:${DOCK}`, '🔧', 'Visa pannrummet', 'Kameran visar pannrummet där huvudkranen sitter')}</div>
+      <div class="inc-hint">Vattnet rinner en våning nedåt var ${SPREAD_S}:e sekund tills huvudkranen är stängd. Det är halt på de blöta golven.</div>`, true));
   }
   // ---------- Kuppen på 5:an (incident med val: polisens insatsledare – eller du) ----------
   const Hs = S.heist;

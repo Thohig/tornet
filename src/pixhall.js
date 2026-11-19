@@ -1,8 +1,8 @@
 // Pixelgrafik: hallen på varje våning (korridoren, glimten av rummet, entrén med karuselldörr och
 // reception), driftcentralen med driftchefen, personalrummet, perrongen och skyltarna i hallen.
 import { S } from './state.js';
-import { BREAK, CONTROL, DOOR_X, EL, FL, FLOOR_HOURS, floorOpen, FLOORS, floorY, INNER_X1, LAND_X0, LOBBY, MEZZ, SPOTS, STATION, TRAIN_LEN, TRAIN_X0, TRAIN_X1 } from './config.js';
-import { blend, dark, light, plain, sprite, text, textW } from './pixart.js';
+import { BOILER_X, BREAK, CONTROL, DOCK, DOOR_X, EL, SHAFT_W, shaftX, FL, FLOOR_HOURS, floorOpen, FLOORS, floorY, INNER_X1, LAND_X0, LOBBY, MEZZ, SPOTS, STATION, TRAIN_LEN, TRAIN_X0, TRAIN_X1 } from './config.js';
+import { blend, dark, light, plain, PX, sprite, text, textW } from './pixart.js';
 import { PAL } from './pixpal.js';
 import { nightness } from './view.js';
 import { inWindow, personHead, winPos } from './render.js';
@@ -16,6 +16,7 @@ import { blinkOf } from './pixcars.js';
 import { bubble } from './pixfolk.js';
 import { unlockedFloor } from './visning.js';
 import { fireProg } from './pixroof.js';
+import { wetFloor, wetShaft } from './leak.js';
 /** @typedef {import('./people.js').Person} Person */
 
 // ---------- Hallen på varje våning ----------
@@ -248,6 +249,7 @@ export function drawHall(f, h) {
   else if (f === CONTROL) controlRoom(top, bot);
   else if (f === BREAK) breakRoom(top, bot, h);
   else hallProps(f, th, top, bot);
+  if (f === DOCK) boilerDoor(top, bot);
   // spårad person därinne / muspekaren över korridoren
   const sel = S.sel && !S.sel.dead && S.sel.floor === f && S.sel.state !== 'ride' && personHead(S.sel)?.hidden;
   if (sel || S.hoverDoor === f) ants(cx - 6, cy - 6, cw + 12, ch + 6, sel ? '#ffe14d' : '#ffffff');
@@ -266,6 +268,24 @@ export function drawHall(f, h) {
   stairSign(f, false);
   if (f === STATION) drawPlatformPx(top, bot, h);
 }
+// ---------- Pannrummet: dörren i hallen på P1 ----------
+// En ståldörr med varningsrand och en skylt, rör längs väggen och ratten till huvudkranen (vattenläckan, leak.js:
+// ratten är röd när kranen är stängd). Vaktmästaren står bredvid dörren (BOILER_STAND i config).
+function boilerDoor(top, bot) {
+  const dw = 22, dh = Math.min(26, bot - top - 21), dx = X(BOILER_X) - dw / 2, dy = bot - 3 - dh;
+  // rören längs väggen ovanför dörren
+  R(dx - 2, dy - 4, dw + 4, 2, '#8a6a46'); R(dx - 2, dy - 4, dw + 4, 1, '#b08a5a');
+  // dörren
+  box(dx, dy, dw, dh, '#7a828c'); R(dx + 1, dy + 1, dw - 2, 1, '#9aa3ad');
+  R(dx + dw - 5, dy + Math.floor(dh / 2), 2, 2, '#ffd23f'); // handtaget
+  for (let x = dx + 1; x < dx + dw - 1; x++) R(x, dy + dh - 4, 1, 3, Math.floor((x - dx) / 2) % 2 ? INK : '#ffd23f');
+  // skylten
+  R(dx + 1, dy + 3, dw - 2, 7, '#ffffff'); text(g, 'PANNA', dx + dw / 2, dy + 4, INK, 'center');
+  // ratten till huvudkranen på röret
+  const L = S.leak, shut = !!(L && L.shut), wx = dx + 2, wy = dy + dh - 10;
+  box(wx - 2, wy - 2, 6, 6, shut ? '#c0392b' : '#5a2a2a'); R(wx, wy, 2, 2, shut ? '#ff6b5a' : '#8a3a3a');
+  reserve(dx, dy, dw, 12);
+}
 // ---------- Driftcentralen: kontrollrummet där driftchefen sitter ----------
 // Ett fönster i hallens bakvägg: en skärm per hiss (korgens läge i schaktet, rött när den är trasig),
 // ett larmljus som snurrar under incidenter, kontrollbordet och driftchefen (Gun-Britt på dagen, Rune på
@@ -278,7 +298,8 @@ export const resetChiefAt = () => { chiefAt = null; };
 export const winFig = (p, mood) => ({ id: p.id, mood, child: false, smoked: false, look: p.look });
 const sitters = (f, win) => S.people.filter(p => !p.dead && p.floor === f && inWindow(p) && p.spot.win === win);
 function controlRoom(top, bot) {
-  const wx = X(DOOR_X) + 58, ww = Math.min(108, X(INNER_X1) - 14 - wx), wy = top + 18, wh = bot - 3 - wy;
+  // (fönstret börjar en bit in i hallen: till vänster om det sitter pannrummets dörr, boilerDoor)
+  const wx = X(DOOR_X) + 76, ww = Math.min(108, X(INNER_X1) - 14 - wx), wy = top + 18, wh = bot - 3 - wy;
   if (ww < 50) return;
   const power = S.power || (S.outage && S.outage.gen), alarmed = alarm(), blink = Math.floor(S.anim * 3) % 2 === 0;
   // ramen och rummet (mörkt, upplyst av skärmarna)
@@ -510,6 +531,7 @@ export function floorOverlays(f, h) {
     R(x0, top, x1 - x0, bot - top, `rgba(10,6,34,${someone ? 0.38 : 0.62})`);
   }
   if (th !== 'roof') nightLight(f, th, x0, x1, top, bot, n);
+  if (wetFloor(f)) wetHall(f, x0, x1, top, bot);
   if (S.fire) {
     const on = Math.sin(S.anim * 10) > 0;
     box(x1 - 10, top + 3, 5, 5, on ? '#ff2d55' : '#7a2033');
@@ -527,6 +549,41 @@ export function floorOverlays(f, h) {
           R(X(wx) - 2 + Math.round(Math.sin(k * 6 + j) * 2), bot - 6 - Math.round(k * 16), 3, 2, `rgba(235,240,245,${(0.7 * (1 - k)).toFixed(2)})`);
         }
       });
+    }
+  }
+}
+// ---------- Vattenläckan (leak.js): pölar, dropp från taket och en skylt ----------
+const waterC = a => (S.leak && S.leak.green ? `rgba(80,220,120,${a})` : `rgba(63,124,255,${a})`);
+function wetHall(f, x0, x1, top, bot) {
+  const L = S.leak, src = !!L && f === L.src, shut = !!L && L.shut;
+  // pölarna på golvet (glänser lite)
+  R(x0, bot - 3, x1 - x0, 2, waterC(0.35));
+  for (let i = 0; i < 6; i++) { const px = x0 + 8 + ((i * 53 + f * 17) % Math.max(1, x1 - x0 - 30)); R(px, bot - 4, 14 + (i % 3) * 6, 2, waterC(0.5)); if (Math.sin(S.anim * 2 + i + f) > 0.7) R(px + 3, bot - 4, 2, 1, '#ffffff'); }
+  // dropp från taket (forsar där röret sprack, tills kranen är stängd)
+  if (!shut) for (let i = 0; i < (src ? 7 : 4); i++) {
+    const dx = x0 + 20 + ((i * 41 + f * 29) % Math.max(1, x1 - x0 - 40)), k = (S.anim * (src ? 1.6 : 0.9) + i * 0.37) % 1;
+    if (src && i < 2) R(dx, top + 2, 2, bot - top - 5, waterC(0.55));
+    else R(dx, top + 2 + Math.round(k * (bot - top - 8)), 1, 2, waterC(0.8));
+  }
+  // VÅTT GOLV – en gul skylt på golvet
+  const sx = X(DOOR_X) + 44;
+  R(sx, bot - 13, 1, 10, INK); R(sx + 9, bot - 13, 1, 10, INK);
+  box(sx - 1, bot - 15, 12, 8, '#ffd23f'); text(g, '!', sx + 5, bot - 14, INK, 'center');
+}
+/** vatten som rinner längs schaktväggarna där hissarna går förbi blöta våningar (efter korgarna) */
+export function drawLeakPx() {
+  const L = S.leak;
+  if (!L || L.ph === 'done' || L.shut) return;
+  for (const e of S.elevators) {
+    if (!wetShaft(e)) continue;
+    const sx = X(shaftX(e.id));
+    for (const f of L.wet) {
+      if (f < e.minF || f > e.maxF) continue;
+      const ya = Y(floorY(f + 1)), yb = Y(floorY(f));
+      for (const ox of [2, Math.round(SHAFT_W / PX) - 4]) for (let y = ya; y < yb; y += 4) {
+        const k = (S.anim * 3 + y * 0.07 + ox) % 1;
+        R(sx + ox, y + Math.round(k * 4), 2, 3, waterC(0.75));
+      }
     }
   }
 }
