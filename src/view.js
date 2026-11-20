@@ -24,30 +24,39 @@ export const VIEW = { scale: 1, dpr: 1, camY: 0, viewH: H, x0: LAND_X0, follow: 
   panX: 0, panW: 0, panTo: /** @type {number|null} */ (null),
   // textskylten längst ner i bilden (#lower) täcker padB världsenheter: kameran räknar med att bara
   // viewH − padB syns, och kan scrolla padB längre ner så att även stationen hamnar ovanför skylten
-  padB: 0 };
+  padB: 0,
+  // mobilen: hela bredden i stället för närbild (dubbeltryck i bilden eller 🔍)
+  wide: false };
 /** css-pixlar som textskylten tar längst ner i bilden (vanligt läge / biografläget) */
 const LOWER_PX = { std: 62, cinema: 118 };
 // Minsta skala: på en telefon blir huset annars så litet att folk är prickar och skyltarna oläsliga.
 // Är spelytan smalare scrollar bilden i sidled. Skalan avrundas så att en pixel i pixelgrafiken (PX = 2
-// världsenheter) blir ett helt antal skärmpixlar.
+// världsenheter) blir ett helt antal skärmpixlar. Mobilen kan växla till hela bredden (VIEW.wide).
 const MIN_SCALE = 0.7;
+// Mobilläget (body.mob): smal skärm, eller en telefon på tvären (body.land). Bilden fyller skärmen och
+// kontrollpanelen blir en list med flikar (panels.js) – nertill, eller som en smal list till höger på tvären.
+// Textskylten ligger då i listen i stället för i bilden (padB = 0), utom på tvären och i biografläget.
+const LAND_MAX_H = 500;
+/** mobilläget just nu: { mob, land } (läses av panels.js) */
+export function screenMode() {
+  const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+  const land = coarse && window.innerHeight <= LAND_MAX_H && window.innerWidth > window.innerHeight;
+  return { mob: window.innerWidth <= 800 || land, land };
+}
 export function resize() {
   // huset fyller hela bredden och kameran visar en del i taget (scrolla eller låt kameran följa)
-  const stacked = window.innerWidth <= 800;
-  // svh: Safari räknar vh med ytan bakom adressfältet
-  // staplat (smal skärm): bilden överst och kontrollpanelen under; lämna plats så att panelens översta block
-  // (uppspelningen, händelserna och det du följer) syns under bilden utan att man scrollar sidan.
-  // svh: Safari räknar vh med ytan bakom adressfältet
-  const vh = CSS.supports('height', '1svh') ? 'svh' : 'vh', cinema = document.body.classList.contains('cinema');
-  stage.style.height = !stacked ? '' : cinema ? `100${vh}` : `max(50${vh}, calc(100${vh} - 270px))`;
+  const { mob, land } = screenMode(), B = document.body.classList;
+  B.toggle('mob', mob); B.toggle('land', mob && land);
+  const cinema = B.contains('cinema');
+  // (spelytans höjd sköts av css: i mobilläget tar listen sin plats och bilden resten – ResizeObserver nedan)
   const r = stage.getBoundingClientRect();
   const innerW = r.width - 4, innerH = r.height - 4; // (ramen runt spelytan)
   const VW = W - VIEW.x0; // hela bredden i världsenheter
   const dpr = window.devicePixelRatio || 1;
   const fit = innerW / VW;
-  const s = fit >= MIN_SCALE ? fit : Math.max(fit, Math.round(MIN_SCALE * 2 * dpr) / (2 * dpr));
-  const padB = (cinema ? LOWER_PX.cinema : LOWER_PX.std) / s;
-  const cssW = VW * s, cssH = Math.min((H + padB) * s, innerH);
+  const s = fit >= MIN_SCALE || (mob && VIEW.wide) ? fit : Math.max(fit, Math.round(MIN_SCALE * 2 * dpr) / (2 * dpr));
+  const padB = mob && !land && !cinema ? 0 : (cinema ? LOWER_PX.cinema : LOWER_PX.std) / s;
+  const cssW = VW * s, cssH = Math.max(1, Math.min((H + padB) * s, innerH));
   // samma storlek som förut (Safari skickar resize när adressfältet fälls in): rita inte om canvasen
   if (cv.width === Math.round(cssW * dpr) && cv.height === Math.round(cssH * dpr) && VIEW.dpr === dpr && VIEW.panW === innerW && VIEW.padB === padB) return;
   VIEW.padB = padB;
@@ -56,12 +65,23 @@ export function resize() {
   cv.width = Math.round(cssW * dpr); cv.height = Math.round(cssH * dpr);
   VIEW.scale = s; VIEW.dpr = dpr; VIEW.viewH = cssH / s;
   VIEW.camY = clamp(VIEW.camY, 0, camMax());
+  setPan(VIEW.panX);
   // går det att scrolla i bilden tar den ett finger själv (två fingrar zoomar sidan som vanligt);
   // syns hela huset får ett finger scrolla sidan i stället
-  cv.style.touchAction = camMax() > 0 ? 'pinch-zoom' : 'auto';
+  cv.style.touchAction = camMax() > 0 || panMax() > 0 ? 'pinch-zoom' : 'auto';
   portrait.width = 64 * dpr; portrait.height = 76 * dpr;
   S.trackDirty = true;
 }
+/** mobilen: växla mellan närbild (minsta skalan, bilden scrollar i sidled) och hela bredden */
+export function toggleWide() {
+  VIEW.wide = !VIEW.wide;
+  try { localStorage.setItem('tornet-wide', VIEW.wide ? '1' : ''); } catch { /* (privat läge) */ }
+  resize();
+  keepX(VIEW.x0 + VIEW.panX / VIEW.scale);
+}
+try { VIEW.wide = localStorage.getItem('tornet-wide') === '1'; } catch { /* (privat läge) */ }
+// listen nertill ändrar höjd när en flik öppnas: då ändras spelytan och bilden räknas om
+if (typeof ResizeObserver === 'function') new ResizeObserver(() => resize()).observe(stage);
 window.addEventListener('resize', resize);
 // ---------- Kamera ----------
 export const camMax = () => Math.max(0, H + VIEW.padB - VIEW.viewH);
@@ -151,7 +171,7 @@ const DRAG_PX = 8;
 /** @type {{ id: number, x: number, y: number, moved: boolean }|null} */
 let drag = null, dragEnded = 0;
 cv.addEventListener('pointerdown', ev => {
-  if (ev.button !== 0 || (camMax() <= 0 && panMax() <= 0)) return;
+  if (ev.button !== 0 || (camMax() <= 0 && panMax() <= 0 && ev.pointerType !== 'touch')) return;
   drag = { id: ev.pointerId, x: ev.clientX, y: ev.clientY, moved: false };
 });
 cv.addEventListener('pointermove', ev => {
@@ -162,16 +182,24 @@ cv.addEventListener('pointermove', ev => {
   scrollBy(-dy / VIEW.scale, -dx / VIEW.scale);
   drag.x = ev.clientX; drag.y = ev.clientY;
 });
+// Dubbeltryck med fingret i bilden (mobilen): växla närbild/hela bredden. Det andra trycket väljer inget.
+const TAP2_MS = 320, TAP2_PX = 30;
+let lastTap = { t: 0, x: 0, y: 0 }, tap2At = 0;
 const endDrag = (/** @type {PointerEvent} */ ev) => {
   if (!drag || ev.pointerId !== drag.id) return;
   if (drag.moved) dragEnded = performance.now();
+  else if (ev.pointerType === 'touch' && document.body.classList.contains('mob')) {
+    const now = performance.now();
+    if (now - lastTap.t < TAP2_MS && Math.hypot(ev.clientX - lastTap.x, ev.clientY - lastTap.y) < TAP2_PX) { tap2At = now; lastTap.t = 0; toggleWide(); }
+    else lastTap = { t: now, x: ev.clientX, y: ev.clientY };
+  }
   drag = null;
 };
 cv.addEventListener('pointerup', endDrag);
 cv.addEventListener('pointercancel', endDrag);
 // klicket som följer direkt på ett drag ska inte välja det som råkar ligga under fingret
 cv.addEventListener('click', ev => {
-  if (performance.now() - dragEnded < 300) ev.stopImmediatePropagation();
+  if (performance.now() - dragEnded < 300 || performance.now() - tap2At < 300) ev.stopImmediatePropagation();
 }, true);
 export const clouds = Array.from({ length: 6 }, (_, i) => ({ x: i * 190 + vrand(0, 80), y: vrand(16, 110), s: vrand(0.7, 1.2), v: vrand(4, 9) }));
 export const stars = Array.from({ length: 50 }, () => ({ x: vrand(0, W), y: vrand(0, 130), r: vrand(0.8, 2) }));

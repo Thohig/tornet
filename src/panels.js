@@ -11,7 +11,7 @@ import { esc, fl } from './util.js';
 import { CONTROL, CREW, END_H, FL, LOBBY, ROOF, START_H, STRAT_HINT, STRAT_NAMES, TEMPOS, TOP, tempoName } from './config.js';
 import { S, hour, phaseName } from './state.js';
 import { FIRE_FLOORS, INC_LEVELS, INC_LEVEL_NAMES } from './incidents.js';
-import { VIEW, nightness, resize } from './view.js';
+import { VIEW, nightness, resize, toggleWide } from './view.js';
 import { crewNow, toggleAuto } from './director.js';
 import { chiefOnDuty } from './chief.js';
 import { $, ikon, carHtml, dayNumbers, drawPortrait, incidentPanel, logHtml, personHtml, rosterHtml, statsHtml } from './hud.js';
@@ -21,7 +21,7 @@ import { getLang, trDom } from './lang.js';
 import { musicOn } from './music.js';
 import { lastDay, summaryHtml } from './summary.js';
 import { guideName } from './visning.js';
-import { SPEEDS, extraActions, uiHooks } from './input.js';
+import { SPEEDS, extraActions, setSpeed, uiHooks } from './input.js';
 import { act } from './actions.js';
 import { chaosReady } from './chaos.js';
 import { LEAK_FLOORS } from './leak.js';
@@ -31,8 +31,9 @@ const side = $('side'), portrait = $('portrait');
 
 // ---------- Vyer och utfällda länkar (bara gränssnittets tillstånd) ----------
 /** @typedef {{ key: string, html: string, focus: string[], spot: string[] }} TourPanel */
-/** @type {{ view: null|'roster'|'log'|'stats'|'set'|'yesterday', open: Set<string>, fireFloor: string, squeezed: Set<string>, key: string, tour: TourPanel|null, chaosArm: number }} */
-const UI = { view: null, open: new Set(), fireFloor: '', squeezed: new Set(), key: '', tour: null, chaosArm: 0 };
+/** tab = mobilens öppna flik (null = bara bilden), mkey = situationen som senast öppnade eller stängde en flik av sig själv */
+/** @type {{ view: null|'roster'|'log'|'stats'|'set'|'yesterday', open: Set<string>, fireFloor: string, squeezed: Set<string>, key: string, tour: TourPanel|null, chaosArm: number, tab: null|string, mkey: string }} */
+const UI = { view: null, open: new Set(), fireFloor: '', squeezed: new Set(), key: '', tour: null, chaosArm: 0, tab: null, mkey: '' };
 /** knappen som beställer en rundvisning hos den som guidar härnäst (Berit på dagen, kvällsvärden annars) */
 const tourBtn = () => { const n = guideName(); return ikon('visning:start', '🛎️', `Be ${n} visa runt`, `${n} ringer efter en vikarie till disken och visar en gäst runt i huset – du följer med`, false, S.visning ? ' disabled' : ''); };
 /** Rundvisningen (intro.js): ett eget block överst, blocken i focus fälls ut och lyfts fram, och det som
@@ -44,8 +45,8 @@ const VIEWS = { roster: ['📋', 'Register', 'Alla i huset just nu – klicka p�
   set: ['⚙️', 'Inställningar', 'Felknappar, underhåll och vad som händer när dygnet tar slut'], stats: ['🏆', 'Resultat', 'Dagens siffror och betyg'] };
 /** vyer som inte har en egen länk: gårdagens sammanfattning (öppnas från informationsrutan eller resultatet) */
 const VIEW_TITLE = v => (v === 'yesterday' ? `🌅 Dag ${lastDay()?.day ?? ''}` : VIEWS[v].slice(0, 2).join(' '));
-extraActions.view = b => { UI.view = UI.view === b || b === 'back' ? null : /** @type {any} */ (b); S.logDirty = true; };
-extraActions.yesterday = () => { if (lastDay()) { UI.view = 'yesterday'; S.logDirty = true; } };
+extraActions.view = b => { UI.view = UI.view === b || b === 'back' ? null : /** @type {any} */ (b); if (UI.view) UI.tab = 'more'; S.logDirty = true; };
+extraActions.yesterday = () => { if (lastDay()) { UI.view = 'yesterday'; UI.tab = 'more'; S.logDirty = true; } };
 extraActions.open = b => { UI.open.add(b); UI.view = null; };
 extraActions.fold = b => { UI.open.delete(b); UI.squeezed.add(b); };
 extraActions.rf = b => { S.rosterFilter = b; };
@@ -327,6 +328,8 @@ export function updatePanel() {
   if (document.body.classList.contains('cinema')) return;
   const inc = S.started ? incidentPanel() : { html: '', n: 0, open: 0, alert: false };
   const F = S.started ? followed() : null, busy = inc.alert || !!S.warn;
+  if (document.body.classList.contains('mob')) { UI.key = ''; renderMob(F, inc); return; }
+  side.classList.remove('sheet');
   // (när ett kort fälls ihop blir det plats igen: då får blocken fällas ut på nytt)
   const key = `${busy}|${F ? F.kind : ''}|${UI.view}|${inc.n}|${inc.open}|${UI.tour ? UI.tour.key : ''}`;
   if (key !== UI.key) { UI.key = key; UI.squeezed.clear(); if (busy || F) UI.open.clear(); }
@@ -340,6 +343,100 @@ export function updatePanel() {
 }
 function repaint() { updatePanel(); }
 uiHooks.repaint = repaint;
+
+// ---------- Mobilen: bilden fyller skärmen, panelen är en list med flikar ----------
+// Nertill (på tvären: till höger) ligger listen: uppspelningen, zoomen och flikarna. Ovanför den en rad med
+// det som händer (textskyltens innehåll: vad regissören visar och driftchefens beslut, annars radion eller
+// det du följer). En flik öppnas som ett ark ovanför raden och bilden krymper medan det är öppet – arket
+// ligger aldrig över bilden. En incident eller förvarning öppnar händelsearket av sig själv och stänger det
+// när den är över; rundvisningen öppnar fliken med det guiden pratar om.
+/** flikarna: ikon, namn, förklaring */
+const TABS = { events: ['🚨', 'Händelser', 'Det som händer just nu – incidenterna och förvarningen'], now: ['📻', 'Nu', 'Dygnet, driftradion och dagens siffror'],
+  trig: ['⚡', 'Framkalla', 'Brand, strömavbrott, storm, hissfel …'], strat: ['🎛️', 'Styrning', 'Driftchefen, styrlogiken och slumpen'],
+  follow: ['👤', 'Följer', 'Det du följer: hissen, våningen eller personen'], more: ['☰', 'Mer', 'Kameran, ljudet, språket, register, logg, inställningar och resultat'] };
+/** rundvisningens block (focus) → fliken där det finns på mobilen */
+const TAB_OF = { play: 'now', chief: 'now', day: 'now', events: 'events', trig: 'trig', strat: 'strat', follow: 'follow', view: 'more', links: 'more' };
+extraActions.tab = b => { UI.tab = UI.tab === b || b === 'close' ? null : b; if (UI.tab !== 'more') UI.view = null; };
+extraActions.wide = () => toggleWide();
+extraActions.spdnext = () => setSpeed(SPEEDS[(SPEEDS.indexOf(S.speed) + 1) % SPEEDS.length]);
+const SPD_TXT = { 0.25: '¼×', 0.5: '½×', 1: '1×', 2: '2×' };
+/** fliken "Nu": dygnet, vädret, stapeln, radion och dagens siffror */
+function nowHtml() {
+  const h = hour(), night = nightness(h) > 0.5;
+  const wx = `${S.weather.cold > 0 ? '❄️ ' : S.weather.temp >= 20 ? '🌤️ ' : ''}${S.weather.temp} °C${S.storm ? ' · 🌬️ storm' : ''}`;
+  return `<div class="pl-top"><span class="pl-sun">${night ? '🌙' : '☀️'}</span><span class="pl-ph"><b>${phaseName(h)}</b> · ${wx}<br><span class="dim">Dag ${S.day} · ${S.people.length} i huset · frö ${S.seed}</span></span></div>`
+    + timelineHtml() + `<div class="m-gap"></div>` + radioHtml('full') + `<div class="m-gap"></div>` + dayHtml();
+}
+/** fliken "Mer": kameran, ljudet, språket, hjälpen och vyerna (en öppen vy visas under) */
+function moreHtml() {
+  const views = Object.entries(VIEWS).map(([v, [i, n, h]]) => ikon(`view:${v}`, i, n, h, UI.view === v)).join('');
+  const top = `<div class="row">${camTools()}${ikon('help', '?', 'Hjälp', 'Handgreppen och mer om huset')}<span class="sp"></span>${flagsHtml()}</div><div class="row">${views}</div>`;
+  return top + (UI.view ? `<div class="m-view"><div class="m-vh"><b>${VIEW_TITLE(UI.view)}</b><button class="blk-x" data-act="view:back" data-hint="Tillbaka">✕</button></div>${viewHtml(UI.view)}</div>` : '');
+}
+/** raden ovanför listen: det som händer (samma innehåll som textskylten i bilden) */
+function tickHtml(F, inc) {
+  const c = S.started && !S.summaryShown ? crewNow() : null, C = S.chief;
+  const dec = C && C.on && C.say && C.say.dec && S.t < C.say.until;
+  const show = S.warn ? warnText() : c ? `<span class="lw-tag">${c.auto ? '● LIVE' : '❚❚'}</span>${esc(c.show)}` : '<span class="dim">Tornet</span>';
+  const last = S.feed[S.feed.length - 1], fresh = last && S.t - last.t <= RADIO_QUIET_S;
+  const sub = dec ? `${C.say.who ? '🚓' : '🧑‍💼'} <b>${esc(C.say.who || chiefOnDuty().name)}:</b> ${esc(C.say.text)}`
+    : F && !c ? followHtml(F).head : fresh ? `📻 ${esc(last.text)}` : '';
+  const tab = inc.n || S.warn ? 'events' : F ? 'follow' : 'now';
+  return `<button class="m-tick${inc.alert || S.warn ? ' alert' : ''}" data-act="tab:${tab}" data-hint="${TABS[tab][1]} – tryck för att visa"><div class="m-t1">${show}</div>${sub ? `<div class="m-t2">${sub}</div>` : ''}</button>`;
+}
+/** förvarningens text (utan knappen) */
+function warnText() { const m = warnHtml().match(/^<button[^>]*>([^<]*)/); return m ? m[1] : ''; }
+/** listen: paus, fart, zoom och flikarna */
+function barHtml(F, inc) {
+  const tabs = Object.entries(TABS).filter(([k]) => (k !== 'events' || inc.n || S.warn) && (k !== 'follow' || F) && ((k !== 'trig' && k !== 'strat') || S.started))
+    .map(([k, [i, n, h]]) => ikon(`tab:${k}`, i, n, h, UI.tab === k, k === 'events' && inc.alert ? ' data-alert="1"' : ''));
+  return ikon('pause', S.paused ? '▶' : '❚❚', S.paused ? 'Spela' : 'Paus', 'Pausa eller spela', S.paused)
+    + ikon('spdnext', SPD_TXT[S.speed] || '1×', 'Fart', 'Tryck för nästa fart: ¼×, ½×, 1×, 2×')
+    + ikon('wide', VIEW.wide ? '🔎' : '🔍', VIEW.wide ? 'Närbild' : 'Hela bredden', VIEW.wide ? 'Visa huset större – bilden scrollar i sidled (eller dubbeltryck i bilden)' : 'Visa hela husets bredd (eller dubbeltryck i bilden)', VIEW.wide)
+    + `<span class="m-sep"></span>` + tabs.join('');
+}
+function renderMob(F, inc) {
+  const busy = inc.alert || !!S.warn;
+  // flikar som öppnas och stängs av sig själva när situationen ändras (spelaren kan stänga dem igen)
+  const key = `${busy}|${inc.n}|${UI.tour ? UI.tour.key : ''}`;
+  if (key !== UI.mkey) {
+    UI.mkey = key;
+    const tf = UI.tour && UI.tour.focus.map(k => TAB_OF[k]).find(Boolean);
+    if (tf) UI.tab = tf;
+    else if (S.started && busy) UI.tab = 'events';
+  }
+  if (UI.tab === 'events' && !inc.n && !S.warn) UI.tab = null;
+  if (UI.tab === 'follow' && !F) UI.tab = null;
+  if ((UI.tab === 'trig' || UI.tab === 'strat') && !S.started) UI.tab = null;
+  const land = document.body.classList.contains('land');
+  const shown = [];
+  if (UI.tour) {
+    const offer = UI.tour.key.startsWith('offer');
+    paint('m-tour', `blk b-tour m-tour${offer ? ' offer' : ''}`, UI.tour.html);
+    shown.push(el('m-tour'));
+  }
+  if (UI.tab) {
+    const [i, n] = TABS[UI.tab];
+    let body = '', title = `${i} ${n}`;
+    if (UI.tab === 'events') body = warnHtml() + inc.html;
+    else if (UI.tab === 'now') body = nowHtml();
+    else if (UI.tab === 'trig') body = trigHtml();
+    else if (UI.tab === 'strat') body = stratHtml();
+    else if (UI.tab === 'follow' && F) { const f = followHtml(F); title = f.head; body = f.body; }
+    else if (UI.tab === 'more') body = moreHtml();
+    const hd = `<div class="m-sh"><b>${title}</b><span class="sp"></span>${UI.tab === 'follow' ? `<button class="btn xs" data-act="unfollow" data-hint="Sluta följa">Sluta följa</button>` : ''}<button class="blk-x" data-act="tab:close" data-hint="Stäng – bara bilden">✕</button></div>`;
+    const focus = UI.tour && UI.tour.focus.some(k => TAB_OF[k] === UI.tab) ? ' tour-hi' : '';
+    if (paint('m-sheet', `blk m-sheet t-${UI.tab}${focus}`, hd + `<div class="m-body">${body}</div>`) && UI.tab === 'follow' && F && F.kind === 'person') el('m-sheet').querySelector('.pic')?.appendChild(portrait);
+    shown.push(el('m-sheet'));
+  }
+  if (!land) { paint('m-tick', 'blk m-tickb', tickHtml(F, inc)); shown.push(el('m-tick')); }
+  paint('m-bar', 'blk m-bar', barHtml(F, inc)); shown.push(el('m-bar'));
+  side.classList.toggle('sheet', !!(UI.tab || UI.tour));
+  shown.forEach((e, i) => { if (side.children[i] !== e) side.insertBefore(e, side.children[i] || null); });
+  while (side.children.length > shown.length) side.lastChild.remove();
+  if (UI.tab === 'follow' && F && F.kind === 'person') drawPortrait(F.p);
+  tourSpots();
+}
 
 // ---------- Verktygstips: data-hint visas i en gul ruta vid det man pekar på (ingen statusrad) ----------
 // Med mus: efter en kort stund när pekaren vilar på knappen. Med finger: ett långt tryck (input.js låter då
@@ -416,5 +513,6 @@ window.addEventListener('keydown', ev => {
   if (ev.code === 'KeyH') { setCinema(!cinema); return; }
   if (ev.code !== 'Escape') return;
   if (cinema) { setCinema(false); ev.stopImmediatePropagation(); return; }
-  if (UI.view) { UI.view = null; ev.stopImmediatePropagation(); updatePanel(); }
+  if (UI.view) { UI.view = null; ev.stopImmediatePropagation(); updatePanel(); return; }
+  if (UI.tab && document.body.classList.contains('mob')) { UI.tab = null; ev.stopImmediatePropagation(); updatePanel(); }
 }, true);

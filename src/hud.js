@@ -449,13 +449,15 @@ let introKeys = /** @type {((ev: KeyboardEvent) => void)|null} */ (null);
 export function showIntro(mode = S.started ? 'help' : 'start', then = /** @type {(() => void)|null} */ (null)) {
   const help = mode !== 'start', wasPaused = S.paused;
   // pekskärm (telefon, surfplatta): inga tangenter och ingen mus att hålla över
-  const touch = matchMedia('(pointer: coarse)').matches;
+  const touch = matchMedia('(pointer: coarse)').matches, mob = document.body.classList.contains('mob');
   if (mode === 'help') S.paused = true;
   showOverlay(`<div class="card intro"><h1>TORNET${help ? ' · HJÄLP' : ''}</h1>
     <p>Välkommen till <b>Tornet</b> – åtta hissar styrda av <b>Hiss-O-Matic 3000</b>, ${FL.length} våningar och en massa folk med bråttom. <b>Huset sköter sig självt:</b> driftchefen tar besluten och berättar varför, och regissören 🎬 klipper bilden till det som händer. Luta dig tillbaka och titta.</p>
     <ul class="intro-short">
-      <li><b>${touch ? 'Tryck' : 'Klicka'}</b> på en person, en hiss eller en våning för att följa den – allt om den syns i kontrollpanelen ${innerWidth <= 800 ? 'under bilden' : 'till vänster'}.</li>
-      <li><b>Kontrollpanelen</b> anpassar sig efter vad som händer: när det är lugnt kan du framkalla incidenter och byta styrlogik, när något händer visar den bara det.</li>
+      ${mob ? `<li><b>Tryck</b> på en person, en hiss eller en våning för att följa den – allt om den finns under fliken 👤.</li>
+      <li><b>Listen</b> nertill: ❚❚ paus, fart, 🔍 hela bredden (eller dubbeltryck i bilden) och flikarna 📻 nu, ⚡ framkalla, 🎛️ styrning och ☰ mer. Raden ovanför visar vad som händer – när något händer öppnas 🚨 av sig själv.</li>`
+      : `<li><b>${touch ? 'Tryck' : 'Klicka'}</b> på en person, en hiss eller en våning för att följa den – allt om den syns i kontrollpanelen till vänster.</li>
+      <li><b>Kontrollpanelen</b> anpassar sig efter vad som händer: när det är lugnt kan du framkalla incidenter och byta styrlogik, när något händer visar den bara det.</li>`}
       <li>Hissen eller våningen du följer har egna knappar: framkalla ett hissfel, en brand eller släpp in besökare just där.</li>
       <li>Knapparna är <b>ikoner</b> – ${touch ? 'håll fingret på en' : 'vila musen på en'} så står det vad den gör.</li>
       ${touch ? '<li><b>Dra</b> i bilden med ett finger för att se resten av huset; två fingrar zoomar.</li>' : `<li class="intro-keys"><kbd>Mellanslag</kbd> paus · <kbd>−</kbd>/<kbd>+</kbd> hastighet · <kbd>H</kbd> biografläge · <kbd>S</kbd> styrlogik · <kbd>T</kbd> namnbrickor · <kbd>F</kbd> koppla loss/på kameran · <kbd>A</kbd> regissör (kameran väljer själv) · <kbd>Esc</kbd> sluta följa/tillbaka</li>`}

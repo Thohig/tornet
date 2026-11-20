@@ -1,5 +1,15 @@
 # Ändringar
 
+## November 2026 – ny mobilvy
+- På mobilen fyller bilden skärmen (ungefär tre fjärdedelar i stället för knappt hälften) och sidan scrollar aldrig – bara bilden.
+- Kontrollpanelens staplade fönster är borta på mobilen. I stället: en list nertill med paus, fart (en knapp som byter), 🔍 och flikarna 🚨 händelser, 📻 nu (dygnet, stapeln, radion, dagens siffror), ⚡ framkalla, 🎛️ styrning, 👤 det du följer och ☰ mer (kameran, ljudet, flaggorna, hjälpen, register, logg, inställningar, resultat). En flik öppnas som ett ark ovanför listen och bilden krymper medan den är öppen – inget ligger över bilden.
+- Textskylten, driftradion och dagens rad är en enda rad ovanför listen. Den visar vad regissören visar och driftchefens beslut, annars det senaste på radion eller det du följer. Tryck på raden för att öppna fliken som hör till.
+- En incident eller förvarning öppnar 🚨 av sig själv och stänger den när det är över. Rundvisningen öppnar fliken med det Berit pratar om.
+- Berits fråga om rundvisning är en liten bubbla (”Ska jag visa dig runt i huset?”) i stället för ett helt fönster.
+- 🔍 eller dubbeltryck i bilden växlar mellan närbild (som förut, scrollar i sidled) och hela husets bredd. Valet minns.
+- På tvären (telefon i liggande läge) ligger listen som en smal kolumn till höger och arket bredvid. Textskylten är kvar i bilden.
+- Hjälpen beskriver listen på mobilen. Skrivbordet är oförändrat.
+
 ## November 2026 – spela på GitHub Pages
 - Spelet ligger på GitHub Pages: <https://thohig.github.io/tornet/> (byggs från `main`, cachas 10 min). Ingen lokal server behövs för att spela; `serve.py` behövs bara när man utvecklar.
 - Startappen `~/Projekt/Github Pages/Tornet.app` öppnar Pages-adressen i Safari i stället för att starta `serve.py --auto-stop`.

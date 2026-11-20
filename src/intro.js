@@ -68,8 +68,11 @@ function paint() {
   const btn = (a, t, hint, cls = '', dis = false) => `<button class="btn xs ${cls}" data-act="visning:${a}" data-hint="${hint}"${dis ? ' disabled' : ''}>${t}</button>`;
   let who = guideName(), head = '🛎️ Rundvisning', say = '', nav = '', dots = '', focus = [], spot = [], key = '';
   if (!v) {
-    key = 'offer';
-    say = `Hej och välkommen till Tornet! Jag heter ${who} och sitter i receptionen. Vill du att jag visar dig runt? Huset fortsätter som vanligt under tiden – händer det något går vi och tittar.`;
+    // (mobilen: en kort bubbla i stället för hela hälsningen)
+    const mob = document.body.classList.contains('mob');
+    key = mob ? 'offer-mob' : 'offer';
+    say = mob ? 'Ska jag visa dig runt i huset?'
+      : `Hej och välkommen till Tornet! Jag heter ${who} och sitter i receptionen. Vill du att jag visar dig runt? Huset fortsätter som vanligt under tiden – händer det något går vi och tittar.`;
     nav = `<span class="sp"></span>${btn('nej', 'Nej tack', `${who} sitter kvar i receptionen – du kan fråga henne sedan (?)`)}${btn('ja', 'Ja tack!', `${who} ringer efter en vikarie och visar sedan runt`, 'tour-go')}`;
   } else if (v.ph === 'order') {
     key = 'order';

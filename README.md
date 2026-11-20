@@ -72,6 +72,8 @@ Styrlogiken kan bytas medan huset kör:
 
 Allt annat finns i kontrollpanelen till vänster. Varje ikon förklaras när du håller muspekaren över den.
 
+**På mobilen** fyller bilden skärmen och sidan scrollar aldrig. Nertill finns en list med ❚❚ paus, fart (tryck för nästa), 🔍 närbild/hela bredden (eller dubbeltryck i bilden) och flikarna 🚨 händelser, 📻 nu, ⚡ framkalla, 🎛️ styrning, 👤 det du följer och ☰ mer (kameran, ljudet, språket, register, logg, inställningar, resultat). Raden ovanför listen visar vad som händer. En flik öppnas ovanför raden och bilden krymper så länge den är öppen. När något händer öppnas 🚨 av sig själv. Håll fingret på en ikon så står det vad den gör. På tvären ligger listen som en smal kolumn till höger.
+
 ## Utveckling
 
 Node behövs bara för tester och typkontroll.
