@@ -13,7 +13,7 @@ import { fl } from './util.js';
 import { BOHAG, BOHAG_BY_TYPE, CAR_H, DOCK, DOOR_X, FL, HOME_FLOORS, LOBBY, floorWith, floorY, shaftCX } from './config.js';
 import { S, dayEvent, hour, log } from './state.js';
 import { makePerson, needsFreight, pev, pn, releaseSpot, setTrip } from './people.js';
-import { allowedPos, costBased, outReason, OUT_TEXT, prio, posOf } from './dispatch.js';
+import { allowedPos, costBased, outReason, outText, prio, posOf } from './dispatch.js';
 import { canBrakeTo, deckFloor, unload, releaseCalls } from './elevators.js';
 import { hoistHalt, hoistServes } from './hoist.js';
 import { spawnCrew } from './crew.js';
@@ -215,7 +215,7 @@ function moveTick(dt) {
     }
   }
   // varuhissen gick sönder mitt i flytten: det som går tar hissbalken
-  if (vDown(V) && M.hoist && !M.notes.vdown && V && V.mode !== 'normal') { M.notes.vdown = true; log(`🚚 ${V.name} ${OUT_TEXT[V.mode] || 'går inte'} – flyttgubbarna tar allt med hissbalken`, 'alert', V.color); }
+  if (vDown(V) && M.hoist && !M.notes.vdown && V && V.mode !== 'normal') { M.notes.vdown = true; log(`🚚 ${V.name} ${outText(V.mode) || 'går inte'} – flyttgubbarna tar allt med hissbalken`, 'alert', V.color); }
   // varuhissen: filtarna hängs upp i början; sedan låser Smart den bara för de stora möblerna,
   // de enkla lägena så länge bärarna jobbar (det som är kvar efter dem går med hissbalken)
   if (V && !V.ffCar) { // (under branden är varuhissen brandkårens)

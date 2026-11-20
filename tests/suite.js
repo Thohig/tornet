@@ -37,7 +37,7 @@ import { getLang, setLang, tr } from '../src/lang.js';
 import EN_TEXTS from '../src/lang-en.js';
 import { CUES, PIECES, layout, partOf } from '../src/scoreData.js';
 import { hz, onGrid } from '../src/music.js';
-import { CHAOS_NAMES, chaosReady } from '../src/chaos.js';
+import { chaosNames, chaosReady } from '../src/chaos.js';
 import { dogLockFloor } from '../src/dog.js';
 import { BOILER_STAND, DOCK } from '../src/config.js';
 /** @typedef {import('../src/elevators.js').Elevator} Elevator */
@@ -2103,7 +2103,7 @@ test('Murphys lag: kaosknappen startar en kedja av allt som kan gå fel, en gån
     const ev = S.stats.events.find(x => x.type === 'chaos');
     if (S.chaos || !ev) { fails.push(`frö ${seed}: kedjan tog aldrig slut (steg ${S.chaos ? S.chaos.i : '?'})`); return; }
     const n = +(ev.text.match(/^(\d+)/) || [0, 0])[1];
-    did += n; missed += Object.keys(CHAOS_NAMES).length - n;
+    did += n; missed += Object.keys(chaosNames()).length - n;
     if (n < 8) fails.push(`frö ${seed}: bara ${n} saker gick fel – ${ev.text}`);
     trap = Math.max(trap, w.maxTrap);
     if (w.maxTrap > DOCK_TRAP_S) fails.push(`frö ${seed}: någon satt instängd ${Math.round(w.maxTrap)} s`);

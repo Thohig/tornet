@@ -15,6 +15,7 @@ import { CREW_BY, alarm, atPost, crewPerson, spawnCrew } from './crew.js';
 import { chiefNote, chiefOnDuty } from './chief.js';
 import { nextTrainMin } from './train.js';
 import { techOf } from './service.js';
+import { detours } from './systems.js';
 import { fl } from './util.js';
 /** @typedef {import('./people.js').Person} Person */
 /** @typedef {import('./elevators.js').Elevator} Elevator */
@@ -252,11 +253,8 @@ function happening(v, here, urgent) {
         : `${e.name} har krånglat${stuck ? ' – och det sitter folk i den' : ''}. ${tech ? `Där är ${tech.name}, hissteknikern – hen lagar den.` : 'Hisstekniker är på väg.'} Det står i panelen vad som är fel och när den går igen.`,
       () => e.mode !== 'broken' && e.mode !== 'snapped', `${e.name} hann bli lagad innan vi kom dit – snabbt jobbat!`));
   }
-  if (S.pano && S.pano.ph !== 'done') {
-    list.push(mk(`pano:${S.pano.t0}`, LOBBY, 'Fast på fasaden', 'Panoramahissen sitter fast på fasaden! Kom, vi går ut på gatan och tittar',
-      () => 'Titta upp! Panoramahissen sitter fast utanpå huset. Räddningstjänsten tar ner folk – med rep från taket eller stegbilens stege.',
-      () => !S.pano || S.pano.ph === 'done', 'Räddningstjänsten hann få ner alla innan vi kom ut.'));
-  }
+  // (incidenterna i registret: panoramahissen på fasaden … – systems.js)
+  for (const d of detours(here)) list.push(mk(d.k, d.f, d.title, d.oj, d.there, d.over, d.missed, !!d.hold));
   if (S.move && S.move.state === 'on' && DOCK >= 0) {
     list.push(mk(`move:${S.move.at}`, DOCK, 'Flyttdag', 'Flyttbilen är här! Kom, vi tittar till lastkajen',
       () => 'Flyttdag! Bärarna kör varuhissen i oberoende drift – den tar inga andra så länge. Stora möbler kan få åka hissbalken från taket.',

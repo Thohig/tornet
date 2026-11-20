@@ -47,20 +47,16 @@ import { fl } from './util.js';
 import { activityRate, roomUnits, FLOOR_HOURS, FL, NAMES, ROLE_NAMES, floorOpen, OFFICE_FLOORS, SPOTS, STAIR_X, VISIT_WHY, WAIT_X1, WALK, LOBBY, CAFE, MEZZ, floorWith, EL, SKY, CAST, CREW, STATION, TRAIN_X0, TRAIN_X1, DOCK } from './config.js';
 import { S, clockStr, hour, log, occOf, setOcc } from './state.js';
 import { inFireZone, requestRide, loadKg, personKg, eta, keyed, posOf, costBased, prio, outLong, servesNow } from './dispatch.js';
-import { techNext, maybeStumble, fireCrank, foremanNext } from './service.js';
-import { moverNext, moverTimer, medicNext, moveBoard } from './visits.js';
+import { maybeStumble, fireCrank } from './service.js';
+import { moverTimer, moveBoard } from './visits.js';
 import { alwaysStairs, castBoard, castNext, castPizza, castWaitTick, flushSay, incidentTalk, say } from './cast.js';
 import { kickOff } from './elevators.js';
 import { arriveByCar, backFromAssembly, fireReturn, leaveBuilding, resNext, homeSpot } from './life.js';
-import { ffNext } from './incidents.js';
 import { CREW_LOOK, crewNext, crewSpot, dutyNext, dutySpot } from './crew.js';
-import { rescueNext } from './pano.js';
-import { gondolaCrewNext } from './gondola.js';
-import { chaseNext, chaseSpot, dogArrived, dogNext, dogSpot, dogTimer, groomerNext } from './dog.js';
 import { buttonsMode, carButtonMistakes } from './buttons.js';
 import { tourNext, tourSpot } from './tour.js';
 import { guestNext, keyNext, visningSpot } from './visning.js';
-import { heistOn, heistSpot, hostageNext, robberNext } from './heist.js';
+import { sysArrive, sysNext, sysRole, sysSeized, sysSpot } from './systems.js';
 
 // ---------- Människor ----------
 export const SKIN = ['#ffdbb8', '#f6c48f', '#d9a066', '#a8693f', '#7a4a2a', '#ffe4c8'];
@@ -245,14 +241,12 @@ const ROLE_SPOT_DESC = {
 export function pickSpot(p, f) {
   const list = SPOTS[f];
   if (p.crewId) return crewSpot(p, f);
-  // (kuppen: gänget står synligt i hallen, heist.js)
-  if (p.robber) return heistSpot(p, f);
   // (vaktmästaren på uppdrag står synligt i hallen, crew.js)
   const ds = dutySpot(p, f);
   if (ds) return ds;
-  // (den lösa hunden och de som jagar den syns i hallen, dog.js)
-  if (p.dog) return dogSpot(p);
-  if (p.chase) return chaseSpot(p);
+  // (delsystemen: kuppens gäng, den lösa hunden och de som jagar den syns i hallen – systems.js)
+  const ss = sysSpot(p, f);
+  if (ss !== undefined) return ss;
   // (rundvisningen: gästen står bredvid guiden i hallen, visning.js)
   const vs = p.guest || p.touring ? visningSpot(p, f) : null;
   if (vs) return vs;
@@ -333,7 +327,7 @@ export function walk(p, dt, speed = WALK) {
   p.face = Math.sign(dx); p.x += p.face * st; p.walkPhase += dt * 10 * p.speedMul;
   return false;
 }
-export const liftsAvailable = () => S.power && !(S.fire && S.fire.mode === 'recall') && S.elevators.some(e => e.mode === 'normal' && !e.off && !e.hijack);
+export const liftsAvailable = () => S.power && !(S.fire && S.fire.mode === 'recall') && S.elevators.some(e => e.mode === 'normal' && !e.off && !sysSeized(e));
 /** @param {Person} p */
 export function updatePerson(p, dt) {
   switch (p.state) {
@@ -557,8 +551,7 @@ export function exitDone(p) {
   else if (p.kind === 'res') p.timer = p.floor === p.home ? rand(12, 25) : rand(25, 45);
   // framme vid tunnelbanan men inte på väg med tåget (sista tåget har gått): vidare upp till entrén
   else if (p.floor === STATION && !p.role) { p.timer = rand(0.3, 1.2); pev(p, S.trainDone ? 'Inga fler tåg i natt – går upp till entrén' : 'Tittar på tidtabellen'); }
-  else if (p.dog) { p.timer = dogTimer(); dogArrived(p); } // (den lösa hunden stannar en stund, dog.js)
-  else if (p.chase || p.role === 'hundfrisör') p.timer = 1.5;
+  else if (sysArrive(p)) { /* (delsystemen sätter timern: den lösa hunden, de som jagar den, kuppens gäng – systems.js) */ }
   else if (p.role === 'bud') { p.timer = rand(8, 15); S.stats.deliveries++; }
   else if (p.role === 'flyttgubbe') p.timer = moverTimer(p); // (i lägenheten: packar eller skruvar isär nästa lass)
   else if (p.role === 'ambulans') p.timer = rand(5, 8);
@@ -567,7 +560,6 @@ export function exitDone(p) {
   else if (p.crewId) p.timer = CREW_LOOK; // (personalen tittar ofta upp: rast, larm, skiftbyte – crew.js)
   else if (p.role === 'arbetsledare') p.timer = 6; // (tittar till hissen, se foremanNext i service.js)
   else if (p.role === 'räddare') p.timer = 4;
-  else if (p.robber) p.timer = 3; // (gänget, heist.js) // (räddningstjänsten vid panoramahissen, pano.js)
   else if (p.role) p.timer = { 'väktare': rand(8, 15), 'städare': rand(25, 45), 'vaktmästare': rand(30, 50), 'nattdj': rand(60, 120), 'nattekniker': p.floor === LOBBY ? rand(4, 8) : rand(30, 70) }[p.role];
   else if (p.floor === CAFE) p.timer = rand(25, 60);
   else if (p.kind === 'vis') p.timer = rand(20, 50);
@@ -614,13 +606,11 @@ export function decideNext(p) {
   // (teknikern vid en korg där folk sitter fast släpper ut dem först – service.js)
   if (inFireZone(p.floor) && p.role === 'hisstekniker' && fireCrank(p)) return null;
   if (inFireZone(p.floor) && !p.ff) { p.evac = true; p.evacFrom = p.floor; return [evacFloor(p), 'BRANDLARM – utrymning!', true]; }
-  // (kuppen: hjälten går dit kuppen säger, gisslan samlas i Sky Café – heist.js)
-  if (p.hero && heistOn()) return null;
-  if (p.hostage) { const r = hostageNext(p); if (r !== undefined) return r; }
+  // (delsystemen: kuppens hjälte och gisslan, den som jagar den lösa hunden – systems.js)
+  const sn = sysNext(p);
+  if (sn !== undefined) return sn;
   // (väktaren som visar runt: rundvisningen bestämmer vart han går, visning.js)
   if (p.touring && p.role && !p.crewId) return null;
-  // (den som jagar den lösa hunden går dit hunden är, dog.js)
-  if (p.chase && !p.role) return chaseNext(p);
   if (p.role) return roleNext(p, h);
   if (p.collapsed) { p.timer = 1e9; return null; } // ligger kvar tills ambulansen kommer
   if (p.kind === 'res') return resNext(p, h);
@@ -695,17 +685,12 @@ function roleNext(p, h) {
   if (p.crewId) return crewNext(p, h);
   // (nyckelbäraren låser upp ett stängt stopp åt rundvisningen, visning.js)
   if (p.keys !== undefined && p.keys !== null) { const r = keyNext(p); if (r !== undefined) return r; }
+  // (incidenternas och besökens roller – tekniker, räddare, hund, flyttgubbe, brandman, rånare … – står i registret, systems.js)
+  const sr = sysRole(p, h);
+  if (sr !== undefined) return sr;
+  // husets egna roller
   switch (p.role) {
     case 'bud': return [p.exitFloor, 'Paketet levererat – tillbaka till lastbilen'];
-    case 'hisstekniker': return techNext(p);
-    case 'arbetsledare': return foremanNext(p);
-    case 'räddare': return p.gondola ? gondolaCrewNext(p) : rescueNext(p);
-    case 'hund': return dogNext(p);
-    case 'hundfrisör': return groomerNext(p);
-    case 'flyttgubbe': return moverNext(p);
-    case 'ambulans': return medicNext(p);
-    case 'brandman': return ffNext(p);
-    case 'rånare': return robberNext(p);
     case 'väktare': {
       if (h >= 27 || p.shiftEnd) return [p.exitFloor, 'Passet är slut – går hem'];
       for (let i = 0; i < p.route.length; i++) {

@@ -1,8 +1,8 @@
 // Regissören: automatisk kamera som letar upp det mest sevärda i huset och klipper dit.
 // Rent gränssnitt: läser S, ändrar aldrig simuleringen (slumpen är vrand). Kameran rör sig via S.camTarget
 // precis som när man följer en hiss. Allt manuellt (scrolla, följa, klicka på någon) stänger av regissören.
-import { BREAK, BX1, CONTROL, CREW, DOCK, FLOOR_H, GROUND_Y, LOBBY, ROOF, STATION, TOP, floorWith, floorY, shaftCX } from './config.js';
-import { BANK } from './heist.js';
+import { BREAK, BX1, CONTROL, CREW, DOCK, FLOOR_H, GROUND_Y, LOBBY, ROOF, STATION, TOP, floorY, shaftCX } from './config.js';
+import { incUi } from './incui.js';
 import { alarm, chiefOnDuty } from './chief.js';
 import { CREW_BY, atPost, crewPerson, postFloor } from './crew.js';
 import { S, hour } from './state.js';
@@ -80,51 +80,15 @@ function shots() {
   // urgent: något som just bryter ut (förvarning, blixt) får klippa in direkt, utan att vänta ut MIN_HOLD
   const add = (key, score, kind, id, why, urgent = false) => out.push({ key, score, kind, id, why, urgent });
   // ---------- incidenter och händelser ----------
-  // förvarningar: kameran hinner dit innan det händer
-  const W = S.warn;
-  if (W) {
-    const top = ROOF >= 0 ? ROOF : TOP;
-    if (W.type === 'fire') add('warn', 90, 'floor', W.floor, `👃 Det luktar bränt på ${fl(W.floor)}`, true);
-    else if (W.type === 'power') add('warn', 80, 'floor', LOBBY, '💡 Lamporna flimrar…', true);
-    else if (W.type === 'storm') add('warn', 80, 'floor', top, '🌥️ Ovädret drar in', true);
-    else if (W.type === 'heist') add('warn', 84, 'floor', DOCK, '🚐 En skåpbil vid lastkajen…', true);
-    else if (W.type === 'gondola') add('warn', 82, 'cleaner', 0, '🔩 Det gnisslar i gondolens vinsch', true);
-    else if (W.type === 'dog') add('warn', 78, 'floor', floorWith('spa'), '🐕 Det skäller på Vovve Spa', true);
-    else if (W.type === 'leak') add('warn', 76, 'floor', DOCK, '💧 Det knackar i rören', true);
-    else if (W.type === 'heat') add('warn', 82, 'floor', Math.min(top, S.elevators[W.car].maxF), `🌡️ Motorn i ${S.elevators[W.car].name} brummar`, true);
-    else add('warn', 86, 'car', W.car, W.type === 'cable' ? `🪢 Linorna i ${S.elevators[W.car].name} knarrar`
-      : W.type === 'pano' ? `🔩 ${S.elevators[W.car].name} hackar på fasaden` : `🔩 ${S.elevators[W.car].name} gnisslar`, true);
-  }
+  // förvarningar: kameran hinner dit innan det händer (registret, incui.js)
+  const W = S.warn, hd = { visible, name1 };
+  const wu = W && incUi().find(u => u.key === W.type && u.warn);
+  if (wu) wu.warn(W, add, hd);
   // driftchefen fattar ett beslut: kameran klipper till kontrollrummet en stund (och sedan tillbaka) – utom
   // medan en hiss nödsänks: då visas sänkningen och beslutet syns i kontrollrumspanelen
   const C = S.chief, lowering = S.elevators.some(e => e.mode === 'rescue');
   if (C && C.on && C.say && C.say.dec && CONTROL >= 0 && S.t - C.say.t0 < 3 && !lowering)
     add('chief', 88, 'floor', CONTROL, `${C.say.who ? '🚓' : '🧑‍💼'} ${C.say.who || chiefOnDuty().name}: ${C.say.text}`, S.t - C.say.t0 < 1);
-  // kuppen: skåpbilen och gänget, borren i valvet, den som blev över i trapporna, flykten och polisen
-  const Hs = S.heist;
-  if (Hs) {
-    const hero = S.people.find(p => p.id === Hs.hero && !p.dead);
-    if (Hs.ph === 'in') add('heist', 99, 'floor', DOCK, '🚐 Fem män i overall vid lastkajen', S.t - Hs.t0 < 1);
-    else if (Hs.ph === 'hold' && S.t - Hs.holdT < 6) add('heist', 100, 'floor', CONTROL, '🚐 RÅN! Gänget tar driftcentralen', S.t - Hs.holdT < 1);
-    else if (Hs.ph === 'flee') add('heist', 100, 'floor', Hs.fleeF, '💰 Gänget flyr med guldet', S.t - Hs.fleeT < 1);
-    else if (Hs.ph === 'done' && Hs.caught) add('heist', 70, 'floor', LOBBY, '🚓 Gänget leds ut i handfängsel');
-    else if (Hs.ph === 'hold') {
-      if (hero && hero.state !== 'office' && visible(hero)) add('hero', 94, 'person', hero.id, `🤫 ${name1(hero)} smyger i trapporna`);
-      else if (hero && Hs.heroStep === 4) add('hero', 92, 'person', hero.id, `🔦 ${name1(hero)} signalerar till polisen`);
-      add('vault', 80, 'floor', BANK, S.t < Hs.drillOff ? '🔌 Borren har tystnat!' : `💰 Borren i valvet: ${Math.round(Hs.drill * 100)} %`);
-      if (Hs.police && Hs.stormAt - S.t < 8) add('storm', 98, 'floor', Hs.plan === 'garage' ? DOCK : ROOF >= 0 ? ROOF : TOP, '🚓 Insatsstyrkan går in!', true);
-    }
-  }
-  // (samma nyckel hela branden: när brandmännen är framme visar våningen dem med slangen – eller stegbilens stege)
-  if (S.fire) add('fire', 100, 'floor', S.fire.floor, S.fire.outAt === null ? `🔥 Brand på ${fl(S.fire.floor)}`
-    : S.people.some(p => p.ff && p.state === 'office' && p.floor === S.fire.floor) ? `🚒 Brandmännen släcker på ${fl(S.fire.floor)}`
-    : `🚒 Stegbilen släcker ${fl(S.fire.floor)} utifrån`, S.t - S.fire.t0 < 2);
-  // brandbilen kör in med blåljus på gatan (pixbuilding.js) strax innan kåren är framme
-  if (S.fire && Math.abs(S.fire.brigadeAt + 1.5 - S.t) < 5) add('engine', 104, 'street', 0, S.fire.brigade ? '🚒 Brandmännen springer in' : '🚒 Brandbilen kommer', !S.fire.brigade);
-  // brandmännen på väg upp (i brandhissen eller trapphuset), och tillbaka till bilen när det är släckt
-  const ff = S.people.find(p => p.ff && !p.dead && p.state !== 'office' && visible(p));
-  if (ff && S.fire) add('ff', 92, 'person', ff.id, '🚒 Brandmännen går in');
-  else if (ff && S.brigade) add('ffout', 48, 'person', ff.id, '🚒 Brandmännen går tillbaka till bilen');
   // Stadsturen: bussen som kommer och går (gatan), guiden med flaggan och gruppen på takterrassen
   const T = S.tour;
   if (T) {
@@ -152,35 +116,8 @@ function shots() {
     if (S.heli.state === 'parked') add('heliP', 14, 'floor', ROOF, '🚁 Helikoptern väntar på taket');
     else add('heli', 75, 'floor', ROOF, S.heli.state === 'land' ? '🚁 Helikoptern landar' : '🚁 Helikoptern lyfter');
   }
-  // panoramahissen fast på fasaden: korgen, repet och den som firas ner (pano.js)
-  const Pn = S.pano;
-  if (Pn && Pn.ph !== 'done') {
-    const pe = S.elevators[Pn.car], rider = Pn.rider ? S.people.find(p => p.id === Pn.rider.id) : null;
-    if (rider) add('pano', 94, 'person', rider.id, `🧗 ${rider.name} ${Pn.setup === 'rope' ? 'firas ner längs fasaden' : 'klättrar nerför stegen'} (${Pn.out + 1}/${Pn.n})`, S.t - Pn.rider.t0 < 0.6);
-    else add('pano', Pn.ph === 'stuck' ? 86 : 84, 'car', pe.id, Pn.ph === 'rig' ? (Pn.how === 'rope' ? `🧗 Räddarna riggar repet ovanför ${pe.name}` : `🚒 Stegbilen reser stegen mot ${pe.name}`)
-      : `🛗 ${pe.name} sitter fast på fasaden · ${pe.passengers.length} instängda`, S.t - Pn.t0 < 2);
-  }
-  // fönsterputsaren som sitter fast (gondola.js): gondolen, och Hasse i repet
-  const Gs = S.gondola;
-  if (Gs && Gs.ph === 'stuck') {
-    const h = S.people.find(p => p.role === 'fönsterputsare' && p.crewId && !p.dead);
-    if (Gs.ropeY !== null && h) add('gondola', 92, 'person', h.id, `🧗 ${h.name} firas ner till takterrassen`);
-    else add('gondola', 84, 'cleaner', 0, Gs.how === 'crank' && S.t - Gs.t0 > 20 ? '🪟 Gondolen vevas upp – en våning i taget' : `🪟 ${h ? h.name : 'Fönsterputsaren'} sitter fast i gondolen`, S.t - Gs.t0 < 2);
-  }
-  // den lösa hunden (dog.js): följ pudeln
-  const Dg = S.dog;
-  if (Dg && Dg.ph === 'loose') {
-    const dog = S.people.find(p => p.id === Dg.dog && !p.dead);
-    if (dog) add('dog', 80, 'person', dog.id, `🐕 ${Dg.name} springer runt i huset${Dg.tired ? ' – nu ligger hon och flämtar' : ''}`, S.t - Dg.t0 < 2);
-  }
-  // vattenläckan (leak.js): där röret sprack, sedan vaktmästaren som springer till pannrummet
-  const Lk = S.leak;
-  if (Lk && Lk.ph === 'leak') {
-    const jan = S.people.find(p => p.id === Lk.jan && !p.dead);
-    if (S.t - Lk.t0 < 8) add('leak', 88, 'floor', Lk.src, `🚿 Ett rör har spruckit på ${fl(Lk.src)}`, S.t - Lk.t0 < 1);
-    else if (!Lk.shut && jan) add('leak', 80, 'person', jan.id, `🔧 ${jan.name} springer till huvudkranen`);
-    else add('leak', 50, 'floor', Math.min(...Lk.wet), '🚿 Det droppar fortfarande');
-  }
+  // incidenterna i registret (incui.js): kuppen, branden, panoramahissen, gondolen, hunden, läckan …
+  for (const u of incUi()) if (u.shots) u.shots(add, hd);
   // husets personal (crew.js): skyndar tillbaka till kontrollrummet när larmet går, byter skift och tar rast
   for (const p of S.people) {
     if (p.dead) continue;

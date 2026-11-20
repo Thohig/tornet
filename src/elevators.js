@@ -5,7 +5,7 @@ import { ARR, fl } from './util.js';
 import { ACC, CAP, DOOR_T, DWELL, EL, LOBBY, VMAX, shaftCX, CAR_H, floorY } from './config.js';
 import { S, log } from './state.js';
 import { arriveOnFloor, liftsAvailable, pev, pn, setTrip, toStairs, queueSpot } from './people.js';
-import { safeFloor, aheadOf, allowed, allowedDest, allowedPos, assignedTo, isFull, maybePark, rebuildPicks, stopFloors, loadKg, personKg, slotsFull, benched, keyed, posOf, outReason, OUT_TEXT, etaOutcome } from './dispatch.js';
+import { safeFloor, aheadOf, allowed, allowedDest, allowedPos, assignedTo, isFull, maybePark, rebuildPicks, stopFloors, loadKg, personKg, slotsFull, benched, keyed, posOf, outReason, outText, etaOutcome } from './dispatch.js';
 import { answerCalls, buttonsMode, clearCall } from './buttons.js';
 import { panoDue, panoStick } from './pano.js';
 import { maybeBreak, heatOnStop, heatMul, levelStart, maybeStumble, snapStep, snapDue, snapCable, trapDue, trapBreak } from './service.js';
@@ -106,7 +106,7 @@ export function releaseCalls(e, why, keep = /** @type {((p: any) => boolean)|nul
 export function setMode(e, m) {
   const was = e.mode;
   e.mode = m;
-  if (m !== 'normal' && was === 'normal') releaseCalls(e, OUT_TEXT[m] || m);
+  if (m !== 'normal' && was === 'normal') releaseCalls(e, outText(m) || m);
 }
 /** @param {Elevator} e */
 export function updateElevator(e, dt) {
@@ -123,7 +123,7 @@ export function updateElevator(e, dt) {
   // hissen tas ur trafiken (överhettad, vind, avstängd, service, brandzon): släpp hämtningarna en gång, när det händer
   // (styrningen tilldelar den inga nya så länge orsaken finns kvar)
   const out = outReason(e);
-  if (out && out !== e.outWas) releaseCalls(e, OUT_TEXT[out]);
+  if (out && out !== e.outWas) releaseCalls(e, outText(out));
   e.outWas = out;
   // efter ett strömavbrott startar hissarna om en i taget
   if (e.restartAt && S.t < e.restartAt) { if (e.state === 'moving') e.v = 0; return; }

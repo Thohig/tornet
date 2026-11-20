@@ -24,9 +24,8 @@ import { guideName } from './visning.js';
 import { SPEEDS, extraActions, uiHooks } from './input.js';
 import { act } from './actions.js';
 import { chaosReady } from './chaos.js';
-import { gondolaCandidate } from './gondola.js';
-import { dogPossible } from './dog.js';
-import { LEAK_FLOORS, leakPossible } from './leak.js';
+import { LEAK_FLOORS } from './leak.js';
+import { incUi } from './incui.js';
 
 const side = $('side'), portrait = $('portrait');
 
@@ -197,17 +196,8 @@ function followHtml(F) {
 }
 function trigHtml() {
   const fire = `<select name="fireFloor" data-hint="<b>Brandvåning</b><br>Våningen som börjar brinna"><option value="">slumpad</option>${FIRE_FLOORS.map(f => `<option value="${f}"${String(f) === UI.fireFloor ? ' selected' : ''}>${fl(f)} · ${esc(FL[f].short)}</option>`).join('')}</select>`;
-  const t = (k, icon, name, hint) => ikon(`trig:${k}`, icon, name, hint);
   return `<div class="row ico-grid"><span class="trig-fire">${ikon(`trig:fire:${UI.fireFloor}`, '🔥', 'Brand', 'Det börjar brinna – på vald våning eller en slumpad', false, S.fire ? ' disabled' : '')}${fire}</span>`
-    + t('power', '⚡', 'Strömavbrott', 'Strömmen går i hela huset') + t('storm', '🌬️', 'Storm', 'Ett oväder: de höga schakten svajar')
-    + t('lightning', '⛈️', 'Blixt', 'Blixten slår ner (och ibland ut strömmen)')
-    + t('fault', '🔧', 'Hissfel', 'En slumpad hiss går sönder') + t('heat', '🌡️', 'Het motor', 'En motor överhettas')
-    + t('cable', '🪢', 'Linbrott', 'Linorna går av i en hiss') + t('pano', '🧗', 'Fast på fasaden', 'Panoramahissen fastnar utanför huset – de instängda måste firas ner')
-    + t('medical', '🚑', 'Ambulans', 'Någon svimmar') + t('move', '🚚', 'Flytt', 'Ett hushåll flyttar') + t('vip', '🚁', 'VIP', 'VIP-helikoptern landar')
-    + t('train', '🚇', 'Tågstörning', 'Tåget blir försenat') + t('cold', '❄️', 'Kyla', 'En kall dag: dörrarna i entrén tar emot')
-    + t('heatwave', '☀️', 'Värmebölja', 'Motorerna kyls sämre') + ikon('trig:heist', '🚐', 'Kupp!', 'Ett rånargäng tar över huset för att tömma valvet på 5:an. Kräver en ledig lastkaj', false, S.heist || S.fire ? ' disabled' : '') + ikon('trig:visning', '🛎️', 'Rundvisning nu', 'Den som kan visar en gäst runt direkt – guiden avbryter rasten, och har något stängt ringer hen efter nycklarna', false, S.visning && S.visning.ph !== 'order' ? ' disabled' : '') + ikon('trig:gondola', '🪟', 'Gondolen kärvar', 'Fönsterputsarens gondol fastnar mitt på fasaden – bara när han är ute och putsar (ungefär 08–16)', false, S.gondola || !gondolaCandidate() ? ' disabled' : '')
-    + ikon('trig:dog', '🐕', 'Hunden rymmer', 'En pudel sliter sig ur kopplet (eller smiter ut ur kenneln på Vovve Spa) och springer runt i huset', false, S.dog || !dogPossible() ? ' disabled' : '')
-    + ikon('trig:leak', '🚿', 'Vattenläcka', 'Ett vattenrör spricker på en slumpad våning – vattnet rinner nedåt och in i hisschakten', false, S.leak || !leakPossible() ? ' disabled' : '')
+    + incUi().filter(u => u.trig).map(u => ikon(`trig:${u.key}`, u.trig.icon, u.trig.name, u.trig.hint, false, u.trig.off && u.trig.off() ? ' disabled' : '')).join('') // (registret, incui.js)
     + ikon('bus', '🚌', 'Turistbuss!', 'Stadsturen: en guide och fjorton turister ska se takterrassen och Sky Café. Kommer bara när de har öppet (ungefär 07:30–16)', false, S.fire || S.tour ? ' disabled' : '')
     + `</div><div class="row">${chaosBtn()}</div><div class="dim small">Följ en hiss eller våning för att framkalla något just där.</div>`;
 }
