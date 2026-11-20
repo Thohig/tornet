@@ -153,16 +153,20 @@ export function incUi() {
       if (Pn && Pn.ph !== 'done') {
         const e = S.elevators[Pn.car], reach = ladderReach(e), windy = ropeWindy();
         const b = (h, txt, ok, hint) => `<button class="btn sm${Pn.how === h ? ' on' : ''}" data-act="pano:${h}" ${ok ? '' : 'disabled'} data-hint="${hint}">${txt}</button>`;
-        const status = !Pn.crew ? `Räddningstjänsten är på väg (~${cd(Pn.crewAt - S.t)}s).`
+        // alla är ute (räddarna packar ihop innan det är klart, pano.js): inga val kvar
+        const left = e.passengers.length + (Pn.rider ? 1 : 0), allOut = Pn.n > 0 && left === 0 && Pn.out >= Pn.n;
+        const status = allOut ? `Alla ${Pn.n} är ute – räddarna packar ihop.`
+          : !Pn.crew ? `Räddningstjänsten är på väg (~${cd(Pn.crewAt - S.t)}s).`
           : !Pn.how ? 'Räddningstjänsten är på plats och väntar på besked.'
           : Pn.ph === 'stuck' ? (Pn.how === 'rope' ? 'Räddarna är på väg upp på taket med repet.' : 'Stegbilen ställer sig under korgen.')
           : Pn.ph === 'rig' ? (Pn.how === 'rope' ? 'Räddarna riggar repet ovanför korgen.' : 'Stegen reses mot korgen.')
           : Pn.rider ? `${esc((S.people.find(p => p.id === Pn.rider.id) || { name: 'Någon' }).name)} ${Pn.setup === 'rope' ? 'firas ner' : 'klättrar ner'} – ${Pn.out}/${Pn.n} ute.`
           : Pn.setup === 'rope' && windy ? `För blåsigt för repet (${windMs()} m/s) – räddarna väntar på taket. ${Pn.out}/${Pn.n} ute.` : `${Pn.out}/${Pn.n} ute.`;
         parts.push(card('pano', 'pano', `🧗 ${esc(e.name)} sitter fast på fasaden`, `
-          <div class="inc-s">Hydrauliken har låst sig och korgen hänger utanpå huset med <span class="lv">${e.passengers.length + (Pn.rider ? 1 : 0)}</span> instängda. Den går inte att veva ner – de måste ut utanpå huset. ${status}</div>
+          ${allOut ? `<div class="inc-s">Hydrauliken har låst sig och korgen hänger tom utanpå huset. ${status}</div>`
+          : `<div class="inc-s">Hydrauliken har låst sig och korgen hänger utanpå huset med <span class="lv">${left}</span> instängda. Den går inte att veva ner – de måste ut utanpå huset. ${status}</div>`}
           ${chiefLine('pano', 'Hur ska de instängda ut?')}
-          <div class="inc-acts">${b('rope', '🧗 Rep från taket', true, `Räddarna firar ner en i taget ${Pn.toF === LOBBY ? 'till gatan' : 'till takterrassen'} – stannar i hård vind`)}${b('ladder', '🚒 Stegbilen', reach, reach ? 'Stegen från gatan – fungerar i blåst' : `Stegen når bara ${LADDER_MAX} våningar upp`)}${ikon(`follow:${e.id}`, '📹', 'Visa hissen', 'Kameran följer hissen')}</div>
+          <div class="inc-acts">${allOut ? '' : b('rope', '🧗 Rep från taket', true, `Räddarna firar ner en i taget ${Pn.toF === LOBBY ? 'till gatan' : 'till takterrassen'} – stannar i hård vind`) + b('ladder', '🚒 Stegbilen', reach, reach ? 'Stegen från gatan – fungerar i blåst' : `Stegen når bara ${LADDER_MAX} våningar upp`)}${ikon(`follow:${e.id}`, '📹', 'Visa hissen', 'Kameran följer hissen')}</div>
           <div class="inc-hint">Repet går fortare när det är lugnt; stegbilen klarar blåsten men når inte högt. Teknikern kan inte laga hydrauliken förrän alla är ute.</div>`, true));
       }
     },

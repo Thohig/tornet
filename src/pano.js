@@ -139,13 +139,14 @@ export function panoTick() {
     return;
   }
   if (S.t < P.next) return;
+  const p = nextOut(e);
+  // (alla är ute: klart, även om det blåser – det finns ingen kvar att fira ner)
+  if (!p) { finish(P, e); return; }
   if (P.setup === 'rope' && ropeWindy()) {
     if (P.noted !== 'wind') { P.noted = 'wind'; log(`🌬️ För blåsigt för repet – räddarna väntar ut vinden på taket`, 'alert', e.color); }
     return;
   }
   P.noted = '';
-  const p = nextOut(e);
-  if (!p) { finish(P, e); return; }
   // ner: med repet till terrassen eller gatan, eller nerför stegen till gatan
   const toF = P.setup === 'rope' ? P.toF : LOBBY, y0 = floorY(e.pos), y1 = toF === LOBBY ? GROUND_Y : TERRACE_Y;
   const dur = P.setup === 'rope' ? 1 + Math.abs(y1 - y0) / ROPE_V : 2 + (Math.abs(y1 - y0) / FLOOR_H) * CLIMB_PER_FLOOR;

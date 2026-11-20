@@ -1101,6 +1101,8 @@ export default {
   "🚒 Stegbilen": "🚒 Ladder truck",
   "Stegen från gatan – fungerar i blåst": "The ladder from the street – works in the wind",
   "Stegen når bara {0} våningar upp": "The ladder only reaches {0} floors up",
+  "Alla {0} är ute – räddarna packar ihop.": "All {0} are out – the rescuers are packing up.",
+  "Hydrauliken har låst sig och korgen hänger tom utanpå huset. {0}": "The hydraulics have locked up and the car is hanging empty outside the building. {0}",
   "Hydrauliken har låst sig och korgen hänger utanpå huset med": "The hydraulics have locked up and the car is hanging outside the building with",
   "instängda. Den går inte att veva ner – de måste ut utanpå huset. {0}": "trapped. It can't be cranked down – they have to get out the outside way. {0}",
   "Repet går fortare när det är lugnt; stegbilen klarar blåsten men når inte högt. Teknikern kan inte laga hydrauliken förrän alla är ute.": "The rope is faster when it's calm; the ladder truck copes with the wind but doesn't reach high. The technician can't fix the hydraulics until everyone is out.",

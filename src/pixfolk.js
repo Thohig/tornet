@@ -102,12 +102,15 @@ export function bark(cx, y) { text(g, 'VOV!', cx, y - 6, '#ffffff', 'center', 1,
 export const talking = p => !!(p.say && S.t < p.say.until);
 /** pratbubbla med namn och replik, med en liten pil ner mot personen @param {Person} p */
 export function speech(p, cx, y) { bubble(`${p.name}: "${p.say.text}"`, cx, y); }
-export function bubble(str, cx, y0, fill = '#ffffff') {
+export function bubble(str, cx, y0, fill = '#ffffff', optional = false) {
   const s = plain(str);
   // (bubblan hålls inom bilden – pilen pekar ändå på personen)
   const w = Math.min(textW(s) + 6, 260), x = clamp(Math.round(cx - w / 2), 1, Math.max(1, lo.width - w - 1));
-  // repliker är viktiga: de flyttas uppåt om platsen är tagen, men ritas alltid
-  const y = place(x, y0, w, 9, [0, -11, -22]) ?? y0;
+  // repliker är viktiga: de flyttas uppåt om platsen är tagen, men ritas alltid – utom de som också syns
+  // någon annanstans (optional: driftchefen vid bordet, vars replik rullar i driftcentralens textremsa)
+  const py = place(x, y0, w, 9, [0, -11, -22]);
+  if (py === null && optional) return;
+  const y = py ?? y0;
   if (y < y0) R(cx, y + 9, 1, y0 - y, INK);
   pill(x, y, w, 9, fill);
   g.save(); g.beginPath(); g.rect(x + 1, y, w - 2, 9); g.clip();

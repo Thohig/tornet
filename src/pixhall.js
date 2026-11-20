@@ -271,8 +271,14 @@ export function drawHall(f, h) {
 // ---------- Pannrummet: dörren i hallen på P1 ----------
 // En ståldörr med varningsrand och en skylt, rör längs väggen och ratten till huvudkranen (vattenläckan, leak.js:
 // ratten är röd när kranen är stängd). Vaktmästaren står bredvid dörren (BOILER_STAND i config).
+/** dörrens vänsterkant och bredd: skylten får plats med texten (även på engelska), och dörren börjar
+ * till höger om trappskylten (stairSign, med glöden) – den ritas efter och skulle annars täcka skylten */
+const boilerBox = () => {
+  const dw = Math.max(22, textW('PANNA') + 4);
+  return { dx: Math.max(Math.round(X(BOILER_X) - dw / 2), X(DOOR_X) + 19 + 33 + 3), dw };
+};
 function boilerDoor(top, bot) {
-  const dw = 22, dh = Math.min(26, bot - top - 21), dx = X(BOILER_X) - dw / 2, dy = bot - 3 - dh;
+  const { dx, dw } = boilerBox(), dh = Math.min(26, bot - top - 21), dy = bot - 3 - dh;
   // rören längs väggen ovanför dörren
   R(dx - 2, dy - 4, dw + 4, 2, '#8a6a46'); R(dx - 2, dy - 4, dw + 4, 1, '#b08a5a');
   // dörren
@@ -299,7 +305,8 @@ export const winFig = (p, mood) => ({ id: p.id, mood, child: false, smoked: fals
 const sitters = (f, win) => S.people.filter(p => !p.dead && p.floor === f && inWindow(p) && p.spot.win === win);
 function controlRoom(top, bot) {
   // (fönstret börjar en bit in i hallen: till vänster om det sitter pannrummets dörr, boilerDoor)
-  const wx = X(DOOR_X) + 76, ww = Math.min(108, X(INNER_X1) - 14 - wx), wy = top + 18, wh = bot - 3 - wy;
+  const bb = CONTROL === DOCK ? boilerBox() : null;
+  const wx = Math.max(X(DOOR_X) + 76, bb ? bb.dx + bb.dw + 3 : 0), ww = Math.min(108, X(INNER_X1) - 14 - wx), wy = top + 18, wh = bot - 3 - wy;
   if (ww < 50) return;
   const power = S.power || (S.outage && S.outage.gen), alarmed = alarm(), blink = Math.floor(S.anim * 3) % 2 === 0;
   // ramen och rummet (mörkt, upplyst av skärmarna)
@@ -399,7 +406,9 @@ export function drawChiefPx() {
     at = hd && !hd.hidden ? { x: X(hd.x), y: Y(hd.y) + 11 } : chiefAt;
   }
   if (!at) return;
-  bubble(`${who.name}: "${C.say.text}"`, at.x, at.y - 14, C.say.dec ? '#fff6a8' : '#ffffff');
+  // (vid bordet rullar repliken redan i fönstrets textremsa: får bubblan ingen ledig plats ritas den inte,
+  // i stället för ovanpå våningsskylten och fönstrets rubrik)
+  bubble(`${who.name}: "${C.say.text}"`, at.x, at.y - 14, C.say.dec ? '#fff6a8' : '#ffffff', at === chiefAt);
 }
 // ---------- Personalrummet: där driftcheferna fikar ----------
 // Ett fönster i hallens bakvägg, som kontrollrummet: soffa, bord med korsord, kaffebryggare och kylskåp.

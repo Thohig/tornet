@@ -1,5 +1,10 @@
 # Ändringar
 
+## November 2026 – småfel från ett provspel
+- Pannrumsdörren på P1 ligger till höger om trappskylten, som förut täckte ”P” i ”PANNA”. Skylten är lika bred som texten, så att ”BOILER” får plats på engelska. Driftcentralens fönster flyttar sig så att det inte krockar med dörren.
+- Driftchefens pratbubbla vid kontrollbordet ritas inte ovanpå våningsskylten och driftcentralens rubrik när det saknas plats. Repliken rullar redan i fönstrets textremsa.
+- Panoramahissen på fasaden: när alla är nere säger kortet att korgen hänger tom och att räddarna packar ihop, och knapparna rep/stegbil är borta. Räddningen avslutas när den sista är nere, även om det har blåst upp. Förut väntade den på att vinden skulle mojna, fast det inte fanns någon kvar att fira ner.
+
 ## November 2026 – regissören är på från start
 - Regissören 🎬 klipper bilden från första sekunden. Stänger du av den (🎬 eller A) minns spelet det till nästa gång.
 - Den kommer tillbaka av sig själv när du släpper kameran: direkt när du slutar följa någon (Esc, ✕ eller klick på samma person eller hiss igen), och efter 25 sekunder när du har scrollat fritt eller tittar på en våning. Bryter något nytt ut (förvarning, blixten, brand) medan du har scrollat bort dig klipper den in direkt. Följer du en person eller hiss rör den inte kameran.
