@@ -8,7 +8,7 @@ import { CREW_BY, atPost, crewPerson, postFloor } from './crew.js';
 import { S, hour } from './state.js';
 import { fl } from './util.js';
 import { vpick, vrand } from './rng.js';
-import { VIEW, camMax, camTarget, keepX, seeH } from './view.js';
+import { VIEW, camMax, camTarget, detachCam, keepX, seeH } from './view.js';
 import { personHead } from './render.js';
 import { cleanerAt } from './hoist.js';
 import { BUS_NAME } from './tour.js';
@@ -50,9 +50,14 @@ export function slowmo(dt) {
   return slow;
 }
 
-/** Slår på/av regissören. */
+/** Slår på/av regissören (spelarens val: den kommer tillbaka av sig själv när spelaren släpper kameran). */
 export function toggleAuto() {
-  if (VIEW.auto) { VIEW.auto = false; return false; }
+  if (VIEW.auto || VIEW.autoWant) { VIEW.auto = VIEW.autoWant = false; return false; }
+  return startAuto();
+}
+/** Slår på regissören (starten, biografläget, 🎬/A) – den tar kameran direkt. */
+export function startAuto() {
+  VIEW.autoWant = true;
   // koppla loss allt annat först – detachCam stänger av regissören, så den slås på sist
   const t = camTarget();
   if (t) VIEW.lastCam = t;
@@ -244,10 +249,34 @@ function shotX(s) {
   return h && !h.hidden ? h.x : null;
 }
 
+/** sekunder (verklig tid) efter fri scrollning innan regissören tar kameran igen */
+export const AUTO_IDLE = 25;
+/** Regissören är pausad (spelaren har kameran): ska den ta tillbaka den nu? */
+function resume() {
+  if (!VIEW.autoWant || !S.started) return false;
+  const t = camTarget();
+  if (t && t.kind !== 'floor') { calm = null; return false; } // följer spelaren en hiss eller en person är det hens val
+  if (S.paused) return false;
+  if (S.anim - VIEW.freeAt >= AUTO_IDLE) return true;
+  // har spelaren scrollat bort sig och något nytt bryter ut (förvarning, blixten …) klipper regissören in direkt;
+  // det som redan pågick när hen tog kameran räknas inte (kollas fyra gånger i sekunden)
+  if (S.anim < calmAt) return false;
+  calmAt = S.anim + 0.25;
+  const now = new Set(shots().filter(c => c.urgent).map(c => c.key)), was = calm;
+  calm = now;
+  return !!was && S.anim - VIEW.freeAt > 2 && [...now].some(k => !was.has(k));
+}
+/** de brådskande tagningarna när regissören senast vilade (null = börja om) */
+let calm = /** @type {Set<string>|null} */ (null), calmAt = 0;
 /** Varje bildruta: byt tagning vid behov och styr kameran. */
 export function updateDirector() {
-  if (!VIEW.auto) return;
-  // något manuellt har tagit över kameran
+  if (!VIEW.auto) {
+    if (!resume()) return;
+    if (camTarget()) detachCam(); // (våningen spelaren tittade på)
+    VIEW.auto = true; VIEW.shot = null; S.followHold = 0;
+  }
+  calm = null;
+  // något manuellt har tagit över kameran (regissören vilar tills spelaren släpper den)
   if (camTarget()) { VIEW.auto = false; return; }
   if (!S.started || S.anim < (S.followHold || 0)) return;
   const dt = Math.max(0, Math.min(0.25, S.anim - lastAnim)); lastAnim = S.anim;

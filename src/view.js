@@ -18,8 +18,11 @@ export const stage = document.getElementById('stage');
 /** @typedef {{ kind: 'car'|'person'|'floor', id: number }} CamTarget */
 export const VIEW = { scale: 1, dpr: 1, camY: 0, viewH: H, x0: LAND_X0, follow: /** @type {number|null} */ (null),
   camSel: false, camFloor: /** @type {number|null} */ (null), lastCam: /** @type {CamTarget|null} */ (null),
-  // regissören (director.js): automatisk kamera och den tagning den visar just nu
-  auto: false, shot: /** @type {(import('./director.js').Shot & { t0: number })|null} */ (null),
+  // regissören (director.js): automatisk kamera och den tagning den visar just nu. autoWant = spelaren vill ha
+  // regissören (🎬/A, minns i start.js): auto slås av när spelaren tar kameran, och på igen när hen släpper den –
+  // direkt när hen slutar följa något, efter en stund (AUTO_IDLE) när hen har scrollat fritt eller tittar på en våning. freeAt = när kameran
+  // senast flyttades för hand (S.anim)
+  auto: false, autoWant: false, freeAt: -1e9, shot: /** @type {(import('./director.js').Shot & { t0: number })|null} */ (null),
   // sidled (smal skärm): bilden är bredare än spelytan och flyttas panX css-pixlar åt vänster; panTo = dit den glider
   panX: 0, panW: 0, panTo: /** @type {number|null} */ (null),
   // textskylten längst ner i bilden (#lower) täcker padB världsenheter: kameran räknar med att bara
@@ -105,7 +108,7 @@ export function lookAt(worldY, hold = 4) {
   S.followHold = S.anim + hold;
 }
 export function scrollToFloor(f) {
-  detachCam(); VIEW.camFloor = f;
+  detachCam(); VIEW.camFloor = f; VIEW.freeAt = S.anim;
   lookAt(floorY(f) - FLOOR_H / 2, 0);
   keepX(VIEW.x0); // (hallen ligger längst till vänster)
 }
@@ -157,7 +160,7 @@ export function updateCamera(dt) {
 }
 export function scrollBy(dy, dx = 0) {
   // manuell scrollning kopplar loss kameran
-  detachCam(); S.camTarget = null; VIEW.panTo = null;
+  detachCam(); S.camTarget = null; VIEW.panTo = null; VIEW.freeAt = S.anim;
   VIEW.camY = clamp(VIEW.camY + dy, 0, camMax());
   if (dx) setPan(VIEW.panX + dx * VIEW.scale);
 }

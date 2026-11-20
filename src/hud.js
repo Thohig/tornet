@@ -474,7 +474,7 @@ export function showIntro(mode = S.started ? 'help' : 'start', then = /** @type 
       <li><b>Vaktmästaren</b> Bosse har sin post vid pannrummet på P1 och rycker ut när något går snett i vardagen: när fönsterputsarens gondol fastnar på fasaden, när en pudel rymmer från hundsalongen och åker hiss runt huset, och när ett vattenrör spricker – då springer han ner och stänger huvudkranen. På kvällen sköter kvällsvaktmästaren det, och på natten rings jouren in.</li>
       <li>Bilden visar <b>hallen framför hissarna</b> – rummen ligger bakom korridoren, och folk syns när de kommer ut för att vänta på hissen. Siffran vid korridoren är hur många som är inne.</li>
       <li><b>Klicka på en person</b> för att följa hen – kameran följer med och panelen visar vart hen ska och varför, även när hen är inne i rummen. <b>Klicka på en korridor</b> för att följa någon som är därinne, <b>på en hiss</b> för dess plan och last, och <b>på en våning</b> för att framkalla något där.</li>
-      <li>${touch ? '<b>Dra</b> i bilden' : '<b>Scrolla</b> med mushjulet eller piltangenterna'} – då kopplas kameran loss, och ${touch ? 'regissören 🎬' : '<kbd>F</kbd>'} kopplar på den igen.</li>
+      <li>${touch ? '<b>Dra</b> i bilden' : '<b>Scrolla</b> med mushjulet eller piltangenterna'} – då kopplas kameran loss, och regissören 🎬 tar den igen när du har låtit bli en stund. Slutar du följa någon tar regissören över direkt.</li>
       <li>Register 📋, logg 📜, inställningar ⚙️ och dagens resultat 🏆 ligger längst ner i kontrollpanelen.</li>
     </ul>
     </details></div>`);

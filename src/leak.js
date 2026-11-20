@@ -34,7 +34,7 @@ export const SPREAD_S = 24;
 export const VALVE_T = 5;
 /** golven torkar efter att kranen stängts (s) */
 export const DRY_S = 45;
-/** risken (per sekund) att en blöt hiss som kör kortsluts */
+/** risken (per sekund och blöt våning i schaktet) att en blöt hiss som kör kortsluts */
 export const SHORT_K = 0.006;
 /** risken (per sekund) att den som går över ett blött golv halkar */
 const SLIP_K = 0.05;
@@ -49,7 +49,9 @@ export const leakPossible = () => !S.leak && SOURCES.length > 0 && DOCK >= 0;
 /** är våningen f blöt? */
 export const wetFloor = f => !!S.leak && S.leak.ph !== 'done' && S.leak.wet.includes(f);
 /** går hissens schakt förbi en blöt våning? (panoramahissen utanpå huset klarar sig) @param {Elevator} e */
-export const wetShaft = e => !!S.leak && S.leak.ph !== 'done' && !e.facade && S.leak.wet.some(f => f >= e.minF && f <= e.maxF);
+export const wetShaft = e => wetIn(e) > 0;
+/** hur många blöta våningar hissens schakt går förbi (panoramahissen: inga) @param {Elevator} e */
+export const wetIn = e => !S.leak || S.leak.ph === 'done' || e.facade ? 0 : S.leak.wet.filter(f => f >= e.minF && f <= e.maxF).length;
 
 /** Spelaren eller slumpen: ett rör spricker på våning f (utelämnat: slumpen väljer). Returnerar false om det inte går. */
 export function startLeak(f = null) {
@@ -117,8 +119,10 @@ export function leakTick(dt) {
   // kör de blöta hissarna vidare kan vattnet kortsluta styrningen (bara med strömmen på)
   if (!L.shut && L.mode !== 'stop' && S.power) {
     for (const e of S.elevators) {
-      if (e.mode !== 'normal' || e.state !== 'moving' || L.shorts.includes(e.id) || !wetShaft(e)) continue;
-      if (rng() < SHORT_K * dt * L.wet.length) {
+      const n = wetIn(e);
+      if (e.mode !== 'normal' || e.state !== 'moving' || L.shorts.includes(e.id) || !n) continue;
+      // risken växer med de blöta våningarna i hissens eget schakt (vattnet längre upp rinner inte här)
+      if (rng() < SHORT_K * dt * n) {
         L.shorts.push(e.id);
         log(`⚡ Vattnet når styrningen i ${e.name} – kortslutning!`, 'alert', e.color);
         triggerFault(e);

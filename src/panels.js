@@ -12,7 +12,7 @@ import { CONTROL, CREW, END_H, FL, LOBBY, ROOF, START_H, STRAT_HINT, STRAT_NAMES
 import { S, hour, phaseName } from './state.js';
 import { FIRE_FLOORS, INC_LEVELS, INC_LEVEL_NAMES } from './incidents.js';
 import { VIEW, nightness, resize, toggleWide } from './view.js';
-import { crewNow, toggleAuto } from './director.js';
+import { crewNow, startAuto } from './director.js';
 import { chiefOnDuty } from './chief.js';
 import { $, ikon, carHtml, dayNumbers, drawPortrait, incidentPanel, logHtml, personHtml, rosterHtml, statsHtml } from './hud.js';
 import { peopleBehindDoor } from './render.js';
@@ -163,7 +163,9 @@ const flagsHtml = () => `<span class="pl-lang">${flagBtn('sv')}${flagBtn('en')}<
 /** kamerans verktyg: ikoner i uppspelningsraden (vad regissören visar står på textskylten i bilden) */
 function camTools() {
   const c = crewNow(), who = c ? esc(c.who.name) : 'Regissören';
-  return ikon('auto', '🎬', 'Regissören', VIEW.auto ? `${who} klipper bilden till det mest sevärda. Klicka (A) för att ta kameran själv.` : `Du har kameran. Klicka (A) så klipper ${who} bilden åt dig.`, VIEW.auto)
+  return ikon('auto', '🎬', 'Regissören', VIEW.auto ? `${who} klipper bilden till det mest sevärda. Klicka i bilden för att ta kameran själv – ${who} tar den igen när du släpper den. (A) stänger av regissören.`
+    : VIEW.autoWant ? `Du har kameran – ${who} tar den igen när du slutar följa eller har låtit bli att scrolla en stund. (A) stänger av regissören.`
+    : `Du har kameran. Klicka (A) så klipper ${who} bilden åt dig.`, VIEW.autoWant)
     + ikon('cinema', '🎞️', 'Biografläget', 'Bara bilden och textskylten (H)')
     + ikon('tags', '🏷️', 'Namnbrickor', 'Namnen över alla i bild (T)', S.tags)
     + ikon('sound', soundOn() ? '🔊' : '🔇', 'Ljud', soundOn() ? 'Ljudet är på (M)' : 'Ljudet är av (M)', soundOn());
@@ -481,7 +483,7 @@ let cinema = false;
 export function setCinema(v) {
   cinema = v;
   document.body.classList.toggle('cinema', v);
-  if (v && !VIEW.auto) toggleAuto();
+  if (v && !VIEW.auto) startAuto();
   resize();
   updatePanel();
 }

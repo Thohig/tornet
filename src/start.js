@@ -1,6 +1,7 @@
 // Starten: spelet har ingen startmeny – det finns ett enda Tornet och det går hela tiden. Första gången visas
 // uppstarten i DOS-svart och välkomstrutan, och Berit erbjuder en rundvisning (intro.js) när hon kommer till disken.
-// Spelarens val i panelen (styrlogik, slumpen, driftchefen, felknappar, underhåll) minns till nästa gång.
+// Spelarens val i panelen (styrlogik, slumpen, driftchefen, felknappar, underhåll, regissören) minns till nästa gång.
+// Regissören är på från start om spelaren inte har stängt av den.
 // Bara gränssnitt: dygnet startas med newSim, och allt spelaren gör sedan går via act().
 import { BUILDING, FL, STRAT_NAMES } from './config.js';
 import { S, log } from './state.js';
@@ -12,6 +13,8 @@ import { offerVisning } from './intro.js';
 import { getLang, setLang, tr } from './lang.js';
 import { extraActions } from './input.js';
 import { repaintAll } from './panels.js';
+import { startAuto } from './director.js';
+import { VIEW } from './view.js';
 
 const KEY = { boot: 'tornet.boot', seen: 'tornet.intro', offer: 'tornet.visning', prefs: 'tornet.val', lang: 'tornet.lang' };
 const store = {
@@ -28,13 +31,14 @@ function prefs() {
     chief: o.chief ?? true,
     mistakes: ['av', 'lite', 'mycket'].includes(o.mistakes) ? o.mistakes : undefined,
     maint: ['natt', 'fel'].includes(o.maint) ? o.maint : undefined,
+    dir: o.dir ?? true,
   };
 }
 let saved = '';
 /** Spara spelarens val när de ändras (anropas med panelen, main.js). */
 export function rememberPrefs() {
   if (!S.started || !S.chief) return;
-  const now = JSON.stringify({ strategy: S.strategy, incLevel: S.incLevel, chief: S.chief.on, mistakes: S.mistakes, maint: S.maint });
+  const now = JSON.stringify({ strategy: S.strategy, incLevel: S.incLevel, chief: S.chief.on, mistakes: S.mistakes, maint: S.maint, dir: VIEW.autoWant });
   if (now === saved) return;
   saved = now;
   store.set(KEY.prefs, JSON.parse(now));
@@ -59,6 +63,7 @@ export function startGame(seed) {
 }
 function go() {
   S.started = true;
+  if (prefs().dir) startAuto();
   log('Dag 1 börjar – dörrarna öppnas!', 'sys');
   // första gången: Berit erbjuder en rundvisning (i panelen – hon börjar när hon har kommit till disken)
   if (!store.get(KEY.offer)) { store.set(KEY.offer, 1); offerVisning(); }

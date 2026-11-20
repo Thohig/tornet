@@ -32,8 +32,8 @@ export function followPerson(p) {
 /** följ en hiss eller en våning (den som följdes släpps) */
 export function followCarOnly(id) { select(null); followCar(id); }
 export function followFloor(f) { select(null); scrollToFloor(f); }
-/** sluta följa: kameran står kvar men minns vad den följde (F kopplar på igen) */
-export function unfollow() { if (camTarget()) detachCam(); select(null); }
+/** sluta följa: kameran står kvar men minns vad den följde (F kopplar på igen); regissören tar över direkt om den är vald */
+export function unfollow() { if (camTarget()) { detachCam(); VIEW.freeAt = -1e9; } select(null); }
 /** koppla på kameran igen på det den senast följde (hiss, person eller våning) */
 export function reattachCam() {
   const t = VIEW.lastCam;
@@ -47,7 +47,7 @@ export function reattachCam() {
   }
 }
 /** F: koppla loss kameran om den följer något, annars koppla på den igen */
-export function toggleCam() { if (camTarget()) detachCam(); else reattachCam(); }
+export function toggleCam() { if (camTarget()) { detachCam(); VIEW.freeAt = S.anim; } else reattachCam(); }
 /** följ nästa person som är inne på våningen f (klick på korridoren) */
 export function followInside(f) {
   const inside = peopleBehindDoor(f);
@@ -112,11 +112,11 @@ export function doAction(cmd) {
   else if (a === 'follow') { if (VIEW.follow === +b) unfollow(); else followCarOnly(+b); }
   else if (a === 'person') {
     const p = S.people.find(q => q.id === +b && !q.dead);
-    if (p && VIEW.camSel && S.sel === p) detachCam(); else if (p) followPerson(p);
+    if (p && VIEW.camSel && S.sel === p) { detachCam(); VIEW.freeAt = -1e9; } else if (p) followPerson(p);
   }
   else if (a === 'unfollow') unfollow();
   else if (a === 'auto') toggleAuto();
-  else if (a === 'cam') { if (b === 'off') detachCam(); else reattachCam(); }
+  else if (a === 'cam') { if (b === 'off') { detachCam(); VIEW.freeAt = S.anim; } else reattachCam(); }
   else if (a === 'pow') {
     if (b === 'gen') act('generator');
     if (b === 'auto') act('autoRescue');

@@ -39,6 +39,7 @@ import { CUES, PIECES, layout, partOf } from '../src/scoreData.js';
 import { hz, onGrid } from '../src/music.js';
 import { chaosNames, chaosReady } from '../src/chaos.js';
 import { dogLockFloor } from '../src/dog.js';
+import { wetIn } from '../src/leak.js';
 import { BOILER_STAND, DOCK } from '../src/config.js';
 /** @typedef {import('../src/elevators.js').Elevator} Elevator */
 /** @typedef {import('../src/people.js').Person} Person */
@@ -2230,6 +2231,26 @@ test('Vattenläckan: vattnet rinner nedåt tills vaktmästaren stänger huvudkra
     out.push(`${fl(L.src)}→${wetAtShut} vån (${jan.crewId ? jan.name : jan.jour ? 'jouren' : 'kvällsvaktmästaren'}${mode ? `, ${mode}` : ''})`);
   }
   return out.join(' · ');
+});
+test('Vattenläckan: kortslutningsrisken räknar de blöta våningarna i hissens eget schakt', () => {
+  sim(3);
+  runUntil(10);
+  const top = Math.max(...HOME_FLOORS);
+  act('trigger', 'leak', top);
+  assert(S.leak && S.leak.src === top, 'ingen läcka');
+  // vattnet rinner ända ner till entrén (vaktmästaren hinner inte – kranen hålls öppen)
+  const L = S.leak;
+  L.wet = [];
+  for (let f = top; f >= LOBBY; f--) L.wet.push(f);
+  const out = [];
+  for (const e of S.elevators) {
+    const own = L.wet.filter(f => f >= e.minF && f <= e.maxF).length;
+    assert(wetIn(e) === (e.facade ? 0 : own), `${e.name}: ${wetIn(e)} blöta våningar i schaktet, väntade ${e.facade ? 0 : own}`);
+    out.push(`${e.name} ${wetIn(e)}`);
+  }
+  const lo = S.elevators.filter(e => !e.facade && e.maxF < top && wetIn(e) > 0), hi = S.elevators.filter(e => !e.facade && e.maxF >= top);
+  assert(lo.length && hi.length && lo.every(a => hi.every(b => wetIn(a) < wetIn(b))), 'en låg hiss är lika utsatt som en hög');
+  return `${L.wet.length} blöta våningar · ${out.join(', ')}`;
 });
 test('Driftcheferna är personer: vid bordet, fikar när det är lugnt, skyndar tillbaka vid larm och byter skift kl 22', () => {
   sim(31, { chief: true });

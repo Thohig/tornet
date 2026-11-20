@@ -1,5 +1,14 @@
 # Ändringar
 
+## November 2026 – regissören är på från start
+- Regissören 🎬 klipper bilden från första sekunden. Stänger du av den (🎬 eller A) minns spelet det till nästa gång.
+- Den kommer tillbaka av sig själv när du släpper kameran: direkt när du slutar följa någon (Esc, ✕ eller klick på samma person eller hiss igen), och efter 25 sekunder när du har scrollat fritt eller tittar på en våning. Bryter något nytt ut (förvarning, blixten, brand) medan du har scrollat bort dig klipper den in direkt. Följer du en person eller hiss rör den inte kameran.
+- När rundvisningen är slut går kameran tillbaka till regissören i stället för att stanna kvar på guiden.
+- Verktygstipset på 🎬 och hjälpen berättar det.
+
+## November 2026 – vattenläckan: risken följer schaktet
+- Kortslutningsrisken för en blöt hiss som kör vidare räknas på de blöta våningarna i hissens eget schakt (`wetIn` i leak.js), inte på alla blöta våningar i huset. Uppehissarna och varuhissen, som går förbi mest vatten, är nu mest utsatta; låga zonen klarar sig med en droppe på 5:an.
+
 ## November 2026 – ny mobilvy
 - På mobilen fyller bilden skärmen (ungefär tre fjärdedelar i stället för knappt hälften) och sidan scrollar aldrig – bara bilden.
 - Kontrollpanelens staplade fönster är borta på mobilen. I stället: en list nertill med paus, fart (en knapp som byter), 🔍 och flikarna 🚨 händelser, 📻 nu (dygnet, stapeln, radion, dagens siffror), ⚡ framkalla, 🎛️ styrning, 👤 det du följer och ☰ mer (kameran, ljudet, flaggorna, hjälpen, register, logg, inställningar, resultat). En flik öppnas som ett ark ovanför listen och bilden krymper medan den är öppen – inget ligger över bilden.

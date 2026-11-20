@@ -9,14 +9,15 @@ import { STOPS, guideName, nextGuide, touring } from './visning.js';
 import { CREW } from './config.js';
 import { crewPerson, atPost } from './crew.js';
 import { VIEW } from './view.js';
-import { toggleAuto } from './director.js';
-import { extraActions, followPerson } from './input.js';
+import { extraActions, followPerson, unfollow } from './input.js';
 import { setTour } from './panels.js';
 import { soundOn } from './sound.js';
 import { esc } from './util.js';
 import { getLang, tr } from './lang.js';
 
 const U = {
+  /** guiden som kameran följer för rundvisningens skull (id, −1 = ingen) */
+  cam: -1,
   /** Berit erbjuder en rundvisning (första gången spelet startas) */
   offer: false,
   /** panelens nyckel senast (ritas bara om när den ändras) */
@@ -38,7 +39,7 @@ extraActions.visning = b => {
   if (b === 'nej') { U.offer = false; }
   else if (b === 'ja' || b === 'start') { U.offer = false; act('visning', 'start'); }
   else if (b === 'again') { U.spoken = -1; }
-  else if (b === 'follow') { const p = beritP(); if (p) { if (VIEW.auto) toggleAuto(); followPerson(p); } }
+  else if (b === 'follow') { const p = beritP(); if (p) { followPerson(p); U.cam = p.id; } }
   else if (b === 'next' || b === 'end') { hush(); act('visning', b); }
   paint();
 };
@@ -52,7 +53,12 @@ export function introTick() {
   if (v && v.ph === 'go' && U.followed !== v.t0) {
     U.followed = v.t0;
     const p = beritP();
-    if (p) { if (VIEW.auto) toggleAuto(); followPerson(p); }
+    if (p) { followPerson(p); U.cam = p.id; }
+  }
+  // rundvisningen är slut: följer kameran fortfarande guiden tar regissören tillbaka den (om spelaren vill ha den)
+  if (U.cam >= 0 && (!v || v.ph === 'done')) {
+    if (VIEW.autoWant && VIEW.camSel && S.sel && S.sel.id === U.cam) unfollow();
+    U.cam = -1;
   }
   voice(v);
   paint();
