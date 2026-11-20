@@ -86,7 +86,7 @@ npm run league      # styrlogikerna mot varandra: väntetid, kWh, trappa …
 
 Samma testsvit körs i webbläsaren på `/tests.html`. På GitHub kör `npm run check` vid push till `main` och vid pull request (inte när bara `.md`-filer ändrats). Kör `npm run quick` lokalt före varje commit och hela `npm run check` innan något hamnar på `main`.
 
-**Upplägg.** Simuleringen i `src/` rör aldrig DOM eller canvas och kör headless i Node med fast tidssteg och seedad slump i namngivna strömmar. Samma frö ger alltid exakt samma dygn. Grafiken läser bara simuleringens tillstånd, och allt spelaren gör går via `act()`. Huset beskrivs som data i `BUILDING` i `config.js`, och resten räknas ut därifrån. Mer om arkitekturen och reglerna finns i [CLAUDE.md](CLAUDE.md).
+**Upplägg.** Simuleringen i `src/` rör aldrig DOM eller canvas och kör headless i Node med fast tidssteg och seedad slump i namngivna strömmar. Samma frö ger alltid exakt samma dygn. Grafiken läser bara simuleringens tillstånd, och allt spelaren gör går via `act()`. Huset beskrivs som data i `BUILDING` i `config.js`, och resten räknas ut därifrån. Husets delsystem och incidenter står i två register: `src/systems.js` (simuleringen – hur de tickar, startar, förvarnar, vad driftchefen gör och vad folket och hissarna behöver veta) och `src/incui.js` (gränssnittet – knappen i *Framkalla*, incidentkortet och regissörens klipp). En ny incident är en egen modul och en post i vart och ett av registren. Mer om arkitekturen och reglerna finns i [CLAUDE.md](CLAUDE.md).
 
 All text i spelet och i koden är på svenska.
 

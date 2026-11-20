@@ -6,7 +6,7 @@
 - Folket och hissarna frågar också registret: rollerna (tekniker, räddare, hund, flyttgubbe, brandman, rånare …) står i posterna (`roles`), liksom var de står (`spot`), timern när de är framme (`arrive`), vart delsystemet skickar någon (`next` – kuppens hjälte och gisslan, den som jagar hunden), spärrade våningar (`blocks` – hunden) och varför en hiss inte tar nya (`out` – kapad, blött schakt). `people.js` och `dispatch.js` känner inte längre till kuppen, hunden eller läckan.
 - Kaosknappens steg för hissarna och besökarna och rundvisningens omläggning till panoramahissen kommer ur registret (`chaos`, `detour`).
 - Gränssnittet har ett eget register, `src/incui.js`: knapparna i *Framkalla*, incidentkorten och regissörens klipp (förvarningen och det sevärda) är en post per incident. hud.js, director.js och panels.js går igenom listan.
-- Inget beteende är ändrat: facit är identiskt.
+- Inget beteende är ändrat: facit är identiskt. Vinsten: en ny incident berör ungefär 5–6 filer i stället för omkring 20, och sju filer behöver inte röras alls (`sim.js`, `people.js`, `dispatch.js`, `input.js`, `actions.js`, `chaos.js`, `director.js`). Registret kostar under 1 % av simuleringens körtid.
 
 ## November 2026 – snabbare tester i vardagen
 - `npm run quick` (och `/tests.html?quick`): typkontrollen och testsviten i snabbläget – två dygn i stället för tio i varje block av invarianttesterna, två i stället för sex med slumpade spelaråtgärder, färre frön i dockhuset, kaosknappen och flyttvalen, facit för första dygnet per styrlogik, och utan de statistiska jämförelserna mellan styrlogikerna. Ungefär halva tiden (2,3 min mot 4,5 min på fyra kärnor). `npm run check` kör allt som förut, och CI kör hela sviten.
