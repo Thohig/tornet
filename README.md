@@ -62,7 +62,7 @@ Styrlogiken kan bytas medan huset kör:
 | Mellanslag | Paus |
 | 1 / 2, − / + | Hastighet (¼× ½× 1× 2×) |
 | F | Koppla loss eller på kameran |
-| A | Regissören (automatisk kamera) |
+| A | Regissören (automatisk kamera) – på från start, tar kameran igen när du släpper den; A stänger av den |
 | H | Biografläge |
 | T | Namnbrickor |
 | S | Byt styrlogik |
