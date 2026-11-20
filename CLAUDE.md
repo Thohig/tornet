@@ -8,7 +8,7 @@ Simulering av skyskrapan Tornet med 8 hissar (styrsystemet heter Hiss-O-Matic 30
 python3 serve.py          # http://localhost:8123 (no-cache-server, krävs för att ändringar ska synas)
 ```
 
-Servern lyssnar bara på den egna datorn (`--lan` = även nätverket, t.ex. mobilen) och lämnar bara ut spelets filer: `ALLOWED` i `serve.py` – **en ny mapp som spelet laddar måste läggas till där**, annars ger den 404. `python3 serve.py --auto-stop` stänger dessutom av sig själv 5 min efter att spelet tystnat (spelet anropar `/ping` var 30:e sekund, `main.js`) eller efter 12 h. Spelet hämtar inget utifrån: typsnittet VT323 ligger i `fonts/` (OFL). Spelet ligger också på GitHub Pages (https://thohig.github.io/tornet/, byggs från `main`, cachas 10 min) – där startar `~/Projekt/Tornet.app` det, utan lokal server.
+Servern lyssnar bara på den egna datorn (`--lan` = även nätverket, t.ex. mobilen) och lämnar bara ut spelets filer: `ALLOWED` i `serve.py` – **en ny mapp som spelet laddar måste läggas till där**, annars ger den 404. `python3 serve.py --auto-stop` stänger dessutom av sig själv 5 min efter att spelet tystnat (spelet anropar `/ping` var 30:e sekund, `main.js`) eller efter 12 h. Spelet hämtar inget utifrån: typsnittet VT323 ligger i `fonts/` (OFL). Spelet ligger också på GitHub Pages (https://thohig.github.io/tornet/, byggs från `main`, cachas 10 min) – där startar `~/Projekt/Github Pages/Tornet.app` det, utan lokal server.
 
 Ingen byggprocess: webbläsaren laddar `src/*.js` som ES-moduler direkt. Förhandsvisning: `.claude/launch.json` → konfigurationen `hiss`.
 
