@@ -14,20 +14,12 @@ import { castSchedule } from './cast.js';
 import { makeElevator, updateElevator, releaseCalls } from './elevators.js';
 import { buttonsMode, buttonWaitTick, dispatchCalls } from './buttons.js';
 import { incidentTick, planIncidents } from './incidents.js';
-import { lifeRoll, lifeTick, lifeReset } from './life.js';
-import { stormTick, weatherReset } from './weather.js';
-import { TRAIN_SHARE, trainReset, trainTick } from './train.js';
-import { medicClear, visitsReset, visitsRoll, visitsTick } from './visits.js';
-import { hoistReset, hoistTick } from './hoist.js';
+import { TRAIN_SHARE } from './train.js';
+import { medicClear } from './visits.js';
 import { chiefReset, chiefRoll, chiefTick } from './chief.js';
 import { panoTick } from './pano.js';
-import { tourReset, tourTick } from './tour.js';
-import { visningReset, visningTick } from './visning.js';
-import { heistReset, heistTick } from './heist.js';
 import { chaosReset, chaosTick } from './chaos.js';
-import { gondolaReset, gondolaTick } from './gondola.js';
-import { dogReset, dogTick } from './dog.js';
-import { leakReset, leakTick } from './leak.js';
+import { systems } from './systems.js';
 import { crewArrivals, crewRoll, crewStart, spawnCrew } from './crew.js';
 /** @typedef {import('./elevators.js').Elevator} Elevator */
 
@@ -65,7 +57,7 @@ const ARRIVAL_MUL = 1.6;
 // 0.3 ger ungefär samma väntetider över dygnet som det korta dygnet (p50 ≈ 9 s, p95 ≈ 38 s) med knappt
 // dubbelt så många anställda – mätt med sex frön, Smart.
 export const EMP_K = 0.3;
-function arrivalRate(h) { return ARRIVAL_MUL * baseRate(h) * pace(h) ** EMP_K; }
+export function arrivalRate(h) { return ARRIVAL_MUL * baseRate(h) * pace(h) ** EMP_K; }
 function baseRate(h) {
   if (h < 6.5) return 0.02; if (h < 7) return 0.08; if (h < 7.3) return 0.21;
   if (h < 9.3) return 0.56; if (h < 10.2) return 0.18; if (h < 15) return 0.03;
@@ -149,17 +141,7 @@ export function step(dt) {
   S.t += dt;
   S.clock += dt * timeScale(hour());
   spawnTick(dt);
-  lifeTick(dt);
-  trainTick(dt, arrivalRate);
-  visitsTick(dt);
-  tourTick(dt);
-  visningTick(dt);
-  heistTick(dt);
-  hoistTick(dt);
-  gondolaTick(dt);
-  dogTick(dt);
-  leakTick(dt);
-  stormTick(dt);
+  for (const s of systems()) if (s.tick) s.tick(dt); // (husets delsystem i registrets ordning, systems.js)
   nightModeTick(dt);
   for (const p of S.people) updatePerson(p, dt);
   if (S.people.some(p => p.dead)) S.people = S.people.filter(p => !p.dead);
@@ -252,18 +234,8 @@ export function resetDay() {
   S.elevators = EL.map((_, i) => makeElevator(i));
   for (const e of S.elevators) { const w0 = WEAR.rand(0.1, 0.5); e.wear = carry ? carry[e.id] : w0; }
   if (kept) for (const e of S.elevators) if (kept[e.id]) restoreFault(e, kept[e.id]);
-  lifeReset();
-  trainReset();
-  weatherReset();
-  visitsReset();
-  tourReset();
-  visningReset();
-  heistReset();
+  for (const s of systems()) if (s.reset) s.reset(); // (systems.js)
   chaosReset();
-  gondolaReset();
-  dogReset();
-  leakReset();
-  hoistReset();
   planIncidents(); // (sist: tidtabellen slumpas när allt annat är på plats)
   S.lastInc = null;
   chiefReset();
@@ -290,11 +262,7 @@ export function rollDay() {
     if (p.kind === 'emp') { p.leaveAt = 0; p.lunched = true; }
     if (NIGHT_ROLES.includes(p.role)) p.shiftEnd = true;
   }
-  lifeRoll();
-  if (!S.train) trainReset();
-  const storm = S.storm;
-  weatherReset(); S.storm = storm;
-  visitsRoll();
+  for (const s of systems()) if (s.roll) s.roll(); // (systems.js – delsystem utan roll fortsätter som de är)
   const W = S.warn;
   planIncidents(); S.warn = W; // (en förvarning som pågår bryter ut som planerat)
   chiefRoll();

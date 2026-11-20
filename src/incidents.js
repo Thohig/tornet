@@ -4,21 +4,15 @@ const { pick, rand, rng } = stream('incidenter');
 // dygnets tidtabell har en egen ström: slumpens nivå (av/lugn/normal/kaos) ändrar inte hur incidenterna själva förlöper
 const T = stream('tidtabell');
 import { fl } from './util.js';
-import { FL, LOBBY, OFFICE_FLOORS, TOP, floorOpen, floorWith } from './config.js';
+import { FL, LOBBY, OFFICE_FLOORS, TOP } from './config.js';
 import { S, hooks, hour, incidentOver, log } from './state.js';
 import { trappedTalk } from './cast.js';
 import { arriveOnFloor, evacFloor, makePerson, pev, pn, setTrip, toStairs } from './people.js';
 import { fireReturn } from './life.js';
 import { allowedDest, allowedFor, allowedPos, inFireZone, posOf, rebuildPicks, safeFloor } from './dispatch.js';
 import { canBrakeTo, deckFloor, exitAll, recallCar, releaseCalls, restoreElevator, setMode } from './elevators.js';
-import { cableCandidate, triggerCable, triggerFault, triggerHeat } from './service.js';
-import { startStorm } from './weather.js';
-import { startMedical } from './visits.js';
-import { PANO, panoCandidate, triggerPano } from './pano.js';
-import { BANK, HEIST_WARN, heistPossible, startHeist } from './heist.js';
-import { gondolaCandidate, triggerGondola } from './gondola.js';
-import { dogPossible, startDog } from './dog.js';
-import { leakPossible, startLeak } from './leak.js';
+import { cableCandidate } from './service.js';
+import { systems, system } from './systems.js';
 /** @typedef {import('./elevators.js').Elevator} Elevator */
 /** @typedef {import('./people.js').Person} Person */
 
@@ -27,20 +21,13 @@ import { leakPossible, startLeak } from './leak.js';
 export const FIRE_FLOORS = FL.map((_, f) => f).filter(f => f > LOBBY && f <= TOP && FL[f].theme !== 'roof');
 /** Utlös en incident nu. target: våningen som brinner, eller hissen (id) som går sönder / blir het / får linbrott. */
 export function trigger(type, target = null) {
+  const s = system(type);
+  if (!s || !s.trigger) return;
   const e = target !== null && target !== undefined && type !== 'fire' ? S.elevators[target] || null : null;
-  if (type === 'fire') startFire(FIRE_FLOORS.includes(target) ? target : undefined);
-  if (type === 'power') startOutage();
-  if (type === 'fault') triggerFault(e);
-  if (type === 'storm' && startStorm()) incidentStarted(null);
-  if (type === 'heat') triggerHeat(e);
-  if (type === 'cable') triggerCable(e);
-  if (type === 'medical') startMedical(); // (ingen incident – bara en händelse som rutan berättar om)
-  if (type === 'pano') triggerPano();
-  if (type === 'heist') startHeist();
-  if (type === 'gondola') triggerGondola();
-  if (type === 'dog') startDog();
-  if (type === 'leak') startLeak(target);
+  return s.trigger(target, e); // (posterna i systems.js)
 }
+/** incidenternas egen slump (våningen som börjar brinna, hissen som går sönder – systems.js) */
+export const incPick = pick;
 export function incidentStarted(floor) {
   S.stats.incidents++;
   hooks.incident(floor);
@@ -307,8 +294,6 @@ export function endOutage() {
 // lamporna flimrar, det mörknar, motorn brummar, linorna knarrar) så att man hinner titta dit.
 /** hur troligt en incident börjar vid klockan h (rusningarna och lunchen mest) */
 const INC_WEIGHT = h => (h < 7 ? 0 : h < 7.5 ? 0.6 : h < 9.5 ? 1.6 : h < 11 ? 1 : h < 13 ? 1.5 : h < 15.5 ? 1 : h < 18.5 ? 1.6 : h < 22 ? 0.7 : 0);
-/** förvarningens längd i sekunder (verklig tid) per incidenttyp */
-export const WARN_S = { fire: 10, power: 6, storm: 14, heat: 10, fault: 8, cable: 40, pano: 10, heist: 18, gondola: 8, dog: 6, leak: 10 };
 /** minsta avstånd mellan två planerade incidenter (speltimmar) */
 const INC_GAP = 1.2;
 /** dygnets tidtabell (anropas av resetDay) */
@@ -346,84 +331,42 @@ export function setIncLevel(v) {
   log(`🎲 Slumpen: ${INC_LEVEL_NAMES[v]}${v === 'av' ? ' – inga fler incidenter av sig själva i dag' : ` – ${S.incPlan.length} incident${S.incPlan.length === 1 ? '' : 'er'} kvar i dagens tidtabell`}`, 'sys');
 }
 /** linorna i den mest slitna hissen kan gå av (bara om de är rejält slitna) */
-const cableRisk = () => {
+export const cableRisk = () => {
   const c = S.elevators.filter(e => cableCandidate(e) && e.wear >= 0.25).sort((a, b) => b.wear - a.wear)[0];
   return c ? { e: c, w: (c.wear - 0.2) * 1.2 } : null;
 };
-/** välj incident (viktad) och var den händer */
+/** hissar som kan få ett fel eller en het motor (de som kör som vanligt) */
+export const busyCars = () => S.elevators.filter(e => e.mode === 'normal' && !e.hold && !e.breakNext && !e.indep && !e.hot);
+/** välj incident (viktad, i registrets ordning – systems.js) och var den händer */
 function chooseIncident(night) {
-  const busy = S.elevators.filter(e => e.mode === 'normal' && !e.hold && !e.breakNext && !e.indep && !e.hot);
   if (night) return S.power && !S.fire ? { type: 'power' } : null;
-  /** @type {[string, number][]} */
+  /** @type {[import('./systems.js').System, number][]} */
   const opts = [];
-  if (!S.fire) opts.push(['fire', 1]);
-  if (S.power) opts.push(['power', 1]);
-  if (busy.length) opts.push(['fault', 1.2]);
-  if (!S.storm) opts.push(['storm', 0.8]);
-  // motorvärme: varmare dag och hissar som redan går varma gör det troligare
-  if (busy.length) opts.push(['heat', 0.4 + Math.max(0, S.weather.temp - 15) * 0.06 + Math.max(...busy.map(e => e.heat)) * 0.6]);
-  const cr = cableRisk();
-  if (cr) opts.push(['cable', cr.w]);
-  // panoramahissen kan fastna på fasaden (bara när den kör med folk)
-  const P = PANO ? S.elevators[PANO.id] : null;
-  if (panoCandidate(P) && P.passengers.length && !S.pano) opts.push(['pano', 0.3]);
-  // Kuppen på 5:an: sällsynt, högst en gång per dygn, när lastkajen är ledig (heist.js)
-  if (heistPossible() && S.heistDay !== S.day) opts.push(['heist', S.incLevel === 'kaos' ? 0.5 : 0.2]);
-  // fönsterputsarens gondol kärvar (bara när han är ute och putsar, gondola.js)
-  if (gondolaCandidate()) opts.push(['gondola', 0.35]);
-  // en pudel rymmer (dog.js)
-  if (dogPossible() && floorOpen(floorWith('spa'), hour())) opts.push(['dog', 0.4]);
-  // ett vattenrör spricker (leak.js)
-  if (leakPossible()) opts.push(['leak', 0.5]);
+  for (const s of systems()) {
+    const w = s.weight ? s.weight() : 0;
+    if (w) opts.push([s, w]);
+  }
   if (!opts.length) return null;
-  let r = rng() * opts.reduce((a, o) => a + o[1], 0), type = opts[0][0];
-  for (const [k, w] of opts) { r -= w; if (r <= 0) { type = k; break; } }
-  if (type === 'fire') return { type, floor: pick(OFFICE_FLOORS.slice(1)) };
-  if (type === 'fault') { const act = busy.filter(e => e.passengers.length || e.carCalls.size); return { type, car: pick(act.length ? act : busy).id }; }
-  if (type === 'heat') return { type, car: [...busy].sort((a, b) => b.heat - a.heat || b.passengers.length - a.passengers.length)[0].id };
-  if (type === 'cable') return { type, car: /** @type {{ e: any }} */ (cr).e.id };
-  if (type === 'pano') return { type, car: P.id };
-  if (type === 'heist') return { type, floor: BANK };
-  return { type };
+  let r = rng() * opts.reduce((a, o) => a + o[1], 0), chosen = opts[0][0];
+  for (const [s, w] of opts) { r -= w; if (r <= 0) { chosen = s; break; } }
+  return { type: chosen.key, ...(chosen.pick ? chosen.pick() : {}) };
 }
-const WARN_LOG = {
-  fire: f => `👃 Det luktar bränt på våning ${fl(f)}…`,
-  power: () => '💡 Lamporna i huset flimrar…',
-  storm: () => '🌥️ Det mörknar över staden och vinden friskar i…',
-  heat: e => `🌡️ Motorn i ${e.name}s maskinrum brummar ansträngt…`,
-  fault: e => `🔩 ${e.name} låter konstigt – det gnisslar i korgen…`,
-  cable: e => `🪢 Det knarrar i bärlinorna på ${e.name} – de är slitna (${Math.round(e.wear * 100)} %)…`,
-  pano: e => `🔩 ${e.name} hackar på fasaden – det luktar hydraulolja…`,
-  heist: () => HEIST_WARN,
-  gondola: () => '🔩 Det gnisslar i gondolens vinsch uppe på taket…',
-  dog: () => '🐕 Det skäller ilsket uppe på Vovve Spa…',
-  leak: () => '💧 Det droppar från taket någonstans… och det knackar i rören',
-};
+/** förvarningens längd i sekunder (verklig tid) per incidenttyp (warnS i systems.js) */
+export const warnS = type => system(type).warnS;
 /** En incident i tidtabellen som ska bryta ut: typen och var (våning för brand, hiss för fel/värme/linbrott/panorama)
  * @typedef {{ type: string, floor?: number, car?: number }} IncPick */
 /** Förvarningen som pågår (S.warn) @typedef {IncPick & { t0: number, until: number }} Warn */
 /** förvarningen startar: incidenten bryter ut när den är slut @param {IncPick} inc */
 function startWarn(inc) {
   const e = inc.car !== undefined ? S.elevators[inc.car] : null;
-  S.warn = { ...inc, t0: S.t, until: S.t + WARN_S[inc.type] };
-  log(inc.type === 'fire' ? WARN_LOG.fire(inc.floor) : WARN_LOG[inc.type](e), 'alert', e ? e.color : null);
+  S.warn = { ...inc, t0: S.t, until: S.t + warnS(inc.type) };
+  log(system(inc.type).warn(e, inc), 'alert', e ? e.color : null);
   if (inc.type === 'fire') for (const p of S.people) if (p.floor === inc.floor && p.state === 'office') pev(p, 'Känner ni lukten? Det luktar bränt…');
   if (inc.type === 'cable' && e) { e.creak = true; for (const p of e.passengers) pev(p, 'Det knarrar i linorna ovanför korgen…'); }
 }
 /** förvarningen är slut: incidenten bryter ut (om den fortfarande kan) */
 function fireWarn(W) {
-  const e = W.car !== undefined ? S.elevators[W.car] : null;
-  if (W.type === 'fire') startFire(W.floor);
-  else if (W.type === 'power') startOutage();
-  else if (W.type === 'storm') { if (startStorm()) incidentStarted(null); }
-  else if (W.type === 'fault' && e) triggerFault(e);
-  else if (W.type === 'heat' && e) triggerHeat(e);
-  else if (W.type === 'cable' && e) { e.creak = false; if (cableCandidate(e)) triggerCable(e); }
-  else if (W.type === 'pano' && e && panoCandidate(e) && !S.pano) e.panoNext = true;
-  else if (W.type === 'heist') { if (startHeist(true)) S.heistDay = S.day; }
-  else if (W.type === 'gondola') triggerGondola();
-  else if (W.type === 'dog') startDog();
-  else if (W.type === 'leak') startLeak();
+  system(W.type).hit(W, W.car !== undefined ? S.elevators[W.car] : null);
 }
 export function incidentTick(dt) {
   if (S.fire) fireTick();

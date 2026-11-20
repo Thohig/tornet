@@ -18,7 +18,7 @@ import { setSeed, stream, streamNames } from '../src/rng.js';
 import { assignCalls, antiNuisance } from '../src/buttons.js';
 import { act } from '../src/actions.js';
 import { powerKw, triggerFault, breakDown, tech, techs, techOf, snapCable, EXTRA_QUEUE, CALL_T, trapBreak, FAULT_KIND, jobFloor } from '../src/service.js';
-import { WARN_S, FF_ATTACK_S, endOutage } from '../src/incidents.js';
+import { warnS, FF_ATTACK_S, endOutage } from '../src/incidents.js';
 import { forceMove, BLANKET_T } from '../src/visits.js';
 import { trafficMode, learnBin, peakHold, PEAK_HOLD } from '../src/dispatch.js';
 import { windAt, startStorm } from '../src/weather.js';
@@ -566,7 +566,7 @@ test('Tidtabellen: 1–3 incidenter per dygn spridda över dagen, ibland en på 
     if (S.warn && !warned) warned = { ...S.warn };
     if (warned && !S.warn) broke = S.t;
   }
-  assert(warned && broke !== null && Math.abs(broke - warned.t0 - WARN_S[warned.type]) < 0.1, `ingen förvarning före incidenten (${JSON.stringify(warned)})`);
+  assert(warned && broke !== null && Math.abs(broke - warned.t0 - warnS(warned.type)) < 0.1, `ingen förvarning före incidenten (${JSON.stringify(warned)})`);
   return `${(hours.length / days).toFixed(1)} incidenter per dygn kl ${Math.min(...hours).toFixed(1)}–${Math.max(...hours).toFixed(1)} · ${nights} nattliga avbrott på ${days} dygn · förvarning (${warned.type})`;
 });
 test('Kedjor: blixten i stormen slår ut strömmen, och hissarna startar om en i taget efteråt', () => {

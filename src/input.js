@@ -1,7 +1,7 @@
 // Klick, tangentbord och alla knappar i kontrollpanelen (data-act).
 // Vänsterklick i bilden följer det man klickar på: en person, en hiss, en korridor (nästa person därinne)
 // eller en våning. Det finns ingen högerklicksmeny – det som går att göra med det man följer står i panelen.
-import { act } from './actions.js';
+import { act, ACTIONS } from './actions.js';
 import { clamp } from './util.js';
 import { BX0, CAR_H, CAR_W, DOOR_X, FLOOR_H, GROUND_Y, H, INNER_X1, LOBBY, ROOF_Y, STRAT_NAMES, TOP, WAIT_X1, floorY, shaftX, surf } from './config.js';
 import { S, clockStr, log } from './state.js';
@@ -105,10 +105,6 @@ export function doAction(cmd) {
   else if (a === 'moveBlankets') act('moveBlankets', b === '1');
   else if (a === 'moveWind') act('moveWind', b);
   else if (a === 'pano') act('panoRescue', b);
-  else if (a === 'gondola') act('gondola', b);
-  else if (a === 'dog') act('dog', b);
-  else if (a === 'leak') act('leak', b);
-  else if (a === 'heist') act('heist', b);
   else if (a === 'dismiss') S.dismissed.add(b); // (bara gränssnittet – simuleringen läser det aldrig)
   else if (a === 'incfold') foldInc(b);
   else if (a === 'show') followFloor(+b);
@@ -126,6 +122,9 @@ export function doAction(cmd) {
     if (b === 'auto') act('autoRescue');
     if (b === 'rescue') act('rescue', +c);
   } else if (a === 'car') act('carOff', +c);
+  // allt annat: knappen heter som spelaråtgärden och har ett argument i text (incidentkortens val: gondola:crank,
+  // dog:lock, leak:stop, heist:cut …) – en ny incident med val behöver ingen egen rad här
+  else if (Object.hasOwn(ACTIONS, a)) act(a, b);
   uiHooks.repaint();
 }
 // pointerdown i stället för click: panelen ritas om flera gånger i sekunden (nedräkningar, hissens läge)

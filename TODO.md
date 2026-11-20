@@ -2,4 +2,6 @@
 
 Förslag som inte är gjorda än, ungefär i den ordning de ger mest. Stryk det som blir gjort.
 
-Inget kvar just nu.
+1. **Incidentregistret, gränssnittet.** Simuleringen går igenom `systems()` (systems.js), men gränssnittet räknar fortfarande upp incidenterna var för sig: korten i `incidentHtml` (hud.js), regissören (`director.js`: förvarningarna och vad som är sevärt), knapparna i *Framkalla* (`trigHtml` i panels.js), rundvisningens omläggning (`happening` i visning.js), musiken och ljuden (score.js, sound.js) och kaoskedjans steg (`STEPS` i chaos.js). Nästa steg: ett eget register i gränssnittet (t.ex. `src/incui.js`: nyckel → `card()`, `director()`, `trig` med ikon/namn/förklaring och `possible()`), så att en ny incident blir en post där i stället för rader i fem filer.
+2. **Kärnan frågar efter enskilda incidenter.** `people.js`, `dispatch.js` och `elevators.js` läser `S.fire`, `S.dog`, `S.leak`, `e.wetLock`, `e.hijack`, `dogLockFloor()` … på ett tjugotal ställen. Låt registret svara i stället: t.ex. `blocks(e, p)` (får p kliva på e här?) och `holds(e)` (tar hissen inga nya?) per post, som `canTake`/`outReason` frågar alla poster om. Facit ska vara oförändrat.
+3. **Rollerna.** `roleNext` i people.js har en gren per roll (tekniker, räddare, hund, rånare, brandman …). Låt modulerna anmäla sina roller (`roles: { hund: dogNext }` i registret) så att people.js inte växer med varje incident.

@@ -5,7 +5,8 @@ import { S, log } from './state.js';
 import { pev, spawnVisitor } from './people.js';
 import { spawnBus } from './tour.js';
 import { endVisning, nextVisning, orderVisning } from './visning.js';
-import { heistChoice, startHeist } from './heist.js';
+import { heistChoice } from './heist.js';
+import { systems } from './systems.js';
 import { rebuildPicks } from './dispatch.js';
 import { setFireMode, setIncLevel, startGenerator, startRescue, toggleAutoRescue, toggleOff, trigger } from './incidents.js';
 import { setStormMode, setWeather, strikeNow } from './weather.js';
@@ -33,17 +34,17 @@ export function changeStrategy(k) {
 }
 /** inställningar som spelaren kan ändra under dygnet */
 const SETTINGS = ['mistakes', 'maint'];
-/** Allt spelaren kan framkalla. target = våning (brand) eller hiss (hissfel, het motor, linbrott); utelämnat = slumpen väljer. */
-export const TRIGGERS = ['fire', 'power', 'fault', 'storm', 'heat', 'cable', 'pano', 'medical', 'move', 'lightning', 'cold', 'heatwave', 'train', 'vip', 'heist', 'visning', 'gondola', 'dog', 'leak'];
+/** Händelser som bara kan framkallas (de har ingen post med trigger i registret, systems.js). */
+const EXTRA_TRIGGERS = {
+  move: () => moveNow(), lightning: () => strikeNow(), cold: () => setWeather('cold'), heatwave: () => setWeather('heatwave'),
+  train: () => delayTrain(), vip: () => vipNow(),
+  visning: () => orderVisning(true), // (rundvisningen direkt – guiden avbryter rasten, visning.js)
+};
+/** Allt spelaren kan framkalla: registrets incidenter och händelserna ovan.
+ * target = våning (brand, vattenläcka) eller hiss (hissfel, het motor, linbrott); utelämnat = slumpen väljer. */
+export const triggers = () => [...systems().filter(s => s.trigger).map(s => s.key), ...Object.keys(EXTRA_TRIGGERS)];
 function triggerAny(type, target = null) {
-  if (type === 'move') return moveNow();
-  if (type === 'lightning') return strikeNow();
-  if (type === 'cold' || type === 'heatwave') return setWeather(type);
-  if (type === 'train') return delayTrain();
-  if (type === 'vip') return vipNow();
-  if (type === 'heist') return startHeist();
-  if (type === 'visning') return orderVisning(true); // (rundvisningen direkt – guiden avbryter rasten, visning.js)
-  return trigger(type, target);
+  return EXTRA_TRIGGERS[type] ? EXTRA_TRIGGERS[type]() : trigger(type, target);
 }
 const FIRE_TEXT = { recall: 'Brandåterkallning', zone: 'Brandzon', none: 'Normal drift i branden' };
 const car = id => S.elevators[id];

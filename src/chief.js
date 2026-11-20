@@ -23,6 +23,7 @@ import { setDogLock } from './dog.js';
 import { setLeakMode } from './leak.js';
 import { changeStrategy } from './actions.js';
 import { STRAT_NAMES } from './config.js';
+import { systems } from './systems.js';
 
 /** dagens och nattens driftchef (personalen i CREW, config.js – kontrollrummet byter skift klockan 22) */
 export const CHIEFS = CREW.filter(c => c.post === 'chief');
@@ -126,11 +127,7 @@ export function chiefTick(dt) {
   if (!S.outage) clear('power');
   for (const e of S.elevators) if (!e.hot && !e.fan && (C.dec[`heat${e.id}`] || C.manual[`heat${e.id}`])) clear(`heat${e.id}`);
   if (!S.move || S.move.state === 'done') clear('move');
-  if (!S.pano || S.pano.ph === 'done') clear('pano');
-  if (!S.gondola || S.gondola.ph === 'done') clear('gondola');
-  if (!S.dog || S.dog.ph === 'done') clear('dog');
-  if (!S.leak) clear('leak');
-  if (!S.heist || S.heist.ph === 'done') { clear('heist'); delete C.seen.heistWait; delete C.seen.heistPlan; delete C.seen.heistSignal; }
+  for (const s of systems()) if (s.chief && s.chief.done()) { clear(s.key); if (s.chief.cleared) s.chief.cleared(); } // (systems.js)
   // kuppen: polisens insatsledare bestämmer (chefen sitter bunden i driftcentralen och tar inga egna beslut)
   if (S.heist && S.heist.police && S.heist.ph !== 'done') heistChiefTick();
   if (S.heist && S.heist.tied) return;
@@ -142,10 +139,7 @@ export function chiefTick(dt) {
   serviceTick(dt);
   strategyTick(dt);
   moveTick();
-  panoChiefTick();
-  gondolaChiefTick();
-  dogChiefTick();
-  leakChiefTick();
+  for (const s of systems()) if (s.chief && s.chief.tick) s.chief.tick(); // (panoramahissen, gondolen, hunden, läckan … – systems.js)
   watchTick();
 }
 
@@ -272,7 +266,7 @@ function moveTick() {
 }
 
 // --- Panoramahissen sitter fast på fasaden: rep från taket eller stegbilen från gatan ---
-function panoChiefTick() {
+export function panoChiefTick() {
   const P = S.pano, C = S.chief;
   if (!P || P.ph === 'done' || !free('pano')) return;
   const e = S.elevators[P.car], windy = ropeWindy(), reach = ladderReach(e);
@@ -290,7 +284,7 @@ function panoChiefTick() {
 // --- Fönsterputsaren sitter fast: lastluckan om gondolen hänger vid en och det är lugnt, annars vevar vaktmästaren
 //     upp den; tar det för lång tid (gondolen hänger långt ner) och det inte blåser ringer chefen räddningstjänsten ---
 const GONDOLA_SLOW_S = 70;
-function gondolaChiefTick() {
+export function gondolaChiefTick() {
   const G = S.gondola, C = S.chief;
   if (!G || G.ph !== 'stuck' || !free('gondola')) return;
   if (S.t - G.t0 < 2) return; // (chefen hinner se det på skärmen)
@@ -310,7 +304,7 @@ function gondolaChiefTick() {
 // --- Hunden: låt den springa medan vaktmästaren och ägaren jagar den; springer den runt för länge spärras
 //     hissarna på våningen där den står, så att den inte kommer därifrån (den som väntar där får ta trappan) ---
 const DOG_LOCK_S = 60;
-function dogChiefTick() {
+export function dogChiefTick() {
   const D = S.dog, C = S.chief;
   if (!D || D.ph !== 'loose' || !free('dog')) return;
   if (S.t - D.t0 < 2) return;
@@ -323,7 +317,7 @@ function dogChiefTick() {
 // --- Vattenläckan: hissarna i de blöta schakten står still – utom i rusningen när bara en våning är blöt, då
 //     kör de vidare tills kranen är stängd; når vattnet fler våningar eller kortsluts en hiss stoppas de ---
 const LEAK_BUSY = 12;
-function leakChiefTick() {
+export function leakChiefTick() {
   const L = S.leak, C = S.chief;
   if (!L || L.ph !== 'leak' || L.shut || !free('leak')) return;
   if (S.t - L.t0 < 2) return;

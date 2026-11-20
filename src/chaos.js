@@ -4,6 +4,7 @@
 // det som inte hinner bli av inom stegets väntetid hoppas över. Sedan tar huset hand om resten själv:
 // driftchefen fattar sina beslut som vanligt. Kedjan har en egen slumpström ('kaos'): brandvåningen,
 // pauserna mellan stegen.
+import { anyIncident } from './systems.js';
 import { stream } from './rng.js';
 const { pick, rand } = stream('kaos');
 import { S, incidentOver, log, notice } from './state.js';
@@ -75,7 +76,7 @@ export function startChaos() {
   return true;
 }
 /** det har lugnat sig: ingen incident pågår och ingen sitter instängd */
-const calm = () => !S.fire && !S.outage && !S.storm && !S.pano && !S.heist && !S.gondola && !S.dog && !S.leak
+const calm = () => !anyIncident()
   && !S.elevators.some(e => e.passengers.length && (e.mode === 'snapped' || e.mode === 'broken'));
 export function chaosTick(dt) {
   const C = S.chaos;
