@@ -6,7 +6,9 @@ Huset sköter sig självt: driftchefen i kontrollrummet fattar alla beslut och b
 
 ## Kom igång
 
-Det finns ingen byggprocess. Webbläsaren laddar källkoden som ES-moduler direkt.
+Spela direkt i webbläsaren på **<https://thohig.github.io/tornet/>** (GitHub Pages, byggs från `main`). Där behövs ingen server, men sidan cachas i 10 minuter, så en ny push kan dröja en stund innan den syns.
+
+För att köra koden lokalt: det finns ingen byggprocess. Webbläsaren laddar källkoden som ES-moduler direkt.
 
 ```bash
 python3 serve.py

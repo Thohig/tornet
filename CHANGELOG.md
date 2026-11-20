@@ -1,5 +1,10 @@
 # Ändringar
 
+## November 2026 – spela på GitHub Pages
+- Spelet ligger på GitHub Pages: <https://thohig.github.io/tornet/> (byggs från `main`, cachas 10 min). Ingen lokal server behövs för att spela; `serve.py` behövs bara när man utvecklar.
+- Startappen `~/Projekt/Github Pages/Tornet.app` öppnar Pages-adressen i Safari i stället för att starta `serve.py --auto-stop`.
+- README och CLAUDE.md beskriver det.
+
 ## November 2026 – incidentregistret
 - Nytt: `src/systems.js`, ett register med en post per delsystem i tickordning. Varje post säger hur delsystemet tickar, nollställs och rullar över dygnsskiftet, och för incidenterna hur de framkallas, hur troliga de är i dygnets tidtabell, deras förvarning och driftchefens del.
 - `sim.js` (tick, `resetDay`, `rollDay`), `incidents.js` (framkallning, tidtabell, förvarningar), `chief.js` (när besluten upphör, olyckornas beslut), `chaos.js` (när det har lugnat sig) och `actions.js` (`triggers()`) går igenom registret i stället för att räkna upp incidenterna. Incidentkortens knappar (`gondola:crank`, `dog:lock` …) når `act()` utan egen rad i input.js.
