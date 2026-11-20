@@ -2,14 +2,17 @@
 //                                 npm test -- natt    (bara tester vars namn innehåller "natt")
 //                                 npm test -- --jobs=4 (antal trådar; standard en per kärna, 1 = en tråd)
 //                                 npm run golden      (skriv om facit för regressionstestet)
+//                                 npm test -- --quick (snabbläget, samma som npm run quick utan typkontrollen)
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
 import { Worker } from 'node:worker_threads';
-import { tests, Fail, setGolden, GOLDEN_CASES, caseKey, dayFingerprint } from './suite.js';
 import { goldenDiff } from './goldendiff.js';
 
 const goldenPath = new URL('./golden.json', import.meta.url);
 const args = process.argv.slice(2);
+// snabbläget måste vara satt innan sviten laddas (den bestämmer vilka tester som finns); arbetarna ärver miljön
+if (args.includes('--quick')) process.env.TORNET_QUICK = '1';
+const { tests, Fail, setGolden, GOLDEN_CASES, caseKey, dayFingerprint, QUICK } = await import('./suite.js');
 const c = { ok: '\x1b[32m', bad: '\x1b[31m', dim: '\x1b[2m', bold: '\x1b[1m', off: '\x1b[0m' };
 
 if (args.includes('--update-golden')) {
@@ -61,7 +64,7 @@ function runHere({ t, i }) {
 
 if (jobs === 1) queue.forEach(runHere);
 else {
-  console.log(`${c.dim}Kör ${chosen.length} tester på ${jobs} trådar …${c.off}`);
+  console.log(`${c.dim}Kör ${chosen.length} tester${QUICK ? ' i snabbläget' : ''} på ${jobs} trådar …${c.off}`);
   await new Promise((done, fail) => {
     let running = 0;
     for (let k = 0; k < jobs; k++) {
@@ -81,5 +84,5 @@ else {
 try { writeFileSync(timesPath, JSON.stringify(times, null, 1) + '\n'); } catch (e) { /* bara en optimering */ }
 
 const failed = chosen.length - passed;
-console.log(`\n${c.bold}${failed ? c.bad + '✗' : c.ok + '✓'} ${passed} av ${chosen.length} tester godkända på ${((performance.now() - t0) / 1000).toFixed(1)} s${c.off}`);
+console.log(`\n${c.bold}${failed ? c.bad + '✗' : c.ok + '✓'} ${passed} av ${chosen.length} tester godkända på ${((performance.now() - t0) / 1000).toFixed(1)} s${QUICK ? ' (snabbläget – npm run check kör allt)' : ''}${c.off}`);
 process.exit(failed ? 1 : 0);

@@ -78,12 +78,13 @@ Node behövs bara för tester och typkontroll.
 npm test            # hela testsviten i Node, parallellt (--jobs=N)
 npm run typecheck   # tsc på JSDoc-typerna
 npm run check       # båda
+npm run quick       # snabbläget: färre slumpade dygn, ungefär halva tiden
 npm run golden      # skriv om facit efter avsiktliga beteendeändringar
 npm run bench       # simuleringens fart
 npm run league      # styrlogikerna mot varandra: väntetid, kWh, trappa …
 ```
 
-Samma testsvit körs i webbläsaren på `/tests.html`. På GitHub kör `npm run check` vid push till `main` och vid pull request (inte när bara `.md`-filer ändrats). Kör `npm run check` lokalt före varje commit.
+Samma testsvit körs i webbläsaren på `/tests.html`. På GitHub kör `npm run check` vid push till `main` och vid pull request (inte när bara `.md`-filer ändrats). Kör `npm run quick` lokalt före varje commit och hela `npm run check` innan något hamnar på `main`.
 
 **Upplägg.** Simuleringen i `src/` rör aldrig DOM eller canvas och kör headless i Node med fast tidssteg och seedad slump i namngivna strömmar. Samma frö ger alltid exakt samma dygn. Grafiken läser bara simuleringens tillstånd, och allt spelaren gör går via `act()`. Huset beskrivs som data i `BUILDING` i `config.js`, och resten räknas ut därifrån. Mer om arkitekturen och reglerna finns i [CLAUDE.md](CLAUDE.md).
 

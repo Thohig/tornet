@@ -1,5 +1,9 @@
 # Ändringar
 
+## November 2026 – snabbare tester i vardagen
+- `npm run quick` (och `/tests.html?quick`): typkontrollen och testsviten i snabbläget – två dygn i stället för tio i varje block av invarianttesterna, två i stället för sex med slumpade spelaråtgärder, färre frön i dockhuset, kaosknappen och flyttvalen, facit för första dygnet per styrlogik, och utan de statistiska jämförelserna mellan styrlogikerna. Ungefär halva tiden (2,3 min mot 4,5 min på fyra kärnor). `npm run check` kör allt som förut, och CI kör hela sviten.
+- I sviten: `test(namn, fn, { slow: true })` körs bara i hela sviten, `some(lista, n)` ger de n första i snabbläget.
+
 ## November 2026 – färre CI-körningar
 - GitHub Actions (`.github/workflows/check.yml`) körs vid push bara på `main` (samma commit testades annars två gånger, på arbetsgrenen och på main) och vid pull request. Ändringar som bara rör `.md`-filer startar ingen körning (`paths-ignore`).
 - CLAUDE.md: `npm run check` körs lokalt före varje commit – CI ska inte vara det som hittar felen.
