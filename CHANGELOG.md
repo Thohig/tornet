@@ -1,5 +1,8 @@
 # Ändringar
 
+## November 2026 – ikonen i Safari
+- Ikonlänkarna i `index.html` har `?v=2`, så att Safari hämtar ikonen på nytt i stället för att hålla fast vid en gammal (eller tom) favicon i sin cache. `tornet-180.png` finns nu också som `rel="icon"` för webbläsare som vill ha en större ikon.
+
 ## November 2026 – startappen borttagen
 - Startappen `Tornet.app` behövs inte längre: spelet öppnas på GitHub Pages eller med `serve.py`. Ikonen finns kvar i `ikon/Tornet.icns` (samma bild som `ikon/tornet-1024.png`).
 - Kommentarerna i `serve.py` och `main.js` och CLAUDE.md nämner inte appen längre. README och CLAUDE.md berättar vad som ligger i `ikon/`.
