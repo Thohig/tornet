@@ -7,7 +7,7 @@ så att en vanlig omladdning alltid ger senaste versionen av spelet.
 Kör:  python3 serve.py              (port 8123, bara den här datorn)
       python3 serve.py 9000         (annan port)
       python3 serve.py --lan        (även andra på nätverket, t.ex. mobilen på samma wifi)
-      python3 serve.py --auto-stop  (säkert läge, så startar Tornet.app servern)
+      python3 serve.py --auto-stop  (stänger av sig själv när spelet tystnat)
 
 Servern lyssnar bara på den egna datorn (localhost) om inte --lan anges.
 

@@ -1,5 +1,9 @@
 # Ändringar
 
+## November 2026 – startappen borttagen
+- Startappen `Tornet.app` behövs inte längre: spelet öppnas på GitHub Pages eller med `serve.py`. Ikonen finns kvar i `ikon/Tornet.icns` (samma bild som `ikon/tornet-1024.png`).
+- Kommentarerna i `serve.py` och `main.js` och CLAUDE.md nämner inte appen längre. README och CLAUDE.md berättar vad som ligger i `ikon/`.
+
 ## November 2026 – småfel från ett provspel
 - Pannrumsdörren på P1 ligger till höger om trappskylten, som förut täckte ”P” i ”PANNA”. Skylten är lika bred som texten, så att ”BOILER” får plats på engelska. Driftcentralens fönster flyttar sig så att det inte krockar med dörren.
 - Driftchefens pratbubbla vid kontrollbordet ritas inte ovanpå våningsskylten och driftcentralens rubrik när det saknas plats. Repliken rullar redan i fönstrets textremsa.

@@ -47,7 +47,7 @@ function frame(now) {
 document.fonts && document.fonts.ready.then(resize);
 requestAnimationFrame(frame);
 
-// Säg till servern att spelet är öppet: serve.py --auto-stop (Tornet.app) stänger av sig själv
+// Säg till servern att spelet är öppet: serve.py --auto-stop stänger av sig själv
 // när pingarna har tystnat. Finns ingen server som svarar händer ingenting.
 const ping = () => fetch('/ping', { cache: 'no-store' }).catch(() => {});
 ping();
