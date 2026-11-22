@@ -14,7 +14,7 @@ För att köra koden lokalt: det finns ingen byggprocess. Webbläsaren laddar k�
 python3 serve.py
 ```
 
-Öppna sedan <http://localhost:8123>. Servern skickar inga cachehuvuden, så ändringar i koden syns direkt vid omladdning. Den lyssnar bara på den egna datorn och lämnar bara ut spelets filer. Spelet hämtar inget utifrån, och typsnittet ligger i `fonts/`. Ikonerna ligger i `ikon/`: flikens ikon, ikonen för hemskärmen på mobilen och `Tornet.icns` för en Mac-app.
+Öppna sedan <http://localhost:8123>. Servern skickar inga cachehuvuden, så ändringar i koden syns direkt vid omladdning. Den lyssnar bara på den egna datorn och lämnar bara ut spelets filer. Spelet hämtar inget utifrån, och typsnittet ligger i `fonts/`. Ikonerna ligger i `ikon/`: flikens ikon, ikonen för hemskärmen på mobilen och `Tornet.icns`, samma bild i macOS-format.
 
 - `python3 serve.py --lan` släpper in andra på nätverket, till exempel mobilen på samma wifi.
 - `python3 serve.py --auto-stop` stänger av servern själv en stund efter att spelet stängts.

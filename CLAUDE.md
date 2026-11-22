@@ -8,11 +8,11 @@ Simulering av skyskrapan Tornet med 8 hissar (styrsystemet heter Hiss-O-Matic 30
 python3 serve.py          # http://localhost:8123 (no-cache-server, krävs för att ändringar ska synas)
 ```
 
-Servern lyssnar bara på den egna datorn (`--lan` = även nätverket, t.ex. mobilen) och lämnar bara ut spelets filer: `ALLOWED` i `serve.py` – **en ny mapp som spelet laddar måste läggas till där**, annars ger den 404. `python3 serve.py --auto-stop` stänger dessutom av sig själv 5 min efter att spelet tystnat (spelet anropar `/ping` var 30:e sekund, `main.js`) eller efter 12 h. Spelet hämtar inget utifrån: typsnittet VT323 ligger i `fonts/` (OFL). Ikonerna ligger i `ikon/` (`tornet-32.png` = favicon, `tornet-180.png` = apple-touch-icon, `tornet-1024.png` = originalet, `Tornet.icns` = samma bild för en macOS-app); byts en ikon ut, höj `?v=` på ikonlänkarna i `index.html` – Safari håller annars fast vid den gamla). Spelet ligger också på GitHub Pages (https://thohig.github.io/tornet/, byggs från `main`, cachas 10 min).
+Servern lyssnar bara på den egna datorn (`--lan` = även nätverket, t.ex. mobilen) och lämnar bara ut spelets filer: `ALLOWED` i `serve.py` – **en ny mapp som spelet laddar måste läggas till där**, annars ger den 404. `python3 serve.py --auto-stop` stänger dessutom av sig själv 5 min efter att spelet tystnat (spelet anropar `/ping` var 30:e sekund, `main.js`) eller efter 12 h. Spelet hämtar inget utifrån: typsnittet VT323 ligger i `fonts/` (OFL). Ikonerna ligger i `ikon/` (`tornet-32.png` = favicon, `tornet-180.png` = apple-touch-icon, `tornet-1024.png` = originalet, `Tornet.icns` = samma bild i macOS-format); byts en ikon ut, höj `?v=` på ikonlänkarna i `index.html` – Safari håller annars fast vid den gamla). Spelet ligger också på GitHub Pages (https://thohig.github.io/tornet/, byggs från `main`, cachas 10 min).
 
 Ingen byggprocess: webbläsaren laddar `src/*.js` som ES-moduler direkt. Förhandsvisning: `.claude/launch.json` → konfigurationen `hiss`.
 
-Node (Homebrew) behövs bara för tester/typkontroll. I ett skal utan profil måste brew läsas in först:
+Node (Homebrew) behövs bara för tester/typkontroll. I ett skal utan profil måste brew läsas in först (på en Intel-Mac ligger brew i `/usr/local/bin/brew`):
 
 ```bash
 eval "$(/opt/homebrew/bin/brew shellenv)"
