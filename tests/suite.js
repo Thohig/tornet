@@ -10,13 +10,13 @@ import {
 } from '../src/incidents.js';
 import { liftsAvailable, pn, spawnVisitor } from '../src/people.js';
 import { TOUR_N } from '../src/tour.js';
-import { loadKg, allowed, allowedPos, posOf, safeFloor, operational, canTake, stopFloors, isFull, costBased, benched, inFireZone } from '../src/dispatch.js';
+import { loadKg, allowed, allowedPos, posOf, safeFloor, operational, canTake, stopFloors, isFull, costBased, benched, inFireZone, prio } from '../src/dispatch.js';
 import { RATED_KG, FULL_LOAD, VMAX, DEFAULT_TEMPO, dayLength } from '../src/config.js';
 import { needsFreight, mayUseFreight, legDest } from '../src/people.js';
 import { fl } from '../src/util.js';
 import { setSeed, stream, streamNames } from '../src/rng.js';
 import { assignCalls, antiNuisance } from '../src/buttons.js';
-import { act } from '../src/actions.js';
+import { act, triggers } from '../src/actions.js';
 import { powerKw, triggerFault, breakDown, tech, techs, techOf, snapCable, EXTRA_QUEUE, CALL_T, trapBreak, FAULT_KIND, jobFloor } from '../src/service.js';
 import { warnS, FF_ATTACK_S, endOutage } from '../src/incidents.js';
 import { forceMove, BLANKET_T } from '../src/visits.js';
@@ -175,7 +175,7 @@ function makeWatcher() {
       for (const p of e.passengers) {
         if (p.state === 'ride' && !e.serves.has(p.dest)) w.hit('badLeg', e, p, 'åker en hiss som inte går till delmålet');
         if (p.state === 'ride' && (e.freight ? !mayUseFreight(p) : needsFreight(p))) w.hit('badFreight', e, p, 'fel last i fel hiss');
-        if (e.vipLock && !p.vip && !p.medic && w.vipSet[i] && !w.vipSet[i].has(p)) w.hit('vipMixed', e, p, 'åker med i en VIP-låst hiss');
+        if (e.vipLock && !prio(p) && w.vipSet[i] && !w.vipSet[i].has(p)) w.hit('vipMixed', e, p, 'åker med i en VIP-låst hiss');
       }
       if (e.state === 'moving') w.maxKg = Math.max(w.maxKg, kg);
       // en trasig hiss eller en hiss på service rör sig aldrig och har ingen ombord;
@@ -242,7 +242,7 @@ function makeWatcher() {
       for (const p of S.people) {
         const e = p.state === 'wait' && p.assigned !== null ? S.elevators[p.assigned] : null;
         const why = !e ? '' : e.mode !== 'normal' ? e.mode : benched(e) ? 'benched' : e.hold ? 'hold' : e.sleep ? 'sleep' : e.zoneLock ? 'zoneLock'
-          : e.vipLock && !p.vip && !p.medic ? 'vipLock' : !canTake(e, p) ? 'canTake' : '';
+          : e.vipLock && !prio(p) ? 'vipLock' : !canTake(e, p) ? 'canTake' : '';
         if (!why) { w.deadAssign.delete(p); continue; }
         const since = w.deadAssign.get(p) ?? S.t;
         w.deadAssign.set(p, since);
@@ -1943,12 +1943,12 @@ export const PLAYER_ACTIONS = {
   moveBlankets: r => act('moveBlankets', r() < 0.5),
   moveWind: r => act('moveWind', r() < 0.5 ? 'wait' : 'varu'),
   // framkalla händelser (även på en viss våning eller hiss), slumpen och driftchefen
-  trigger: r => act('trigger', ['move', 'lightning', 'cold', 'heatwave', 'train', 'vip', 'visning'][Math.floor(r() * 7)]),
+  trigger: r => act('trigger', ['move', 'lightning', 'cold', 'heatwave', 'train', 'vip'][Math.floor(r() * 6)]),
   fireAt: r => act('trigger', 'fire', FIRE_FLOORS[Math.floor(r() * FIRE_FLOORS.length)]),
   carTrigger: r => act('trigger', ['fault', 'heat', 'cable'][Math.floor(r() * 3)], Math.floor(r() * S.elevators.length)),
   incLevel: r => act('incLevel', ['av', 'lugn', 'normal', 'kaos'][Math.floor(r() * 4)]),
   chief: r => act('chief', r() < 0.7),
-  visning: r => act('visning', ['start', 'start', 'next', 'end'][Math.floor(r() * 4)]),
+  visning: r => act('visning', ['start', 'now', 'next', 'end'][Math.floor(r() * 4)]),
   heistTrig: () => act('trigger', 'heist'),
   chaos: () => act('chaos'),
   // vaktmästarens olyckor: gondolen, hunden, vattenläckan – och valen på korten
@@ -2176,6 +2176,8 @@ test('Murphys lag: kaosknappen startar en kedja av allt som kan gå fel, en gån
     fails.push(...newInvariantFails(w, `frö ${seed}`));
   });
   assert(fails.length === 0, `${fails.length} fel:\n  ${fails.slice(0, 10).join('\n  ')}`);
+  // rundvisningen är ingen incident: den kommer bara när spelaren ber om den
+  assert(!('visning' in chaosNames()), 'kaoskedjan startar en rundvisning');
   // nästa dygn (mjukt dygnsskifte): locket är plomberat igen, och knappen går att trycka
   sim(2304, { chief: true, roll: 'mjuk' });
   while (hour() < 10) step(DT);
@@ -2822,18 +2824,19 @@ test('Rundvisningen efter Berits pass: kvällsvärden Yvonne tar den på kvälle
   return out.join(' · ');
 });
 
-test('Rundvisningen framkallad: börjar direkt med den som kan, stängda stopp låses upp av den som har nycklarna', () => {
+test('Rundvisningen direkt (ingen incident – den beställs): börjar med den som kan, stängda stopp låses upp av den som har nycklarna', () => {
   const out = [];
   /** @type {[number, string, string][]} */
   const cases = [[6.2, 'ny', 'gunbritt'], [21, 'mjuk', 'yvonne']];
   for (const [at, roll, who] of cases) {
     sim(8, { roll, chief: true });
     while (hour() < at) step(DT);
-    assert(act('trigger', 'visning') === true, `kl ${at}: rundvisningen gick inte att framkalla`);
-    assert(act('trigger', 'visning') === false, `kl ${at}: två rundvisningar samtidigt`);
+    assert(!triggers().includes('visning'), 'rundvisningen går att framkalla som en incident');
+    assert(act('visning', 'now') === true, `kl ${at}: rundvisningen gick inte att beställa direkt`);
+    assert(act('visning', 'now') === false, `kl ${at}: två rundvisningar samtidigt`);
     let g = 0;
     while (S.visning && S.visning.ph === 'order' && ++g < 60 / DT) step(DT);
-    assert(S.visning && S.visning.ph !== 'order', `kl ${at}: den framkallade rundvisningen började inte direkt`);
+    assert(S.visning && S.visning.ph !== 'order', `kl ${at}: rundvisningen började inte direkt`);
     const host = S.people.find(p => p.id === S.visning.host);
     assert(host && host.crewId === who, `kl ${at}: guiden är ${host && host.name} (ska vara ${who})`);
     // (ingen receptionist i huset: driftchefen tar den och säger varför)

@@ -35,7 +35,7 @@ const side = $('side'), portrait = $('portrait');
 /** @type {{ view: null|'roster'|'log'|'stats'|'set'|'yesterday', open: Set<string>, fireFloor: string, squeezed: Set<string>, key: string, tour: TourPanel|null, chaosArm: number, tab: null|string, mkey: string }} */
 const UI = { view: null, open: new Set(), fireFloor: '', squeezed: new Set(), key: '', tour: null, chaosArm: 0, tab: null, mkey: '' };
 /** knappen som beställer en rundvisning hos den som guidar härnäst (Berit på dagen, kvällsvärden annars) */
-const tourBtn = () => { const n = guideName(); return ikon('visning:start', '🛎️', `Be ${n} visa runt`, `${n} ringer efter en vikarie till disken och visar en gäst runt i huset – du följer med`, false, S.visning ? ' disabled' : ''); };
+const tourBtn = () => { const n = guideName(); return ikon('visning:now', '🛎️', `Be ${n} visa runt`, `${n} ringer efter en vikarie till disken och visar en gäst runt i huset – du följer med`, false, S.visning ? ' disabled' : ''); };
 /** Rundvisningen (intro.js): ett eget block överst, blocken i focus fälls ut och lyfts fram, och det som
  *  matchar väljarna i spot blinkar (även textskylten i bilden). null = ingen rundvisning. */
 export function setTour(t) { UI.tour = t; UI.view = null; updatePanel(); }

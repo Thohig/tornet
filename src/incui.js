@@ -251,10 +251,6 @@ export function incUi() {
     },
   },
   {
-    key: 'visning',
-    trig: { icon: '🛎️', name: 'Rundvisning nu', hint: 'Den som kan visar en gäst runt direkt – guiden avbryter rasten, och har något stängt ringer hen efter nycklarna', off: () => !!(S.visning && S.visning.ph !== 'order') },
-  },
-  {
     key: 'gondola',
     trig: { icon: '🪟', name: 'Gondolen kärvar', hint: 'Fönsterputsarens gondol fastnar mitt på fasaden – bara när han är ute och putsar (ungefär 08–16)', off: () => !!S.gondola || !gondolaCandidate() },
     warn: (_W, add) => add('warn', 82, 'cleaner', 0, '🔩 Det gnisslar i gondolens vinsch', true),

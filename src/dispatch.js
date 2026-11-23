@@ -127,8 +127,9 @@ export const servesNow = (e, p) => !outReason(e) && !(e.vipLock && !prio(p)) && 
 export const outLong = e => e.mode === 'broken' || e.mode === 'snapped' || e.mode === 'service' || e.hold || benched(e);
 /** har egen nyckel/prioritet och använder aldrig hallknapparna (VIP-gruppen, ambulansen, flyttgubbarna) @param {Person} p */
 export const keyed = p => !!(p.vip || p.medic || p.mover || p.ff || p.rescue);
-/** får en hiss för sig själva (VIP-läge): VIP-gruppen och ambulanspersonalen @param {Person} p */
-export const prio = p => !!(p.vip || p.medic);
+/** får en hiss för sig själva (VIP-läge): VIP-gruppen, ambulanspersonalen och räddningstjänsten (panoramahissen på
+ *  fasaden – annars står de i kö till varuhissen bakom flyttgubbarna) @param {Person} p */
+export const prio = p => !!(p.vip || p.medic || p.rescue);
 /** strategier som använder kostnadsfunktionen (Smart och dess varianter) */
 export const costBased = (k = S.strategy) => k === 'smart' || k === 'peak' || k === 'eco';
 

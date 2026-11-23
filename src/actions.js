@@ -38,7 +38,6 @@ const SETTINGS = ['mistakes', 'maint'];
 const EXTRA_TRIGGERS = {
   move: () => moveNow(), lightning: () => strikeNow(), cold: () => setWeather('cold'), heatwave: () => setWeather('heatwave'),
   train: () => delayTrain(), vip: () => vipNow(),
-  visning: () => orderVisning(true), // (rundvisningen direkt – guiden avbryter rasten, visning.js)
 };
 /** Allt spelaren kan framkalla: registrets incidenter och händelserna ovan.
  * target = våning (brand, vattenläcka) eller hiss (hissfel, het motor, linbrott); utelämnat = slumpen väljer. */
@@ -69,11 +68,12 @@ export const ACTIONS = {
   bus: () => spawnBus(),
   // Murphys lag: kaosknappen – allt som kan gå fel går fel, en gång per dygn (chaos.js)
   chaos: () => startChaos(),
-  // rundvisningen med Berit: beställ (start), gå vidare till nästa stopp (next), avsluta (end)
   // kuppen: polisens val – strömmen (cut/wait), var insatsstyrkan går in (garage/tak), tåget (stop/go), gå in nu (storm)
   heist: what => { const H = S.heist; if (!heistChoice(what)) return false; if (what === 'stop') delayTrain();
     playerChose('heist', { cut: 'Klipp strömmen', wait: 'Vänta ut dem', garage: 'Storma via garaget', tak: 'Storma via taket', stop: 'Stoppa tunnelbanan', go: 'Låt tåget gå', storm: 'Gå in nu!' }[what], { inc: 'heist', floor: H ? null : null }); return true; },
-  visning: what => (what === 'start' ? orderVisning() : what === 'next' ? nextVisning() : what === 'end' ? endVisning() : undefined),
+  // rundvisningen (ingen incident – den beställs): beställ hos guiden (start), direkt – guiden avbryter rasten (now),
+  // gå vidare till nästa stopp (next), avsluta (end)
+  visning: what => (what === 'start' ? orderVisning() : what === 'now' ? orderVisning(true) : what === 'next' ? nextVisning() : what === 'end' ? endVisning() : undefined),
   moveRoute: r => { if (!S.move) return; setMoveRoute(r); playerChose('move', `Flytten: ${{ auto: 'låt styrningen planera', varu: 'allt i varuhissen', balk: 'tungt med hissbalken' }[r]}`); },
   moveBlankets: on => setMoveBlankets(on),
   // fönsterputsaren som sitter fast: vevas upp (crank), in genom lastluckan (hatch) eller räddningstjänstens rep (rope)

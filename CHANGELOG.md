@@ -1,5 +1,10 @@
 # Ändringar
 
+## November 2026 – rundvisningen är ingen incident
+- Rundvisningen är en hjälp för nya spelare och kommer bara när någon ber om den. Den finns inte längre i *Framkalla* (`act('trigger', 'visning')` finns inte), och Murphys lag skickar bara turistbussen i steget med besökarna.
+- Man beställer den genom Berits erbjudande första gången, knappen *🛎️ Be Berit visa runt* som nu står överst i hjälpen (?), och knappen hos guiden eller i entrén. Knapparna använder `act('visning', 'now')`: guiden avbryter rasten, och finns ingen guide i huset tar väktaren eller driftchefen den.
+- Räddningstjänsten vid panoramahissen på fasaden har förtur till hissen (`prio`, VIP-låset) som ambulansen. Förut kunde räddarna stå i kö till varuhissen bakom flyttgubbar och städare medan folk satt fast i korgen.
+
 ## November 2026 – buggletning: var det hände, och länken dit
 - Vakten i testerna (`watcher()` i `tests/suite.js`) sparar första gången varje regel bröts, och rekordet för längsta väntan, åktur, instängning med flera: dygn, klockslag, hissen (läge och tillstånd) och personen. Fallerar ett test skrivs fynden ut under felet med en länk som öppnar just det steget i spelet. Förut stod det bara hur många gånger något hände.
 - Länken kontrolleras innan den skrivs ut: dygnet spelas om från fröet till samma steg. Har testet gjort något annat än att köra dygnet (spelaråtgärder, framkallade incidenter) står det vid länken att den bara visar samma frö och klockslag.

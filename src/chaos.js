@@ -14,7 +14,6 @@ import { moveNow, startMedical } from './visits.js';
 import { delayTrain } from './train.js';
 import { vipNow } from './life.js';
 import { spawnBus } from './tour.js';
-import { orderVisning } from './visning.js';
 import { heistPossible, startHeist } from './heist.js';
 import { triggerHeat } from './service.js';
 import { chiefNote } from './chief.js';
@@ -26,7 +25,7 @@ import { chiefNote } from './chief.js';
 /** vad varje del heter i sammanfattningen (incidenterna i stegen cars och guests: chaos.name i registret, systems.js) */
 const NAMES = {
   heatwave: '☀️ värmebölja', medical: '🚑 ambulans', train: '🚇 tågstörning', vip: '🚁 VIP', storm: '⛈️ storm och blixt',
-  heat: '🌡️ het motor', bus: '🚌 turistbuss', visning: '🛎️ rundvisning', fire: '🔥 brand', heist: '🚐 kupp', move: '🚚 flytt',
+  heat: '🌡️ het motor', bus: '🚌 turistbuss', fire: '🔥 brand', heist: '🚐 kupp', move: '🚚 flytt',
 };
 /** @type {Record<string, string>|null} */
 let names = null;
@@ -52,7 +51,7 @@ const STEPS = [
   { k: 'heat', ready: () => powered() && S.elevators.some(e => e.mode === 'normal'), wait: 150, run: () => [triggerHeat() && 'heat'] },
   { k: 'cars', ready: () => powered() && S.elevators.some(e => e.mode === 'normal'), wait: 90,
     run: () => runIn('cars') },
-  { k: 'guests', ready: () => !S.fire, wait: 90, run: () => [spawnBus() > 0 && 'bus', orderVisning(true) && 'visning', ...runIn('guests')] },
+  { k: 'guests', ready: () => !S.fire, wait: 90, run: () => [spawnBus() > 0 && 'bus', ...runIn('guests')] },
   { k: 'fire', ready: () => !S.fire, wait: 120, run: () => { startFire(pick(FIRE_FLOORS)); return ['fire']; } },
   // kuppen kan inte börja under branden eller strömavbrottet, och inte när flyttbilen står vid lastkajen:
   // den blir finalen när det har lugnat sig
@@ -62,7 +61,7 @@ const STEPS = [
 /** stegen som kan hoppas över (de som startar något) */
 const STEP_KEYS = { start: ['heatwave', 'medical', 'train', 'vip'], storm: ['storm'], heat: ['heat'], fire: ['fire'], heist: ['heist'], move: ['move'] };
 /** @param {string} k */
-const stepKeys = k => (k === 'cars' ? chaosIn('cars').map(s => s.key) : k === 'guests' ? ['bus', 'visning', ...chaosIn('guests').map(s => s.key)] : STEP_KEYS[k] || []);
+const stepKeys = k => (k === 'cars' ? chaosIn('cars').map(s => s.key) : k === 'guests' ? ['bus', ...chaosIn('guests').map(s => s.key)] : STEP_KEYS[k] || []);
 /** hur länge kedjan högst väntar på att det ska lugna sig efter sista steget (s) */
 const TAIL_MAX = 900;
 

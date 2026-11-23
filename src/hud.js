@@ -453,6 +453,7 @@ export function showIntro(mode = S.started ? 'help' : 'start', then = /** @type 
   if (mode === 'help') S.paused = true;
   showOverlay(`<div class="card intro"><h1>TORNET${help ? ' · HJÄLP' : ''}</h1>
     <p>Välkommen till <b>Tornet</b> – åtta hissar styrda av <b>Hiss-O-Matic 3000</b>, ${FL.length} våningar och en massa folk med bråttom. <b>Huset sköter sig självt:</b> driftchefen tar besluten och berättar varför, och regissören 🎬 klipper bilden till det som händer. Luta dig tillbaka och titta.</p>
+    ${help ? `<div class="intro-tour"><button class="btn" id="tour-go"${S.visning ? ' disabled' : ''}>🛎️ BE ${guideName().toUpperCase()} VISA RUNT</button><span>Ny i huset? ${esc(guideName())} visar dig runt och berättar vad du ser.</span></div>` : ''}
     <ul class="intro-short">
       ${mob ? `<li><b>Tryck</b> på en person, en hiss eller en våning för att följa den – allt om den finns under fliken 👤.</li>
       <li><b>Listen</b> nertill: ❚❚ paus, fart, 🔍 hela bredden (eller dubbeltryck i bilden) och flikarna 📻 nu, ⚡ framkalla, 🎛️ styrning och ☰ mer. Raden ovanför visar vad som händer – när något händer öppnas 🚨 av sig själv.</li>`
@@ -462,7 +463,7 @@ export function showIntro(mode = S.started ? 'help' : 'start', then = /** @type 
       <li>Knapparna är <b>ikoner</b> – ${touch ? 'håll fingret på en' : 'vila musen på en'} så står det vad den gör.</li>
       ${touch ? '<li><b>Dra</b> i bilden med ett finger för att se resten av huset; två fingrar zoomar.</li>' : `<li class="intro-keys"><kbd>Mellanslag</kbd> paus · <kbd>−</kbd>/<kbd>+</kbd> hastighet · <kbd>H</kbd> biografläge · <kbd>S</kbd> styrlogik · <kbd>T</kbd> namnbrickor · <kbd>F</kbd> koppla loss/på kameran · <kbd>A</kbd> regissör (kameran väljer själv) · <kbd>Esc</kbd> sluta följa/tillbaka</li>`}
     </ul>
-    <button class="btn" id="go">${help ? 'TILLBAKA' : 'KÖR!'}</button>${help ? `<button class="btn" id="tour-go"${S.visning ? ' disabled' : ''}>🛎️ BE ${guideName().toUpperCase()} VISA RUNT</button>` : ''}
+    <button class="btn" id="go">${help ? 'TILLBAKA' : 'KÖR!'}</button>
     <details class="intro-more"><summary>Mer om huset</summary>
     <ul>
       <li>Det finns <b>inga knappar</b> på våningarna. Varje person har ett eget mål och får en egen hiss. Tankebubblan visar målet och hissen.</li>
@@ -487,7 +488,7 @@ export function showIntro(mode = S.started ? 'help' : 'start', then = /** @type 
   };
   $('go').onclick = go;
   // (rundvisningen: guiden visar runt i huset som det är just nu, visning.js)
-  if ($('tour-go')) $('tour-go').onclick = () => { go(); doAction('visning:start'); };
+  if ($('tour-go')) $('tour-go').onclick = () => { go(); doAction('visning:now'); };
   /** @type {HTMLElement} */ ($('go')).focus();
   // fångas före spelets tangenter (annars pausar mellanslaget och Esc kopplar loss kameran)
   if (introKeys) removeEventListener('keydown', introKeys, true);

@@ -171,8 +171,10 @@ export function step(dt) {
     // (ambulansens hiss är låst även medan den står och väntar på personalen)
     const lock = holders.length > 0 || e.medicHold;
     if (lock && !e.vipLock) {
-      const medic = e.medicHold || holders.some(p => p.medic), who = medic ? 'ambulansen' : 'VIP-gruppen';
-      log(medic ? `🚑 Förtur: ${e.name} reserveras för ambulansen` : `👔 VIP-läge: ${e.name} reserveras för VIP-gruppen`, 'alert', e.color);
+      const medic = e.medicHold || holders.some(p => p.medic), rescue = !medic && holders.some(p => p.rescue);
+      const who = medic ? 'ambulansen' : rescue ? 'räddningstjänsten' : 'VIP-gruppen';
+      log(medic ? `🚑 Förtur: ${e.name} reserveras för ambulansen` : rescue ? `🚒 Förtur: ${e.name} reserveras för räddningstjänsten`
+        : `👔 VIP-läge: ${e.name} reserveras för VIP-gruppen`, 'alert', e.color);
       // de som redan hade fått hissen får en annan
       e.vipLock = lock;
       releaseCalls(e, `reserveras för ${who}`, prio);

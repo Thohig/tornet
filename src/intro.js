@@ -38,6 +38,8 @@ export function offerVisning() { U.offer = true; paint(); }
 extraActions.visning = b => {
   if (b === 'nej') { U.offer = false; }
   else if (b === 'ja' || b === 'start') { U.offer = false; act('visning', 'start'); }
+  // (hjälpen och guidens knapp: direkt – guiden avbryter rasten)
+  else if (b === 'now') { U.offer = false; act('visning', 'now'); }
   else if (b === 'again') { U.spoken = -1; }
   else if (b === 'follow') { const p = beritP(); if (p) { followPerson(p); U.cam = p.id; } }
   else if (b === 'next' || b === 'end') { hush(); act('visning', b); }

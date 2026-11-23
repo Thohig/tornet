@@ -35,7 +35,7 @@ export function nextGuide(h) {
 /** kan p lämna det hen gör och gå med på en rundvisning (i huset, inte på väg hem, inte utrymd)? @param {Person} p */
 const free = p => !!p && !p.dead && p.state !== 'away' && !p.leaving && !p.evac && p.state !== 'assembly' && !p.hero && !p.hostage;
 /** Guiden som kan börja nu, eller null. Beställd: den som sitter i receptionen (inte den som snart går hem).
- *  Framkallad (now): även den som har rast – och finns ingen av dem i huset tar väktaren eller driftchefen den. */
+ *  Direkt (now): även den som har rast – och finns ingen av dem i huset tar väktaren eller driftchefen den. */
 function guideNow(h, now = false) {
   for (const c of GUIDES) {
     const p = crewPerson(c.id);
@@ -130,7 +130,7 @@ const DETOURS = 3;
 
 /**
  * Rundvisningen (S.visning). ph: order (beställd, väntar på guiden) → call (ringer vikarien) → swap (väntar på Kicki)
- * – now = framkallad (börjar direkt, guiden avbryter rasten), sub = Kicki behövs i receptionen –
+ * – now = direkt (spelaren bad om den nu: börjar direkt, guiden avbryter rasten), sub = Kicki behövs i receptionen –
  * → go/at (på väg till / vid ett stopp) → done (slut: Kicki går hem, guiden sätter sig). stop = stoppet (index i
  * STOPS) eller händelsen (detour) som gruppen är på väg till eller står vid; line/lineN = guidens replik.
  * @typedef {{ ph: string, t0: number, host: number, guest: number, kicki: number, si: number, goT: number, stay: number,
@@ -276,14 +276,14 @@ function nearStop(e) {
 // ---------- Spelarens åtgärder ----------
 /** Beställ en rundvisning. Returnerar false om en redan pågår. */
 export function orderVisning(now = false) {
-  // (en beställd rundvisning som väntar kan framkallas: då börjar den direkt)
+  // (en beställd rundvisning som väntar kan beställas direkt: då börjar den nu)
   if (S.visning && now && S.visning.ph === 'order' && !S.visning.now) { S.visning.now = true; return true; }
   if (S.visning) return false;
   S.visning = { ph: 'order', t0: S.t, host: -1, guest: -1, kicki: -1, si: 0, goT: 0, stay: 0, callAt: 0, callUntil: 0,
     now, sub: false, unlock: null, detour: null, seen: [], seenStops: [], line: '', lineN: 0, lineK: '', focus: [], spot: [], log: [], ended: '', kickiSaid: false, paused: false };
   const h = hour(), soon = startable(h), c = nextGuide(h);
   if (now) {
-    log('🛎️ Rundvisning framkallad – den som kan tar den direkt', 'sys');
+    log('🛎️ Rundvisning beställd – den som kan tar den direkt', 'sys');
     return true;
   }
   const when = soon ? 'Hon ringer efter en vikarie till disken och börjar sedan.' : h < c.from ? `Hon börjar när hon kommer till disken kl ${Math.floor(c.from)}.`
