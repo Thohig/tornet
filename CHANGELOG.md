@@ -1,5 +1,12 @@
 # Ändringar
 
+## November 2026 – buggletning: var det hände, och länken dit
+- Vakten i testerna (`watcher()` i `tests/suite.js`) sparar första gången varje regel bröts, och rekordet för längsta väntan, åktur, instängning med flera: dygn, klockslag, hissen (läge och tillstånd) och personen. Fallerar ett test skrivs fynden ut under felet med en länk som öppnar just det steget i spelet. Förut stod det bara hur många gånger något hände.
+- Länken kontrolleras innan den skrivs ut: dygnet spelas om från fröet till samma steg. Har testet gjort något annat än att köra dygnet (spelaråtgärder, framkallade incidenter) står det vid länken att den bara visar samma frö och klockslag.
+- Ögonblicket i adressen (`src/repro.js`): `?seed=…&t=…` (simuleringstid) eller `&h=17.5` (klockslag) spolar fram dygnet med fasta steg, som i testerna, och spelet står pausat. `follow=` sätter kameran på en hiss (`H2`), en våning (`12`) eller en person (namn eller id). `strategy`, `inc`, `chief`, `chiefStrat`, `mistakes`, `maint`, `roll` och `tempo` går före spelarens val, och de sparas inte. Ingen uppstart, välkomstruta eller regissör i det läget. Bara `?seed=` utan tid är som förut ett vanligt dygn.
+- `newSim` sparar hur simuleringen startades i `S.origin`.
+- Första bildrutan kunde få negativ `dt`, och då fick rökpuffen ur en het motor storleken 0 och ritningen kastade ett fel. `dt` är nu aldrig negativ.
+
 ## November 2026 – ikonen i Safari
 - Ikonlänkarna i `index.html` har `?v=2`, så att Safari hämtar ikonen på nytt i stället för att hålla fast vid en gammal (eller tom) favicon i sin cache. `tornet-180.png` finns nu också som `rel="icon"` för webbläsare som vill ha en större ikon.
 

@@ -27,7 +27,7 @@ Spelet visas på **svenska** som standard; med flaggorna längst upp till höger
 
 Adressparametrar:
 
-- `?seed=123` ger samma dygn varje gång (bra för felsökning och för att dela ett dygn).
+- `?seed=123` ger samma dygn varje gång (bra för felsökning och för att dela ett dygn). Med `&h=17.5` (klockslag) eller `&t=` (simuleringstid) spolas dygnet fram och spelet står pausat där; `&follow=H2` följer en hiss, en våning eller en person. Fallerar en regel i testerna skriver de ut en sådan länk.
 - `?lang=sv` eller `?lang=en` väljer språk.
 - `?prof=1` visar hur lång tid varje del av bildrutan tar att rita.
 

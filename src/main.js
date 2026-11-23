@@ -10,22 +10,24 @@ import { updatePanel } from './panels.js';
 import { rememberPrefs, startGame } from './start.js';
 import { beritTalking, introOn, introTick } from './intro.js';
 import { lap, profFrame } from './prof.js';
+import { parseRepro } from './repro.js';
 
 // ---------- Start ----------
-// Ingen startmeny: huset startar direkt (start.js). ?seed=123 i adressen ger ett bestämt frö – samma dygn varje gång.
-const urlSeed = parseInt(new URLSearchParams(location.search).get('seed'), 10);
+// Ingen startmeny: huset startar direkt (start.js). ?seed=123 i adressen ger ett bestämt frö – samma dygn varje gång;
+// med t= eller h= spolas det fram till ett ögonblick (repro.js – testerna skriver sådana länkar när något går fel).
 hooks.incident = floor => {
   if (floor !== null) peekFloor(floor);
 };
 hooks.dayEnd = saveDay;
 resize();
 VIEW.camY = camMax(); // börja nere vid entrén
-startGame(Number.isFinite(urlSeed) ? urlSeed : null);
+startGame(parseRepro(location.search));
 /** @type {any} */ (window).S = S; // för felsökning i konsolen
 
 let last = performance.now(), hudT = 0;
 function frame(now) {
-  const dt = Math.min(0.25, (now - last) / 1000); last = now;
+  // (första bildrutans tidsstämpel kan ligga före last – en negativ dt ger negativ S.anim och rökpuffar i storlek 0)
+  const dt = Math.max(0, Math.min(0.25, (now - last) / 1000)); last = now;
   profFrame(); // ?prof=1: tid per del, ritas i bilden (prof.js)
   const slow = slowmo(dt);
   introTick();

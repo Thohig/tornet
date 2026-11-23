@@ -290,5 +290,7 @@ export function newSim(seed, opts = {}) {
   S.roll = opts.roll ?? 'ny'; // (testerna och ligan kör ett dygn i taget; spelet rullar vidare, se main.js)
   S.yesterday = null;
   S.tempo = setTempo(opts.tempo ?? S.tempo);
+  S.origin = { seed: S.seed, strategy: S.strategy, incLevel: S.incLevel, chief: S.chief.on, chiefStrat: S.chief.strat,
+    mistakes: S.mistakes, maint: S.maint, roll: S.roll, tempo: S.tempo };
   resetDay();
 }

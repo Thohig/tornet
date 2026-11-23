@@ -13,6 +13,8 @@ const INIT = {
   started: false, paused: false, speed: 1, strategy: 'smart', tags: false,
   t: 0, clock: 0, day: 1, anim: 0, tempo: 'lang', // tempo: dygnets längd (TEMPOS i config)
   seed: 0, acc: 0, // dygnets frö (newSim) och tid som inte hunnit bli ett steg (advance)
+  // hur simuleringen startades (newSim): det som behövs för att starta om exakt samma dygn (repro.js)
+  origin: /** @type {import('./repro.js').Origin|null} */ (null),
   people: /** @type {import('./people.js').Person[]} */ ([]), elevators: /** @type {import('./elevators.js').Elevator[]} */ ([]),
   log: /** @type {LogLine[]} */ ([]), fx: /** @type {Fx[]} */ ([]), wl: /** @type {WaitLists|null} */ (null),
   sched: /** @type {SchedEv[]} */ ([]), wakeAt: 0, // wakeAt: tidigast när en sovande hiss får väckas igen (nattläget)

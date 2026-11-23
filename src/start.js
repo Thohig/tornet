@@ -3,15 +3,16 @@
 // Spelarens val i panelen (styrlogik, slumpen, driftchefen, felknappar, underhåll, regissören) minns till nästa gång.
 // Regissören är på från start om spelaren inte har stängt av den.
 // Bara gränssnitt: dygnet startas med newSim, och allt spelaren gör sedan går via act().
-import { BUILDING, FL, STRAT_NAMES } from './config.js';
+import { BUILDING, FL, LABELS, STRAT_NAMES } from './config.js';
 import { S, log } from './state.js';
 import { newSim } from './sim.js';
+import { fastForward, isMoment } from './repro.js';
 import { INC_LEVELS } from './incidents.js';
 import { fl } from './util.js';
 import { showIntro, showOverlay, hideOverlay } from './hud.js';
 import { offerVisning } from './intro.js';
 import { getLang, setLang, tr } from './lang.js';
-import { extraActions } from './input.js';
+import { extraActions, followCarOnly, followFloor, followPerson } from './input.js';
 import { repaintAll } from './panels.js';
 import { startAuto } from './director.js';
 import { VIEW } from './view.js';
@@ -35,8 +36,11 @@ function prefs() {
   };
 }
 let saved = '';
+// ett återskapat ögonblick (?seed=…&t=…): inställningarna kommer från adressen och ska inte sparas som spelarens val
+let moment = /** @type {import('./repro.js').Repro|null} */ (null);
 /** Spara spelarens val när de ändras (anropas med panelen, main.js). */
 export function rememberPrefs() {
+  if (moment) return;
   if (!S.started || !S.chief) return;
   const now = JSON.stringify({ strategy: S.strategy, incLevel: S.incLevel, chief: S.chief.on, mistakes: S.mistakes, maint: S.maint, dir: VIEW.autoWant });
   if (now === saved) return;
@@ -45,17 +49,27 @@ export function rememberPrefs() {
 }
 
 /**
- * Huset startar. seed = ett bestämt frö (?seed= i adressen, för felsökning och för att dela ett dygn),
- * annars ett slumpat. Dygnet rullar alltid vidare kl 06 (mjukt dygnsskifte).
- * @param {number|null} seed
+ * Huset startar. Ett frö i adressen (?seed=, repro.js) ger ett bestämt dygn, för felsökning och för att dela ett dygn,
+ * annars ett slumpat. Dygnet rullar vidare kl 06 (mjukt dygnsskifte) om inte adressen säger roll=ny.
+ * Med t= (simuleringstid) eller h= (klockslag) är det ett återskapat ögonblick: inställningarna i adressen går före
+ * spelarens val, dygnet spolas fram med fasta steg (som i testerna), spelet står pausat och kameran följer follow=
+ * (en hiss, en våning, eller en person – namn eller id).
+ * @param {import('./repro.js').Repro|null} repro
  */
-export function startGame(seed) {
+export function startGame(repro) {
   // språket: svenska om inget annat är valt (?lang=en i adressen går före)
   const q = new URLSearchParams(location.search).get('lang'), saved = store.get(KEY.lang);
   useLang(q === 'sv' || q === 'en' ? q : saved === 'en' ? 'en' : 'sv');
-  const o = prefs();
-  newSim(seed ?? Math.floor(Math.random() * 1e6), { roll: 'mjuk', strategy: o.strategy, incLevel: o.incLevel, chief: o.chief,
-    ...(o.mistakes ? { mistakes: o.mistakes } : {}), ...(o.maint ? { maint: o.maint } : {}) });
+  const o = prefs(), r = repro ? { ...repro.opts } : {};
+  if (r.strategy && !(r.strategy in STRAT_NAMES)) delete r.strategy;
+  newSim(repro ? repro.seed : Math.floor(Math.random() * 1e6), { roll: 'mjuk', strategy: o.strategy, incLevel: o.incLevel, chief: o.chief,
+    ...(o.mistakes ? { mistakes: o.mistakes } : {}), ...(o.maint ? { maint: o.maint } : {}), ...r });
+  if (repro && isMoment(repro)) {
+    moment = repro;
+    const t0 = performance.now(), n = fastForward(repro);
+    console.info(`Tornet: frö ${repro.seed}, spolade ${n} steg på ${Math.round(performance.now() - t0)} ms → S.t = ${S.t.toFixed(4)}`);
+  }
+  if (moment) { go(); return; } // (ett återskapat ögonblick: ingen uppstart eller välkomstruta)
   const first = !store.get(KEY.seen);
   boot(() => {
     if (first) { store.set(KEY.seen, 1); showIntro('start', go); } else go();
@@ -63,10 +77,22 @@ export function startGame(seed) {
 }
 function go() {
   S.started = true;
+  if (moment) { S.paused = true; VIEW.autoWant = false; followMoment(moment.follow); return; } // (ingen logg, ingen regissör: ögonblicket som det var)
   if (prefs().dir) startAuto();
   log('Dag 1 börjar – dörrarna öppnas!', 'sys');
   // första gången: Berit erbjuder en rundvisning (i panelen – hon börjar när hon har kommit till disken)
   if (!store.get(KEY.offer)) { store.set(KEY.offer, 1); offerVisning(); }
+}
+
+/** kameran på det som adressen pekar ut: en hiss (namn), en person (namn eller id) eller en våning (etikett) @param {string|null} what */
+function followMoment(what) {
+  if (!what) return;
+  const e = S.elevators.find(c => c.name === what);
+  if (e) { followCarOnly(e.id); return; }
+  if (LABELS.includes(what)) { followFloor(LABELS.indexOf(what)); return; } // (våningen går före ett id med samma siffror)
+  const p = S.people.find(x => x.name === what) || S.people.find(x => String(x.id) === what);
+  if (p) { followPerson(p); return; }
+  console.warn(`Tornet: follow=${what} finns inte i huset just nu`);
 }
 
 // ---------- Språket ----------

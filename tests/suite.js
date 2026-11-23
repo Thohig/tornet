@@ -1,7 +1,7 @@
 // Testsviten för simuleringen. Ingen grafik, HUD eller DOM – samma tester körs i webbläsaren
 // (tests.html via browser.js) och i terminalen (npm test via run.mjs).
 // Varje test seedar slumpen, så resultaten är exakt reproducerbara.
-import { S, hooks, hour } from '../src/state.js';
+import { S, hooks, hour, clockStr } from '../src/state.js';
 import { floorOpen, FLOOR_HOURS, idx, floorWith, EL, LOBBY, SKY, HOME_FLOORS, OFFICE_FLOORS, CAFE } from '../src/config.js';
 import { DT, step, advance, newSim, resetDay } from '../src/sim.js';
 import {
@@ -41,6 +41,7 @@ import { chaosNames, chaosReady } from '../src/chaos.js';
 import { dogLockFloor } from '../src/dog.js';
 import { wetIn } from '../src/leak.js';
 import { BOILER_STAND, DOCK } from '../src/config.js';
+import { reproQuery, fastForward } from '../src/repro.js';
 /** @typedef {import('../src/elevators.js').Elevator} Elevator */
 /** @typedef {import('../src/people.js').Person} Person */
 
@@ -51,11 +52,12 @@ export const tests = [];
 // Hela sviten (npm test) kör allt; quick är för vardagen mellan ändringarna.
 export const QUICK = !!(globalThis.process?.env?.TORNET_QUICK || globalThis.location?.search?.includes('quick'));
 /** @param {string} name @param {() => any} fn @param {{ slow?: boolean }} [o] */
-const test = (name, fn, o = {}) => { if (!(QUICK && o.slow)) tests.push({ name, fn }); };
+const test = (name, fn, o = {}) => { if (!(QUICK && o.slow)) tests.push({ name, fn: () => { watchers = []; return fn(); } }); };
 /** @template T @param {T[]} list @param {number} n de n första i snabbläget, annars alla */
 const some = (list, n) => QUICK ? list.slice(0, n) : list;
 export class Fail extends Error {}
-function assert(cond, msg) { if (!cond) throw new Fail(msg); }
+// (när ett test fallerar berättar vakterna var och när det som bröt mot reglerna hände – se whereReport)
+function assert(cond, msg) { if (!cond) throw new Fail(msg + whereReport()); }
 
 // ---------- Hjälp ----------
 // (driftchefen är avstängd i testerna om inget annat sägs – de flesta testerna styr incidenterna själva)
@@ -64,8 +66,63 @@ function sim(seed, opts = {}) {
   S.started = true; S.paused = false;
   hooks.incident = () => {}; hooks.dayEnd = () => {};
 }
+// ---------- Var det hände ----------
+// Vakten (watcher) sparar första gången varje regel bröts – och för maxvärdena (längsta väntan …) rekordet – med
+// klockslag, hissen och personen. Fallerar testet skrivs de ut med en länk som öppnar just det steget i spelet
+// (repro.js: ?seed=…&t=…&follow=…). Länken kontrolleras genom att dygnet spelas om från fröet till samma steg:
+// har testet gjort något annat än att köra dygnet (spelaråtgärder, framkallade incidenter) står det vid länken.
+/** @type {ReturnType<typeof makeWatcher>[]} */
+let watchers = []; // vakterna i testet som körs just nu (nollställs av test())
+/** hur länge sedan simuleringstiden t, i text @param {number} t */
+const ago = t => `${(S.t - t).toFixed(0)} s`;
+const BASE = globalThis.location ? `${location.origin}/` : 'http://localhost:8123/';
+// maxvärden som visas när de är större än så här (under testernas gränser); allt annat visas när det hänt alls
+/** @type {Record<string, number>} */
+const NOTABLE = { maxWait: 120, maxRide: 60, maxTrap: 120, deadAssignMax: 0.5, idleWaitMax: 15, techLostMax: 60 };
+/** ett kort fingeravtryck av läget just nu – samma steg i en omspelning ger samma */
+const nowFp = () => `${S.nextId}|${S.stats.served}|${S.people.length}|${S.elevators.map(e => e.pos.toFixed(6)).join(',')}`;
+/** Ett ögonblick: när, var och vem. @param {Elevator|null|undefined} e @param {Person|null|undefined} p @param {string} [text] */
+function spot(e, p, text) {
+  return { t: S.t, day: S.day, clock: clockStr(), fp: nowFp(), follow: e ? e.name : p ? p.name : null,
+    text: [e && `${e.name} (${e.mode}/${e.state}, läge ${e.pos.toFixed(2)})`,
+      p && `${p.name} (${p.state}, ${fl(p.floor)}→${p.dest != null ? fl(p.dest) : '–'})`, text].filter(Boolean).join(' · ') };
+}
+/** Spela om vaktens dygn från fröet och se om ögonblicken blir desamma (true = länken visar exakt det). @param {ReturnType<typeof makeWatcher>} w @param {string[]} keys */
+function replayOk(w, keys) {
+  /** @type {Record<string, boolean>} */
+  const ok = {};
+  const g = w.origin;
+  if (!g) return ok;
+  try {
+    sim(g.seed, { strategy: g.strategy, incLevel: g.incLevel, chief: g.chief, chiefStrat: g.chiefStrat, mistakes: g.mistakes, maint: g.maint, roll: g.roll, tempo: g.tempo });
+    for (const k of [...keys].sort((a, b) => w.ex[a].t - w.ex[b].t)) {
+      const x = w.ex[k];
+      fastForward({ t: x.t });
+      ok[k] = S.day === x.day && Math.abs(S.t - x.t) < DT / 2 && nowFp() === x.fp;
+    }
+  } catch { /* (en krasch i omspelningen = länken stämmer inte) */ }
+  return ok;
+}
+/** Vakternas fynd i testet som körs, som text att hänga på felet ('' = inget). */
+function whereReport() {
+  const out = [];
+  for (const w of watchers) {
+    const keys = Object.keys(w.ex).filter(k => k in NOTABLE ? w[k] > NOTABLE[k] : w[k] > 0).slice(0, 6);
+    if (!keys.length || !w.origin) continue;
+    const ok = replayOk(w, keys);
+    out.push(`  ▸ vakten, frö ${w.origin.seed} (${w.origin.strategy}):`);
+    for (const k of keys) {
+      const x = w.ex[k], max = k in NOTABLE;
+      out.push(`    ${k} ${max ? `${w[k].toFixed(0)} s – rekordet` : `×${w[k]} – första gången`} dag ${x.day} kl ${x.clock} (S.t ${x.t.toFixed(2)}): ${x.text}`);
+      out.push(`      ${BASE}${reproQuery({ origin: w.origin, t: x.t, follow: x.follow })}${ok[k] ? '' : '  (ungefär: testet gjorde mer än att köra dygnet, länken visar bara samma frö och klockslag)'}`);
+    }
+  }
+  return out.length ? `\n${out.join('\n')}` : '';
+}
+
 // Vakt som kontrollerar invarianter efter varje steg
-function watcher() {
+function watcher() { const w = makeWatcher(); watchers.push(w); return w; }
+function makeWatcher() {
   const w = { passes: 0, maxRide: 0, maxWait: 0, n: 0, overweight: 0, maxKg: 0, bypassBroken: 0, prev: [],
     outOfRange: 0, wrongDoor: 0, liftPass: 0, railClash: 0, moveBad: 0, badLeg: 0, badFreight: 0, vipMixed: 0, vipSet: [], selfDest: 0, brokenUse: 0, snapUse: 0, prevSnapN: [], holdBoard: 0, prevN: [], prevHold: [],
     jumps: 0, orphanService: 0, techClash: 0, badReserved: 0, dupNames: 0, dupEx: '', idleWait: new Map(), idleWaitMax: 0, badPlatform: 0,
@@ -78,67 +135,73 @@ function watcher() {
     hijackBoard: 0, hostageLeft: 0,
     // vaktmästarens olyckor: ingen kliver på en hiss i ett blött schakt som tagits ur drift, och ingen utom de som
     // jagar hunden kliver på där hissarna är spärrade för den
-    wetBoard: 0, dogLockBoard: 0 };
+    wetBoard: 0, dogLockBoard: 0,
+    // var det hände (whereReport): simuleringens start och första gången/rekordet per räknare
+    origin: S.origin && { ...S.origin }, ex: /** @type {Record<string, ReturnType<typeof spot>>} */ ({}) };
+  /** en regel bröts: räkna, och spara första gången @param {string} k @param {Elevator|null|undefined} e @param {Person|null|undefined} p @param {string} [text] */
+  w.hit = (k, e, p, text) => { w[k]++; if (!w.ex[k]) w.ex[k] = spot(e, p, text); };
+  /** nytt rekord för ett maxvärde @param {string} k @param {number} v @param {Elevator|null|undefined} e @param {Person|null|undefined} p @param {string} [text] */
+  w.top = (k, v, e, p, text) => { w[k] = v; w.ex[k] = spot(e, p, text); };
   w.before = () => S.elevators.map(e => e.pos);
   w.check = before => {
-    for (const e of S.elevators) for (const p of e.passengers) if ((p.trapT || 0) > w.maxTrap) w.maxTrap = p.trapT;
+    for (const e of S.elevators) for (const p of e.passengers) if ((p.trapT || 0) > w.maxTrap) w.top('maxTrap', p.trapT, e, p);
     if (S.storm) w.maxStorm = Math.max(w.maxStorm, S.t - S.storm.t0);
     if (S.fire) w.maxFire = Math.max(w.maxFire, S.t - S.fire.t0);
     if (S.outage) w.maxOutage = Math.max(w.maxOutage, S.t - S.outage.t0);
     for (const p of S.people) {
       // (den som redan gick i trappan när larmet gick räknas inte)
-      if (S.fire && S.t > S.fire.t0 && !p.role && !p.vip && !p.evac && p.state === 'stairs' && w.prevState.get(p.id) !== 'stairs' && !p.escalator && !inFireZone(p.floor) && inFireZone(p.dest)) w.intoFire++;
-      if (p.state === 'boarding' && p.car && p.car.hijack && w.prevState.get(p.id) !== 'boarding') w.hijackBoard++;
-      if (p.state === 'boarding' && p.car && p.car.wetLock && w.prevState.get(p.id) !== 'boarding') w.wetBoard++;
-      if (p.state === 'boarding' && w.prevState.get(p.id) !== 'boarding' && p.floor === dogLockFloor() && !p.chase && !p.duty) w.dogLockBoard++;
-      if (p.hostage && S.heist && S.heist.ph !== 'done' && p.floor === CAFE && !inFireZone(CAFE) && p.state === 'toQueue' && w.prevState.get(p.id) === 'office') w.hostageLeft++; // (brand: utrymningen går före)
+      if (S.fire && S.t > S.fire.t0 && !p.role && !p.vip && !p.evac && p.state === 'stairs' && w.prevState.get(p.id) !== 'stairs' && !p.escalator && !inFireZone(p.floor) && inFireZone(p.dest)) w.hit('intoFire', null, p, 'gick trappan in i brandzonen');
+      if (p.state === 'boarding' && p.car && p.car.hijack && w.prevState.get(p.id) !== 'boarding') w.hit('hijackBoard', p.car, p, 'klev på en kapad hiss');
+      if (p.state === 'boarding' && p.car && p.car.wetLock && w.prevState.get(p.id) !== 'boarding') w.hit('wetBoard', p.car, p, 'klev på en hiss i ett blött schakt');
+      if (p.state === 'boarding' && w.prevState.get(p.id) !== 'boarding' && p.floor === dogLockFloor() && !p.chase && !p.duty) w.hit('dogLockBoard', p.car, p, 'klev på där hissarna var spärrade för hunden');
+      if (p.hostage && S.heist && S.heist.ph !== 'done' && p.floor === CAFE && !inFireZone(CAFE) && p.state === 'toQueue' && w.prevState.get(p.id) === 'office') w.hit('hostageLeft', null, p, 'gisslan lämnade Sky Café'); // (brand: utrymningen går före)
       w.prevState.set(p.id, p.state);
       if (p.role === 'hisstekniker' && !p.offDuty && p.job !== null && p.job !== undefined && p.state === 'office' && p.floor !== jobFloor(S.elevators[p.job]) && !inFireZone(p.floor)) {
-        const since = w.techLost.get(p.id) ?? S.t; w.techLost.set(p.id, since); w.techLostMax = Math.max(w.techLostMax, S.t - since);
+        const since = w.techLost.get(p.id) ?? S.t; w.techLost.set(p.id, since); if (S.t - since > w.techLostMax) w.top('techLostMax', S.t - since, S.elevators[p.job], p, `står på fel våning med ett jobb i ${ago(since)}`);
       } else w.techLost.delete(p.id);
     }
     S.elevators.forEach((e, i) => {
       const vel = e.v * e.dir;
-      if (w.prevVel[i] !== undefined && vel * w.prevVel[i] < 0 && Math.abs(vel) > 0.3 && Math.abs(w.prevVel[i]) > 0.3) w.flips++;
+      if (w.prevVel[i] !== undefined && vel * w.prevVel[i] < 0 && Math.abs(vel) > 0.3 && Math.abs(w.prevVel[i]) > 0.3) w.hit('flips', e, null, 'bytte riktning i fart');
       w.prevVel[i] = vel;
       const kg = loadKg(e);
       // en hiss får aldrig köra iväg överlastad
-      if (e.state === 'moving' && kg > e.ratedKg + 1e-6) w.overweight++;
+      if (e.state === 'moving' && kg > e.ratedKg + 1e-6) w.hit('overweight', e, null, `körde med ${kg.toFixed(0)} kg (max ${e.ratedKg})`);
       // zonerna: hissen håller sig inom sitt schakt och öppnar bara där den har dörrar
-      if (e.pos < e.minF - 1e-6 || e.pos > e.maxF + 1e-6) w.outOfRange++;
+      if (e.pos < e.minF - 1e-6 || e.pos > e.maxF + 1e-6) w.hit('outOfRange', e, null, 'utanför sin zon');
       // (panoramahissen i lastläge öppnar sin lastdörr mot takterrassen – bara för flyttlasset)
-      if (e.state === 'doors' && !e.stops.has(e.floor) && !(e.mode === 'lift' && e.floor === e.terraceF)) w.wrongDoor++;
-      if (e.mode === 'lift' && (e.passengers.length || e.reserved)) w.liftPass++;
+      if (e.state === 'doors' && !e.stops.has(e.floor) && !(e.mode === 'lift' && e.floor === e.terraceF)) w.hit('wrongDoor', e, null, `öppnade på ${fl(e.floor)} där den inte har dörr`);
+      if (e.mode === 'lift' && (e.passengers.length || e.reserved)) w.hit('liftPass', e, e.passengers[0], 'tog passagerare i lastläge');
       for (const p of e.passengers) {
-        if (p.state === 'ride' && !e.serves.has(p.dest)) w.badLeg++;
-        if (p.state === 'ride' && (e.freight ? !mayUseFreight(p) : needsFreight(p))) w.badFreight++;
-        if (e.vipLock && !p.vip && !p.medic && w.vipSet[i] && !w.vipSet[i].has(p)) w.vipMixed++;
+        if (p.state === 'ride' && !e.serves.has(p.dest)) w.hit('badLeg', e, p, 'åker en hiss som inte går till delmålet');
+        if (p.state === 'ride' && (e.freight ? !mayUseFreight(p) : needsFreight(p))) w.hit('badFreight', e, p, 'fel last i fel hiss');
+        if (e.vipLock && !p.vip && !p.medic && w.vipSet[i] && !w.vipSet[i].has(p)) w.hit('vipMixed', e, p, 'åker med i en VIP-låst hiss');
       }
       if (e.state === 'moving') w.maxKg = Math.max(w.maxKg, kg);
       // en trasig hiss eller en hiss på service rör sig aldrig och har ingen ombord;
       // en hiss som väntar på service tar aldrig nya passagerare
       // (ett hissfel mellan två våningar har kvar sina instängda – men ingen ny kliver på)
       // (en korg som vevas ner för hand vid brandlarm rör sig – service.js fireCrank)
-      if ((e.mode === 'broken' || e.mode === 'service') && ((e.passengers.length && !(e.fault && e.fault.trapped)) || e.reserved || (Math.abs(e.pos - before[i]) > 1e-9 && !(e.fault && e.fault.crank)))) w.brokenUse++;
+      if ((e.mode === 'broken' || e.mode === 'service') && ((e.passengers.length && !(e.fault && e.fault.trapped)) || e.reserved || (Math.abs(e.pos - before[i]) > 1e-9 && !(e.fault && e.fault.crank)))) w.hit('brokenUse', e, e.passengers[0], 'trasig hiss eller hiss på service användes');
       // (de som redan var på väg in genom dörren när hissen kallades till service får åka med)
       const aboard = e.passengers.length + e.reserved;
       // (bara om hissen var hållen redan före steget – den som klev på i samma steg som servicen beställdes hann före)
-      if (e.hold && w.prevHold[i] && aboard > (w.prevN[i] ?? 0)) w.holdBoard++;
+      if (e.hold && w.prevHold[i] && aboard > (w.prevN[i] ?? 0)) w.hit('holdBoard', e, null, 'tog nya passagerare på väg till service');
       w.prevN[i] = aboard; w.prevHold[i] = e.hold;
       // full last: över 80 % stannar hissen bara för avstigning, inte för nya hämtningar
       if (e.state === 'doors' && w.prev[i] === 'moving' && e.mode === 'normal' && kg >= e.ratedKg * FULL_LOAD
-        && !e.passengers.some(p => p.dest === e.floor) && !e.carCallStop) w.bypassBroken++;
+        && !e.passengers.some(p => p.dest === e.floor) && !e.carCallStop) w.hit('bypassBroken', e, null, `stannade för hämtning på ${fl(e.floor)} med full last`);
       w.prev[i] = e.state;
       // de som redan var ombord eller på väg in när VIP-läget slogs på får åka med
       if (!e.vipLock) w.vipSet[i] = null;
       else if (!w.vipSet[i]) w.vipSet[i] = new Set(S.people.filter(p => p.car === e && (p.state === 'ride' || p.state === 'boarding')));
       const a = before[i], b = e.pos;
       // en hiss hoppar aldrig: den flyttar sig högst VMAX·DT per steg
-      if (Math.abs(b - a) > VMAX * DT + 1e-6) w.jumps++;
+      if (Math.abs(b - a) > VMAX * DT + 1e-6) w.hit('jumps', e, null, `hoppade från ${a.toFixed(3)} till ${b.toFixed(3)}`);
       // en hiss på service har alltid en tekniker som jobbar med den
-      if (e.mode === 'service' && !techOf(e)) w.orphanService++;
+      if (e.mode === 'service' && !techOf(e)) w.hit('orphanService', e, null, 'på service utan tekniker');
       // reserverade platser = de som är på väg in genom dörren
-      if (e.reserved !== S.people.filter(p => p.state === 'boarding' && p.car === e).length) w.badReserved++;
+      if (e.reserved !== S.people.filter(p => p.state === 'boarding' && p.car === e).length) w.hit('badReserved', e, null, `e.reserved = ${e.reserved} stämmer inte med de som kliver på`);
       // Återgår hissen till normal drift mitt i farten (återkallning/nödsänkning avbruten) hinner den inte bromsa till
       // våningar inom bromssträckan – de får den köra förbi tills den har stannat (sedan vänder den tillbaka)
       /** @param {Person} p */
@@ -152,7 +215,7 @@ function watcher() {
       // linbrott: korgen faller bara nedåt, står sedan helt still, och ingen ny kliver på (de instängda tas bara ut)
       if (e.mode === 'snapped' && w.prevMode[i] === 'snapped') {
         const n = e.passengers.length;
-        if (e.reserved || n > (w.prevSnapN[i] ?? n) || b > a + 1e-9 || (e.snap.ph !== 'fall' && S.t > e.snap.caughtT && Math.abs(b - a) > 1e-9)) w.snapUse++;
+        if (e.reserved || n > (w.prevSnapN[i] ?? n) || b > a + 1e-9 || (e.snap.ph !== 'fall' && S.t > e.snap.caughtT && Math.abs(b - a) > 1e-9)) w.hit('snapUse', e, null, 'rörde sig eller tog folk efter linbrottet');
       }
       w.prevSnapN[i] = e.passengers.length;
       w.prevMode[i] = e.mode;
@@ -160,18 +223,18 @@ function watcher() {
         // en hiss i normal drift får aldrig köra förbi en passagerares mål
         // (dubbeldäck: målet räknas i korgens läge – övre däcket står en våning högre)
         const pd = pdOf(p);
-        if (e.mode === 'normal' && p.state === 'ride' && crossed(pd) && !w.late[i]?.has(pd)) w.passes++;
-        if (S.power && e.mode === 'normal') w.maxRide = Math.max(w.maxRide, S.t - p.rideStart);
+        if (e.mode === 'normal' && p.state === 'ride' && crossed(pd) && !w.late[i]?.has(pd)) w.hit('passes', e, p, `åkte förbi målet ${fl(p.dest)}`);
+        if (S.power && e.mode === 'normal' && S.t - p.rideStart > w.maxRide) w.top('maxRide', S.t - p.rideStart, e, p, `åker i ${ago(p.rideStart)}`);
       }
     });
     // flyttdagen: varje lass är på ett ställe – den som bär eller packar det, balken, panoramahissen
     if (S.move && S.move.state === 'on') for (const it of S.move.items) {
       const holders = S.people.filter(p => p.mover && p.item === it.id).length;
       const ok = it.st === 'packing' || it.st === 'carried' ? holders === 1 : holders === 0;
-      if (!ok || (it.st === 'hoist' && S.hoist.item !== it.id) || (it.st === 'lift' && S.hoist.liftItem !== it.id)) w.moveBad++;
+      if (!ok || (it.st === 'hoist' && S.hoist.item !== it.id) || (it.st === 'lift' && S.hoist.liftItem !== it.id)) w.hit('moveBad', null, null, `flyttlasset ${it.id} (${it.st}) är på ${holders} ställen`);
     }
     // takskenan: ingen last hänger i hissbalken medan putsarens gondol är nere
-    if (S.hoist && S.hoist.item !== null && !S.cleaner.parked) w.railClash++;
+    if (S.hoist && S.hoist.item !== null && !S.cleaner.parked) w.hit('railClash', null, null, 'last i hissbalken medan gondolen är nere');
     // ingen väntar på en hiss som inte kan komma: tilldelningen till en hiss som är ur drift, på väg till service,
     // sover, är spärrad, reserverad för någon annan eller inte går dit släpps inom ett par steg
     // (vid strömavbrott och brandåterkallning står alla hissar, och då väntar man ut det eller tar trappan)
@@ -183,21 +246,21 @@ function watcher() {
         if (!why) { w.deadAssign.delete(p); continue; }
         const since = w.deadAssign.get(p) ?? S.t;
         w.deadAssign.set(p, since);
-        if (S.t - since > w.deadAssignMax) { w.deadAssignMax = S.t - since; w.deadAssignEx = `${p.name} → ${e.name} (${why})`; }
+        if (S.t - since > w.deadAssignMax) { w.top('deadAssignMax', S.t - since, e, p, `väntar på en hiss som inte kan komma (${why})`); w.deadAssignEx = `${p.name} → ${e.name} (${why})`; }
       }
     } else w.deadAssign.clear();
     // tunnelbanan: på perrongen står bara den som ska med tåget – och efter sista tåget ingen alls
-    for (const p of S.people) if (p.state === 'platform' && (p.floor !== STATION || p.exitFloor !== STATION || !p.toTrain || S.trainDone)) w.badPlatform++;
+    for (const p of S.people) if (p.state === 'platform' && (p.floor !== STATION || p.exitFloor !== STATION || !p.toTrain || S.trainDone)) w.hit('badPlatform', null, p, 'står på perrongen utan att ska med tåget');
     // två tekniker har aldrig samma hiss som jobb, och högst en extra tekniker är inringd
     { const crew = techs(), jobs = crew.filter(t => t.job !== null && t.job !== undefined).map(t => t.job);
-      if (new Set(jobs).size !== jobs.length || crew.filter(t => t.extra).length > 1) w.techClash++; }
+      if (new Set(jobs).size !== jobs.length || crew.filter(t => t.extra).length > 1) w.hit('techClash', null, null, 'två tekniker på samma hiss (eller fler än en extra)'); }
     if (++w.n % 30 === 0 && liftsAvailable() && !S.fire) {
-      for (const p of S.people) if (p.state === 'wait') w.maxWait = Math.max(w.maxWait, S.t - p.waitStart);
+      for (const p of S.people) if (p.state === 'wait' && S.t - p.waitStart > w.maxWait) w.top('maxWait', S.t - p.waitStart, null, p, `väntar i ${ago(p.waitStart)}`);
       // ingen ska stå i kön för att åka till våningen hen redan står på
-      for (const p of S.people) if (p.state === 'wait' && p.dest === p.floor) w.selfDest++;
+      for (const p of S.people) if (p.state === 'wait' && p.dest === p.floor) w.hit('selfDest', null, p, 'väntar på hiss till våningen hen står på');
       // namnen är unika i huset
       const seen = new Set();
-      for (const p of S.people) { if (seen.has(p.name)) { w.dupNames++; w.dupEx = w.dupEx || p.name; } seen.add(p.name); }
+      for (const p of S.people) { if (seen.has(p.name)) { w.hit('dupNames', null, p, 'två i huset heter så'); w.dupEx = w.dupEx || p.name; } seen.add(p.name); }
       // ingen står länge utan tilldelad hiss medan en ledig hiss som kan ta hen står tom och stilla (kostnadsstyrningen)
       if (costBased()) {
         const idle = S.elevators.filter(e => operational(e) && e.state === 'idle' && !e.passengers.length && !stopFloors(e).length && !isFull(e) && !e.vipLock);
@@ -205,7 +268,7 @@ function watcher() {
           if (p.state !== 'wait' || p.vip || p.assigned !== null || p.retypeAt > S.t || !idle.some(e => canTake(e, p))) { w.idleWait.delete(p); continue; }
           const since = w.idleWait.get(p) ?? S.t;
           w.idleWait.set(p, since);
-          w.idleWaitMax = Math.max(w.idleWaitMax, S.t - since);
+          if (S.t - since > w.idleWaitMax) w.top('idleWaitMax', S.t - since, null, p, `utan tilldelad hiss i ${ago(since)} medan en ledig hiss står still`);
         }
       }
     }
