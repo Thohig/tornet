@@ -2460,6 +2460,7 @@ export default {
   "Visar runt – berättar för gästen": "Showing someone around – telling the guest",
   "Lyssnar på {0}": "Listening to {0}",
   "Hissarna kör som vanligt i full fart. Linorna i de höga schakten svänger – risk för vajerlarm och hissfel.": "The elevators run as usual at full speed. The cables in the tall shafts swing – risk of cable alarms and elevator faults.",
+  "Hissarna kör som vanligt igen.": "The elevators are running as usual again.",
   "Svajläge: höga zonen, expressen och varuhissen kör långsammare och panoramahissen parkerar i entrén tills det mojnar. Säkert, men långsammare.": "Sway mode: the high zone, the express and the freight elevator run slower and the panorama elevator parks in the lobby until the wind drops. Safe, but slower.",
   "❄️ Kall dag: {0} °C": "❄️ Cold day: {0} °C",
   "Skorstenseffekten: varm luft stiger i schakten och suger in kall luft genom entrén. Hissdörrarna på E stänger trögt och tar ibland emot.": "The stack effect: warm air rises in the shafts and draws cold air in through the lobby. The elevator doors on E close sluggishly and sometimes resist.",

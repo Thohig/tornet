@@ -322,6 +322,9 @@ body.mob:not(.cinema):not(.land) #lower{display:none !important}
 body.mob.land #app{flex-direction:row}
 body.mob.land #side{order:1;margin:0 0 0 2px;width:50px;height:100%;display:grid;grid-template-columns:minmax(0,1fr) 50px;grid-template-rows:auto minmax(0,1fr);gap:2px}
 body.mob.land #side.sheet{width:min(340px,46vw)}
+body.mob.land #side.sheet.offer{width:min(170px,26vw)}
+body.mob.land #side.offer .m-tour.offer{flex-direction:column;align-items:stretch}
+body.mob.land #side.offer .m-tour.offer .tour-nav{display:flex;flex-direction:column;gap:2px}
 body.mob.land #side:not(.sheet){grid-template-columns:0 50px}
 body.mob.land .m-tour{grid-column:1;grid-row:1}
 body.mob.land .m-sheet{grid-column:1;grid-row:2;max-height:none;min-height:0}

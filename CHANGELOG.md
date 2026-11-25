@@ -1,5 +1,11 @@
 # Ändringar
 
+## November 2026 – provspelning: läckkortet, kortens ordning, ”The lobby”, mobilen på tvären
+- **Vattenläckans kort** bad spelaren ”ta över beslutet” med gråa knappar och driftchefens rad ”hissarna i de blöta schakten står still” även efter att huvudkranen stängts – då kör hissarna igen. Nu säger kortet att hissarna kör som vanligt, slutar blinka och fälls ihop som en informationsruta.
+- **Incidentkorten** står med de som går att åtgärda först och de farligaste överst (brand, strömavbrott, kuppen, fasaden). Under Murphys lag hamnade branden förut längst ner under hunden och läckan.
+- **Engelska:** en översättning med samma ord men andra versaler (”entrén”/”Entrén”) tog den som kom först i lang-en.js, så textskylten visade ”the lobby”. Mallar med exakt samma skiftläge går nu före, och en text som börjar med versal gör det även på engelska.
+- **Mobilen på tvären:** Berits fråga om en rundvisning tog en kolumn på 340 px i hela höjden. Nu är kolumnen smal (knapparna under varandra) så att bilden får platsen.
+
 ## November 2026 – förslagen från provspelningen
 - **⏩ Spola fram natten** (knappen bredvid farterna, på mobilen i listen, eller N): på kvällen och natten (från kl 21) spelas huset upp i 12× till morgonen. Det stannar av sig självt kl 05:54, när en förvarning eller en ny incident kommer, eller när spelaren väljer en fart. Bara uppspelningen går fortare – simuleringen tar samma steg (`toggleSkip`/`skipTick` i input.js).
 - **Panelen under Murphys lag:** informationsrutorna (ambulansen, tågstörningen, värmeböljan …) fälls ihop till en rad direkt medan en incident som går att åtgärda pågår, så att den får platsen. Spelaren kan fortfarande fälla ut dem.

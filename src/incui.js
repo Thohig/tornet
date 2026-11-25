@@ -331,9 +331,9 @@ export function incUi() {
         const b = (m, txt, hint) => `<button class="btn sm${Lk.mode === m ? ' on' : ''}" data-act="leak:${m}" ${Lk.shut ? 'disabled' : ''} data-hint="${hint}">${txt}</button>`;
         parts.push(card('leak', 'leak', `🚿 Vattenläcka på ${fl(Lk.src)}`, `
           <div class="inc-s">Ett rör har spruckit${Lk.green ? ' i labbet – vattnet är grönt' : ''}. Blött: <b>${Lk.wet.map(fl).join(', ')}</b>. Hissar i blöta schakt: ${cars}.${Lk.shorts.length ? ` Kortslutna: <b>${Lk.shorts.map(id => esc(S.elevators[id].name)).join(', ')}</b>.` : ''} ${status}</div>
-          ${chiefLine('leak', 'Ska hissarna i de blöta schakten köra?')}
+          ${Lk.shut ? `<div class="inc-hint">Hissarna kör som vanligt igen.</div><div class="inc-acts">${ikon(`show:${Lk.src}`, '📹', 'Visa läckan', 'Kameran visar våningen där röret sprack')}</div>` : `${chiefLine('leak', 'Ska hissarna i de blöta schakten köra?')}
           <div class="inc-acts">${b('stop', '🛑 Stoppa de blöta hissarna', 'De tas ur drift tills kranen är stängd – säkert, men köerna växer och fler tar trappan')}${b('run', '▶ Kör vidare', 'Bättre flöde – men vattnet kan kortsluta styrningen och ge ett riktigt hissfel')}${ikon(`show:${Lk.src}`, '📹', 'Visa läckan', 'Kameran visar våningen där röret sprack')}${ikon(`show:${DOCK}`, '🔧', 'Visa pannrummet', 'Kameran visar pannrummet där huvudkranen sitter')}</div>
-          <div class="inc-hint">Vattnet rinner en våning nedåt var ${SPREAD_S}:e sekund tills huvudkranen är stängd. Det är halt på de blöta golven.</div>`, true));
+          <div class="inc-hint">Vattnet rinner en våning nedåt var ${SPREAD_S}:e sekund tills huvudkranen är stängd. Det är halt på de blöta golven.</div>`}`, !Lk.shut));
       }
     },
     shots: (add) => {

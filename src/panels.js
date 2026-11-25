@@ -439,6 +439,8 @@ function renderMob(F, inc) {
   if (!land) { paint('m-tick', 'blk m-tickb', tickHtml(F, inc)); shown.push(el('m-tick')); }
   paint('m-bar', 'blk m-bar', barHtml(F, inc)); shown.push(el('m-bar'));
   side.classList.toggle('sheet', !!(UI.tab || UI.tour));
+  // (bara Berits fråga: på tvären en smal kolumn, så att bilden inte krymper för en bubbla)
+  side.classList.toggle('offer', !UI.tab && !!UI.tour && UI.tour.key.startsWith('offer'));
   shown.forEach((e, i) => { if (side.children[i] !== e) side.insertBefore(e, side.children[i] || null); });
   while (side.children.length > shown.length) side.lastChild.remove();
   if (UI.tab === 'follow' && F && F.kind === 'person') drawPortrait(F.p);

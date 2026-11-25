@@ -330,8 +330,11 @@ export function foldInc(k) {
 const cd = sec => `<span class="lv">${Math.max(0, Math.ceil(sec))}</span>`;
 const num = n => `<span class="lv">${Math.round(n)}</span>`;
 /** korten just nu: html, hur många, och om någon är en incident (inte bara information) */
+/** de farligaste incidenterna först (de andra står i registrets ordning): branden ska inte hamna längst ner under Murphys lag */
+const INC_RANK = { fire: 0, power: 1, heist: 2, pano: 3 };
 export function incidentPanel() {
-  const cards = incCards = incidentHtml();
+  const rank = c => (c.alert ? 0 : 10) + (INC_RANK[c.k] ?? 5);
+  const cards = incCards = incidentHtml().map((c, i) => ({ c, i })).sort((a, b) => rank(a.c) - rank(b.c) || a.i - b.i).map(o => o.c);
   incAlert = cards.some(c => c.alert);
   for (const c of cards) if (!incSeen.has(c.k)) incSeen.set(c.k, S.t);
   // ett kort som försvunnit glöms (nästa brand ska fällas ut igen, även om den förra fälldes ihop)

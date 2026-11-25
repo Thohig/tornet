@@ -58,6 +58,8 @@ for (const [sv, en] of Object.entries(EN)) {
   }
 }
 const exact = new Map();
+/** samma mallar med stora och små bokstäver som i lang-en.js ("Entrén" → "The lobby", "entrén" → "the lobby") */
+const exactCase = new Map();
 /** @type {Map<string, Tpl[]>} mallar efter sina två första bokstäver; wild = mallar som börjar med ett värde */
 const bucket = new Map();
 /** @type {Tpl[]} */
@@ -68,7 +70,7 @@ for (const [sv, en] of entries) {
   // (en strukturmall som "{0} · {1}" står kvar men översätter värdena – men inte om den har emoji, som skulle
   // läggas till i texter som saknar dem)
   if (!en || (en === sv && (!hasPh || n !== sv.trim()))) continue;
-  if (!hasPh) { if (!exact.has(n.toLowerCase())) exact.set(n.toLowerCase(), en); continue; }
+  if (!hasPh) { if (!exact.has(n.toLowerCase())) exact.set(n.toLowerCase(), en); if (!exactCase.has(n) && norm(en) === en.replace(/\s+/g, ' ').trim()) exactCase.set(n, en); continue; }
   const parts = n.split(/\{(\w+)\}/), slots = [];
   let src = '', w = 0;
   parts.forEach((p, i) => {
@@ -128,8 +130,11 @@ function find(s, depth) {
 function direct(n, depth, anyEmoji = true) {
   const key = n.toLowerCase();
   if (!/\p{L}/u.test(n)) return null;
+  const exc = exactCase.get(n);
+  if (exc !== undefined) return [exc, 0];
   const ex = exact.get(key);
-  if (ex !== undefined) return [ex, 0];
+  // (en text som börjar med stor bokstav fortsätter göra det: "Entrén" i skylten är inte "the lobby")
+  if (ex !== undefined) return [/^\p{Lu}/u.test(n) ? ex.replace(/^\p{Ll}/u, c => c.toUpperCase()) : ex, 0];
   // (ett utropstecken eller en punkt för mycket: "Brandlarm! … som alla andra!")
   const end = key.match(/^(.*\p{L})([!.?…]+)$/u);
   if (end && exact.has(end[1])) return [exact.get(end[1]) + end[2], 0];
