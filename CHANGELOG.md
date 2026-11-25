@@ -1,9 +1,14 @@
 # Ändringar
 
-## November 2026 – provspelning: läckkortet, kortens ordning, ”The lobby”, mobilen på tvären
+## November 2026 – provspelning: läckkortet, kortens ordning, ”The lobby”, mobilen på tvären, nedräkningar i ord
 - **Vattenläckans kort** bad spelaren ”ta över beslutet” med gråa knappar och driftchefens rad ”hissarna i de blöta schakten står still” även efter att huvudkranen stängts – då kör hissarna igen. Nu säger kortet att hissarna kör som vanligt, slutar blinka och fälls ihop som en informationsruta.
 - **Incidentkorten** står med de som går att åtgärda först och de farligaste överst (brand, strömavbrott, kuppen, fasaden). Under Murphys lag hamnade branden förut längst ner under hunden och läckan.
 - **Engelska:** en översättning med samma ord men andra versaler (”entrén”/”Entrén”) tog den som kom först i lang-en.js, så textskylten visade ”the lobby”. Mallar med exakt samma skiftläge går nu före, och en text som börjar med versal gör det även på engelska.
+- **Nedräkningarna i korten** är ord i stället för sekunder (”framme om en halv minut”, ”alldeles strax”) – spelet visar ingen klocka (`cd` i hud.js).
+- **Berits erbjudande** om en rundvisning drar sig tillbaka efter en och en halv minut, eller när något händer i huset. Det går att be om en rundvisning sedan (? i panelen). Före kl 07 säger hon att passet inte har börjat än, i stället för att bara vänta tyst.
+- **Informationsrutorna** ligger kvar som ihopfällda rader en stund (90 s, ”Dag n börjar” 4 min) i stället för att försvinna efter 30 s – på 2× hann man knappt se dem.
+- **Panoramahissen som hackar:** när den framkallats (eller förvarnats) och väntar på att fastna kommer ett informationskort som säger att den fastnar nästa gång den kör med folk. Knappen är grå så länge.
+- **Gråa knappar i Framkalla** säger varför i verktygstipset (”Går inte just nu: det brinner i huset”) – `why` i `incUi()`.
 - **Mobilen på tvären:** Berits fråga om en rundvisning tog en kolumn på 340 px i hela höjden. Nu är kolumnen smal (knapparna under varandra) så att bilden får platsen.
 
 ## November 2026 – förslagen från provspelningen

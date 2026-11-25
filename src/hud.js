@@ -298,7 +298,8 @@ export function incidentHtml() {
       + `${ikon(`show:${A.floor}`, '📍', 'Visa våningen', 'Kameran går dit ambulansen ska')}${V ? `${ikon(`follow:${V.id}`, '📦', 'Följ varuhissen', 'Kameran följer varuhissen')}` : ''}`);
   }
   for (const n of S.notices) {
-    if (S.t - n.t0 > 30) continue;
+    // (de fälls ihop till en rad efter INFO_OPEN_S och ligger kvar en stund till – dygnets början längst)
+    if (S.t - n.t0 > (n.kind === 'day' ? NOTICE_DAY_S : NOTICE_S)) continue;
     const svcCar = n.act && n.act.startsWith('level:') ? S.elevators[+n.act.split(':')[1]] : null;
     const svc = svcCar ? serviceStatus(svcCar) : null;
     const acts = (n.car !== null ? `${ikon(`follow:${n.car}`, '📹', 'Visa hissen', 'Kameran följer hissen')}` : n.floor !== null ? `${ikon(`show:${n.floor}`, '📍', 'Visa våningen', 'Kameran går till våningen')}` : '')
@@ -316,6 +317,8 @@ function card(k, cls, head, body, alert = false, closable = false) { return { k,
 // går att åtgärda pågår är de ihopfällda direkt, så att de inte tar platsen från den (Murphys lag: sex kort på rad).
 // Spelaren kan alltid fälla ut dem. (Bara gränssnittet.)
 const INFO_OPEN_S = 12;
+/** hur länge en informationsruta (notice) ligger kvar i panelen, och rutan om att ett nytt dygn börjar */
+const NOTICE_S = 90, NOTICE_DAY_S = 240;
 const incOpened = new Set(), incFolded = new Set(), incSeen = new Map();
 let incAlert = false; // någon incident som går att åtgärda just nu (incidentPanel)
 const incIsOpen = c => (incFolded.has(c.k) ? false : incOpened.has(c.k) || c.alert || (!incAlert && S.t - (incSeen.get(c.k) ?? S.t) < INFO_OPEN_S));
@@ -327,7 +330,8 @@ export function foldInc(k) {
 }
 // Siffror som ändras hela tiden (nedräkningar, sekunder) ligger i <span class="lv">: panelen bygger bara om
 // kortet när något annat ändras och uppdaterar annars bara siffrorna, så att knapparna går att klicka på.
-const cd = sec => `<span class="lv">${Math.max(0, Math.ceil(sec))}</span>`;
+/** nedräkningen i korten i ord – spelet visar ingen klocka (en hel adverbial: "framme ${cd(t)}" = "framme om en halv minut") */
+const cd = sec => { const s = Math.ceil(sec); return `<span class="lv">${s <= 0 ? 'nu' : s < 15 ? 'alldeles strax' : s < 45 ? 'om en halv minut' : s < 100 ? 'om någon minut' : 'om en stund'}</span>`; };
 const num = n => `<span class="lv">${Math.round(n)}</span>`;
 /** korten just nu: html, hur många, och om någon är en incident (inte bara information) */
 /** de farligaste incidenterna först (de andra står i registrets ordning): branden ska inte hamna längst ner under Murphys lag */

@@ -199,9 +199,11 @@ function followHtml(F) {
 }
 function trigHtml() {
   const fire = `<select name="fireFloor" data-hint="<b>Brandvåning</b><br>Våningen som börjar brinna"><option value="">slumpad</option>${FIRE_FLOORS.map(f => `<option value="${f}"${String(f) === UI.fireFloor ? ' selected' : ''}>${fl(f)} · ${esc(FL[f].short)}</option>`).join('')}</select>`;
-  return `<div class="row ico-grid"><span class="trig-fire">${ikon(`trig:fire:${UI.fireFloor}`, '🔥', 'Brand', 'Det börjar brinna – på vald våning eller en slumpad', false, S.fire ? ' disabled' : '')}${fire}</span>`
-    + incUi().filter(u => u.trig).map(u => ikon(`trig:${u.key}`, u.trig.icon, u.trig.name, u.trig.hint, false, u.trig.off && u.trig.off() ? ' disabled' : '')).join('') // (registret, incui.js)
-    + ikon('bus', '🚌', 'Turistbuss!', 'Stadsturen: en guide och fjorton turister ska se takterrassen och Sky Café. Kommer bara när de har öppet (ungefär 07:30–16)', false, S.fire || S.tour ? ' disabled' : '')
+  // (en grå knapp säger varför i verktygstipset)
+  const why = (hint, w) => (w ? `${hint}<br><i>Går inte just nu: ${w}</i>` : hint);
+  return `<div class="row ico-grid"><span class="trig-fire">${ikon(`trig:fire:${UI.fireFloor}`, '🔥', 'Brand', why('Det börjar brinna – på vald våning eller en slumpad', S.fire && 'det brinner redan'), false, S.fire ? ' disabled' : '')}${fire}</span>`
+    + incUi().filter(u => u.trig).map(u => { const off = !!(u.trig.off && u.trig.off()); return ikon(`trig:${u.key}`, u.trig.icon, u.trig.name, why(u.trig.hint, off && (u.trig.why ? u.trig.why() : 'den pågår redan')), false, off ? ' disabled' : ''); }).join('') // (registret, incui.js)
+    + ikon('bus', '🚌', 'Turistbuss!', why('Stadsturen: en guide och fjorton turister ska se takterrassen och Sky Café. Kommer bara när de har öppet (ungefär 07:30–16)', S.fire ? 'det brinner i huset' : S.tour && 'bussen är redan här'), false, S.fire || S.tour ? ' disabled' : '')
     + `</div><div class="row">${chaosBtn()}</div><div class="dim small">Följ en hiss eller våning för att framkalla något just där.</div>`;
 }
 /** kaosknappen under sitt plastlock: stängt, uppfällt (blinkar), använd i dag eller kedjan pågår */

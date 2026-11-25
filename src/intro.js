@@ -6,6 +6,7 @@
 import { S } from './state.js';
 import { act } from './actions.js';
 import { STOPS, guideName, nextGuide, touring } from './visning.js';
+import { anyIncident } from './systems.js';
 import { CREW } from './config.js';
 import { crewPerson, atPost } from './crew.js';
 import { VIEW } from './view.js';
@@ -20,6 +21,8 @@ const U = {
   cam: -1,
   /** Berit erbjuder en rundvisning (första gången spelet startas) */
   offer: false,
+  /** när erbjudandet syntes första gången i ett pågående dygn (S.t, −1 = inte än) */
+  offerT0: -1,
   /** panelens nyckel senast (ritas bara om när den ändras) */
   key: '',
   /** rundvisningen (t0) som kameran redan har kopplats till */
@@ -48,9 +51,17 @@ extraActions.visning = b => {
 
 const beritP = () => (S.visning ? S.people.find(p => p.id === S.visning.host && !p.dead) || null : null);
 
+/** hur länge Berits erbjudande står kvar (sekunder i huset) innan hon låter spelaren titta i fred */
+const OFFER_S = 90;
 /** Varje bildruta (main.js) */
 export function introTick() {
   const v = S.visning;
+  // erbjudandet drar sig tillbaka efter en stund, eller när något händer i huset – det går att be om en
+  // rundvisning sedan (? i panelen, guiden eller receptionen)
+  if (U.offer && S.started) {
+    if (U.offerT0 < 0) U.offerT0 = S.t;
+    if (S.t - U.offerT0 > OFFER_S || S.t < U.offerT0 || S.warn || S.fire || S.outage || anyIncident()) U.offer = false;
+  }
   // rundvisningen börjar: kameran följer guiden (regissören av så länge)
   if (v && v.ph === 'go' && U.followed !== v.t0) {
     U.followed = v.t0;
@@ -86,7 +97,9 @@ function paint() {
     key = 'order';
     // den som sitter i receptionen svarar: guiden själv, eller den som går hem snart och lämnar över
     const next = nextGuide(S.clock / 3600 + 6), desk = deskGuide();
-    if (!desk || desk.crewId === next.id) { who = next.name; say = 'Det ordnar jag! Jag börjar så fort jag sitter i receptionen.'; }
+    const nextP = crewPerson(next.id), here = !!nextP && nextP.state !== 'away';
+    if (!desk && !here) { who = next.name; say = 'Det ordnar jag! Mitt pass har inte börjat än – jag visar dig runt så fort jag har kommit och satt mig i receptionen.'; }
+    else if (!desk || desk.crewId === next.id) { who = next.name; say = 'Det ordnar jag! Jag börjar så fort jag sitter i receptionen.'; }
     else { who = desk.name; say = `Gärna! Men mitt pass slutar snart – ${next.name} visar dig runt när hon har börjat.`; }
     nav = `<span class="sp"></span>${btn('end', 'Avbeställ', 'Ingen rundvisning den här gången')}`;
   } else if (v.ph === 'done') {
