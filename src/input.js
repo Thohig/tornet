@@ -4,7 +4,7 @@
 import { act, ACTIONS } from './actions.js';
 import { clamp } from './util.js';
 import { BX0, CAR_H, CAR_W, DOOR_X, FLOOR_H, GROUND_Y, H, INNER_X1, LOBBY, ROOF_Y, STRAT_NAMES, TOP, WAIT_X1, floorY, shaftX, surf } from './config.js';
-import { S, clockStr, log } from './state.js';
+import { S, clockStr, hour, log } from './state.js';
 import { busFrom } from './tour.js';
 import { VIEW, camTarget, cv, detachCam, followCar, lookAt, scrollBy, scrollToFloor } from './view.js';
 import { personHead, peopleBehindDoor } from './render.js';
@@ -16,7 +16,26 @@ import { toggleAuto } from './director.js';
 
 // ---------- Uppspelning och inställningar ----------
 export const SPEEDS = [0.25, 0.5, 1, 2];
-export function setSpeed(v) { S.speed = v; }
+export function setSpeed(v) { skip = null; S.speed = v; }
+// ⏩ Spola fram natten: kvällen och natten är långa att sitta igenom, så huset kan köras i SKIP_SPEED× till
+// morgonen. Det stannar av sig självt kl SKIP_TO, när något händer (förvarning eller ny incident) eller när
+// spelaren väljer en fart. Bara uppspelningen går fortare – simuleringen tar samma steg (advance i sim.js).
+export const SKIP_SPEED = 12, SKIP_FROM = 21, SKIP_TO = 29.9;
+/** @type {{ prev: number, inc: number }|null} */
+let skip = null;
+export const skipping = () => !!skip;
+export const canSkip = () => S.started && !S.summaryShown && hour() >= SKIP_FROM && hour() < SKIP_TO - 0.15;
+export function toggleSkip() {
+  if (skip) { const p = skip.prev; setSpeed(p); return; }
+  if (!canSkip()) return;
+  skip = { prev: S.speed, inc: S.stats.incidents };
+  S.speed = SKIP_SPEED; S.paused = false;
+}
+/** varje gång panelen uppdateras (main.js): spolningen stannar på morgonen eller när något händer */
+export function skipTick() {
+  if (!skip) return;
+  if (hour() >= SKIP_TO || hour() < SKIP_FROM || S.warn || S.stats.incidents !== skip.inc || S.summaryShown) setSpeed(skip.prev);
+}
 export function togglePause() { if (!S.summaryShown) S.paused = !S.paused; }
 const STRATS = ['smart', 'peak', 'eco', 'nearest', 'random', 'buttons'];
 export function cycleStrategy() { act('strategy', STRATS[(STRATS.indexOf(S.strategy) + 1) % STRATS.length]); }
@@ -170,6 +189,7 @@ window.addEventListener('keydown', ev => {
   if (ev.target instanceof Element && ev.target.closest('select,input')) return;
   if (ev.code === 'Space') { ev.preventDefault(); togglePause(); }
   if (ev.code === 'KeyT') toggleTags();
+  if (ev.code === 'KeyN') toggleSkip();
   if (ev.code === 'KeyM') toggleSound();
   if (ev.code === 'KeyF') toggleCam();
   if (ev.code === 'KeyA') toggleAuto();

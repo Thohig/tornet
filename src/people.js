@@ -432,7 +432,8 @@ export function stairsChoice(p, impatient) {
   // hissen som är på väg hit inom några sekunder väntar man ut
   if (p.assigned !== null && eta(S.elevators[p.assigned], p.floor, p.dir) < 8) return false;
   S.stats.stairsChoice++; p.stairsByChoice = true;
-  toStairs(p, `Tröttnar på att vänta efter ${Math.round(p.waited)} s – det är bara ${n} våning${n > 1 ? 'ar' : ''}, tar trappan`);
+  toStairs(p, n > 1 ? `Tröttnar på att vänta efter ${Math.round(p.waited)} s – det är bara ${n} våningar, tar trappan`
+    : `Tröttnar på att vänta efter ${Math.round(p.waited)} s – det är bara en våning, tar trappan`);
   return true;
 }
 /** Dit man utryms: de som jobbar, bor eller är på besök samlas utanför entrén (återsamlingsplatsen) – även de som

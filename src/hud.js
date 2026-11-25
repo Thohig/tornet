@@ -312,10 +312,13 @@ export function incidentHtml() {
 /** ett kort i incidentrutan: incidenter (alert) kan åtgärdas, informationsrutor (closable) bara stängas */
 function card(k, cls, head, body, alert = false, closable = false) { return { k, cls: cls + (alert && chiefOn() ? ' calm' : ''), head, body, alert, closable }; }
 // Incidentkorten i panelens händelseblock: incidenter är utfällda tills spelaren fäller ihop dem;
-// informationsrutor fälls ut en stund när de dyker upp och fälls sedan ihop till en rad. (Bara gränssnittet.)
+// informationsrutor fälls ut en stund när de dyker upp och fälls sedan ihop till en rad – medan en incident som
+// går att åtgärda pågår är de ihopfällda direkt, så att de inte tar platsen från den (Murphys lag: sex kort på rad).
+// Spelaren kan alltid fälla ut dem. (Bara gränssnittet.)
 const INFO_OPEN_S = 12;
 const incOpened = new Set(), incFolded = new Set(), incSeen = new Map();
-const incIsOpen = c => (incFolded.has(c.k) ? false : incOpened.has(c.k) || c.alert || S.t - (incSeen.get(c.k) ?? S.t) < INFO_OPEN_S);
+let incAlert = false; // någon incident som går att åtgärda just nu (incidentPanel)
+const incIsOpen = c => (incFolded.has(c.k) ? false : incOpened.has(c.k) || c.alert || (!incAlert && S.t - (incSeen.get(c.k) ?? S.t) < INFO_OPEN_S));
 let incCards = [];
 /** fäll ut eller ihop ett kort (knappen i rubriken eller den ihopfällda raden) */
 export function foldInc(k) {
@@ -329,6 +332,7 @@ const num = n => `<span class="lv">${Math.round(n)}</span>`;
 /** korten just nu: html, hur många, och om någon är en incident (inte bara information) */
 export function incidentPanel() {
   const cards = incCards = incidentHtml();
+  incAlert = cards.some(c => c.alert);
   for (const c of cards) if (!incSeen.has(c.k)) incSeen.set(c.k, S.t);
   // ett kort som försvunnit glöms (nästa brand ska fällas ut igen, även om den förra fälldes ihop)
   const live = new Set(cards.map(c => c.k));
@@ -461,7 +465,7 @@ export function showIntro(mode = S.started ? 'help' : 'start', then = /** @type 
       <li><b>Kontrollpanelen</b> anpassar sig efter vad som händer: när det är lugnt kan du framkalla incidenter och byta styrlogik, när något händer visar den bara det.</li>`}
       <li>Hissen eller våningen du följer har egna knappar: framkalla ett hissfel, en brand eller släpp in besökare just där.</li>
       <li>Knapparna är <b>ikoner</b> – ${touch ? 'håll fingret på en' : 'vila musen på en'} så står det vad den gör.</li>
-      ${touch ? '<li><b>Dra</b> i bilden med ett finger för att se resten av huset; två fingrar zoomar.</li>' : `<li class="intro-keys"><kbd>Mellanslag</kbd> paus · <kbd>−</kbd>/<kbd>+</kbd> hastighet · <kbd>H</kbd> biografläge · <kbd>S</kbd> styrlogik · <kbd>T</kbd> namnbrickor · <kbd>F</kbd> koppla loss/på kameran · <kbd>A</kbd> regissör (kameran väljer själv) · <kbd>Esc</kbd> sluta följa/tillbaka</li>`}
+      ${touch ? '<li><b>Dra</b> i bilden med ett finger för att se resten av huset; två fingrar zoomar.</li>' : `<li class="intro-keys"><kbd>Mellanslag</kbd> paus · <kbd>−</kbd>/<kbd>+</kbd> hastighet · <kbd>N</kbd> spola fram natten · <kbd>H</kbd> biografläge · <kbd>S</kbd> styrlogik · <kbd>T</kbd> namnbrickor · <kbd>F</kbd> koppla loss/på kameran · <kbd>A</kbd> regissör (kameran väljer själv) · <kbd>Esc</kbd> sluta följa/tillbaka</li>`}
     </ul>
     <button class="btn" id="go">${help ? 'TILLBAKA' : 'KÖR!'}</button>
     <details class="intro-more"><summary>Mer om huset</summary>

@@ -98,7 +98,7 @@ export function releaseCalls(e, why, keep = /** @type {((p: any) => boolean)|nul
   }
   let calls = 0;
   for (const c of Object.values(S.calls)) if (c.car === e.id) { c.car = null; calls++; }
-  if (n) log(`${e.name} ${why} – släpper ${n} hämtning${n > 1 ? 'ar' : ''}`, 'move', e.color);
+  if (n) log(n > 1 ? `${e.name} ${why} – släpper ${n} hämtningar` : `${e.name} ${why} – släpper en hämtning`, 'move', e.color);
   if (n || calls) rebuildPicks();
 }
 /** Byter hissens läge. Alla byten går hit: lämnar hissen normal drift släpps väntande hämtningar direkt,

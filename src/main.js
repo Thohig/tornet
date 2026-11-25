@@ -11,6 +11,7 @@ import { rememberPrefs, startGame } from './start.js';
 import { beritTalking, introOn, introTick } from './intro.js';
 import { lap, profFrame } from './prof.js';
 import { parseRepro } from './repro.js';
+import { skipTick } from './input.js';
 
 // ---------- Start ----------
 // Ingen startmeny: huset startar direkt (start.js). ?seed=123 i adressen ger ett bestämt frö – samma dygn varje gång;
@@ -32,6 +33,7 @@ function frame(now) {
   const slow = slowmo(dt);
   introTick();
   lap('rundvisning');
+  skipTick(); // (⏩ natten: stannar på morgonen eller när något händer)
   if (S.started && !S.paused) advance(dt, S.speed * slow);
   S.anim += dt;
   lap('simulering');

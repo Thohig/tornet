@@ -270,7 +270,8 @@ export function rollDay() {
   chiefRoll();
   crewRoll();
   const y = S.yesterday.stats, avg = y.waitN ? y.waitSum / y.waitN : 0;
-  notice('day', `🌅 Dag ${S.day} börjar`, `I går: ${y.served} resor, snittväntan ${avg.toFixed(1)} s, ${y.incidents} incident${y.incidents === 1 ? '' : 'er'}. Huset rullar vidare – det som pågick fortsätter.`,
+  notice('day', `🌅 Dag ${S.day} börjar`, y.incidents === 1 ? `I går: ${y.served} resor, snittväntan ${avg.toFixed(1)} s, en incident. Huset rullar vidare – det som pågick fortsätter.`
+    : `I går: ${y.served} resor, snittväntan ${avg.toFixed(1)} s, ${y.incidents} incidenter. Huset rullar vidare – det som pågick fortsätter.`,
     { act: 'yesterday', actLabel: 'Gårdagen' });
   log(`🌅 Dag ${S.day} börjar – huset rullar vidare`, 'sys');
 }

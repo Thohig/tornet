@@ -4,7 +4,7 @@
 import { clouds, nightness, skyAt, skyline, stars } from './view.js';
 import { hour, S } from './state.js';
 import { blend, dark, ellipseSprite, led, light, PX, rgbOf, text, textW } from './pixart.js';
-import { BX1, CAR_H, carPos, DOCK, DOOR_X, EL, FLOORS, floorY, GARAGE_FLOORS, GROUND_Y, H, LAND_X0, LOBBY, ROOF_Y, SEAM_F, SHAFT_W, SHAFT_X0, shaftCX, shaftX, STATION, surf, TOP, TOWER_X1, W } from './config.js';
+import { BX0, BX1, CAR_H, carPos, DOCK, DOOR_X, EL, FLOORS, floorY, GARAGE_FLOORS, GROUND_Y, H, LAND_X0, LOBBY, ROOF_Y, SEAM_F, SHAFT_W, SHAFT_X0, shaftCX, shaftX, STATION, surf, TOP, TOWER_X1, W } from './config.js';
 import { clamp, fl } from './util.js';
 import { PAL } from './pixpal.js';
 import { vpick, vrand } from './rng.js';
@@ -90,9 +90,38 @@ export function drawGroundPx() {
   R(0, t0 - 2, lo.width, t1 - t0 + 4, INK); R(0, t0, lo.width, t1 - t0, '#1e2430');
   for (let x = -((X0 / PX) % 10); x < lo.width; x += 10) R(x, t0, 1, t1 - t0, '#262d3b');
   R(0, t1 - 2, lo.width, 1, '#8a909a');
+  drawFoundationPx();
   // trottoaren och gatan
   R(0, gy, lo.width, 7, PAL.walk); R(0, gy, lo.width, 1, INK); R(0, gy + 7, lo.width, 1, INK);
   for (let x = -((X0 / PX) % 12); x < lo.width; x += 12) R(x, gy + 1, 1, 6, PAL.walkLine);
+}
+/** Under stationen: berget, husets bottenplatta med pålar ner i det och schaktgroparna med buffertar
+ *  (gul-svarta stötdämpare) under hissarna som går ända ner till stationen. Bara grafik. */
+function drawFoundationPx() {
+  const y0 = Y(BASE_Y), bx0 = X(BX0), bx1 = X(BX1);
+  if (y0 > lo.height || bx1 < 0) return;
+  // berget: grått med sprickor, en bit under bottenplattan
+  const rock = y0 + 22;
+  R(0, rock, lo.width, lo.height - rock, '#6f6c68'); R(0, rock, lo.width, 1, '#4f4c48');
+  for (let i = 0; i < 40; i++) {
+    const wx = (i * 211) % W, x = X(wx), y = rock + 4 + (i * 7) % 30;
+    if (x > -8 && x < lo.width) { R(x, y, 5, 1, '#5d5a56'); R(x + 5, y + 1, 3, 1, '#5d5a56'); }
+  }
+  // bottenplattan och pålarna
+  R(bx0, y0, bx1 - bx0, 4, '#9c978c'); R(bx0, y0 + 4, bx1 - bx0, 1, INK);
+  for (let x = bx0 + 6; x < bx1 - 2; x += 22) { R(x, y0 + 5, 3, rock - y0 + 4, '#8a857a'); R(x + 3, y0 + 5, 1, rock - y0 + 4, '#6d695f'); }
+  // schaktgroparna: där bärlinan slutar står korgen på buffertarna om den åker för långt
+  for (const e of EL) {
+    if (e.facade || e.minF !== 0) continue;
+    const x = X(shaftX(e.id)) + 2, w = Math.round(SHAFT_W / PX) - 4;
+    if (x > lo.width || x + w < 0) continue;
+    R(x - 1, y0, w + 2, 15, INK); R(x, y0, w, 14, '#2a2f38'); R(x, y0 + 12, w, 2, '#3a4150');
+    for (const bx of [x + Math.round(w * 0.25) - 2, x + Math.round(w * 0.75) - 2]) {
+      R(bx, y0 + 5, 5, 7, INK);
+      for (let k = 0; k < 3; k++) R(bx + 1, y0 + 6 + k * 2, 3, 1, k % 2 ? '#1a1a1a' : '#ffd23f');
+      R(bx, y0 + 4, 5, 1, '#b8bcc4');
+    }
+  }
 }
 /** Gatan utanför (till höger om huset): gatlyktor, busshållplatsen, ett träd och folk som går förbi.
  *  Bara grafik: fotgängarna lånar utseendet av någon i huset och slumpas med vrand. */

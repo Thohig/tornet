@@ -284,7 +284,7 @@ export function endOutage() {
     incidentOver('power', '💡 Strömmen är tillbaka',
       `Avbrottet${O.cause === 'blixt' ? ' (blixtnedslaget)' : ''} varade ${Math.round(S.t - O.t0)} s. `
       + (n ? `${n} satt fast i hissarna, längst ${Math.round(O.maxTrap)} s.` : 'Ingen satt fast i hissarna.')
-      + (O.rescued ? ` Reservkraften nödsänkte ${O.rescued} hiss${O.rescued > 1 ? 'ar' : ''}.` : '')
+      + (O.rescued > 1 ? ` Reservkraften nödsänkte ${O.rescued} hissar.` : O.rescued ? ' Reservkraften nödsänkte en hiss.' : '')
       + (st ? ` ${st} tog trapporna.` : '') + ' Hissarna startar om en i taget.');
   }
 }
@@ -328,7 +328,7 @@ export function setIncLevel(v) {
   planIncidents(hour());
   if (v !== 'av') S.warn = W;
   else if (W && W.car !== undefined) S.elevators[W.car].creak = false;
-  log(`🎲 Slumpen: ${INC_LEVEL_NAMES[v]}${v === 'av' ? ' – inga fler incidenter av sig själva i dag' : ` – ${S.incPlan.length} incident${S.incPlan.length === 1 ? '' : 'er'} kvar i dagens tidtabell`}`, 'sys');
+  log(`🎲 Slumpen: ${INC_LEVEL_NAMES[v]}${v === 'av' ? ' – inga fler incidenter av sig själva i dag' : S.incPlan.length === 1 ? ' – en incident kvar i dagens tidtabell' : ` – ${S.incPlan.length} incidenter kvar i dagens tidtabell`}`, 'sys');
 }
 /** linorna i den mest slitna hissen kan gå av (bara om de är rejält slitna) */
 export const cableRisk = () => {

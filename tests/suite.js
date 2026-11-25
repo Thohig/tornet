@@ -2971,6 +2971,12 @@ test('Språket: svenska är standard, loggen och dagböckerna blir engelska och 
   const swedish = x => /[åäöÅÄÖ]|\b(och|är|på|med|för|går|hiss|våning|inte|kliver|ska)\b/.test(strip(x));
   const all = [...lines], left = all.filter(x => swedish(tr(x)));
   assert(left.length <= all.length * 0.01, `${left.length} av ${all.length} texter är kvar på svenska, t.ex.\n    ${left.slice(0, 8).join('\n    ')}`);
+  // trasig engelska: ett ord som inte finns i någon engelsk mall men är ett som finns + en svensk ändelse
+  // ("on their owna", "3 incidenter") – en svensk ändelse som eget värde (`själv${n > 1 ? 'a' : ''}`), se CLAUDE.md
+  const vocab = new Set(Object.values(EN_TEXTS).join(' ').toLowerCase().match(/[a-z]+/g));
+  const glued = w => !vocab.has(w) && ['a', 'ar', 'er', 'or', 'na', 'en', 'et'].some(s => w.endsWith(s) && vocab.has(w.slice(0, -s.length)) && w.length - s.length > 2);
+  const broken = all.map(x => tr(x)).filter(x => (strip(x).toLowerCase().match(/[a-z]+/g) || []).some(glued));
+  assert(!broken.length, `${broken.length} engelska texter med en svensk ändelse på ett engelskt ord, t.ex.\n    ${broken.slice(0, 6).join('\n    ')}`);
   // svenska: ingenting översätts
   setLang('sv');
   const same = all.every(x => tr(x) === x);

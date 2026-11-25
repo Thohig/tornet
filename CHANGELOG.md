@@ -1,5 +1,13 @@
 # Ändringar
 
+## November 2026 – förslagen från provspelningen
+- **⏩ Spola fram natten** (knappen bredvid farterna, på mobilen i listen, eller N): på kvällen och natten (från kl 21) spelas huset upp i 12× till morgonen. Det stannar av sig självt kl 05:54, när en förvarning eller en ny incident kommer, eller när spelaren väljer en fart. Bara uppspelningen går fortare – simuleringen tar samma steg (`toggleSkip`/`skipTick` i input.js).
+- **Panelen under Murphys lag:** informationsrutorna (ambulansen, tågstörningen, värmeböljan …) fälls ihop till en rad direkt medan en incident som går att åtgärda pågår, så att den får platsen. Spelaren kan fortfarande fälla ut dem.
+- **Under stationen** syns husets grund: berget, bottenplattan med pålar och schaktgroparna med buffertar under hissarna som går ner till stationen. Förut var det bara jord.
+- **Skylten ”ÖVRE DÄCK: VÅN 1”** i entrén och på mellanplanet sitter över huvudhöjd, så folk på väg till rulltrappan skymmer den inte.
+- **Engelska plural:** de sista texterna som byggde plural av svenska ändelser (hämtningar, hissar, våningar, incidenter) skriver hela meningar i båda grenarna.
+- **Testet Språket** letar efter engelska ord med en svensk ändelse (”on their owna”, ”3 incidenter”). `npm run lang` listar ändelser som eget värde (`hiss${n > 1 ? 'ar' : ''}`), och räknar inte längre slumpströmmarnas namn och konsolens meddelanden som texter. Förklaringar som själva innehåller `<b>` (Murphys lag-knappen) läses rätt.
+
 ## November 2026 – provspelning: skyltar, banderoller och engelska plural
 - Incidentbanderollerna överst i bilden (BRAND, STRÖMAVBROTT, STORM) centrerades på hela bilden. På mobilen i närbild, där bilden är bredare än skärmen och flyttad i sidled, hamnade de halvvägs utanför. Nu sitter de mitt i det som syns, och texten blir mindre om den inte får plats.
 - Avgångsskylten på perrongen bokar sin plats, så tankebubblorna lägger sig inte längre över ”STIG PÅ!”. Småpratet från personalen i fönstren (driftcentralen, personalrummet) hoppas över när platsen är tagen, i stället för att ritas över DRIFTCENTRAL-skylten.

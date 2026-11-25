@@ -21,7 +21,7 @@ import { getLang, trDom } from './lang.js';
 import { musicOn } from './music.js';
 import { lastDay, summaryHtml } from './summary.js';
 import { guideName } from './visning.js';
-import { SPEEDS, extraActions, setSpeed, uiHooks } from './input.js';
+import { SKIP_SPEED, SPEEDS, canSkip, extraActions, setSpeed, skipping, toggleSkip, uiHooks } from './input.js';
 import { act } from './actions.js';
 import { chaosReady } from './chaos.js';
 import { LEAK_FLOORS } from './leak.js';
@@ -143,7 +143,7 @@ function playHtml() {
   const speeds = SPEEDS.map(v => { const t = { 0.25: '¼×', 0.5: '½×', 1: '1×', 2: '2×' }[v]; return ikon(`spd:${v}`, t, `Fart ${t}`, 'Snabbare och långsammare med + och −', S.speed === v); }).join('');
   return `<div class="pl-top"><span class="pl-logo" data-hint="Hissarna styrs av Hiss-O-Matic 3000">TORNET</span><span class="pl-sun">${night ? '🌙' : '☀️'}</span>`
     + `<span class="pl-ph"><b>${phaseName(h)}</b> · ${wx}<br><span class="dim">Dag ${S.day} · ${S.people.length} i huset · frö ${S.seed}</span></span>${flagsHtml()}</div>`
-    + `<div class="pl-ctl">${ikon('pause', S.paused ? '▶' : '❚❚', S.paused ? 'Spela' : 'Paus', 'Mellanslag', S.paused)}${speeds}<span class="sp"></span><span class="pl-cam">${camTools()}</span>`
+    + `<div class="pl-ctl">${ikon('pause', S.paused ? '▶' : '❚❚', S.paused ? 'Spela' : 'Paus', 'Mellanslag', S.paused)}${speeds}${skipBtn()}<span class="sp"></span><span class="pl-cam">${camTools()}</span>`
     + `${ikon('help', '?', 'Hjälp', 'Handgreppen, tangenterna och mer om huset')}</div>${timelineHtml()}`;
 }
 // ---------- Språket: två pixelflaggor längst upp till höger ----------
@@ -360,7 +360,11 @@ const TABS = { events: ['🚨', 'Händelser', 'Det som händer just nu – incid
 const TAB_OF = { play: 'now', chief: 'now', day: 'now', events: 'events', trig: 'trig', strat: 'strat', follow: 'follow', view: 'more', links: 'more' };
 extraActions.tab = b => { UI.tab = UI.tab === b || b === 'close' ? null : b; if (UI.tab !== 'more') UI.view = null; };
 extraActions.wide = () => toggleWide();
-extraActions.spdnext = () => setSpeed(SPEEDS[(SPEEDS.indexOf(S.speed) + 1) % SPEEDS.length]);
+extraActions.spdnext = () => (skipping() ? toggleSkip() : setSpeed(SPEEDS[(SPEEDS.indexOf(S.speed) + 1) % SPEEDS.length]));
+extraActions.skip = () => toggleSkip();
+/** ⏩ till morgonen: knappen syns bara på kvällen och natten (och medan det spolas) */
+const skipBtn = () => (skipping() ? ikon('skip', '⏩', 'Sluta spola', `Spolar natten i ${SKIP_SPEED}× – tryck för att sluta (N)`, true)
+  : canSkip() ? ikon('skip', '⏩', 'Till morgonen', `Spola fram natten i ${SKIP_SPEED}× – stannar på morgonen eller när något händer (N)`) : '');
 const SPD_TXT = { 0.25: '¼×', 0.5: '½×', 1: '1×', 2: '2×' };
 /** fliken "Nu": dygnet, vädret, stapeln, radion och dagens siffror */
 function nowHtml() {
@@ -393,7 +397,8 @@ function barHtml(F, inc) {
   const tabs = Object.entries(TABS).filter(([k]) => (k !== 'events' || inc.n || S.warn) && (k !== 'follow' || F) && ((k !== 'trig' && k !== 'strat') || S.started))
     .map(([k, [i, n, h]]) => ikon(`tab:${k}`, i, n, h, UI.tab === k, k === 'events' && inc.alert ? ' data-alert="1"' : ''));
   return ikon('pause', S.paused ? '▶' : '❚❚', S.paused ? 'Spela' : 'Paus', 'Pausa eller spela', S.paused)
-    + ikon('spdnext', SPD_TXT[S.speed] || '1×', 'Fart', 'Tryck för nästa fart: ¼×, ½×, 1×, 2×')
+    + ikon('spdnext', skipping() ? '⏩' : SPD_TXT[S.speed] || '1×', 'Fart', 'Tryck för nästa fart: ¼×, ½×, 1×, 2×')
+    + (!skipping() && canSkip() ? ikon('skip', '⏩', 'Till morgonen', `Spola fram natten i ${SKIP_SPEED}× – stannar på morgonen eller när något händer`) : '')
     + ikon('wide', VIEW.wide ? '🔎' : '🔍', VIEW.wide ? 'Närbild' : 'Hela bredden', VIEW.wide ? 'Visa huset större – bilden scrollar i sidled (eller dubbeltryck i bilden)' : 'Visa hela husets bredd (eller dubbeltryck i bilden)', VIEW.wide)
     + `<span class="m-sep"></span>` + tabs.join('');
 }
