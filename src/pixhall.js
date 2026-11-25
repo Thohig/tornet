@@ -519,6 +519,7 @@ function drawPlatformPx(top, bot, h) {
   const m = nextTrainMin(), msg = m === null ? 'INGA FLER TÅG' : T ? (T.state === 'in' ? 'TÅGET KOMMER' : T.state === 'stop' ? 'STIG PÅ!' : 'AVGÅR') : `TÅG OM ${m} MIN`;
   const bw = textW(msg) + 6, bx = tx1 - bw, by = top + 16;
   box(bx, by, bw, 9, '#101418'); text(g, msg, bx + 3, by + 2, m === null ? '#ff5d52' : '#ffd23f');
+  reserve(bx, by, bw, 9); // (tankebubblorna vid perrongen lägger sig inte över avgångsskylten)
 }
 export function stairSign(f, glow) {
   const x = X(DOOR_X) + 19, y = Y(floorY(f + 1) + 4) + 24;

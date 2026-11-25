@@ -292,10 +292,16 @@ export function drawBannersPx() {
   if (S.fire) list.push([`🔥 BRAND PÅ VÅNING ${fl(S.fire.floor)}${!S.fire.brigade ? '' : S.fire.outAt === null ? ' – BRANDKÅREN GÅR IN' : ' – BRANDKÅREN SLÄCKER'}`, '#ff2d55']);
   if (!S.power) list.push([`⚡ STRÖMAVBROTT${S.outage && S.outage.gen ? ' – RESERVKRAFT' : ''}`, '#6366f1']);
   if (S.storm) list.push([`🌬️ STORM${S.storm.mode === 'sway' ? ' – SVAJLÄGE' : ''}`, '#2a5db0']);
+  // mitt i det som syns: på mobilen i närbild är bilden bredare än skärmen och flyttad panX css-pixlar i sidled
+  // (view.js) – mitt i hela bilden hamnar skylten halvvägs utanför. Får den inte plats blir texten mindre.
+  const k = lo.width / Math.max(1, (W - VIEW.x0) * VIEW.scale); // låga pixlar per css-pixel
+  const vx0 = VIEW.panX * k, vw = VIEW.panW > 0 ? Math.min(lo.width - vx0, VIEW.panW * k) : lo.width;
   list.forEach(([t, c], i) => {
-    const s = plain(t), on = Math.sin(S.anim * 6) > -0.3, w = textW(s) * 2 + 16, x = Math.round(lo.width / 2 - w / 2), y = Math.round(VIEW.camY / PX) - CY + 6 + i * 18;
-    pill(x, y, w, 16, on ? c : INK);
-    text(g, s, lo.width / 2, y + 2, on ? '#ffffff' : c, 'center', 2);
+    const s = plain(t), on = Math.sin(S.anim * 6) > -0.3, y = Math.round(VIEW.camY / PX) - CY + 6 + i * 18;
+    const sc = textW(s) * 2 + 16 <= vw - 4 ? 2 : 1, w = textW(s) * sc + 16, h = sc === 2 ? 16 : 11;
+    const cx = Math.round(clamp(vx0 + vw / 2, vx0 + w / 2 + 2, vx0 + vw - w / 2 - 2)), x = Math.round(cx - w / 2);
+    pill(x, y, w, h, on ? c : INK);
+    text(g, s, cx, y + 2, on ? '#ffffff' : c, 'center', sc);
   });
 }
 // ---------- Väder och ambulans (bara grafik) ----------

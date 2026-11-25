@@ -151,7 +151,7 @@ function stormTick() {
   const w = windAt(), u = (S.t - St.t0) / St.len;
   if (St.mode === 'none' && w > SWAY_AT && u < 0.75 && S.t - C.stormT > 6) {
     C.stormT = S.t; setStormMode('sway');
-    decide('storm', 'Svajläge', `vinden är uppe i ${windMs()} m/s – de höga hissarna saktar in innan linorna börjar slå i schaktet`, { inc: 'storm', say: 'Svajläge! Sakta i höga zonen.' });
+    decide('storm', 'Svajläge', `vinden passerade ${windMs()} m/s – de höga hissarna saktar in innan linorna börjar slå i schaktet`, { inc: 'storm', say: 'Svajläge! Sakta i höga zonen.' });
   } else if (St.mode === 'sway' && w < CALM_AT && u > 0.5 && S.t - C.stormT > 6) {
     C.stormT = S.t; setStormMode('none');
     decide('storm', 'Normal drift igen', `vinden har mojnat till ${windMs()} m/s`, { inc: 'storm', say: 'Det mojnar – full fart igen.' });

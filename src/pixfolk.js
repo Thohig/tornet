@@ -294,8 +294,9 @@ export function drawGagsPx(dt) {
   for (const q of gags) {
     q.life -= dt;
     if (q.p.state !== 'office' || q.p.dead) { q.life = 0; continue; }
-    // den som syns där hen är (personalrummet, receptionen, gondolen, i hallen): bubblan över huvudet
-    if (inWindow(q.p) || q.p.spot?.win === 'hall') { const hd = personHead(q.p); if (hd) { g.globalAlpha = clamp(q.life * 2, 0, 1); bubble(plain(q.text), X(hd.x), Y(hd.y) - 3); g.globalAlpha = 1; } continue; }
+    // den som syns där hen är (personalrummet, receptionen, gondolen, i hallen): bubblan över huvudet – småprat,
+    // så den hoppas över hellre än att läggas över skyltarna (DRIFTCENTRAL, PERSONALRUM) när platsen är tagen
+    if (inWindow(q.p) || q.p.spot?.win === 'hall') { const hd = personHead(q.p); if (hd) { g.globalAlpha = clamp(q.life * 2, 0, 1); bubble(plain(q.text), X(hd.x), Y(hd.y) - 3, '#ffffff', true); g.globalAlpha = 1; } continue; }
     // repliken hörs från rummen: bubblan sitter till höger om trappskylten med en pil mot korridoren
     const s = plain(q.text), w = textW(s) + 7, x = Math.min(X(DOOR_X) + 56, X(INNER_X1) - w - 1), y0 = Y(floorY(q.p.floor + 1) + 4) + 24;
     const y = place(x, y0, w, 10, [0, 10]);

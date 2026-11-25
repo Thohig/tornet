@@ -1,5 +1,11 @@
 # Ändringar
 
+## November 2026 – provspelning: skyltar, banderoller och engelska plural
+- Incidentbanderollerna överst i bilden (BRAND, STRÖMAVBROTT, STORM) centrerades på hela bilden. På mobilen i närbild, där bilden är bredare än skärmen och flyttad i sidled, hamnade de halvvägs utanför. Nu sitter de mitt i det som syns, och texten blir mindre om den inte får plats.
+- Avgångsskylten på perrongen bokar sin plats, så tankebubblorna lägger sig inte längre över ”STIG PÅ!”. Småpratet från personalen i fönstren (driftcentralen, personalrummet) hoppas över när platsen är tagen, i stället för att ritas över DRIFTCENTRAL-skylten.
+- Ljudeffekterna från de spolade timmarna i en `?h=`/`?t=`-länk (”STÄNG! STÄNG!” ×50) flög upp på en gång när spelet startade. Nu töms listan efter spolningen.
+- Engelska: dygnets rubrikmening slutade på ”3 incidenter.” och guiden sa ”find the bus on their owna”. Båda bygger nu hela meningar i varje gren. Driftchefens skäl för svajläget säger ”vinden passerade 16 m/s” (vinden när beslutet togs), eftersom kortet bredvid visar vinden just nu.
+
 ## November 2026 – rundvisningen är ingen incident
 - Rundvisningen är en hjälp för nya spelare och kommer bara när någon ber om den. Den finns inte längre i *Framkalla* (`act('trigger', 'visning')` finns inte), och Murphys lag skickar bara turistbussen i steget med besökarna.
 - Man beställer den genom Berits erbjudande första gången, knappen *🛎️ Be Berit visa runt* som nu står överst i hjälpen (?), och knappen hos guiden eller i entrén. Knapparna använder `act('visning', 'now')`: guiden avbryter rasten, och finns ingen guide i huset tar väktaren eller driftchefen den.

@@ -141,7 +141,7 @@ function leaveBehind(T, live) {
     p.tour = false; T.lost.push(p.name);
     pev(p, `Tappade bort ${BUS_NAME} – får klara sig själv`);
   }
-  if (g && left.length) speak(g, `Vi kan inte vänta längre – ${left.map(p => p.name).join(' och ')} får hitta bussen själv${left.length > 1 ? 'a' : ''}.`);
+  if (g && left.length) speak(g, left.length > 1 ? `Vi kan inte vänta längre – ${left.map(p => p.name).join(' och ')} får hitta bussen själva.` : `Vi kan inte vänta längre – ${left[0].name} får hitta bussen själv.`);
   log(`🚩 ${BUS_NAME} går vidare utan ${left.length} som inte kom fram till ${place(f)}`, 'person', null, T.guide);
   return live.filter(p => p.tour);
 }

@@ -67,6 +67,7 @@ export function startGame(repro) {
   if (repro && isMoment(repro)) {
     moment = repro;
     const t0 = performance.now(), n = fastForward(repro);
+    S.fx.length = 0; // (ljudeffekterna från de spolade timmarna – bara grafiken räknar ner dem, annars flyger de upp på en gång)
     console.info(`Tornet: frö ${repro.seed}, spolade ${n} steg på ${Math.round(performance.now() - t0)} ms → S.t = ${S.t.toFixed(4)}`);
   }
   if (moment) { go(); return; } // (ett återskapat ögonblick: ingen uppstart eller välkomstruta)

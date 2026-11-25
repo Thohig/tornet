@@ -123,7 +123,11 @@ function headline(D) {
   // (hur dygnet kändes: incidenterna och allt annat som tog slut under dygnet; antalet är incidenterna, som i nyckeltalen)
   const st = D.st, n = st.incidents, busy = Math.max(n, st.events.filter(e => e.type !== 'move' && e.type !== 'medical').length);
   const kind = busy === 0 ? 'Lugnt dygn' : busy <= 2 ? 'Händelserikt dygn' : 'Kaosdygn';
-  return `${kind} – ${st.served} resor med snittväntan ${avgWait(st).toFixed(1)} s${n ? `, ${n} incident${n === 1 ? '' : 'er'}` : ''}.`;
+  // (hela meningar i varje gren: lang-en.js översätter mallarna, en svensk ändelse som eget värde blir kvar på svenska)
+  const wait = avgWait(st).toFixed(1);
+  if (!n) return `${kind} – ${st.served} resor med snittväntan ${wait} s.`;
+  return n === 1 ? `${kind} – ${st.served} resor med snittväntan ${wait} s, 1 incident.`
+    : `${kind} – ${st.served} resor med snittväntan ${wait} s, ${n} incidenter.`;
 }
 /** stamgästernas rad: de två mest anmärkningsvärda */
 function funLine(st) {
