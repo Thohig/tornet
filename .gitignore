@@ -4,3 +4,4 @@ __pycache__/
 .claude/settings.local.json
 tests/league-*.json
 tests/.times.json
+tools/playtest-out/

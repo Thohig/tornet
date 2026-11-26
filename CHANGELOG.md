@@ -1,5 +1,14 @@
 # Ändringar
 
+## November 2026 – förslagen från provspelningen: fel syns, kuppen väntar, helbilden på mobilen, npm run playtest
+- **Fel i en bildruta** fångas steg för steg (uppspelningen, simuleringen, kameran, bilden, ljudet, panelen – `guard` i main.js). Ett fel i ritningen stoppar inte längre panelen eller simuleringen. Felet visas en gång i en röd ruta nere till vänster (`#err`, klick stänger), eftersom det inte finns någon konsol på mobilen.
+- **Kuppen när lastkajen är upptagen:** förut hände ingenting när man framkallade kuppen medan flyttbilen eller leveransbilen stod vid lastkajen. Nu kör skåpbilen runt kvarteret (`orderHeist`, `S.heistWait`), ett informationskort säger vad gänget väntar på, och de backar in när kajen är ledig. Knappen är grå så länge.
+- **Flyttgubbarna** har en text i personrutan och spårlappen (”Lastar flyttbilen”, ”Ställer av lasset vid flyttbilen”) i stället för bara våningens namn (`roomDesc` i describe.js).
+- **Mobilens helbild (🔍):** texten är för liten för att läsas, så pratbubblorna, tankebubblorna, namnbrickorna, småpratet och ljudeffekterna ritas inte (`tinyText()` i view.js). Den man följer behåller sin bubbla.
+- **`npm run playtest`** (tools/playtest.mjs): provspelar i Chromium med Playwright (inget beroende i package.json). Tre kaosdygn på engelska medan kameran följer personer och hissar. Skriptet letar efter fel i sidan och svenska som blivit kvar i panelen, textskylten och verktygstipsen. Det hittade direkt hissens ”ska av + hämtar”.
+- **Översättningen:** ett värde först i en mall (`{0} stopp …`) sväljer inte längre en avskiljare som mallen saknar (` · `, ` – `, ` → `) – raden delas först. ` + ` är en avskiljare (hissens nästa stopp: ”Isak ska av + hämtar Zainab”).
+- `cap()` finns i util.js i stället för i fyra moduler.
+
 ## November 2026 – provspelning: spelet fryser inte, flyttgubbarna, nedräkningarna på engelska
 - **Spelloopen** beställer nästa bildruta först. Förut stoppade ett enda fel i ritningen eller panelen hela spelet (bilden frös), eftersom `requestAnimationFrame` kom sist i `frame()`.
 - **Följer du en flyttgubbe** vid lastkajen kraschade personrutan: de är ”inne” utan en plats (`p.spot`). Nu står våningen där, som i spårlappen.

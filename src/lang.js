@@ -24,7 +24,7 @@ const GAP = '\\s+';
 const PH = /\{(\w+)\}/g;
 
 // ---------- Mallarna ----------
-/** @typedef {{ re: RegExp, slots: string[], en: string, w: number, emo: boolean }} Tpl */
+/** @typedef {{ re: RegExp, slots: string[], en: string, w: number, emo: boolean, lead: boolean, seps: string }} Tpl */
 /** alla poster: lang-en.js, plus bitar som visas för sig (utan inledande avskiljare, eller bara delen före ett tankstreck) */
 const entries = Object.entries(EN);
 for (const [sv, en] of Object.entries(EN)) {
@@ -80,7 +80,7 @@ for (const [sv, en] of entries) {
   });
   if (!w) continue; // (bara värden: "{0}{1}" passar på allt)
   /** @type {Tpl} */
-  const t = { re: new RegExp(`^${src}$`, 'iu'), slots, en, w, emo: EMOJI.test(sv) };
+  const t = { re: new RegExp(`^${src}$`, 'iu'), slots, en, w, emo: EMOJI.test(sv), lead: !parts[0], seps: n };
   EMOJI.lastIndex = 0;
   const lead = parts[0].toLowerCase();
   if (lead.length >= 2) { const k = lead.slice(0, 2); if (!bucket.has(k)) bucket.set(k, []); bucket.get(k).push(t); } else wild.push(t);
@@ -146,6 +146,9 @@ function direct(n, depth, anyEmoji = true) {
     if (t.emo && !anyEmoji) continue;
     const m = n.match(t.re);
     if (!m) continue;
+    // (ett värde först i mallen sväljer inte en avskiljare som mallen själv saknar: i "TB · ett stopp …" ska
+    // "{0} stopp …" inte få "TB · ett" – raden delas först vid avskiljaren, split nedan)
+    if (t.lead && LEAD_SEP.some(x => m[1].includes(x) && !t.seps.includes(x))) continue;
     const vals = {};
     t.slots.forEach((k, j) => { vals[k] = m[j + 1]; });
     let miss = 0;
@@ -156,8 +159,10 @@ function direct(n, depth, anyEmoji = true) {
   }
   return best;
 }
+/** avskiljare som ett inledande värde inte får innehålla (om inte mallen har dem) */
+const LEAD_SEP = [' · ', ' – ', ' — ', ' → '];
 /** avskiljare som en text utan egen mall delas vid */
-const SEP = /( · | – | — |: | → |, | och | \(|(?<=[.!?…]) )/;
+const SEP = /( · | – | — |: | → | \+ |, | och | \(|(?<=[.!?…]) )/;
 /**
  * En text utan egen mall: dela vid avskiljarna och välj den indelning som lämnar minst kvar på svenska (färre,
  * större bitar vinner vid lika). null = inget gick att översätta. @returns {[string, number]|null}

@@ -12,7 +12,8 @@
     "check": "npm run typecheck && npm test",
     "quick": "npm run typecheck && node tests/run.mjs --quick",
     "league": "node tests/league.mjs",
-    "lang": "node tools/lang.mjs"
+    "lang": "node tools/lang.mjs",
+    "playtest": "node tools/playtest.mjs"
   },
   "devDependencies": {
     "acorn": "^8.19.0",

@@ -37,6 +37,12 @@ export function stateInfo(p) {
 }
 
 /** En rad om vad personen gör just nu – till spårlappen som följer personen i bilden @param {Person} p */
+/** vad någon gör inne på en våning: platsens text – flyttgubbarna vid lastkajen har ingen plats @param {Person} p */
+export function roomDesc(p) {
+  if (p.spot) return p.spot.desc;
+  if (p.mover) return p.loader ? 'Lastar flyttbilen' : 'Ställer av lasset vid flyttbilen';
+  return 'Inne på våningen';
+}
 export function noteDetail(p) {
   if (p.dead) return 'Har lämnat huset';
   const via = p.goal !== p.dest && p.state !== 'office' ? ` (byter på ${fl(p.dest)})` : '';
@@ -50,7 +56,7 @@ export function noteDetail(p) {
     case 'boarding': case 'ride': return `→ ${fl(p.dest)}${p.goal !== p.dest ? ` (sedan ${fl(p.goal)})` : ''} · åkt ${Math.round(S.t - (p.rideStart || S.t))} s`;
     case 'exiting': return p.spot ? p.spot.desc : 'På väg ut';
     case 'stairs': case 'instairs': return `Trappan till ${fl(p.dest)}`;
-    case 'office': return p.spot ? `${p.spot.desc} (${FL[p.floor].short})` : FL[p.floor].short;
+    case 'office': return `${roomDesc(p)} (${FL[p.floor].short})`;
     case 'away': return 'Inte i huset just nu';
     case 'assembly': return 'Väntar på återsamlingsplatsen utanför entrén';
     case 'incar': return `Kör in i garaget på ${fl(p.floor)}`;

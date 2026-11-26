@@ -8,7 +8,7 @@
 // (Simulering: läget ligger i S.dog. Egen slumpström.)
 import { stream } from './rng.js';
 const { pick, rand, rng } = stream('hunden');
-import { fl } from './util.js';
+import { cap, fl } from './util.js';
 import { EL, FL, FLOORS, LOBBY, SKY, floorWith } from './config.js';
 import { S, incidentOver, log } from './state.js';
 import { blankPerson, makePerson, pev, pn, releaseSpot, setTrip } from './people.js';
@@ -182,7 +182,6 @@ function finish(D, by, how) {
   incidentOver('dog', `🐕 ${D.name} är fångad`, `${D.name} var lös i ${sec} s, hann till ${n} ${n === 1 ? 'våning' : 'våningar'} och åkte hiss ${D.rides} ${D.rides === 1 ? 'gång' : 'gånger'} – ${line}.`
     + (D.lock ? ' Hissarna på hundens våning var spärrade en stund.' : ''), { floor: D.f });
 }
-const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
 /** hundfrisörens nästa beslut: tillbaka till kenneln med hunden, sedan ut @param {Person} p */
 export function groomerNext(p) {
   if (p.chase) return chaseNext(p);

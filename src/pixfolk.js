@@ -12,7 +12,7 @@ import { CALL_REPLY } from './service.js';
 import { noteDetail, stateInfo } from './describe.js';
 import { CREW_BY } from './crew.js';
 import { vpick, vrand } from './rng.js';
-import { VIEW } from './view.js';
+import { VIEW, tinyText } from './view.js';
 import { ants, ARROW, box, g, INK, label, line, lo, pill, place, R, X, Y } from './pixcore.js';
 import { blinkOf, hoseSpray } from './pixcars.js';
 /** @typedef {import('./people.js').Person} Person */
@@ -59,13 +59,15 @@ export function drawHallPeople() {
     }
     g.globalAlpha = 1;
   }
+  // (mobilens helbild: texten går inte att läsa – bara den man följer får sin bubbla)
+  const tiny = tinyText();
   // pratbubblor från stamgästerna först (de är viktigast), sedan tankebubblorna och namnbrickorna
-  for (const { p, lp } of list) if (talking(p) && lp.a > 0.5) speech(p, X(lp.x), Y(surf(p.floor) + p.depth * 0.6) - 38 - (p.state === 'wait' ? 12 : 0));
+  for (const { p, lp } of list) if ((!tiny || p === S.sel) && talking(p) && lp.a > 0.5) speech(p, X(lp.x), Y(surf(p.floor) + p.depth * 0.6) - 38 - (p.state === 'wait' ? 12 : 0));
   // tankebubblorna: de som väntar på samma hiss till samma våning delar en bubbla ("→6 L1 ×3"),
   // utom den som spåras och när namnbrickorna är på
   const groups = new Map();
   for (const { p, lp } of list) {
-    if (p.state !== 'wait') continue;
+    if (p.state !== 'wait' || (tiny && p !== S.sel)) continue;
     const k = S.tags || p === S.sel ? `p${p.id}` : `${p.floor}|${p.dest}|${p.assigned}|${buttonsMode() ? p.dir : ''}|${p.fixAt ? 1 : 0}`;
     const gr = groups.get(k);
     if (gr) gr.push({ p, lp }); else groups.set(k, [{ p, lp }]);
@@ -76,7 +78,7 @@ export function drawHallPeople() {
   }
   // namnbrickor: alla med ID-knappen, stamgästerna alltid (med en stjärna)
   for (const { p, lp } of list) {
-    if (!(S.tags || p.cast) || p.state === 'wait' || lp.a <= 0.5 || talking(p)) continue;
+    if (tiny || !(S.tags || p.cast) || p.state === 'wait' || lp.a <= 0.5 || talking(p)) continue;
     const s = plain((p.cast ? '* ' : '') + p.name), w = textW(s) + 5, cx = X(lp.x), y = place(Math.round(cx - w / 2), Y(surf(p.floor) + p.depth * 0.6) - 36, w, 9, [0, -10]);
     if (y !== null) label(s, cx, y, p.cast ? '#ffe14d' : '#ffffff');
   }
@@ -280,7 +282,8 @@ export function drawGagsPx(dt) {
       gagT = vrand(1.8, 4);
       const lo2 = VIEW.camY, hi = VIEW.camY + VIEW.viewH;
       // (vid kontrollbordet pratar chefen själv – S.chief.say; personalen och andra i tjänst bara om jobbet)
-      const cands = S.people.filter(p => p.state === 'office' && !p.sleeping && p.spot && p.spot.k !== 'door' && p.spot.post !== 'chief'
+      // (mobilens helbild: småpratet går inte att läsa – inget nytt)
+      const cands = tinyText() ? [] : S.people.filter(p => p.state === 'office' && !p.sleeping && p.spot && p.spot.k !== 'door' && p.spot.post !== 'chief'
         && !p.touring && (workLines(p) === null || workLines(p).length > 0)
         && floorY(p.floor) > lo2 + 40 && floorY(p.floor) < hi + 40 && !gags.some(q => q.p.floor === p.floor));
       if (cands.length) {
@@ -318,7 +321,8 @@ export function drawFxPx(dt) {
     const k = `${f.text}|${f.band}`, gr = groups.get(k);
     if (gr) gr.push(f); else groups.set(k, [f]);
   }
-  for (const gr of groups.values()) {
+  // (mobilens helbild: ljudeffekterna blir bara fläckar – de räknas ner men ritas inte)
+  if (!tinyText()) for (const gr of groups.values()) {
     const f = gr.reduce((a, b) => (b.life > a.life ? b : a));
     const x = gr.reduce((a, b) => a + b.x, 0) / gr.length;
     const n = new Set(gr.map(q => Math.round(q.x))).size;

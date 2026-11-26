@@ -9,7 +9,7 @@
 // patientens våning tills de kommer tillbaka med båren (medicHold).
 import { stream } from './rng.js';
 const { pick, rand, rng, shuffle } = stream('händelser');
-import { fl } from './util.js';
+import { cap, fl } from './util.js';
 import { BOHAG, BOHAG_BY_TYPE, CAR_H, DOCK, DOOR_X, FL, HOME_FLOORS, LOBBY, floorWith, floorY, shaftCX } from './config.js';
 import { S, dayEvent, hour, log } from './state.js';
 import { makePerson, needsFreight, pev, pn, releaseSpot, setTrip } from './people.js';
@@ -321,7 +321,6 @@ export function moverNext(p) {
   }
   return [DOCK, leftInFlat(M) ? 'Tillbaka till flyttbilen' : 'Inget mer att bära – tillbaka till flyttbilen', false];
 }
-const cap = s => s[0].toUpperCase() + s.slice(1);
 /**
  * En flyttgubbe kliver på varuhissen med en möbel (anropas från boardDone). Långa möbler kan behöva vändas
  * ("PIVOT!") och ibland fastnar de helt: då bärs möbeln tillbaka till lastluckan och tar hissbalken – eller

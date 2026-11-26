@@ -49,6 +49,7 @@ const INIT = {
   visning: /** @type {import('./visning.js').Visning|null} */ (null),
   // Kuppen på 5:an: rånargänget, gisslan, hjälten och polisen (heist.js)
   heist: /** @type {import('./heist.js').Heist|null} */ (null), heistDay: 0, // (dygnet då slumpen senast gav en kupp: högst en per dygn)
+  heistWait: /** @type {number|null} */ (null), // (framkallad men lastkajen var upptagen: gänget väntar runt hörnet sedan S.t)
   // Murphys lag: kaosknappens kedja som pågår och dygnet då knappen senast trycktes (en gång per dygn, chaos.js)
   chaos: /** @type {import('./chaos.js').Chaos|null} */ (null), chaosDay: 0,
   // tunnelbanan (train.js): tåget som är inne, nästa och förra avgången, förseningen och om sista tåget har gått

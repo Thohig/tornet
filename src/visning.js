@@ -16,7 +16,7 @@ import { chiefNote, chiefOnDuty } from './chief.js';
 import { nextTrainMin } from './train.js';
 import { techOf } from './service.js';
 import { detours } from './systems.js';
-import { fl } from './util.js';
+import { cap, fl } from './util.js';
 /** @typedef {import('./people.js').Person} Person */
 /** @typedef {import('./elevators.js').Elevator} Elevator */
 
@@ -116,7 +116,6 @@ export function keyNext(p) {
   if (p.floor !== u.f) return [u.f, `Låser upp ${placeName(u.f)} åt rundvisningen`, false];
   return null;
 }
-const cap = t => t.charAt(0).toUpperCase() + t.slice(1);
 /** hur länge (verkliga sekunder) innan vikarien kliver in i entrén efter samtalet */
 const KICKI_S = 20;
 /** hur länge guiden pratar vid ett stopp: ord per sekund (uppläst) och minst så här många sekunder */

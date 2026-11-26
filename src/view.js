@@ -4,6 +4,7 @@ import { clamp, mix } from './util.js';
 import { FLOOR_H, H, LAND_X0, W, floorY, shaftCX } from './config.js';
 import { S } from './state.js';
 import { personHead } from './render.js';
+import { PX } from './pixart.js';
 
 // ---------- Grafik: setup ----------
 /** @param {string} id */
@@ -75,6 +76,9 @@ export function resize() {
   portrait.width = 64 * dpr; portrait.height = 76 * dpr;
   S.trackDirty = true;
 }
+/** Är pixelgrafikens text för liten för att läsas (mobilens helbild: en pixel i bilden mindre än 1,2 skärmpixlar)?
+ * Då hoppar bilden över prat- och tankebubblorna, namnbrickorna, småpratet och ljudeffekterna – de blir bara fläckar. */
+export const tinyText = () => VIEW.scale * PX < 1.2;
 /** mobilen: växla mellan närbild (minsta skalan, bilden scrollar i sidled) och hela bredden */
 export function toggleWide() {
   VIEW.wide = !VIEW.wide;

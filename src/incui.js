@@ -12,7 +12,7 @@ import { LADDER_MAX, PANO, ladderReach, panoCandidate, ropeWindy } from './pano.
 import { gondolaCandidate, gondolaWindy } from './gondola.js';
 import { dogPossible } from './dog.js';
 import { leakPossible, SPREAD_S } from './leak.js';
-import { BANK, GOLD, VAN_NAME } from './heist.js';
+import { BANK, GOLD, VAN_NAME, heistBlock } from './heist.js';
 /** panoramahissen (null om huset saknar en) */
 const panoCar = () => (PANO ? S.elevators[PANO.id] || null : null);
 
@@ -215,11 +215,15 @@ export function incUi() {
   },
   {
     key: 'heist',
-    trig: { icon: '🚐', name: 'Kupp!', hint: 'Ett rånargäng tar över huset för att tömma valvet på 5:an. Kräver en ledig lastkaj', off: () => !!(S.heist || S.fire), why: () => (S.heist ? 'kuppen pågår redan' : 'det brinner i huset') },
+    trig: { icon: '🚐', name: 'Kupp!', hint: 'Ett rånargäng tar över huset för att tömma valvet på 5:an. Är lastkajen upptagen väntar gänget tills den är ledig', off: () => !!(S.heist || S.heistWait !== null), why: () => (S.heist ? 'kuppen pågår redan' : 'gänget väntar redan på sin chans') },
     warn: (_W, add) => add('warn', 84, 'floor', DOCK, '🚐 En skåpbil vid lastkajen…', true),
     card: (h, parts) => {
       const { card, chiefLine, cd, ikon } = h;
       // ---------- Kuppen på 5:an (incident med val: polisens insatsledare – eller du) ----------
+      // framkallad men lastkajen är upptagen: skåpbilen kör runt kvarteret (heist.js, orderHeist)
+      if (S.heistWait !== null && !S.heist) parts.push(card('heist-wait', 'info heist', '🚐 En skåpbil kör runt kvarteret', `
+          <div class="inc-s">Fem män i overall från ${esc(VAN_NAME)} väntar ${heistBlock()}. Sedan backar de in vid lastkajen.</div>
+          <div class="inc-acts">${ikon(`show:${DOCK}`, '📍', 'Visa lastkajen', 'Kameran går till lastkajen')}</div>`));
       const Hs = S.heist;
       if (Hs && Hs.ph !== 'done') {
         const gang = S.people.filter(p => p.robber && !p.dead).length, host = S.people.filter(p => p.hostage).length;

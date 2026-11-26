@@ -12,6 +12,7 @@ import { beritTalking, introOn, introTick } from './intro.js';
 import { lap, profFrame } from './prof.js';
 import { parseRepro } from './repro.js';
 import { skipTick } from './input.js';
+import { tr } from './lang.js';
 
 // ---------- Start ----------
 // Ingen startmeny: huset startar direkt (start.js). ?seed=123 i adressen ger ett bestämt frö – samma dygn varje gång;
@@ -26,27 +27,53 @@ startGame(parseRepro(location.search));
 /** @type {any} */ (window).S = S; // för felsökning i konsolen
 
 let last = performance.now(), hudT = 0;
+// ---------- Fel i en bildruta ----------
+// Varje steg fångar sina egna fel: ett fel i ritningen ska inte stoppa simuleringen eller panelen (och tvärtom).
+// Felet syns i konsolen och i en liten ruta nere till vänster – på mobilen finns ingen konsol att titta i.
+const seenErr = new Set();
+let errBox = /** @type {HTMLElement|null} */ (null);
+/** @param {string} where @param {unknown} err */
+function showError(where, err) {
+  const msg = err instanceof Error ? err.message : String(err), key = `${where}|${msg}`;
+  if (seenErr.has(key)) return;
+  seenErr.add(key);
+  console.error(`Tornet: fel i ${where}`, err);
+  if (!errBox) {
+    errBox = document.createElement('div'); errBox.id = 'err';
+    errBox.addEventListener('click', () => { errBox?.remove(); errBox = null; });
+    document.body.appendChild(errBox);
+  }
+  const line = document.createElement('div');
+  line.textContent = `⚠️ ${tr(`Fel i ${where}`)}: ${msg}`;
+  errBox.appendChild(line);
+  errBox.title = tr('Klicka för att stänga');
+}
+/** @param {string} where @param {() => void} fn */
+function guard(where, fn) { try { fn(); } catch (err) { showError(where, err); } }
+
 function frame(now) {
-  // (nästa bildruta beställs först: ett fel i ritningen eller panelen ska inte frysa hela spelet – det syns i konsolen)
+  // (nästa bildruta beställs först: inget fel får frysa spelet)
   requestAnimationFrame(frame);
   // (första bildrutans tidsstämpel kan ligga före last – en negativ dt ger negativ S.anim och rökpuffar i storlek 0)
   const dt = Math.max(0, Math.min(0.25, (now - last) / 1000)); last = now;
   profFrame(); // ?prof=1: tid per del, ritas i bilden (prof.js)
-  const slow = slowmo(dt);
-  introTick();
-  lap('rundvisning');
-  skipTick(); // (⏩ natten: stannar på morgonen eller när något händer)
-  if (S.started && !S.paused) advance(dt, S.speed * slow);
+  let slow = 1;
+  guard('uppspelningen', () => {
+    slow = slowmo(dt);
+    introTick();
+    lap('rundvisning');
+    skipTick(); // (⏩ natten: stannar på morgonen eller när något händer)
+  });
+  guard('simuleringen', () => { if (S.started && !S.paused) advance(dt, S.speed * slow); });
   S.anim += dt;
   lap('simulering');
-  updateDirector();
-  updateCamera(dt);
+  guard('kameran', () => { updateDirector(); updateCamera(dt); });
   lap('regissör/kamera');
-  render(dt);
-  updateSound(introOn(), beritTalking());
+  guard('bilden', () => render(dt));
+  guard('ljudet', () => updateSound(introOn(), beritTalking()));
   lap('ljud');
   hudT -= dt;
-  if (hudT <= 0) { hudT = 0.15; updatePanel(); rememberPrefs(); }
+  if (hudT <= 0) { hudT = 0.15; guard('panelen', () => { updatePanel(); rememberPrefs(); }); }
   lap('panelen');
 }
 document.fonts && document.fonts.ready.then(resize);

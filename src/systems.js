@@ -15,7 +15,7 @@ import { trainReset, trainTick } from './train.js';
 import { medicNext, moverNext, startMedical, visitsReset, visitsRoll, visitsTick } from './visits.js';
 import { tourReset, tourTick } from './tour.js';
 import { visningReset, visningTick } from './visning.js';
-import { BANK, HEIST_WARN, heistOn, heistPossible, heistReset, heistSpot, heistTick, hostageNext, robberNext, startHeist } from './heist.js';
+import { BANK, HEIST_WARN, heistOn, heistPossible, heistReset, heistSpot, heistTick, hostageNext, orderHeist, robberNext, startHeist } from './heist.js';
 import { hoistReset, hoistTick } from './hoist.js';
 import { gondolaCandidate, gondolaCrewNext, gondolaReset, gondolaTick, triggerGondola } from './gondola.js';
 import { chaseNext, chaseSpot, dogArrived, dogLockFloor, dogNext, dogPossible, dogReset, dogSpot, dogTick, dogTimer, groomerNext, startDog } from './dog.js';
@@ -108,7 +108,7 @@ export function systems() {
         there: () => 'Titta upp! Panoramahissen sitter fast utanpå huset. Räddningstjänsten tar ner folk – med rep från taket eller stegbilens stege.',
         over: () => !S.pano || S.pano.ph === 'done', missed: 'Räddningstjänsten hann få ner alla innan vi kom ut.' } : null) },
     // Kuppen på 5:an: sällsynt, högst en gång per dygn, när lastkajen är ledig (heist.js)
-    { key: 'heist', tick: heistTick, reset: heistReset, on: () => !!S.heist, trigger: () => startHeist(),
+    { key: 'heist', tick: heistTick, reset: heistReset, on: () => !!S.heist, trigger: () => orderHeist(),
       weight: () => heistPossible() && S.heistDay !== S.day && (S.incLevel === 'kaos' ? 0.5 : 0.2), pick: () => ({ floor: BANK }),
       warnS: 18, warn: () => HEIST_WARN, hit: () => { if (startHeist(true)) S.heistDay = S.day; },
       // (polisens insatsledare bestämmer under kuppen – heistChiefTick i chief.js, även när chefen är på rast)

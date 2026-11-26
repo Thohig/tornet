@@ -69,10 +69,29 @@ export function heistPossible() {
   return BANK >= 0 && DOCK >= 0 && CAFE >= 0 && CONTROL >= 0 && !S.heist && !S.fire && S.power && !S.truck && !(S.move && S.move.state === 'on');
 }
 
+/** vad gänget väntar på när kuppen är framkallad men inte kan börja ('' = den kan börja) – hela bisatser */
+export function heistBlock() {
+  if (S.fire) return 'tills branden är släckt';
+  if (!S.power) return 'tills strömmen är tillbaka';
+  if (S.truck) return 'tills leveransbilen har kört från lastkajen';
+  if (S.move && S.move.state === 'on') return 'tills flyttbilen har kört från lastkajen';
+  return '';
+}
+/** Spelaren framkallar kuppen: börjar direkt, eller väntar gänget runt hörnet tills lastkajen är ledig (S.heistWait) */
+export function orderHeist() {
+  if (S.heist || S.heistWait !== null) return false;
+  if (startHeist()) return true;
+  if (!heistBlock()) return false;
+  S.heistWait = S.t;
+  log(`🚐 En skåpbil från ${VAN_NAME} kör runt kvarteret – gänget väntar ${heistBlock()}`, 'alert');
+  return true;
+}
+
 /** Kuppen börjar: skåpbilen backar in vid lastkajen. Returnerar false om den inte kan börja nu. */
 /** @param {boolean} [warned] förvarningen har redan visat bilen vid kajen */
 export function startHeist(warned = false) {
   if (!heistPossible()) return false;
+  S.heistWait = null;
   S.heist = { ph: 'in', t0: S.t, van: 'in', vanX: warned ? 70 : -260, gang: [], hero: -1, heroWho: '', heroStep: 0, heroT: 0, steps: 0,
     holdT: 0, police: false, policeAt: 0, plan: 'garage', train: 'go', power: 'wait', drill: 0, drillOff: 0, gold: GOLD,
     route: '', fleeF: -1, fleeT: 0, stormAt: 0, signal: false, outcome: '', caught: false, hostages: 0, idFrom: S.nextId,
@@ -310,6 +329,8 @@ export function heistChoice(what) {
 
 /** varje steg (sim.js) */
 export function heistTick(dt) {
+  // (framkallad medan lastkajen var upptagen: skåpbilen backar in så fort det går)
+  if (S.heistWait !== null && !S.heist && heistPossible()) startHeist();
   const Hs = H();
   if (!Hs) return;
   // skåpbilen
@@ -381,6 +402,6 @@ function talk(Hs) {
   ];
   lines[n % lines.length]();
 }
-export function heistReset() { S.heist = null; }
+export function heistReset() { S.heist = null; S.heistWait = null; }
 /** förvarningen: skåpbilen har stått länge (incidents.js) */
 export const HEIST_WARN = `🚐 En skåpbil från ${VAN_NAME} står vid lastkajen med motorn igång…`;

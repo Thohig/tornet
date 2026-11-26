@@ -417,3 +417,5 @@ body.cinema #side{display:none !important}
 .tour-hi{outline:2px solid var(--vga-y);outline-offset:-1px}
 .tour-spot{animation:tourspot .7s infinite alternate}
 @keyframes tourspot{from{outline:2px solid transparent;outline-offset:1px}to{outline:2px solid #ff8c00;outline-offset:1px}}
+/* fel i en bildruta (main.js): en liten ruta nere till vänster, klick stänger – på mobilen finns ingen konsol */
+#err{position:fixed;left:4px;bottom:4px;z-index:50;max-width:min(420px,calc(100vw - 8px));padding:4px 6px;font:11px/1.3 monospace;color:#fff;background:#a01818;box-shadow:var(--raised);cursor:pointer}

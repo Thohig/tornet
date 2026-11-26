@@ -5,7 +5,7 @@
 // ('lift') kör ner dem till entrén. Ingen hänger under en last: så länge balken är ute står gondolen parkerad.
 // Balken stannar i hård vind, vid brand och vid strömavbrott.
 // (Simulering: läget ligger i S.cleaner och S.hoist, grafiken i pixroof.js läser bara.)
-import { fl } from './util.js';
+import { cap, fl } from './util.js';
 import { BX1, DOOR_T, EL, HATCH_FLOORS, LOBBY, SEAM_F, TOP, TOWER_X1, floorY } from './config.js';
 import { S, hour, log } from './state.js';
 import { moveTo, restoreElevator, setMode, vmaxOf } from './elevators.js';
@@ -213,7 +213,6 @@ export function liftStep(e, dt) {
     }
   }
 }
-const cap = s => s[0].toUpperCase() + s.slice(1);
 /** Hissbalkens läge i klartext för flyttrutan ('' om flytten inte har något för balken) */
 export function hoistStatus(M) {
   if (!M || !M.hoist) return '';

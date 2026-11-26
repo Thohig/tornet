@@ -2926,6 +2926,21 @@ test('Kuppen: klipps strömmen öppnas valvet och gänget flyr – aldrig den v�
   return out.join(' · ');
 });
 
+test('Kuppen när lastkajen är upptagen: gänget kör runt kvarteret och backar in när flyttbilen har kört', () => {
+  sim(5, { roll: 'mjuk', chief: true, incLevel: 'av' });
+  while (hour() < 10) step(DT);
+  act('trigger', 'move');
+  let g = 0;
+  while (!(S.move && S.move.state === 'on') && ++g < 600 / DT) step(DT);
+  assert(S.move && S.move.state === 'on', 'flytten kom aldrig igång');
+  assert(act('trigger', 'heist') === true, 'kuppen gick inte att beställa');
+  assert(!S.heist && S.heistWait !== null, 'kuppen började fast flyttbilen står vid lastkajen');
+  assert(act('trigger', 'heist') === false, 'kuppen gick att beställa två gånger');
+  while (!S.heist && ++g < 9000 / DT) { step(DT); assert(S.heist === null || !S.move || S.move.state !== 'on', 'skåpbilen backade in medan flyttbilen stod kvar'); }
+  assert(S.heist && S.heistWait === null, 'gänget kom aldrig');
+  return `skåpbilen backade in kl ${hour().toFixed(1)}`;
+});
+
 test('Kuppen under rundvisningen: Berit och gästen blir över, smyger i trapporna och rundvisningen fortsätter efteråt', () => {
   sim(12, { roll: 'mjuk', chief: true });
   while (hour() < 14.4) step(DT);
@@ -2977,6 +2992,10 @@ test('Språket: svenska är standard, loggen och dagböckerna blir engelska och 
   const glued = w => !vocab.has(w) && ['a', 'ar', 'er', 'or', 'na', 'en', 'et'].some(s => w.endsWith(s) && vocab.has(w.slice(0, -s.length)) && w.length - s.length > 2);
   const broken = all.map(x => tr(x)).filter(x => (strip(x).toLowerCase().match(/[a-z]+/g) || []).some(glued));
   assert(!broken.length, `${broken.length} engelska texter med en svensk ändelse på ett engelskt ord, t.ex.\n    ${broken.slice(0, 6).join('\n    ')}`);
+  // ett inledande värde sväljer inte en avskiljare ("TB · 2 stopp …" är inte "{0} stopp …" med "TB · 2"),
+  // och " + " delar en text (hissens nästa stopp: "Isak ska av + hämtar Zainab ▼")
+  assert(tr('Rutt: P2 → TB · målet efter 2 stopp') === 'Route: P2 → TB · destination after 2 stops', `rutten: ${tr('Rutt: P2 → TB · målet efter 2 stopp')}`);
+  assert(!swedish(tr('Isak ska av + hämtar Zainab ▼')), `nästa stopp: ${tr('Isak ska av + hämtar Zainab ▼')}`);
   // svenska: ingenting översätts
   setLang('sv');
   const same = all.every(x => tr(x) === x);

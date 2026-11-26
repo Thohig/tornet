@@ -10,7 +10,7 @@ import { plannedRoute } from './sim.js';
 import { VIEW, pctx } from './view.js';
 import { personSprite } from './pixpeople.js';
 import { PAL } from './pixpal.js';
-import { stateInfo } from './describe.js';
+import { roomDesc, stateInfo } from './describe.js';
 export { stateInfo };
 import { residentDesc } from './life.js';
 import { jobFloor, tech, techOf, cableStatus } from './service.js';
@@ -421,8 +421,8 @@ export function personHtml(p) {
     case 'exiting': now = `Kliver av på ${fl(p.floor)}`; logic = p.spot ? `På väg: ${esc(p.spot.desc.toLowerCase())}` : 'På väg ut genom entrén'; break;
     case 'stairs': now = `Går mot trapphuset på ${fl(p.floor)}`; logic = `Ska gå ${Math.abs(p.dest - p.floor)} våningar till ${fl(p.dest)}`; break;
     case 'instairs': now = `I trapphuset på väg till ${fl(p.dest)}`; logic = `Framme om ~${Math.max(0, Math.ceil(p.timer))}s`; break;
-    // (flyttgubbarna vid lastkajen är "inne" utan en plats – som i describe.js)
-    case 'office': now = p.sleeping && p.spot?.bed ? `Sover i sängen (${fl(p.floor)}) 💤` : p.spot ? `${p.spot.desc} (${FL[p.floor].short})` : FL[p.floor].short; logic = `Nästa beslut om ~${Math.max(0, Math.round(p.timer / activityRate(hour())))}s`; break;
+    // (flyttgubbarna vid lastkajen är "inne" utan en plats – roomDesc i describe.js)
+    case 'office': now = p.sleeping && p.spot?.bed ? `Sover i sängen (${fl(p.floor)}) 💤` : `${roomDesc(p)} (${FL[p.floor].short})`; logic = `Nästa beslut om ~${Math.max(0, Math.round(p.timer / activityRate(hour())))}s`; break;
     case 'away': now = 'Är inte i huset just nu'; logic = `Kommer tillbaka: ${phaseName(p.returnAt).toLowerCase()}`; break;
     case 'incar': now = `Kör in i garaget på ${fl(p.floor)}`; logic = 'Parkerar och går sedan till hissarna'; break;
     case 'assembly': now = 'Väntar på återsamlingsplatsen'; logic = 'Går in igen när branden är släckt'; break;
