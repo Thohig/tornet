@@ -172,6 +172,11 @@ const CARGO_ROWS = {
     pal: { G: '#5a6670', D: '#3d4650', Y: '#d4a017', K: INK, R: '#5a5a6e' }, dx: 4 },
   piano: { rows: ['PPPPPPPPPP', 'PPPPPPPPPP', 'PGPPPPPPGP', 'PPPPPPPPPP', 'WKWKWWKWKW', 'PPPPPPPPPP', 'PPPPPPPPPP', 'PPPPPPPPPP', 'PP......PP', 'KKKKKKKKKK', '.R......R.'],
     pal: { P: '#2b2233', G: '#d4a017', W: '#ffffff', K: INK, R: '#5a5a6e' }, dx: 4 },
+  // firmafesten (party.js): ballonger i snören, och budets tårta på en bricka
+  // (ballongerna svävar i snören från handen: långa snören, så att de hamnar ovanför huvudet)
+  ballonger: { rows: ['.RR..BB..', 'RRRRBBBB.', 'RRRRBBBB.', '.RRGGBB..', '..GGGG...', '..GGGG...', '...KGK...', '...K.K...', '....K....', '....K....', '....K....',
+    '....K....', '....K....', '....K....', '....K....', '....K....', '....K....'], pal: { R: '#ff5d52', B: '#3f7cff', G: '#ffe14d', K: INK }, dx: 1 },
+  tårta: { rows: ['.Y..Y..Y.', '.W..W..W.', 'PPPPPPPPP', 'WWWWWWWWW', 'PPRPPPRPP', 'WWWWWWWWW', 'KKKKKKKKK'], pal: { P: '#ff9fc7', W: '#ffffff', R: '#ff5d52', Y: '#ffe14d', K: INK }, dx: 3 },
   // pudeln från hundsalongen i koppel: två gångsteg, sittande (när matte/husse väntar) och framifrån (i hissen)
   pudel: { rows: ['......WW..', '.....WWWW.', '.....WWKWN', 'WW...PWWW.', 'WWwWWWWW..', '..WWWWWW..', '..w....w..', '.WW...WW..'], pal: POODLE, dx: 7 },
   pudel2: { rows: ['......WW..', '.....WWWW.', '.....WWKWN', 'WW...PWWW.', 'WWwWWWWW..', '..WWWWWW..', '...w..w...', '..WW.WW...'], pal: POODLE, dx: 7 },
@@ -194,6 +199,6 @@ export function cargoSprite(kind, dir) {
     c = dir < 0 ? flipped(r) : r;
     CARGO_CACHE.set(key, c);
   }
-  const lift = kind === 'pizza' ? 14 : kind === 'verktygslåda' ? 6 : kind === 'flyttlåda' ? 9 : kind === 'filtar' ? 18 : kind === 'bår' || kind === 'bårP' ? 4 : 0;
+  const lift = kind === 'ballonger' ? 9 : kind === 'tårta' ? 9 : kind === 'pizza' ? 14 : kind === 'verktygslåda' ? 6 : kind === 'flyttlåda' ? 9 : kind === 'filtar' ? 18 : kind === 'bår' || kind === 'bårP' ? 4 : 0;
   return { c, dx: dir < 0 ? -d.dx - c.width : d.dx, lift };
 }

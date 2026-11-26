@@ -545,7 +545,8 @@ function drawPlatformPx(top, bot, h) {
   // perrongkanten med gul linje
   R(tx0 - 6, ty1, tx1 - tx0 + 10, 1, '#ffd23f'); R(tx0 - 6, ty1 + 1, tx1 - tx0 + 10, 1, INK);
   // avgångsskylten: DOS-svart med gul text (ingen klocka – bara minuter kvar i speltid)
-  const m = nextTrainMin(), msg = m === null ? 'INGA FLER TÅG' : T ? (T.state === 'in' ? 'TÅGET KOMMER' : T.state === 'stop' ? 'STIG PÅ!' : 'AVGÅR') : sv`TÅG OM ${m} MIN`;
+  const m = nextTrainMin(), stuck = S.tunnel && S.tunnel.ph === 'stuck';
+  const msg = m === null ? 'INGA FLER TÅG' : T ? (T.state === 'in' ? 'TÅGET KOMMER' : T.state === 'stop' ? 'STIG PÅ!' : 'AVGÅR') : stuck ? 'SIGNALFEL – FÖRSENAT' : sv`TÅG OM ${m} MIN`;
   const bw = textW(msg) + 6, bx = tx1 - bw, by = top + 16;
   box(bx, by, bw, 9, '#101418'); text(g, msg, bx + 3, by + 2, m === null ? '#ff5d52' : '#ffd23f');
   reserve(bx, by, bw, 9); // (tankebubblorna vid perrongen lägger sig inte över avgångsskylten)

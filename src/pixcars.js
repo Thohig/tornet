@@ -18,6 +18,7 @@ import { winFig } from './pixhall.js';
 import { shaftBot, shaftTop } from './pixbuilding.js';
 import { bark, DOGS, hotOf, phoneOn, speech, talking } from './pixfolk.js';
 import { sv } from './sv.js';
+import { crashRun } from './crash.js';
 /** @typedef {import('./elevators.js').Elevator} Elevator */
 /** @typedef {import('./people.js').Person} Person */
 
@@ -240,9 +241,14 @@ export function drawCarPx(e) {
     for (let n = 0; n < 2; n++) R(x - 1 + (n ? cw + 1 : 0), yt + Math.round(vrand(4, chh - 4)), 1, 1, '#ffd23f');
   }
   carSigns(e, G);
-  // en stamgäst i korgen som pratar
-  const talker = e.passengers.find(talking);
-  if (talker) speech(talker, x + cw / 2, yt - 23);
+}
+/** Stamgästerna som pratar i korgarna: repliken ritas efter gatan och folket i hallarna (pixfolk.js), så att
+ *  skyltarna där – brandbilens, hallens – redan har bokat sin plats */
+export function drawCarTalkPx() {
+  for (const e of S.elevators) {
+    const talker = e.passengers.find(talking), G = talker ? carGeom(e) : null;
+    if (G) speech(talker, G.x + G.cw / 2, G.yt - 23);
+  }
 }
 /** Skyltarna: en ovanför korgen och en mitt på den. Den viktigaste tar platsen (ordningen nedan) – en blinkande
  *  skylt håller sin plats även när den är släckt, så att två skyltar inte turas om. Samma val när platserna bokas
@@ -289,6 +295,7 @@ function carSigns(e, G) {
   if (S.warn && S.warn.type === 'fault' && S.warn.car === e.id && e.mode === 'normal') slot.top('GNISSEL…', '#ffe9a8', INK, Math.sin(S.anim * 6) > 0);
   if (e.mode === 'normal' && S.power && e.restartAt && S.t < e.restartAt) slot.top('OMSTART', '#7dff9a');
   if (e.mode === 'normal' && !e.hold && e.heat >= WARM_AT && e.state === 'moving') slot.top('VARM', '#ff8c42');
+  if (crashRun(e)) slot.top('NÖDLÄGE', '#3f7cff', '#ffffff'); // (Hiss-O-Matic har kraschat – crash.js)
 }
 /** strömavbrott: folk sitter fast i en korg som stannade mellan våningarna @param {Elevator} e */
 const trappedInOutage = e => !S.power && e.mode === 'normal' && e.passengers.length > 0;

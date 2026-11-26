@@ -35,9 +35,13 @@ import { startStorm, stormTick, weatherReset } from './weather.js';
 import { PANO, panoCandidate, rescueNext, triggerPano } from './pano.js';
 import { cableCandidate, foremanNext, techNext, triggerCable, triggerFault, triggerHeat } from './service.js';
 import { busyCars, cableRisk, ffNext, FIRE_FLOORS, incidentStarted, incPick, startFire, startOutage } from './incidents.js';
-import { dogChiefTick, gondolaChiefTick, leakChiefTick, panoChiefTick } from './chief.js';
+import { crashChiefTick, tunnelChiefTick, panicChiefTick, partyChiefTick, dogChiefTick, gondolaChiefTick, leakChiefTick, panoChiefTick } from './chief.js';
 import { arrivalRate } from './sim.js';
 import { sv } from './sv.js';
+import { crashPossible, crashReset, crashTick, startCrash } from './crash.js';
+import { tunnelPossible, tunnelReset, tunnelTick, startTunnel } from './tunnel.js';
+import { panicPossible, panicReset, panicTick, startPanic } from './panic.js';
+import { partyArrive, partyNext, partyPossible, partyReset, partyTick, startParty } from './party.js';
 /** @typedef {import('./elevators.js').Elevator} Elevator */
 /** @typedef {import('./incidents.js').IncPick} IncPick */
 /** @typedef {import('./people.js').Person} Person */
@@ -154,6 +158,30 @@ export function systems() {
       chief: { tick: leakChiefTick, done: () => !S.leak },
       out: { id: 'wet', text: 'står still – det rinner vatten i schaktet', test: e => e.wetLock },
       chaos: { step: 'cars', name: '🚿 vattenläcka', run: () => startLeak() } },
+    // Hiss-O-Matic 3000 kraschar (crash.js): hissarna går i nödläge (elevators.js och dispatch.js frågar crashRun/crashed)
+    { key: 'crash', tick: crashTick, reset: crashReset, on: () => !!S.crash, trigger: () => startCrash(), weight: () => crashPossible() && 0.3,
+      warnS: 8, warn: () => '🖥️ Skärmarna i driftcentralen fryser till en sekund… och en till', hit: () => startCrash(),
+      chief: { tick: crashChiefTick, done: () => !S.crash },
+      chaos: { step: 'cars', name: '🖥️ Hiss-O-Matic kraschar', run: () => startCrash() } },
+    // tåget står i tunneln (tunnel.js): perrongen fylls, ersättningsbussar eller vänta
+    { key: 'tunnel', tick: tunnelTick, reset: tunnelReset, on: () => !!S.tunnel, trigger: () => startTunnel(),
+      weight: () => tunnelPossible() && hour() >= 7 && hour() < 21 && 0.3,
+      warnS: 8, warn: () => '🚇 Det skrapar och gnisslar långt inne i tunneln…', hit: () => startTunnel(),
+      chief: { tick: tunnelChiefTick, done: () => !S.tunnel || S.tunnel.ph !== 'stuck' },
+      chaos: { step: 'guests', name: '🚇 tåget i tunneln', run: () => startTunnel() } },
+    // panik i en fullsatt hiss som tvärstannar (panic.js): prata i nödtelefonen eller veva ner korgen
+    { key: 'panic', tick: panicTick, reset: panicReset, on: () => !!S.panic && S.panic.ph !== 'wait', trigger: () => startPanic(),
+      weight: () => panicPossible() && 0.3,
+      warnS: 6, warn: () => '😰 Det är trångt och varmt i hissarna i dag…', hit: () => startPanic(),
+      chief: { tick: panicChiefTick, done: () => !S.panic || S.panic.ph !== 'on' },
+      chaos: { step: 'cars', name: '😱 panik i hissen', run: () => startPanic() } },
+    // firmafesten (party.js): gästerna med ballonger och tårtan – varuhissen eller vilken hiss som helst
+    { key: 'party', tick: partyTick, reset: partyReset, on: () => !!S.party, trigger: () => startParty(),
+      weight: () => partyPossible() && 0.35,
+      warnS: 8, warn: () => '🎈 Någon blåser upp ballonger på ett av kontoren…', hit: () => startParty(),
+      chief: { tick: partyChiefTick, done: () => !S.party },
+      next: partyNext, arrive: partyArrive,
+      chaos: { step: 'guests', name: '🎈 firmafest', run: () => startParty() } },
     // vädret: stormen blåser (stormen som incident är posten storm ovan); en storm som pågår följer med över dygnsskiftet
     { key: 'weather', tick: stormTick, reset: weatherReset, roll: () => { const st = S.storm; weatherReset(); S.storm = st; } },
   ];

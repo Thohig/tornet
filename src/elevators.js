@@ -5,7 +5,7 @@ const { rand, rng } = stream('hissar');
 import { ARR, fl } from './util.js';
 import { ACC, CAP, DOOR_T, DWELL, EL, LOBBY, VMAX, shaftCX, CAR_H, floorY } from './config.js';
 import { S, log } from './state.js';
-import { arriveOnFloor, liftsAvailable, pev, pn, setTrip, toStairs, queueSpot } from './people.js';
+import { arriveOnFloor, elevatorAllows, liftsAvailable, pev, pn, setTrip, toStairs, queueSpot } from './people.js';
 import {
   safeFloor, aheadOf, allowed, allowedDest, allowedPos, assignedTo, isFull, maybePark, rebuildPicks, stopFloors, loadKg,
   personKg, slotsFull, benched, keyed, posOf, outReason, outText, etaOutcome,
@@ -17,10 +17,11 @@ import { doorHold, politeHold } from './cast.js';
 import { liftStep } from './hoist.js';
 import { windMul } from './weather.js';
 import { peakHold } from './dispatch.js';
+import { crashRun, crashStop, sweepDir, sweepStop } from './crash.js';
 /** @typedef {import('./people.js').Person} Person */
 
 // ---------- Hissar ----------
-/** Ett hissfel som väntar på tekniker (service.js) @typedef {{ what: string, t0: number, need: number, kind?: string, tool?: string, cable?: boolean, exitF?: number, done?: number, trapped?: boolean, n?: number, nextTalk?: number, pano?: boolean, crank?: { to: number, by: number, open: boolean } }} Fault */
+/** Ett hissfel som väntar på tekniker (service.js) @typedef {{ what: string, t0: number, need: number, kind?: string, tool?: string, cable?: boolean, exitF?: number, done?: number, trapped?: boolean, n?: number, nextTalk?: number, pano?: boolean, crank?: { to: number, by: number, open: boolean, why: string } }} Fault */
 /** Linbrottet: fall → fast → utrymning (service.js) @typedef {{ ph: string, t0: number, stopAt: number, caughtT: number, exitF: number, n: number, out: number, nextOut: number, climb: number }} Snap */
 /**
  * En hiss. Läget (`pos`, `floor`, `carCalls`, `pick`, `stops`) räknas i nedre däckets våningar,
@@ -84,6 +85,8 @@ export const vmaxOf = e => VMAX * windMul(e) * heatMul(e);
 export function shouldStop(e, g, d) {
   if (!e.stops.has(g)) return false;
   if (!allowedPos(e, g) && !(e.zoneLock && g === e.minF)) return false; // spärrad hiss får köra ner till sin lägsta våning // expresshissar m.fl. stannar bara på sina våningar
+  // Hiss-O-Matic har kraschat: nödläget stannar på varje våning (crash.js) – men en full korg kör förbi (vågen sitter i korgen)
+  if (crashRun(e)) return sweepStop(e, g) && (e.carCalls.has(g) || !isFull(e));
   if (e.carCalls.has(g)) return true;
   if (isFull(e)) return false;
   if (assignedTo(e, g, d)) return true;
@@ -159,6 +162,8 @@ export function idleEval(e, dt) {
   const f = Math.round(e.pos);
   e.pos = f; e.v = 0; e.target = null;
   if (S.fire && S.fire.mode === 'zone' && zoneReroute(e, f)) { arrive(e, f); return; }
+  // nödläget (crash.js): korgen pendlar hela tiden och vänder vid schaktets ände
+  if (crashRun(e)) { e.idleTime = 0; e.parkTarget = null; e.dir = sweepDir(e, f); if (e.dir) e.state = 'moving'; return; }
   const full = isFull(e), up = !full && assignedTo(e, f, 1), dn = !full && assignedTo(e, f, -1);
   if ((up || dn) && (e.dir === 0 || assignedTo(e, f, e.dir) || !aheadOf(e, f, e.dir))) { arrive(e, f); return; }
   const stops = stopFloors(e);
@@ -248,6 +253,7 @@ export function arrive(e, f) {
   else if (!assignedTo(e, f, d) && !aheadOf(e, f, d)) {
     d = (assignedTo(e, f, -d) || aheadOf(e, f, -d)) ? -d : 0;
   }
+  if (crashRun(e)) { d = sweepDir(e, f); crashStop(); }
   e.dir = d;
   if (buttonsMode()) answerCalls(e, f);
   e.state = 'doors'; e.doorPhase = 'opening'; e.dwell = 0; e.dwellNeed = DWELL;
@@ -372,12 +378,16 @@ export function load(e, f) {
   /** @param {Person} p */
   const seen = p => { p.seenBy = p.seenBy || {}; if (p.seenBy[e.id] === e.trips) return true; p.seenBy[e.id] = e.trips; return false; };
   let boarded = false;
-  const buttons = buttonsMode();
+  const buttons = buttonsMode(), sweep = crashRun(e);
   for (const p of waiting) {
-    // KNAPPAR: man kliver på vilken hiss som helst i sin grupp som öppnar åt rätt håll
-    const mine = buttons && !keyed(p) ? p.bank === e.group && e.legs.some(l => l.includes(p.floor) && l.includes(p.dest)) && allowedDest(e, p) && !e.vipLock && !e.indep : p.assigned === e.id;
+    // KNAPPAR: man kliver på vilken hiss som helst i sin grupp som öppnar åt rätt håll; i nödläge (crash.js) på
+    // vilken hiss som helst som går hela vägen och öppnar åt rätt håll
+    const any = buttons || sweep;
+    const mine = sweep && !keyed(p) ? e.legs.some(l => l.includes(p.floor) && l.includes(p.dest)) && allowedDest(e, p) && elevatorAllows(EL[e.id], p)
+      : buttons && !keyed(p) ? p.bank === e.group && e.legs.some(l => l.includes(p.floor) && l.includes(p.dest)) && allowedDest(e, p) && !e.vipLock && !e.indep
+        : p.assigned === e.id;
     if (!mine) {
-      if (buttons && !keyed(p)) continue;
+      if (any && !keyed(p)) continue;
       if (p.assigned !== null && !seen(p)) { pev(p, sv`Hiss ${e.name} öppnar – men jag ska ta ${EL[p.assigned].name}`); }
       continue;
     }

@@ -14,7 +14,7 @@ import { CREW_BY } from './crew.js';
 import { vpick, vrand } from './rng.js';
 import { VIEW, tinyText } from './view.js';
 import { ants, ARROW, box, g, INK, keepIn, label, line, lo, pill, place, R, reserve, X, Y } from './pixcore.js';
-import { blinkOf, hoseSpray } from './pixcars.js';
+import { blinkOf, drawCarTalkPx, hoseSpray } from './pixcars.js';
 import { sv } from './sv.js';
 /** @typedef {import('./people.js').Person} Person */
 
@@ -62,20 +62,23 @@ export function drawHallPeople() {
   }
   // (mobilens helbild: texten går inte att läsa – bara den man följer får sin bubbla)
   const tiny = tinyText();
-  // pratbubblor från stamgästerna först (de är viktigast), sedan tankebubblorna och namnbrickorna
+  // tankebubblan för den som spåras först (den ska alltid synas), sedan pratbubblorna från stamgästerna (de är
+  // viktigast), korgarnas repliker, de andras tankebubblor och namnbrickorna
+  const sel = list.find(q => q.p === S.sel && q.p.state === 'wait');
+  if (sel) thought(sel.p, X(sel.lp.x) + 3, Y(surf(sel.p.floor) + sel.p.depth * 0.6) - 30, 1);
   for (const { p, lp } of list) if ((!tiny || p === S.sel) && talking(p) && lp.a > 0.5) speech(p, X(lp.x), Y(surf(p.floor) + p.depth * 0.6) - 38 - (p.state === 'wait' ? 12 : 0));
+  drawCarTalkPx();
   // tankebubblorna: de som väntar på samma hiss till samma våning delar en bubbla ("→6 L1 ×3"),
   // utom den som spåras och när namnbrickorna är på
   const groups = new Map();
   for (const { p, lp } of list) {
-    if (p.state !== 'wait' || (tiny && p !== S.sel)) continue;
+    if (p.state !== 'wait' || (tiny && p !== S.sel) || p === S.sel) continue;
     const k = S.tags || p === S.sel ? `p${p.id}` : `${p.floor}|${p.dest}|${p.assigned}|${buttonsMode() ? p.dir : ''}|${p.fixAt ? 1 : 0}`;
     const gr = groups.get(k);
     if (gr) gr.push({ p, lp }); else groups.set(k, [{ p, lp }]);
   }
-  // (den som spåras först: hens bubbla ska alltid synas, och de andra flyttar sig för den)
-  for (const gr of [...groups.values()].sort((a, b) => Number(b.some(q => q.p === S.sel)) - Number(a.some(q => q.p === S.sel)))) {
-    const lead = gr.find(q => q.p === S.sel) || gr.reduce((a, b) => (b.lp.x > a.lp.x ? b : a));
+  for (const gr of groups.values()) {
+    const lead = gr.reduce((a, b) => (b.lp.x > a.lp.x ? b : a));
     thought(lead.p, X(lead.lp.x) + 3, Y(surf(lead.p.floor) + lead.p.depth * 0.6) - 30, gr.length);
   }
   // namnbrickor: alla med ID-knappen, stamgästerna alltid (med en stjärna)
@@ -120,6 +123,7 @@ export function bubble(str, cx, y0, fill = '#ffffff', optional = false) {
   // någon annanstans (optional: driftchefen och samtalet till hissjouren, som står i Driftradion)
   const py = place(x, y0, w, 9, optional ? [0, -11, -22] : UP);
   if (py === null && (bubble2(s, cx, y0, fill) || optional)) return; // (för bred: på två rader får den oftast plats)
+  if (py === null) reserve(x, y0, w, 9); // (ritas ändå – det som kommer efter lägger sig inte över den)
   const y = py ?? y0;
   if (y < y0) R(cx, y + 9, 1, y0 - y, INK);
   pill(x, y, w, 9, fill);

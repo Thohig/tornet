@@ -25,6 +25,10 @@ import { startChaos } from './chaos.js';
 import { gondolaText, setGondolaHow } from './gondola.js';
 import { setDogLock } from './dog.js';
 import { setLeakMode } from './leak.js';
+import { setCrashMode } from './crash.js';
+import { setTunnelMode } from './tunnel.js';
+import { setPanicMode } from './panic.js';
+import { setPartyMode } from './party.js';
 import { sv } from './sv.js';
 
 /** Byt styrlogik: hallknapparna nollställs och alla väntande fördelas om. */
@@ -88,6 +92,14 @@ export const ACTIONS = {
   dog: what => { if (!setDogLock(what === 'lock', 'player')) return false; playerChose('dog', what === 'lock' ? 'Spärra hissarna där hunden är' : 'Låt hunden åka', { inc: 'dog' }); return true; },
   // vattenläckan: hissarna i de blöta schakten ur drift (stop) eller kör vidare (run)
   leak: m => { if (!setLeakMode(m, 'player')) return false; playerChose('leak', m === 'stop' ? 'Hissarna i de blöta schakten står still' : 'Hissarna i de blöta schakten kör vidare', { inc: 'leak' }); return true; },
+  // Hiss-O-Matic har kraschat: nödläge (nod) eller omstart (boot)
+  crash: m => { if (!setCrashMode(m, 'player')) return false; playerChose('crash', m === 'boot' ? 'Hiss-O-Matic startas om' : 'Hissarna går i nödläge', { inc: 'crash' }); return true; },
+  // tåget i tunneln: vänta (wait) eller ersättningsbussar (bus)
+  tunnel: m => { if (!setTunnelMode(m, 'player')) return false; playerChose('tunnel', m === 'bus' ? 'Ersättningsbussar på gatan' : 'Vi väntar på tåget', { inc: 'tunnel' }); return true; },
+  // panik i hissen: prata i nödtelefonen (talk) eller veva ner korgen (crank)
+  panic: m => { if (!setPanicMode(m, 'player')) return false; playerChose('panic', m === 'crank' ? 'Teknikern vevar ner korgen' : 'Vi pratar med dem i nödtelefonen', { inc: 'panic' }); return true; },
+  // firmafesten: ballongerna i varuhissen (varu) eller i vilken hiss som helst (alla)
+  party: m => { if (!setPartyMode(m, 'player')) return false; playerChose('party', m === 'varu' ? 'Ballongerna tar varuhissen' : 'Gästerna åker vilken hiss som helst', { inc: 'party' }); return true; },
   panoRescue: how => { if (!S.pano || !setPanoHow(how, 'player')) return; playerChose('pano', panoText(how), { inc: 'pano', car: S.pano.car }); },
   moveWind: c => { if (!S.move) return; setMoveWind(c); playerChose('move', c === 'varu' ? 'Lasset vid luckan i varuhissen' : 'Lasset vid luckan väntar'); },
 };

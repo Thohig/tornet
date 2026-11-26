@@ -403,7 +403,7 @@ function workTick(t, dt) {
     pev(t, sv`Hiss ${e.name} är lagad`);
     e.fault = null;
   } else {
-    S.stats.serviced++;
+    S.stats.serviced++; if (e.serviceAsap) S.stats.serviceOrdered++; // (beställd: efter vattenläckan, ett nivåfel …)
     log(sv`✅ Nattservice klar på ${e.name} – slitaget ${Math.round(e.wear * 100)} % → 5 %`, 'alert', e.color);
     pev(t, sv`Servicen på hiss ${e.name} är klar`);
     e.wear = 0.05; e.serviceAsap = false;
@@ -418,16 +418,22 @@ function workTick(t, dt) {
 // hand (bromsen lossas, korgen glider sakta) till närmaste våning, öppnar och släpper ut dem – de utryms med
 // hen. Hissen är fortfarande trasig och lagas när branden är släckt.
 /** Teknikern t ska utrymmas: vevar hen först ner en korg med instängda? (true = vevandet pågår, vänta) @param {Person} t */
-export function fireCrank(t) {
+export function fireCrank(t) { return crankDown(t, 'fire'); }
+/** Teknikern t vevar ner korgen hen står vid (folk sitter fast mellan två våningar) till närmaste våning nedanför och
+ *  släpper ut dem – vid brandlarm, eller när någon får panik i korgen (panic.js). true = vevandet pågår.
+ *  @param {Person} t @param {'fire'|'panic'} why */
+export function crankDown(t, why) {
   if (!hasJob(t)) return false;
   const e = S.elevators[t.job];
   if (e.mode !== 'broken' || !e.fault || !e.fault.trapped || e.fault.pano || !e.passengers.length || t.state !== 'office' || t.floor !== jobFloor(e)) return false;
   if (!e.fault.crank) {
     const stops = [...e.stops], below = stops.filter(f => f <= e.pos + 1e-6).sort((a, b) => b - a);
     const to = below.length ? below[0] : stops.sort((a, b) => Math.abs(a - e.pos) - Math.abs(b - e.pos))[0];
-    e.fault.crank = { to, by: t.id, open: false };
-    pev(t, sv`Brandlarm! Vevar ner hiss ${e.name} för hand till ${fl(to)} och släpper ut de instängda först`);
-    log(sv`🔧 Brandlarm: ${pn(t)} vevar ner ${e.name} för hand till ${fl(to)} – ${e.passengers.length} instängda släpps ut`, 'alert', e.color, t.id);
+    e.fault.crank = { to, by: t.id, open: false, why };
+    pev(t, why === 'fire' ? sv`Brandlarm! Vevar ner hiss ${e.name} för hand till ${fl(to)} och släpper ut de instängda först`
+      : sv`Någon har panik i hiss ${e.name} – vevar ner den för hand till ${fl(to)} och släpper ut dem först`);
+    log(why === 'fire' ? sv`🔧 Brandlarm: ${pn(t)} vevar ner ${e.name} för hand till ${fl(to)} – ${e.passengers.length} instängda släpps ut`
+      : sv`🔧 ${pn(t)} vevar ner ${e.name} för hand till ${fl(to)} – ${e.passengers.length} instängda släpps ut`, 'alert', e.color, t.id);
     for (const p of e.passengers) pev(p, `Teknikern vevar ner hissen för hand – vi ska ut!`);
   }
   return true;
@@ -448,7 +454,8 @@ function crankTick(e, dt) {
   exitAll(e, e.floor, 'Utsläppt ur hissen för hand');
   e.fault.trapped = false; e.fault.crank = null;
   log(sv`🔧 ${e.name} nedvevad till ${fl(e.floor)} – ${n} ute`, 'alert', e.color);
-  incidentOver('fault', sv`✅ De instängda i ${e.name} är ute`, sv`${n} satt fast mellan två våningar i ${Math.round(down)} s. När brandlarmet gick vevade ${t ? t.name : 'teknikern'} ner korgen för hand till ${fl(e.floor)} och släppte ut dem. Hissen lagas när branden är släckt.`, { car: e.id });
+  if (c.why === 'fire') incidentOver('fault', sv`✅ De instängda i ${e.name} är ute`, sv`${n} satt fast mellan två våningar i ${Math.round(down)} s. När brandlarmet gick vevade ${t ? t.name : 'teknikern'} ner korgen för hand till ${fl(e.floor)} och släppte ut dem. Hissen lagas när branden är släckt.`, { car: e.id });
+  else log(sv`🔧 ${n} ute ur ${e.name} – ${t ? t.name : 'teknikern'} lagar hissen nu`, 'alert', e.color);
   if (t && t.state === 'office') t.timer = Math.min(t.timer, 0.3); // (och utryms själv)
   rerouteStranded();
 }

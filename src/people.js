@@ -42,6 +42,7 @@ const G = stream('gestalt'), G2 = stream('inkallade');
  *   medic?: boolean, mover?: boolean, loader?: boolean, item?: number|null, rescue?: boolean, ropeF?: number,
  *   guide?: boolean, tour?: boolean, guest?: boolean, touring?: boolean, keys?: number|null, robber?: boolean, caught?: boolean, hostage?: boolean, hero?: boolean,
  *   say?: { text: string, until: number }, sayLater?: string|null, gripes?: number, talkedInc?: number,
+ *   party?: boolean, partyBag?: Cargo|null, cake?: boolean,
  * }} Person
  */
 import { fl } from './util.js';
@@ -58,6 +59,7 @@ import { kickOff } from './elevators.js';
 import { arriveByCar, backFromAssembly, fireReturn, leaveBuilding, resNext, homeSpot } from './life.js';
 import { CREW_LOOK, crewNext, crewSpot, dutyNext, dutySpot } from './crew.js';
 import { buttonsMode, carButtonMistakes } from './buttons.js';
+import { balloonFreight } from './party.js';
 import { tourNext, tourSpot } from './tour.js';
 import { guestNext, keyNext, visningSpot } from './visning.js';
 import { sysArrive, sysNext, sysRole, sysSeized, sysSpot } from './systems.js';
@@ -132,6 +134,9 @@ export const CARGO = {
   servicevaska: { kind: 'verktygslåda', name: 'serviceväska', kg: 12 },
   pudel: { kind: 'pudel', name: 'nyklippt pudel', kg: 7 },
   raggig: { kind: 'raggig', name: 'raggig pudel', kg: 8 },
+  // firmafesten (party.js): gästernas ballonger och budets tårta (för tung för en vanlig hiss)
+  ballonger: { kind: 'ballonger', name: 'ballonger', kg: 1 },
+  tårta: { kind: 'tårta', name: 'tårta', kg: 25 },
 };
 const SPA = floorWith('spa');
 /** @param {Person} p */
@@ -145,12 +150,13 @@ export function queueSpot(f) {
 /** @param {Person} p */
 export const needsFreight = p => !!(p.cargo && p.cargo.kg >= 22);
 /** @param {Person} p */
-export const mayUseFreight = p => needsFreight(p) || p.kind === 'staff';
+export const mayUseFreight = p => needsFreight(p) || p.kind === 'staff' || balloonFreight(p);
 /** får personen åka den här hisstypen? */
 // (ambulanspersonalen med båren och flyttgubbarna åker bara varuhiss)
 /** @param {Person} p */
 // (guiden och gästen på rundvisningen åker samma hissar – inte personalens varuhiss)
-export const elevatorAllows = (d, p) => (p.medic || p.mover || (p.robber && !p.caught) ? !!d.freight : d.freight ? mayUseFreight(p) && !p.touring : !needsFreight(p));
+// (firmafestens gäster med ballonger tar bara varuhissen när det är bestämt – party.js)
+export const elevatorAllows = (d, p) => (p.medic || p.mover || (p.robber && !p.caught) || balloonFreight(p) ? !!d.freight : d.freight ? mayUseFreight(p) && !p.touring : !needsFreight(p));
 /**
  * Nästa delmål på vägen mot goal: direkt om någon hiss går hela vägen, annars dit där man byter hiss
  * (t.ex. låg zon → entrén → expressen → sky lobbyn → hög zon). Söker resvägen med minst antal byten

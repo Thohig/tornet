@@ -22,6 +22,7 @@ import { panoTick } from './pano.js';
 import { chaosReset, chaosTick } from './chaos.js';
 import { systems } from './systems.js';
 import { crewArrivals, crewRoll, crewStart, spawnCrew } from './crew.js';
+import { crashed } from './crash.js';
 /** @typedef {import('./elevators.js').Elevator} Elevator */
 
 // ---------- Planerad rutt (för HUD) ----------
@@ -161,7 +162,7 @@ export function step(dt) {
     if (p.assigned !== null && !canTake(S.elevators[p.assigned], p)) p.assigned = null;
     if (p.assigned === null && !(p.retypeAt > S.t)) dispatchPerson(p);
   }
-  if (buttonsMode()) dispatchCalls();
+  if (buttonsMode() && !crashed()) dispatchCalls();
   S.wl = wl;
   // VIP-läge: hissen som tar VIP-gruppen tar inga andra under tiden
   // (VIP-gästerna plockas ut en gång – loopen nedan ändrar bara vanliga personer)
@@ -199,7 +200,7 @@ export function step(dt) {
           : m === 'lunch' ? '🚦 Rusningsläge LUNCH: hissarna sprids ut över huset' : '🚦 Rusningsläget av – jämn trafik', 'park');
     }
   } else S.peakMode = null;
-  if ((costBased() || buttonsMode()) && S.power) {
+  if ((costBased() || buttonsMode()) && S.power && !crashed()) {
     S.reoptT -= dt;
     if (S.reoptT <= 0) { S.reoptT = 1.5; if (buttonsMode()) dispatchCalls(true); else reoptimize(); }
   }

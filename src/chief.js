@@ -30,6 +30,10 @@ import { heistChoice } from './heist.js';
 import { gondolaWindy, setGondolaHow } from './gondola.js';
 import { setDogLock } from './dog.js';
 import { setLeakMode } from './leak.js';
+import { setCrashMode } from './crash.js';
+import { onPlatform, setTunnelMode } from './tunnel.js';
+import { setPanicMode } from './panic.js';
+import { setPartyMode } from './party.js';
 import { changeStrategy } from './actions.js';
 import { STRAT_NAMES } from './config.js';
 import { systems } from './systems.js';
@@ -341,6 +345,73 @@ export function leakChiefTick() {
   }
   if (L.mode === 'run' && (L.wet.length >= 3 || L.shorts.length) && setLeakMode('stop', 'chief'))
     decide('leak', 'Nu stoppas de blöta hissarna', L.shorts.length ? sv`${S.elevators[L.shorts[0]].name} har redan kortslutits` : sv`vattnet har nått ${L.wet.length} våningar`, { inc: 'leak', floor: L.src, say: 'Stopp! Det rinner för mycket.' });
+}
+
+// --- Hiss-O-Matic kraschar: i rusningen (många som väntar) chansar chefen på en omstart – nödläget är för
+//     långsamt då; när det är lugnt får hissarna gå i nödläge tills supporten har hittat felet. Misslyckas
+//     omstarten blir det nödläge ---
+const CRASH_BUSY = 12;
+export function crashChiefTick() {
+  const X = S.crash, C = S.chief;
+  if (!X || X.ph !== 'nod' || !free('crash') || S.t - X.t0 < 3) return;
+  const waiting = S.people.filter(p => p.state === 'wait').length;
+  if (!C.dec.crash) {
+    if (waiting >= CRASH_BUSY && setCrashMode('boot', 'chief'))
+      decide('crash', 'Hiss-O-Matic startas om', sv`${waiting} väntar på hiss – nödläget är för långsamt, vi chansar på en omstart`, { inc: 'crash', say: 'Har vi testat att starta om? Nu gör vi det.' });
+    else if (setCrashMode('nod', 'chief'))
+      decide('crash', 'Hissarna går i nödläge tills supporten hittat felet', 'det är lugnt i huset – en omstart stoppar alla hissar en stund och lyckas inte alltid', { inc: 'crash', say: 'Låt dem gå i nödläge.' });
+    return;
+  }
+  if (X.failed && X.mode === '' && setCrashMode('nod', 'chief'))
+    decide('crash', 'Nödläge tills supporten hittat felet', 'omstarten gav blå skärm – vi provar inte igen', { inc: 'crash', say: 'Blå skärm… Nödläge, då.' });
+}
+
+// --- Tåget i tunneln: står det många på perrongen (eller är det rusning) sätts ersättningsbussar in direkt;
+//     annars väntar vi på tåget – blir perrongen proppfull ändå kommer bussarna ---
+const TUNNEL_CROWD = 10, TUNNEL_FULL = 18;
+export function tunnelChiefTick() {
+  const T = S.tunnel, C = S.chief;
+  if (!T || T.ph !== 'stuck' || !free('tunnel') || S.t - T.t0 < 4) return;
+  const n = onPlatform().length, h = hour(), rush = (h >= 15.5 && h < 18.5) || (h >= 7 && h < 9.5);
+  if (!C.dec.tunnel) {
+    if ((n >= TUNNEL_CROWD || rush) && setTunnelMode('bus', 'chief'))
+      decide('tunnel', 'Ersättningsbussar på gatan', rush ? 'det är rusning – perrongen blir full på nolltid' : sv`${n} väntar redan på perrongen`, { inc: 'tunnel', say: 'Beställ ersättningsbussar!' });
+    else if (setTunnelMode('wait', 'chief'))
+      decide('tunnel', 'Vi väntar på tåget', sv`bara ${n} på perrongen – signalfel brukar gå fort att laga`, { inc: 'tunnel', say: 'Vi väntar ut det.' });
+    return;
+  }
+  if (T.mode === 'wait' && n >= TUNNEL_FULL && setTunnelMode('bus', 'chief'))
+    decide('tunnel', 'Nu kommer ersättningsbussarna', sv`perrongen är proppfull – ${n} väntar`, { inc: 'tunnel', say: 'Bussar! Nu!' });
+}
+
+// --- Panik i hissen: är korgen full (många instängda) eller paniken svår vevar teknikern ner den direkt;
+//     annars pratar driftcentralen med dem i nödtelefonen tills hissen är lagad. Blir det värre: veva ---
+const PANIC_MANY = 6;
+export function panicChiefTick() {
+  const P = S.panic, C = S.chief;
+  if (!P || P.ph !== 'on' || !free('panic') || S.t - P.t0 < 2) return;
+  const e = S.elevators[P.car], n = e.passengers.length;
+  if (!C.dec.panic) {
+    if (n >= PANIC_MANY && setPanicMode('crank', 'chief'))
+      decide('panic', 'Teknikern vevar ner korgen direkt', sv`${n} sitter fast i ${e.name} och en har panik – lagningen får vänta tills de är ute`, { inc: 'panic', car: e.id, say: 'Veva ner dem – nu!' });
+    else if (setPanicMode('talk', 'chief'))
+      decide('panic', 'Vi pratar med dem i nödtelefonen', sv`${n} i ${e.name} – en lugn röst hjälper mest tills teknikern har lagat hissen`, { inc: 'panic', car: e.id, say: 'Hallå där inne – andas lugnt, hjälpen är på väg.' });
+    return;
+  }
+  if (P.mode === 'talk' && P.level > 0.85 && setPanicMode('crank', 'chief'))
+    decide('panic', 'Nu vevar teknikern ner korgen', 'paniken sprider sig i korgen – de måste ut', { inc: 'panic', car: e.id, say: 'Det går inte – veva ner dem!' });
+}
+
+// --- Firmafesten: går varuhissen i vanlig trafik tar gästerna med ballonger den (breda dörrar, inget fastnar);
+//     är den upptagen (flytten, ambulansen, en tekniker) åker de vilken hiss som helst ---
+export function partyChiefTick() {
+  const P = S.party, C = S.chief;
+  if (!P || P.ph !== 'on' || !free('party') || S.t - P.t0 < 2 || C.dec.party) return;
+  const V = S.elevators.find(e => e.freight);
+  if (V && V.mode === 'normal' && !V.indep && !V.medicHold && !S.move && setPartyMode('varu', 'chief'))
+    decide('party', 'Ballongerna tar varuhissen', 'de fastnar i de vanliga hissdörrarna – varuhissen har breda dörrar', { inc: 'party', floor: P.f, say: 'Ballongerna i varuhissen, tack!' });
+  else if (setPartyMode('alla', 'chief'))
+    decide('party', 'Gästerna åker vilken hiss som helst', V ? sv`${V.name} är upptagen` : 'det finns ingen varuhiss', { inc: 'party', floor: P.f, say: 'Akta dörrarna med ballongerna!' });
 }
 
 // --- Kuppen: polisens insatsledare – vänta ut dem (strömmen klipps inte), gå in via garaget där skåpbilen står ---

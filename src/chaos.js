@@ -113,7 +113,7 @@ function endChaos(C) {
   const min = Math.max(1, Math.round((S.t - C.t0) / 60)), names = ks => ks.map(k => chaosNames()[k]).join(' · ');
   log(sv`✅ Murphys lag är över – huset klarade ${C.did.length} saker som gick fel`, 'alert');
   incidentOver('chaos', '✅ Murphys lag är över',
-    sv`${C.did.length} saker gick fel på ${min} min: ${names(C.did)}.` + (C.missed.length ? sv` Det här hann aldrig hända: ${names(C.missed)}.` : ''));
+    sv`${C.did.length} saker gick fel på ${min} min: ${names(C.did)}.${C.missed.length ? sv` Det här hann aldrig hända: ${names(C.missed)}.` : ''}`);
   S.chaos = null;
 }
 /** nytt dygn från början (resetDay): knappen är plomberad igen */

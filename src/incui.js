@@ -9,7 +9,7 @@
 // informationsrutorna), förvarningens klipp `warn` och det sevärda `shots`; panels.js, hud.js och director.js går
 // igenom listan
 import { esc, fl } from './util.js';
-import { DOCK, EL, FIRE_HINT, LOBBY, ROOF, TOP, CONTROL, floorWith } from './config.js';
+import { DOCK, EL, FIRE_HINT, LOBBY, ROOF, TOP, CONTROL, STATION, FL, floorWith } from './config.js';
 import { S } from './state.js';
 import { canRescue } from './incidents.js';
 import { STORM_HINT, windMs } from './weather.js';
@@ -21,6 +21,10 @@ import { leakPossible, SPREAD_S } from './leak.js';
 import { BANK, GOLD, VAN_NAME, heistBlock } from './heist.js';
 import { sv } from './sv.js';
 import { sh } from './lang.js';
+import { BOOT_S, crashPossible } from './crash.js';
+import { onPlatform, tunnelPossible } from './tunnel.js';
+import { panicPossible, panicWhere } from './panic.js';
+import { partyPossible } from './party.js';
 /** panoramahissen (null om huset saknar en) */
 const panoCar = () => (PANO ? S.elevators[PANO.id] || null : null);
 
@@ -399,6 +403,123 @@ export function incUi() {
         if (S.t - Lk.t0 < 8) add('leak', 88, 'floor', Lk.src, sv`🚿 Ett rör har spruckit på ${fl(Lk.src)}`, S.t - Lk.t0 < 1);
         else if (!Lk.shut && jan) add('leak', 80, 'person', jan.id, sv`🔧 ${jan.name} springer till huvudkranen`);
         else add('leak', 50, 'floor', Math.min(...Lk.wet), '🚿 Det droppar fortfarande');
+      }
+    },
+  },
+  {
+    key: 'crash',
+    sound: { warn: 'buzz' },
+    trig: { icon: '🖥️', name: 'Hiss-O-Matic kraschar', hint: 'Styrsystemet går ner: hissarna går i nödläge och stannar på varje våning', off: () => !crashPossible(),
+      why: () => (S.crash ? 'systemet ligger redan nere' : S.fire ? 'det brinner i huset' : 'strömmen är borta') },
+    warn: (_W, add) => add('warn', 76, 'floor', CONTROL, '🖥️ Skärmarna i driftcentralen fryser', true),
+    card: (h, parts) => {
+      const { card, chiefLine, cd, num, bold, line, acts, hint, choice } = h;
+      const X = S.crash;
+      if (!X) return;
+      const b = (m, txt, why) => choice(`crash:${m}`, txt, { on: X.mode === m, off: X.ph === 'boot', why });
+      const status = X.ph === 'boot' ? sh`Hiss-O-Matic startar om – alla hissar står still. Uppe ${cd(X.bootEnd - S.t)}.`
+        : sh`Hissarna går i nödläge: de pendlar och stannar på varje våning, och folk kliver på den första som öppnar åt rätt håll. Stopp hittills: ${bold(num(X.stops))}.`;
+      parts.push(card('crash', 'crash', '🖥️ Hiss-O-Matic har kraschat', `
+          ${line(status)}
+          ${X.failed ? line(sh`Omstarten misslyckades – ${bold('blå skärm')}.`) : ''}
+          ${chiefLine('crash', 'Vad gör vi med styrsystemet?')}
+          ${acts(b('nod', '🐢 Kör i nödläge', 'Hissarna fortsätter stanna överallt tills supporten har hittat felet – långsamt, men inget står still'),
+            b('boot', '🔁 Starta om', sv`Alla hissar står still i ${BOOT_S} s medan systemet startar – och det är inte säkert att det lyckas`))}
+          ${hint('Supporten är i telefonen. Nödläget är långsamt men säkert; en omstart går fort om den lyckas.')}`, X.ph === 'nod'));
+    },
+    shots: (add) => {
+      const X = S.crash;
+      if (X && S.t - X.t0 < 10) add('crash', 84, 'floor', CONTROL, '🖥️ Hiss-O-Matic har kraschat', S.t - X.t0 < 1);
+      else if (X && X.ph === 'boot') add('crash', 70, 'floor', CONTROL, '🔁 Hiss-O-Matic startar om');
+      else if (X) {
+        const e = S.elevators.find(q => q.passengers.length > 2 && q.mode === 'normal');
+        if (e) add('crash', 56, 'car', e.id, sv`🐢 ${e.name} stannar på varje våning`);
+      }
+    },
+  },
+  {
+    key: 'tunnel',
+    trig: { icon: '🚇', name: 'Tåget står i tunneln', hint: 'Signalfel: tåget fastnar i tunneln och perrongen fylls', off: () => !tunnelPossible(),
+      why: () => (S.tunnel ? 'tåget står redan i tunneln' : S.fire ? 'det brinner i huset' : 'inga tåg går just nu') },
+    warn: (_W, add) => add('warn', 74, 'floor', STATION, '🚇 Det gnisslar i tunneln', true),
+    card: (h, parts) => {
+      const { card, chiefLine, num, bold, line, acts, hint, choice, ikon } = h;
+      const X = S.tunnel;
+      if (!X || X.ph !== 'stuck') return;
+      const b = (m, txt, why) => choice(`tunnel:${m}`, txt, { on: X.mode === m, why });
+      const n = onPlatform().length;
+      const how = X.mode === 'bus' ? sh` Ersättningsbussarna har tagit ${bold(num(X.bussed))} upp genom huset.`
+        : X.gaveUp ? sh` ${bold(num(X.gaveUp))} har tröttnat och gått upp till gatan.` : '';
+      parts.push(card('tunnel', 'tunnel', '🚇 Tåget står i tunneln', `
+          ${line(sh`Signalfel – inga tåg kommer på en stund. På perrongen: ${bold(num(n))}.${how}`)}
+          ${chiefLine('tunnel', 'Vänta på tåget eller sätta in bussar?')}
+          ${acts(b('wait', '⏳ Vänta på tåget', 'Folk står kvar på perrongen – den som tröttnar går upp till gatan själv'),
+            b('bus', '🚌 Ersättningsbussar', 'Alla som ska med tåget går upp genom huset till entrén direkt – en rusning uppåt'),
+            ikon(`show:${STATION}`, '📹', 'Visa perrongen', 'Kameran går ner till perrongen'))}
+          ${hint('När tåget till slut kommer kliver alla av som har samlats längs linjen – en klump som ska upp genom huset.')}`, true));
+    },
+    shots: (add) => {
+      const X = S.tunnel;
+      if (X && X.ph === 'stuck') add('tunnel', S.t - X.t0 < 8 ? 82 : 58, 'floor', STATION, '🚇 Perrongen fylls – tåget står i tunneln', S.t - X.t0 < 1);
+      else if (X) add('tunnel', 78, 'floor', STATION, '🚇 Tåget rullar in – äntligen');
+    },
+  },
+  {
+    key: 'panic',
+    sound: { warn: 'strain' },
+    trig: { icon: '😱', name: 'Panik i hissen', hint: 'En fullsatt hiss tvärstannar mellan två våningar – och någon får cellskräck', off: () => !panicPossible(),
+      why: () => (S.panic ? 'någon har redan panik' : S.fire ? 'det brinner i huset' : 'ingen hiss är fullsatt och på väg just nu') },
+    warn: (_W, add) => add('warn', 70, 'floor', LOBBY, '😰 Trångt i hissarna', true),
+    card: (h, parts) => {
+      const { card, chiefLine, num, bold, line, acts, hint, choice, followCar } = h;
+      const X = S.panic;
+      if (!X || X.ph !== 'on') return;
+      const e = S.elevators[X.car], who = S.people.find(p => p.id === X.who);
+      const b = (m, txt, why) => choice(`panic:${m}`, txt, { on: X.mode === m, why });
+      const how = X.level > 0.6 ? 'Paniken sprider sig i korgen.' : X.level > 0.25 ? 'Det är oroligt i korgen.' : 'Det har lugnat sig lite.';
+      parts.push(card('panic', 'panic', sv`😱 Panik i ${e.name}`, `
+          ${line(sh`${bold(esc(who ? who.name : 'Någon'))} har panik i ${esc(e.name)} mellan två våningar (vid ${panicWhere(X)}). Larmet har ringt ${bold(num(X.alarms))} gånger och ${bold(num(X.pressed.length))} knappar är intryckta. ${how}`)}
+          ${chiefLine('panic', 'Hur får vi ut dem?')}
+          ${acts(b('talk', '📞 Prata med dem', 'Driftcentralen lugnar dem i nödtelefonen tills hissen är lagad – men sedan stannar den på alla våningar hen tryckte på'),
+            b('crank', '🔧 Veva ner korgen', 'Teknikern vevar ner korgen till närmaste våning så fort hen är där och släpper ut dem – lagningen får vänta'),
+            followCar(e))}
+          ${hint(sv`${X.n} sitter fast. Hissteknikern är på väg.`)}`, true));
+    },
+    shots: (add) => {
+      const X = S.panic;
+      if (X && X.ph === 'on') add('panic', X.onT < 8 ? 90 : 66, 'car', X.car, sv`😱 Panik i ${S.elevators[X.car].name}`, X.onT < 1);
+      else if (X && X.ph === 'ride') add('panic', 60, 'car', X.car, sv`🔘 ${S.elevators[X.car].name} stannar överallt`);
+    },
+  },
+  {
+    key: 'party',
+    trig: { icon: '🎈', name: 'Firmafest', hint: 'Ett företag har fest: kollegor med ballonger och en tårta på väg genom huset (eftermiddag, en gång per dygn)',
+      off: () => !partyPossible(), why: () => (S.party ? 'festen pågår redan' : S.partyDay === S.day ? 'det har redan varit fest i dag' : 'det är inte eftermiddag på kontoren') },
+    warn: (_W, add) => add('warn', 66, 'floor', LOBBY, '🎈 Det blåses upp ballonger', true),
+    card: (h, parts) => {
+      const { card, chiefLine, num, bold, line, acts, hint, choice, ikon } = h;
+      const X = S.party;
+      if (!X) return;
+      const b = (m, txt, why) => choice(`party:${m}`, txt, { on: X.mode === m, why });
+      const there = X.guests.filter(id => S.people.some(p => p.id === id && p.floor === X.f && p.state === 'office')).length;
+      const status = X.ph === 'on' ? sh`${bold(num(there))} av ${num(X.guests.length)} gäster är framme${X.caked ? ' och tårtan har kommit' : ' – tårtan är på väg i varuhissen'}.`
+        : 'Festen är slut – gästerna går tillbaka med ballongerna.';
+      const stuck = X.stuck ? sh` Ballongerna har fastnat i dörrarna ${bold(num(X.stuck))} gånger${X.popped ? sh` (${num(X.popped)} smällde)` : ''}.` : '';
+      parts.push(card('party', 'party', sv`🎈 Firmafest hos ${FL[X.f].name}`, `
+          ${line(status + stuck)}
+          ${chiefLine('party', 'Vilken hiss tar ballongerna?')}
+          ${acts(b('varu', '🛗 Varuhissen', 'Breda dörrar – inget fastnar. Men den är långsam och delas med godset'),
+            b('alla', '🎈 Vilken hiss som helst', 'Fortare – men ballongerna fastnar i dörrarna och håller upp alla andra'),
+            ikon(`show:${X.f}`, '📍', 'Visa festen', 'Kameran går till festvåningen'))}
+          ${hint('Tårtan väger 25 kg och åker alltid varuhissen.')}`, X.ph === 'on' && X.mode === ''));
+    },
+    shots: (add) => {
+      const X = S.party;
+      if (X && X.ph === 'on') {
+        const cake = S.people.find(p => p.id === X.cake && !p.dead && p.cargo);
+        if (S.t - X.t0 < 6) add('party', 72, 'floor', X.f, sv`🎈 Firmafest hos ${FL[X.f].name}`, S.t - X.t0 < 1);
+        else if (cake && (cake.state === 'ride' || cake.state === 'wait')) add('party', 60, 'person', cake.id, '🎂 Tårtan är på väg');
+        else add('party', 50, 'floor', X.f, sv`🎈 Fest på ${fl(X.f)}`);
       }
     },
   },

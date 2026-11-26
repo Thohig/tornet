@@ -190,7 +190,7 @@ const SEP = /( · | – | — |: | → | \+ |, | och | \(|(?<=[.!?…]) )/;
 function split(n, depth) {
   if (depth > 3) return null;
   const parts = n.split(SEP);
-  if (parts.length < 3 || parts.length > 25) return null;
+  if (parts.length < 3 || parts.length > 49) return null; // (Murphys lags lista: ett tjugotal namn)
   const segs = parts.filter((_, i) => i % 2 === 0), seps = parts.filter((_, i) => i % 2 === 1);
   const m = segs.length;
   /** @type {{ cost: number, miss: number, out: string }[]} */

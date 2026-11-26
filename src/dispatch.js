@@ -16,6 +16,7 @@ import { buttonsMode, mistakeRate, pressHallButton } from './buttons.js';
 import { moveKwh, heatMul } from './service.js';
 import { windMul } from './weather.js';
 import { sysBlocks, sysOut, sysOutText } from './systems.js';
+import { crashed } from './crash.js';
 /** @typedef {import('./elevators.js').Elevator} Elevator */
 /** @typedef {import('./people.js').Person} Person */
 
@@ -250,6 +251,7 @@ export function requestRide(p) {
     S.learnToday[learnBin(hour())][p.floor]++;
   }
   if (buttonsMode() && !keyed(p)) { pressHallButton(p); return; }
+  if (crashed()) return; // (styrsystemet ligger nere: man väntar på den första hissen som öppnar åt rätt håll, crash.js)
   // ibland slår man in fel våning på terminalen och får börja om
   if (!keyed(p) && rng() < mistakeRate(0.04)) {
     p.retypeAt = S.t + rand(2, 4);
@@ -363,6 +365,7 @@ export function costLine(p, chosenId) {
 }
 /** @param {Person} p */
 export function dispatchPerson(p) {
+  if (crashed()) return; // Hiss-O-Matic har kraschat: ingen fördelar hissarna (crash.js)
   if (!allowedFor(p, p.floor) || !allowedFor(p, p.dest)) {
     toStairs(p, S.fire && S.fire.mode === 'recall' ? 'Brandåterkallning – alla hissar avstängda, tar trapporna' : 'Hissarna kör inte hit pga branden – tar trapporna');
     return;

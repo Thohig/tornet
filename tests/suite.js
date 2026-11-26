@@ -10,7 +10,7 @@ import {
 } from '../src/incidents.js';
 import { liftsAvailable, pn, spawnVisitor } from '../src/people.js';
 import { TOUR_N } from '../src/tour.js';
-import { loadKg, allowed, allowedPos, posOf, safeFloor, operational, canTake, stopFloors, isFull, costBased, benched, inFireZone, prio } from '../src/dispatch.js';
+import { loadKg, allowed, allowedPos, posOf, safeFloor, operational, canTake, stopFloors, isFull, costBased, benched, inFireZone, prio, keyed } from '../src/dispatch.js';
 import { RATED_KG, FULL_LOAD, VMAX, DEFAULT_TEMPO, dayLength } from '../src/config.js';
 import { needsFreight, mayUseFreight, legDest } from '../src/people.js';
 import { fl } from '../src/util.js';
@@ -41,6 +41,10 @@ import { hz, onGrid } from '../src/music.js';
 import { chaosNames, chaosReady } from '../src/chaos.js';
 import { dogLockFloor } from '../src/dog.js';
 import { wetIn } from '../src/leak.js';
+import { crashRun } from '../src/crash.js';
+import { onPlatform, tunnelPossible } from '../src/tunnel.js';
+import { panicPossible } from '../src/panic.js';
+import { balloons, partyPossible } from '../src/party.js';
 import { BOILER_STAND, DOCK } from '../src/config.js';
 import { reproQuery, fastForward } from '../src/repro.js';
 /** @typedef {import('../src/elevators.js').Elevator} Elevator */
@@ -262,8 +266,10 @@ function makeWatcher() {
       // namnen är unika i huset
       const seen = new Set();
       for (const p of S.people) { if (seen.has(p.name)) { w.hit('dupNames', null, p, 'två i huset heter så'); w.dupEx = w.dupEx || p.name; } seen.add(p.name); }
-      // ingen står länge utan tilldelad hiss medan en ledig hiss som kan ta hen står tom och stilla (kostnadsstyrningen)
-      if (costBased()) {
+      // ingen står länge utan tilldelad hiss medan en ledig hiss som kan ta hen står tom och stilla (kostnadsstyrningen –
+      // inte medan Hiss-O-Matic ligger nere: då fördelar ingen hissarna, crash.js)
+      if (S.crash) w.idleWait.clear();
+      else if (costBased()) {
         const idle = S.elevators.filter(e => operational(e) && e.state === 'idle' && !e.passengers.length && !stopFloors(e).length && !isFull(e) && !e.vipLock);
         for (const p of S.people) {
           if (p.state !== 'wait' || p.vip || p.assigned !== null || p.retypeAt > S.t || !idle.some(e => canTake(e, p))) { w.idleWait.delete(p); continue; }
@@ -1101,7 +1107,8 @@ test('Nattservice: de slitna hissarna servas på natten, utan den slits de dag f
   const days = (maint, seed) => {
     sim(seed, { autoInc: true, maint });
     let faults = 0, serviced = 0;
-    for (let d = 1; d <= 3; d++) { runDay(); faults += S.stats.faults; serviced += S.stats.serviced; S.day++; resetDay(); }
+    // (beställd service – efter vattenläckan, ett nivåfel – räknas inte: den kommer i båda lägena)
+    for (let d = 1; d <= 3; d++) { runDay(); faults += S.stats.faults; serviced += S.stats.serviced - S.stats.serviceOrdered; S.day++; resetDay(); }
     return { faults, serviced, wear: S.elevators.reduce((a, e) => a + e.wear, 0) / S.elevators.length };
   };
   // (felen räknas över tre frön – med ett enda frö avgör slumpen för mycket)
@@ -1953,10 +1960,14 @@ export const PLAYER_ACTIONS = {
   heistTrig: () => act('trigger', 'heist'),
   chaos: () => act('chaos'),
   // vaktmästarens olyckor: gondolen, hunden, vattenläckan – och valen på korten
-  accident: r => act('trigger', ['gondola', 'dog', 'leak'][Math.floor(r() * 3)]),
+  accident: r => act('trigger', ['gondola', 'dog', 'leak', 'crash', 'tunnel', 'panic', 'party'][Math.floor(r() * 7)]),
   gondola: r => act('gondola', ['crank', 'hatch', 'rope'][Math.floor(r() * 3)]),
   dog: r => act('dog', r() < 0.5 ? 'lock' : 'free'),
   leak: r => act('leak', r() < 0.5 ? 'stop' : 'run'),
+  crash: r => act('crash', r() < 0.5 ? 'nod' : 'boot'),
+  tunnel: r => act('tunnel', r() < 0.5 ? 'wait' : 'bus'),
+  panic: r => act('panic', r() < 0.5 ? 'talk' : 'crank'),
+  party: r => act('party', r() < 0.5 ? 'varu' : 'alla'),
   heist: r => act('heist', ['cut', 'wait', 'garage', 'tak', 'stop', 'go', 'storm'][Math.floor(r() * 7)]),
   chiefBack: r => act('chiefBack', ['storm', 'fire', 'power', 'strategy', 'move', 'pano', `heat${Math.floor(r() * S.elevators.length)}`][Math.floor(r() * 7)]),
 };
@@ -3001,6 +3012,141 @@ test('sv`…`: samma svenska sträng som utan sv, och engelskan ur mallen med v�
   } finally { setLang('sv'); }
   assert(tr(s) === s, 'svenska ska visas som den är');
   return 'samma sträng · mallen ur lang-en.js · värden med egna mallar';
+});
+
+test('Hiss-O-Matic kraschar: nödläget stannar på varje våning utan tilldelningar, omstarten stoppar hissarna och allt går igen', () => {
+  const out = [];
+  for (const [seed, at, mode] of [[3, 9, 'nod'], [4, 12, 'boot'], [5, 17.3, null], [8, 8.4, null]]) {
+    sim(seed, { chief: mode === null });
+    runUntil(at);
+    assert(act('trigger', 'crash') === true, `frö ${seed}: gick inte att framkalla`);
+    const w = watcher();
+    { const b = w.before(); step(DT); w.check(b); }
+    if (mode) assert(act('crash', mode), `frö ${seed}: valet ${mode} gick inte`);
+    let g = 0, assigned = 0, skipped = 0, boarded = 0, frozen = 0, booted = false;
+    const sweeping = new Set();
+    while (S.crash && ++g < 600 / DT) {
+      const ph = S.crash.ph, pos0 = S.elevators.map(e => e.pos);
+      const b = w.before(); step(DT); w.check(b);
+      if (ph === 'nod' && S.crash && S.crash.ph === 'nod') {
+        for (const p of S.people) if (p.state === 'wait' && p.assigned !== null && !keyed(p) && !prio(p)) assigned++;
+        // en hiss i nödläge kör aldrig förbi en våning den får stanna på, utom när den är full (räknas från första stoppet)
+        for (const e of S.elevators) {
+          if (!crashRun(e)) { sweeping.delete(e.id); continue; }
+          if (e.state === 'doors') sweeping.add(e.id);
+          const a = Math.min(pos0[e.id], e.pos), z = Math.max(pos0[e.id], e.pos);
+          if (sweeping.has(e.id) && !isFull(e)) for (const f of e.stops) if (f > a + 1e-3 && f < z - 1e-3 && allowedPos(e, f)) skipped++;
+        }
+      }
+      if (ph === 'boot' && S.crash && S.crash.ph === 'boot') { booted = true; for (const e of S.elevators) if (e.mode === 'normal' && e.state === 'moving' && e.v > 0) frozen++; }
+      boarded += S.people.filter(p => p.state === 'boarding').length > 0 ? 1 : 0;
+    }
+    assert(!S.crash, `frö ${seed}: kraschen tog aldrig slut`);
+    assert(!assigned, `frö ${seed}: ${assigned} väntande fick en hiss tilldelad trots att styrsystemet låg nere`);
+    assert(!skipped, `frö ${seed}: en hiss i nödläge åkte förbi en våning ${skipped} gånger`);
+    assert(!frozen, `frö ${seed}: en hiss rörde sig under omstarten`);
+    assert(boarded > 0, `frö ${seed}: ingen klev på under kraschen`);
+    // efteråt fördelas hissarna igen
+    for (let i = 0; i < 20 / DT; i++) step(DT);
+    assert(S.people.some(p => p.state === 'wait' && p.assigned !== null) || !S.people.some(p => p.state === 'wait'), `frö ${seed}: ingen fick en hiss efteråt`);
+    const f = newInvariantFails(w, `frö ${seed}`);
+    assert(!f.length, f.join('; '));
+    out.push(`${Math.round(g * DT)} s${booted ? ' (omstart)' : ''}`);
+  }
+  return out.join(' · ');
+});
+
+test('Tåget står i tunneln: inga tåg medan det står still, bussarna tömmer perrongen och tåget kommer med en klump', () => {
+  const out = [];
+  for (const [seed, at, mode] of [[3, 17, 'wait'], [4, 16.5, 'bus'], [5, 8, null]]) {
+    sim(seed, { chief: mode === null });
+    runUntil(at);
+    while (!tunnelPossible()) step(DT);
+    assert(act('trigger', 'tunnel') === true, `frö ${seed}: gick inte att framkalla`);
+    const w = watcher();
+    if (mode) assert(act('tunnel', mode), `frö ${seed}: valet ${mode} gick inte`);
+    let g = 0, trainWhileStuck = false, platAfterBus = 0;
+    const trains0 = S.stats.trains;
+    while (S.tunnel && ++g < 600 / DT) {
+      const b = w.before(); step(DT); w.check(b);
+      if (S.tunnel && S.tunnel.ph === 'stuck') {
+        if (S.train && S.train.state !== 'out') trainWhileStuck = true;
+        if (S.tunnel.mode === 'bus') platAfterBus = Math.max(platAfterBus, onPlatform().length);
+      }
+    }
+    assert(!S.tunnel, `frö ${seed}: tåget kom aldrig`);
+    assert(!trainWhileStuck, `frö ${seed}: ett tåg kom in medan tåget stod i tunneln`);
+    assert(!platAfterBus, `frö ${seed}: ${platAfterBus} stod kvar på perrongen fast bussarna var insatta`);
+    assert(S.stats.trains === trains0 + 1, `frö ${seed}: ${S.stats.trains - trains0} tåg kom in`);
+    const f = newInvariantFails(w, `frö ${seed}`);
+    assert(!f.length, f.join('; '));
+    out.push(`${Math.round(g * DT)} s${mode ? `, ${mode}` : ''}, ${S.train ? S.train.n : 0} av tåget`);
+  }
+  return out.join(' · ');
+});
+
+test('Panik i hissen: korgen tvärstannar, larmet ringer – vevas ner eller lagas med dem i och stannar där hen tryckte', () => {
+  const out = [];
+  for (const [seed, at, mode] of [[3, 8.5, 'talk'], [4, 9, 'crank'], [6, 17.2, null]]) {
+    sim(seed, { chief: mode === null });
+    runUntil(at);
+    let g = 0;
+    while (!panicPossible() && ++g < 200 / DT) step(DT);
+    assert(act('trigger', 'panic') === true, `frö ${seed}: gick inte att framkalla`);
+    const w = watcher();
+    g = 0;
+    while (S.panic && S.panic.ph === 'wait' && ++g < 60 / DT) { const b = w.before(); step(DT); w.check(b); }
+    assert(S.panic && S.panic.ph === 'on', `frö ${seed}: korgen tvärstannade aldrig`);
+    const P = S.panic, e = S.elevators[P.car];
+    if (mode) assert(act('panic', mode), `frö ${seed}: valet ${mode} gick inte`);
+    let rideStops = 0;
+    g = 0;
+    while (S.panic && ++g < 900 / DT) {
+      const ph = S.panic.ph, st = e.state;
+      const b = w.before(); step(DT); w.check(b);
+      if (ph === 'ride' && st !== 'doors' && e.state === 'doors') rideStops++;
+    }
+    assert(!S.panic, `frö ${seed}: paniken tog aldrig slut`);
+    assert(P.alarms > 0, `frö ${seed}: larmet ringde aldrig`);
+    assert(!e.passengers.some(p => p.id === P.who) || e.mode === 'normal', `frö ${seed}: hen sitter kvar`);
+    const f = newInvariantFails(w, `frö ${seed}`);
+    assert(!f.length, f.join('; '));
+    out.push(`${e.name} ${Math.round(P.onT)} s, ${P.alarms} larm, ${P.mode}${rideStops ? `, ${rideStops} stopp efteråt` : ''}`);
+  }
+  return out.join(' · ');
+});
+
+test('Firmafesten: gästerna kommer med ballonger, tårtan åker varuhissen, ballongerna fastnar i dörrarna och alla går tillbaka', () => {
+  const out = [];
+  for (const [seed, at, mode] of [[3, 14, 'varu'], [4, 15, 'alla'], [5, 14.5, null]]) {
+    sim(seed, { chief: mode === null });
+    runUntil(at);
+    let g = 0;
+    while (!partyPossible() && ++g < 200 / DT) step(DT);
+    assert(act('trigger', 'party') === true, `frö ${seed}: gick inte att framkalla`);
+    assert(act('trigger', 'party') !== true, `frö ${seed}: två fester samma dygn`);
+    const P = S.party, w = watcher();
+    if (mode) assert(act('party', mode), `frö ${seed}: valet ${mode} gick inte`);
+    let maxThere = 0, cakeIn = '', balloonsOutside = 0;
+    g = 0;
+    while (S.party && ++g < 900 / DT) {
+      const b = w.before(); step(DT); w.check(b);
+      if (!S.party) break;
+      maxThere = Math.max(maxThere, P.guests.filter(id => S.people.some(p => p.id === id && p.floor === P.f && p.state === 'office')).length);
+      const c = S.people.find(p => p.id === P.cake);
+      if (c && c.state === 'ride' && c.cargo && c.car && !cakeIn) cakeIn = c.car.name;
+      if (P.mode === 'varu') for (const e of S.elevators) if (!e.freight && e.passengers.some(balloons)) balloonsOutside++;
+    }
+    assert(!S.party, `frö ${seed}: festen tog aldrig slut`);
+    assert(maxThere >= Math.min(3, P.guests.length), `frö ${seed}: bara ${maxThere} gäster kom fram`);
+    assert(P.caked && cakeIn === 'V', `frö ${seed}: tårtan ${P.caked ? `åkte ${cakeIn}` : 'kom aldrig fram'}`);
+    assert(!balloonsOutside, `frö ${seed}: ballonger i en vanlig hiss fast de skulle ta varuhissen`);
+    assert(!S.people.some(p => p.party), `frö ${seed}: någon är fortfarande gäst`);
+    const f = newInvariantFails(w, `frö ${seed}`);
+    assert(!f.length, f.join('; '));
+    out.push(`${P.guests.length} gäster på ${fl(P.f)} (${P.mode}), fast ${P.stuck}×, poff ${P.popped}`);
+  }
+  return out.join(' · ');
 });
 
 test('Språket: svenska är standard, loggen och dagböckerna blir engelska och svenska visar allt som det är', () => {

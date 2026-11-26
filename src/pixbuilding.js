@@ -200,6 +200,7 @@ function drawFireTruckPx(x, gy) {
   R(x + w - 4, y + 1, 3, 2, on ? '#1b2a6e' : '#3f7cff');
   if (on && parked) { R(x + 1, y + 1, 8, 6, 'rgba(63,124,255,.25)'); }
   text(g, 'BRANDKÅREN', x + 13 + Math.round((w - 13) / 2), y + 4, '#ffffff', 'center');
+  reserve(x + 13, y + 3, w - 13, 7); // (repliker och bubblor som ritas efter gatan lägger sig inte över skylten)
   for (const hx of [x + 4, x + 22, x + w - 12]) { R(hx, y + h - 6, 7, 5, INK); R(hx + 2, y + h - 4, 3, 1, '#7d786d'); }
 }
 /** släcker kåren utifrån (brandmännen hann inte upp i tid)? */

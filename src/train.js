@@ -54,7 +54,7 @@ export function trainTick(dt, rate) {
   const T = S.train;
   if (!T) {
     if (!trainsRunning(h) || h < FIRST_H) return;
-    if (S.t < S.trainNext) return;
+    if (S.t < S.trainNext || (S.tunnel && S.tunnel.ph === 'stuck')) return; // (tåget står i tunneln – tunnel.js)
     S.train = { x: TRAIN_X0 - TRAIN_LEN, v: VMAX_T, state: 'in', t: 0, off: 0, spawned: 0, n: 0 };
     return;
   }
@@ -145,19 +145,20 @@ function depart(T) {
     }
   }
 }
+/** Den som tänkte åka tåg går ut genom entrén i stället (sista tåget har gått, eller tåget står i tunneln – tunnel.js)
+ * @param {import('./people.js').Person} p */
+export function toStreet(p, why) {
+  p.exitFloor = LOBBY;
+  if (p.state === 'platform') { p.toTrain = false; p.boardAt = undefined; setTrip(p, LOBBY, why, true); }
+  else if (p.leaving && p.goal === STATION && (p.state === 'wait' || p.state === 'toQueue')) setTrip(p, LOBBY, why, true);
+  else if (p.toTrain && p.state === 'exiting') { p.toTrain = false; setTrip(p, LOBBY, why, true); }
+  pev(p, why);
+}
 /** efter sista tåget: alla som tänkte åka tåg går ut genom entrén i stället */
 function lastTrainGone() {
   S.trainDone = true;
   let n = 0;
-  for (const p of S.people) {
-    if (p.dead || p.exitFloor !== STATION) continue;
-    p.exitFloor = LOBBY; n++;
-    const why = 'Sista tåget har gått – tar sig ut genom entrén';
-    if (p.state === 'platform') { p.toTrain = false; p.boardAt = undefined; setTrip(p, LOBBY, why, true); }
-    else if (p.leaving && p.goal === STATION && (p.state === 'wait' || p.state === 'toQueue')) setTrip(p, LOBBY, why, true);
-    else if (p.toTrain && p.state === 'exiting') { p.toTrain = false; setTrip(p, LOBBY, why, true); }
-    pev(p, why);
-  }
+  for (const p of S.people) if (!p.dead && p.exitFloor === STATION) { toStreet(p, 'Sista tåget har gått – tar sig ut genom entrén'); n++; }
   log(sv`🚇 Sista tåget har gått${n ? sv` – ${n} får ta sig ut genom entrén` : ''}`, 'sys');
 }
 /** Spelaren: tågstörning – nästa tåg blir försenat och kommer med dubbelt så många (alla som samlats sedan förra) */
