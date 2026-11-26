@@ -453,6 +453,7 @@ export default {
   "Hon börjar när hon kommer till disken kl {0}.": "She'll start when she gets to the desk at {0}.",
   "Gärna! Men mitt pass slutar snart – {0} visar dig runt när hon har börjat.": "Gladly! But my shift ends soon – {0} will show you around once she starts.",
   "🛎️ BE {0} VISA RUNT": "🛎️ ASK {0} FOR A TOUR",
+  "💻 Tornet gör sig bäst på en dator med stor skärm och mus – på mobilen och surfplattan blir bilden liten och allt får inte plats.": "💻 Tornet is best enjoyed on a computer with a large screen and a mouse – on a phone or tablet the picture gets small and not everything fits.",
   "Ny i huset? {0} visar dig runt och berättar vad du ser.": "New to the building? {0} shows you around and tells you what you are looking at.",
   "Receptionisten": "The receptionist",
   "Receptionist · 07–19": "Receptionist · 07–19",

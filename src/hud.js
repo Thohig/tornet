@@ -506,6 +506,7 @@ export function showIntro(mode = S.started ? 'help' : 'start', then = /** @type 
   if (mode === 'help') S.paused = true;
   showOverlay(`<div class="card intro"><h1>TORNET${help ? ' · HJÄLP' : ''}</h1>
     <p>Välkommen till <b>Tornet</b> – åtta hissar styrda av <b>Hiss-O-Matic 3000</b>, ${FL.length} våningar och en massa folk med bråttom. <b>Huset sköter sig självt:</b> driftchefen tar besluten och berättar varför, och regissören 🎬 klipper bilden till det som händer. Luta dig tillbaka och titta.</p>
+    ${mob || touch ? '<p class="intro-warn">💻 Tornet gör sig bäst på en dator med stor skärm och mus – på mobilen och surfplattan blir bilden liten och allt får inte plats.</p>' : ''}
     ${help ? `<div class="intro-tour"><button class="btn" id="tour-go"${S.visning ? ' disabled' : ''}>🛎️ BE ${guideName().toUpperCase()} VISA RUNT</button><span>Ny i huset? ${esc(guideName())} visar dig runt och berättar vad du ser.</span></div>` : ''}
     <ul class="intro-short">
       ${mob ? `<li><b>Tryck</b> på en person, en hiss eller en våning för att följa den – allt om den finns under fliken 👤.</li>
