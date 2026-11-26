@@ -16,6 +16,7 @@ import { VIEW, pctx } from './view.js';
 import { personSprite } from './pixpeople.js';
 import { PAL } from './pixpal.js';
 import { roomDesc, stateInfo } from './describe.js';
+import { sv } from './sv.js';
 export { stateInfo };
 import { residentDesc } from './life.js';
 import { jobFloor, tech, techOf, cableStatus } from './service.js';
@@ -37,7 +38,7 @@ export function $(id) { return document.getElementById(id); }
 /** @param {Elevator} e */
 export function carHtml(e) {
   const n = e.passengers.length, kg = cabinKg(e), pct = kg / e.ratedKg, svc = serviceStatus(e), route = plannedRoute(e);
-  const kw = e.kw > 0.05 ? `⚡ drar ${e.kw.toFixed(0)} kW` : e.kw < -0.05 ? `♻ återmatar ${(-e.kw).toFixed(0)} kW` : e.state === 'moving' ? '⚡ 0 kW' : '⚡ vila';
+  const kw = e.kw > 0.05 ? sv`⚡ drar ${e.kw.toFixed(0)} kW` : e.kw < -0.05 ? sv`♻ återmatar ${(-e.kw).toFixed(0)} kW` : e.state === 'moving' ? '⚡ 0 kW' : '⚡ vila';
   const who = n ? e.passengers.map(p => `<span data-pid="${p.id}">${esc(p.name)}</span>→${fl(p.dest)}${p.goal !== p.dest && !p.viaStairs ? `↹${fl(p.goal)}` : ''}`).join(', ') : '–';
   return `<div class="car-head" style="--c:${e.color};--ct:${PAL.on(e.color)}"><span class="nm">${esc(e.name)}</span><span class="st">${esc(stateLabel(e))}</span><span class="fl">${fl(Math.round(e.pos))}</span></div>`
     + `<div class="zone">${esc(zoneText(EL[e.id]))}</div>`
@@ -51,11 +52,11 @@ export function carHtml(e) {
 /** motorns temperatur i °C (värmen 0–1 där 1 = överhettningsskyddet löser ut vid 100 °C) @param {Elevator} e */
 export const motorC = e => Math.round(35 + e.heat * 65);
 export function zoneText(d) {
-  if (d.deck2) return `${fl(d.minF)} ⇄ ${fl(d.maxF)} nedre · ${fl(d.upper[0])} ⇄ ${fl(d.upper[d.upper.length - 1])} övre · dubbeldäck`;
-  if (d.express) return `${fl(d.minF)} ⇄ ${fl(d.maxF)} · express`;
-  if (d.facade) return `${d.serves.map(fl).join(' · ')} · panorama i glas`;
-  if (d.freight) return `${fl(d.minF)}–${fl(d.maxF)} · varuhiss ${d.ratedKg} kg`;
-  return `${fl(d.minF)}–${fl(d.maxF)} · ${d.group} zon`;
+  if (d.deck2) return sv`${fl(d.minF)} ⇄ ${fl(d.maxF)} nedre · ${fl(d.upper[0])} ⇄ ${fl(d.upper[d.upper.length - 1])} övre · dubbeldäck`;
+  if (d.express) return sv`${fl(d.minF)} ⇄ ${fl(d.maxF)} · express`;
+  if (d.facade) return sv`${d.serves.map(fl).join(' · ')} · panorama i glas`;
+  if (d.freight) return sv`${fl(d.minF)}–${fl(d.maxF)} · varuhiss ${d.ratedKg} kg`;
+  return sv`${fl(d.minF)}–${fl(d.maxF)} · ${d.group} zon`;
 }
 /** @param {Elevator} e */
 export function stateLabel(e) {
@@ -79,7 +80,7 @@ export function stateLabel(e) {
   if (!S.power) return 'STRÖMLÖS';
   if (e.off && e.state !== 'moving' && !e.passengers.length) return 'UR DRIFT';
   if (e.state === 'doors') return { opening: 'ÖPPNAR', open: 'LASTAR', closing: 'STÄNGER' }[e.doorPhase];
-  if (e.state === 'moving') return e.targetKind === 'park' ? `PARKERAR ${ARR(e.dir)}` : `ÅKER ${ARR(e.dir)}`;
+  if (e.state === 'moving') return e.targetKind === 'park' ? `PARKERAR ${ARR(e.dir)}` : sv`ÅKER ${ARR(e.dir)}`;
   return 'VILAR';
 }
 export const nameList = list => (list.length > 2 ? `${list.length} st` : list.map(p => p.name).join(' & '));
@@ -87,52 +88,52 @@ export const nameList = list => (list.length > 2 ? `${list.length} st` : list.ma
 export function reasonAt(e, f, d) {
   const r = [];
   const off = e.passengers.filter(p => p.dest === f);
-  if (off.length) r.push(`${nameList(off)} ska av`);
+  if (off.length) r.push(sv`${nameList(off)} ska av`);
   const up = pickersAt(e, f, d), back = pickersAt(e, f, -d);
-  if (up.length) r.push(`hämtar ${nameList(up)} ${ARR(d)}`);
-  else if (back.length) r.push(`vänder & hämtar ${nameList(back)} ${ARR(-d)}`);
+  if (up.length) r.push(sv`hämtar ${nameList(up)} ${ARR(d)}`);
+  else if (back.length) r.push(sv`vänder & hämtar ${nameList(back)} ${ARR(-d)}`);
   return r.join(' + ') || '—';
 }
 /** @param {Elevator} e */
 export function whyText(e) {
-  if (e.zoneLock) return `Når ingen våning utanför brandzonen – står spärrad på ${fl(e.minF)} tills branden är släckt`;
+  if (e.zoneLock) return sv`Når ingen våning utanför brandzonen – står spärrad på ${fl(e.minF)} tills branden är släckt`;
   if (e.mode === 'snapped' || (e.mode === 'broken' && e.fault.cable)) return cableStatus(e);
   if (e.mode === 'broken') {
     const t = S.people.find(p => p.role === 'hisstekniker' && p.job === e.id);
-    return `Trasig på ${fl(e.floor)}: ${e.fault.what} · ${t ? (t.state === 'office' && t.floor === e.floor ? `${t.name} lagar den (${Math.round(100 * Math.min(1, t.workT / e.fault.need))} %)` : `${t.name} är på väg`) : 'väntar på hisstekniker'}`;
+    return sv`Trasig på ${fl(e.floor)}: ${e.fault.what} · ${t ? (t.state === 'office' && t.floor === e.floor ? sv`${t.name} lagar den (${Math.round(100 * Math.min(1, t.workT / e.fault.need))} %)` : sv`${t.name} är på väg`) : 'väntar på hisstekniker'}`;
   }
   const svcName = e.serviceAsap ? 'Beställd service' : 'Nattservice';
-  if (e.mode === 'service') return `${svcName} på ${fl(e.home)} – slitaget nollställs`;
-  if (e.hold) return `Ska på ${svcName.toLowerCase()} – tar inga nya resenärer och kör hem till ${fl(e.home)}`;
-  if (e.sleep) return `Sover på ${fl(Math.round(e.pos))} för att spara energi – vaknar om det bildas kö`;
-  if (e.hot) return `Motorn är överhettad (${motorC(e)} °C) – kör klart sina passagerare men tar inga nya tills den har svalnat${e.fan ? ' · extrafläkten går' : ''}`;
-  if (e.windLock) return `Stängd för stormen – parkerar på ${fl(e.home)} tills det mojnar`;
+  if (e.mode === 'service') return sv`${svcName} på ${fl(e.home)} – slitaget nollställs`;
+  if (e.hold) return sv`Ska på ${svcName.toLowerCase()} – tar inga nya resenärer och kör hem till ${fl(e.home)}`;
+  if (e.sleep) return sv`Sover på ${fl(Math.round(e.pos))} för att spara energi – vaknar om det bildas kö`;
+  if (e.hot) return sv`Motorn är överhettad (${motorC(e)} °C) – kör klart sina passagerare men tar inga nya tills den har svalnat${e.fan ? ' · extrafläkten går' : ''}`;
+  if (e.windLock) return sv`Stängd för stormen – parkerar på ${fl(e.home)} tills det mojnar`;
   if (e.indep && !e.passengers.length) return 'Oberoende drift (flyttdag): nyckelstyrd, svarar inte på anrop – bara flyttgubbarna åker';
-  if (e.medicHold) return `Står kvar på ${fl(S.medic ? S.medic.floor : Math.round(e.pos))} med ambulansens nyckel – väntar på personalen och båren`;
-  if (e.mode === 'recall') return `Brandåterkallning: kör direkt till ${fl(e.home)} utan stopp och släpper ut alla`;
-  if (e.mode === 'locked') return `Avstängd i ${fl(e.home)} med öppna dörrar tills branden är släckt`;
+  if (e.medicHold) return sv`Står kvar på ${fl(S.medic ? S.medic.floor : Math.round(e.pos))} med ambulansens nyckel – väntar på personalen och båren`;
+  if (e.mode === 'recall') return sv`Brandåterkallning: kör direkt till ${fl(e.home)} utan stopp och släpper ut alla`;
+  if (e.mode === 'locked') return sv`Avstängd i ${fl(e.home)} med öppna dörrar tills branden är släckt`;
   if (e.mode === 'lift') return 'Lastläge: kör flyttlasset från takterrassen ner till entrén – tar inga resenärer';
   if (e.liftWant) return 'Kör klart sina resenärer och hämtar sedan ett flyttlass på takterrassen';
-  if (e.mode === 'rescue') return `Krypkör på reservkraft till ${fl(e.rescueTarget)} för att släppa ut ${e.passengers.length} instängda`;
+  if (e.mode === 'rescue') return sv`Krypkör på reservkraft till ${fl(e.rescueTarget)} för att släppa ut ${e.passengers.length} instängda`;
   if (e.mode === 'dead') return 'Utrymd – väntar på att strömmen ska komma tillbaka';
-  if (!S.power) return e.passengers.length ? `Står still ${Math.abs(e.pos - Math.round(e.pos)) > 0.05 ? 'mellan våningar' : `på ${fl(Math.round(e.pos))}`} – ${e.passengers.length} instängda!` : 'Står still utan ström';
+  if (!S.power) return e.passengers.length ? sv`Står still ${Math.abs(e.pos - Math.round(e.pos)) > 0.05 ? 'mellan våningar' : sv`på ${fl(Math.round(e.pos))}`} – ${e.passengers.length} instängda!` : 'Står still utan ström';
   if (e.state === 'doors') {
     const parts = [];
     if (e.lastOff) parts.push(`${e.lastOff} av`);
-    if (e.lastOn) parts.push(`${e.lastOn} på`);
-    let s = `Vån ${fl(e.floor)}: ${parts.join(', ') || 'ingen av/på än'}`;
-    s += e.dir ? ` · kör ${ARR(e.dir)} härnäst` : ' · ingen riktning – första passageraren bestämmer';
-    if (isFull(e)) s += slotsFull(e) ? ' · FULLT!' : ` · FULL LAST (${Math.round(cabinKg(e) / e.ratedKg * 100)} %)`;
+    if (e.lastOn) parts.push(sv`${e.lastOn} på`);
+    let s = sv`Vån ${fl(e.floor)}: ${parts.join(', ') || 'ingen av/på än'}`;
+    s += e.dir ? sv` · kör ${ARR(e.dir)} härnäst` : ' · ingen riktning – första passageraren bestämmer';
+    if (isFull(e)) s += slotsFull(e) ? ' · FULLT!' : sv` · FULL LAST (${Math.round(cabinKg(e) / e.ratedKg * 100)} %)`;
     return s;
   }
   if (e.state === 'moving' && e.target !== null) {
-    if (e.targetKind === 'halt') return `Inga mål ${ARR(e.dir)} längre – bromsar vid ${fl(e.target)}`;
-    if (isFull(e) && pickTotal(e)) return `FULL LAST ${Math.round(loadKg(e) / e.ratedKg * 100)} % – passerar hämtningar, stannar bara för avstigning (${fl(e.target)})`;
-    if (e.targetKind === 'park') return `Ledig – kör till parkering ${fl(e.target)}`;
-    return `Nästa stopp ${fl(e.target)}: ${reasonAt(e, e.target, e.dir)}`;
+    if (e.targetKind === 'halt') return sv`Inga mål ${ARR(e.dir)} längre – bromsar vid ${fl(e.target)}`;
+    if (isFull(e) && pickTotal(e)) return sv`FULL LAST ${Math.round(loadKg(e) / e.ratedKg * 100)} % – passerar hämtningar, stannar bara för avstigning (${fl(e.target)})`;
+    if (e.targetKind === 'park') return sv`Ledig – kör till parkering ${fl(e.target)}`;
+    return sv`Nästa stopp ${fl(e.target)}: ${reasonAt(e, e.target, e.dir)}`;
   }
   if (e.off) return 'Ur drift – tar inga nya resenärer';
-  return `Ledig vid ${fl(Math.round(e.pos))} – väntar på uppdrag`;
+  return sv`Ledig vid ${fl(Math.round(e.pos))} – väntar på uppdrag`;
 }
 /** grov uppskattning av en resa genom huset (gång, väntan och åktur) i sekunder */
 const tripGuess = (from, to) => (from === to ? 4 : 12 + Math.abs(to - from) * 2.5);
@@ -148,15 +149,15 @@ export function serviceStatus(e) {
   const work = broken ? e.fault.need : e.mode === 'service' ? e.serviceNeed : 0.4 * 3600 / timeScale(hour());
   const verb = broken ? 'lagar' : 'servar';
   if (mine && t.state === 'office' && t.floor === f) {
-    if (e.mode === 'normal') return `🔧 ${t.name} väntar på ${fl(f)} tills hissen har kört hem tom · arbetet tar ~${secs(work)}`;
-    return `🔧 ${t.name} ${verb} (${Math.round(100 * Math.min(1, t.workT / work))} %) · klar om ${secs(work - t.workT)}`;
+    if (e.mode === 'normal') return sv`🔧 ${t.name} väntar på ${fl(f)} tills hissen har kört hem tom · arbetet tar ~${secs(work)}`;
+    return sv`🔧 ${t.name} ${verb} (${Math.round(100 * Math.min(1, t.workT / work))} %) · klar om ${secs(work - t.workT)}`;
   }
   let arrive, who;
-  if (mine) { arrive = tripGuess(t.floor, f); who = `${t.name} är på väg till ${fl(f)}`; }
-  else if (t) return `🔧 Teknikern ${t.name} är upptagen${t.job !== null && t.job !== undefined ? ` med ${S.elevators[t.job].name}` : ''} – ${e.name} står i kö`;
+  if (mine) { arrive = tripGuess(t.floor, f); who = sv`${t.name} är på väg till ${fl(f)}`; }
+  else if (t) return sv`🔧 Teknikern ${t.name} är upptagen${t.job !== null && t.job !== undefined ? ` med ${S.elevators[t.job].name}` : ''} – ${e.name} står i kö`;
   else if (S.techCallAt !== null) { arrive = Math.max(0, S.techCallAt - S.t) + tripGuess(LOBBY, f); who = 'Teknikern är larmad'; }
-  else return `🔧 Väntar på hissteknikern${!S.power ? ' (strömavbrott)' : S.fire ? ' (brand)' : ''}`;
-  return `🔧 ${who} · framme om ~${secs(arrive)} · klar om ~${secs(arrive + work)}`;
+  else return sv`🔧 Väntar på hissteknikern${!S.power ? ' (strömavbrott)' : S.fire ? ' (brand)' : ''}`;
+  return sv`🔧 ${who} · framme om ~${secs(arrive)} · klar om ~${secs(arrive + work)}`;
 }
 /** En ikonknapp: bara ikonen syns; namnet och förklaringen står i verktygstipset (panels.js) och namnet
  *  läses upp av skärmläsare. extra = fler attribut (t.ex. ' disabled'). */
@@ -165,7 +166,7 @@ export const ikon = (act, icon, name, hint = '', isOn = false, extra = '') =>
 /** @param {Elevator} e */
 export function carActs(e) {
   const b = [];
-  b.push(e.off ? ikon(`car:off:${e.id}`, '▶', 'Sätt i drift', `${e.name} tar nya resenärer igen`) : ikon(`car:off:${e.id}`, '⏸', 'Ta ur drift', `${e.name} lämnar av dem som är ombord och tar inga nya`));
+  b.push(e.off ? ikon(`car:off:${e.id}`, '▶', 'Sätt i drift', sv`${e.name} tar nya resenärer igen`) : ikon(`car:off:${e.id}`, '⏸', 'Ta ur drift', sv`${e.name} lämnar av dem som är ombord och tar inga nya`));
   if (e.mode === 'normal' && !e.serviceAsap && !e.hold && S.started) b.push(ikon(`level:${e.id}`, '🛠️', 'Beställ service', 'Hissteknikern kommer direkt, även på dagen'));
   if (!S.power && e.mode === 'normal' && e.passengers.length && !(e.state === 'doors' && e.door >= 0.95))
     b.push(`<button class="btn xs hot2" data-act="pow:rescue:${e.id}" ${canRescue(e) ? '' : 'disabled'}>🔋 Nödsänk (${e.passengers.length})</button>`);
@@ -245,7 +246,7 @@ export function incidentHtml() {
     const intro = e.mode === 'snapped' && e.snap.ph === 'fall' ? 'Bärlinorna har gått av – korgen faller!'
       : e.mode === 'snapped' ? 'Bärlinorna gick av och fångapparaten stoppade fallet. Korgen står fast mellan två våningar.'
       : `Alla är ute. Hissen står avstängd medan nya bärlinor dras i schaktet – det tar några timmar.`;
-    info(`cable-${e.id}-${Math.round(cab.t0)}`, 'cable', `🪢 Linbrott i ${esc(e.name)}`, `${intro}<div class="svc">${esc(cableStatus(e))}</div>`,
+    info(`cable-${e.id}-${Math.round(cab.t0)}`, 'cable', sv`🪢 Linbrott i ${esc(e.name)}`, `${intro}<div class="svc">${esc(cableStatus(e))}</div>`,
       `${ikon(`follow:${e.id}`, '📹', 'Visa hissen', 'Kameran följer hissen')}`);
   }
   const M = S.move;
@@ -263,23 +264,23 @@ export function incidentHtml() {
     const windy = M.state === 'on' && hoistHalt() === 'blåst' && M.items.some(it => it.st === 'hatch');
     const wind = windy ? `<button class="btn xs${(M.windChoice ?? (M.smart ? 'varu' : 'wait')) === 'wait' ? ' on' : ''}" data-act="moveWind:wait">⏳ Vänta ut blåsten</button><button class="btn xs${(M.windChoice ?? (M.smart ? 'varu' : 'wait')) === 'varu' ? ' on' : ''}" data-act="moveWind:varu">🛗 Ta varuhissen</button>` : '';
     const body = M.state === 'planned'
-      ? `<b>${esc(M.who)}</b> flyttar från ${fl(M.floor)} i dag – Flyttfirman Lyft & Bär kommer ${M.smart ? 'efter lunch, när förmiddagens leveranser är klara' : 'på förmiddagen, mitt i leveranserna'}. Bohaget: <b>${num(M.loads)}</b> lass${xl.length ? `, bland annat ${esc(xl.join(' och '))}` : ''}.`
+      ? `<b>${esc(M.who)}</b> flyttar från ${fl(M.floor)} i dag – Flyttfirman Lyft & Bär kommer ${M.smart ? 'efter lunch, när förmiddagens leveranser är klara' : 'på förmiddagen, mitt i leveranserna'}. Bohaget: <b>${num(M.loads)}</b> lass${xl.length ? sv`, bland annat ${esc(xl.join(' och '))}` : ''}.`
         + ` <b>Välj väg</b> för möblerna och om varuhissen ska kläs med <b>skyddsfiltar</b> (tar ${BLANKET_T} s i början, men inga repor i väggarna). ${routeTxt}`
         + (M.dockWait > 0 ? ' Flyttbilen väntar på gatan – leveransbilen står vid lastkajen.' : '')
       : M.state === 'on'
         ? `<b>${esc(M.who)}</b> flyttar från ${fl(M.floor)} med Flyttfirman Lyft & Bär. Bohaget: <b>${num(M.loads)}</b> lass – ${num(flat)} kvar i lägenheten, ${num(out)} nere vid flyttbilen, ${num(M.truck)} inlastade.`
           + `<div class="svc" data-hint="▓ i flyttbilen · ▒ på lastkajen · ░ på väg · · i lägenheten">${bar}</div>`
-          + (S.t < M.crewAt ? `Flyttgubbarna klär ${V ? esc(V.name) : 'varuhissen'} med skyddsfiltar. ` : '') + `${routeTxt} ${lock}`
+          + (S.t < M.crewAt ? sv`Flyttgubbarna klär ${V ? esc(V.name) : 'varuhissen'} med skyddsfiltar. ` : '') + `${routeTxt} ${lock}`
           + (hoistStatus(M) ? ` <b>Hissbalken:</b> ${esc(hoistStatus(M))}` : '')
           + (windy ? ' <b>Blåsten stoppar hissbalken</b> – vänta ut den, eller bär ner det som står vid lastluckan i varuhissen?' : '')
-          + (M.pivots ? ` ${M.pivots === 1 ? 'En möbel har fått vändas i hissdörren.' : `${num(M.pivots)} möbler har fått vändas i hissdörren.`}` : '')
-          + (M.stuck ? ` ${M.stuck === 1 ? 'Det fastnade helt en gång.' : `Det fastnade helt ${num(M.stuck)} gånger.`}` : '')
-          + (M.broken ? ` 💥 ${num(M.broken)} lass tappades.` : '') + (M.scratches ? ` ${num(M.scratches)} repor i varuhissen.` : '')
+          + (M.pivots ? ` ${M.pivots === 1 ? 'En möbel har fått vändas i hissdörren.' : sv`${num(M.pivots)} möbler har fått vändas i hissdörren.`}` : '')
+          + (M.stuck ? ` ${M.stuck === 1 ? 'Det fastnade helt en gång.' : sv`Det fastnade helt ${num(M.stuck)} gånger.`}` : '')
+          + (M.broken ? sv` 💥 ${num(M.broken)} lass tappades.` : '') + (M.scratches ? ` ${num(M.scratches)} repor i varuhissen.` : '')
           + (M.notes.truck ? ' Leveransbilen får vänta på gatan – flyttbilen står vid lastkajen.' : '')
           + (S.power ? '' : ' Strömavbrott: flyttgubbarna väntar ut det med möblerna vid hissen – den som har tomma händer tar trapporna.')
-        : `Flytten är klar: ${num(M.loads)} lass på ${Math.round(M.t1 - M.t0)} s${M.hoisted ? ` (${num(M.hoisted)} med hissbalken och panoramahissen)` : ''}, varuhissen var låst i ${Math.round(M.indepSec)} s. Den går i vanlig trafik igen.`;
+        : sv`Flytten är klar: ${num(M.loads)} lass på ${Math.round(M.t1 - M.t0)} s${M.hoisted ? sv` (${num(M.hoisted)} med hissbalken och panoramahissen)` : ''}, varuhissen var låst i ${Math.round(M.indepSec)} s. Den går i vanlig trafik igen.`;
     const mc = M.state === 'done' ? '' : chiefLine('move', 'Välj väg för möblerna:');
-    info(`move-${S.day}`, 'move', `🚚 Flyttdag på ${fl(M.floor)}`, body + mc,
+    info(`move-${S.day}`, 'move', sv`🚚 Flyttdag på ${fl(M.floor)}`, body + mc,
       `${routes}${blank}${wind}${V && M.state !== 'planned' ? `${ikon(`follow:${V.id}`, '📦', 'Följ varuhissen', 'Kameran följer varuhissen')}` : ''}${ikon(`show:${M.floor}`, '📍', 'Visa våningen', 'Kameran går till våningen där flytten är')}${ikon(`show:${DOCK}`, '🚛', 'Lastkajen', 'Kameran går till lastkajen')}`);
   }
   const A = S.medic;
@@ -287,10 +288,10 @@ export function incidentHtml() {
     // strömavbrott: hissarna står still, så personalen bär båren i trapporna (eller sitter fast och räddas först)
     const dark = !S.power && (A.state === 'onway' || A.state === 'transport');
     const stuck = S.people.some(p => p.medic && p.state === 'ride');
-    const what = { called: `${esc(A.pname)} har svimmat på ${esc(A.where)} (${fl(A.floor)}). Ambulansen är på väg.`,
-      onway: dark ? 'Ambulanspersonalen är i huset med bår.' : `Ambulanspersonalen är i huset med bår. Båren får bara plats i varuhissen, som går med förtur – VIP-läge för ambulansen.${A.car !== null && A.car !== undefined ? ` ${esc(S.elevators[A.car].name)} väntar på dem på ${fl(A.floor)}.` : ''}`,
-      transport: `${esc(A.pname)} bärs ut på båren till ambulansen.`,
-      done: `Ambulansen har kört${A.taken ? ` med ${esc(A.pname)}` : ''} – ${Math.round(A.t1 - A.t0)} s från larm till avfärd.` }[A.state];
+    const what = { called: sv`${esc(A.pname)} har svimmat på ${esc(A.where)} (${fl(A.floor)}). Ambulansen är på väg.`,
+      onway: dark ? 'Ambulanspersonalen är i huset med bår.' : sv`Ambulanspersonalen är i huset med bår. Båren får bara plats i varuhissen, som går med förtur – VIP-läge för ambulansen.${A.car !== null && A.car !== undefined ? sv` ${esc(S.elevators[A.car].name)} väntar på dem på ${fl(A.floor)}.` : ''}`,
+      transport: sv`${esc(A.pname)} bärs ut på båren till ambulansen.`,
+      done: sv`Ambulansen har kört${A.taken ? ` med ${esc(A.pname)}` : ''} – ${Math.round(A.t1 - A.t0)} s från larm till avfärd.` }[A.state];
     const how = dark
       ? (stuck ? ' Strömavbrott: personalen sitter fast i hissen – reservkraftens auto-räddning tar den hissen först.' : ' Strömavbrott: hissarna står still, så personalen bär båren i trapporna.')
       : A.state === 'onway' || A.state === 'transport'
@@ -401,51 +402,51 @@ export function rosterHtml() {
 /** Personen man följer: vem, vart, varför och vad styrningen tänker. Porträttet ritas med drawPortrait. @param {Person} p */
 export function personHtml(p) {
   const [label, col] = stateInfo(p);
-  let role = p.kind === 'emp' ? `Anställd · ${FL[p.home].name} (${fl(p.home)})${p.overtime ? ' · jobbar över' : ''}`
+  let role = p.kind === 'emp' ? sv`Anställd · ${FL[p.home].name} (${fl(p.home)})${p.overtime ? ' · jobbar över' : ''}`
     : p.kind === 'res' ? residentDesc(p) : p.vip ? 'VIP-besök med helikopter 🚁' : p.role ? ROLE_NAMES[p.role] : 'Besökare';
-  if (p.cast) role = `★ Stamgäst · ${p.title}`;
+  if (p.cast) role = sv`★ Stamgäst · ${p.title}`;
   if (p.crewId) role = `${CREW_BY[p.crewId].icon} ${p.title}`;
   else if (p.role === 'arbetsledare') role = `🦺 ${p.title}`;
   if (p.guide) role = `🚩 ${p.title}`;
   else if (p.tour) role = '🚌 Turist på Stadsturen';
-  if (p.auto) role += ` · bil på ${fl(p.auto.floor)}`;
-  role += ` · ${p.kg} kg${p.cargo ? ` + ${p.cargo.name} ${p.cargo.kg} kg` : ''}`;
-  const why = p.dead ? 'Har lämnat huset' : `${p.why} → våning ${fl(p.goal ?? p.dest)}${p.goal !== p.dest && p.state !== 'office' ? ` (byter hiss på ${fl(p.dest)})` : ''}`;
+  if (p.auto) role += sv` · bil på ${fl(p.auto.floor)}`;
+  role += sv` · ${p.kg} kg${p.cargo ? sv` + ${p.cargo.name} ${p.cargo.kg} kg` : ''}`;
+  const why = p.dead ? 'Har lämnat huset' : sv`${p.why} → våning ${fl(p.goal ?? p.dest)}${p.goal !== p.dest && p.state !== 'office' ? sv` (byter hiss på ${fl(p.dest)})` : ''}`;
   let now = '', logic = '–';
   if (p.dead) now = 'Ute ur huset';
   else switch (p.state) {
-    case 'toQueue': now = `Går mot hissarna på ${fl(p.floor)}`; logic = 'Får en hiss tilldelad när hen kommer fram'; break;
+    case 'toQueue': now = sv`Går mot hissarna på ${fl(p.floor)}`; logic = 'Får en hiss tilldelad när hen kommer fram'; break;
     case 'wait': {
-      now = `Väntar på ${fl(p.floor)} (${ARR(p.dir)} mot ${fl(p.dest)}) i ${Math.round(S.t - p.waitStart)}s`;
+      now = sv`Väntar på ${fl(p.floor)} (${ARR(p.dir)} mot ${fl(p.dest)}) i ${Math.round(S.t - p.waitStart)}s`;
       if (S.strategy === 'buttons' && !p.vip) {
         const lit = p.bank && S.calls[`${p.bank}|${p.floor}|${p.dir}`];
         const e = p.assigned !== null ? S.elevators[p.assigned] : null;
-        now += p.fixAt ? ' · tryckte fel knapp' : lit ? ` · knappen ${ARR(p.dir)} lyser` : '';
-        logic = `Styrsystemet ser bara ${ARR(p.dir)} på ${fl(p.floor)} – inte vart hen ska.${e ? ` ${e.name} tar anropet (~${Math.round(eta(e, p.floor, p.dir))}s)` : ''}`;
+        now += p.fixAt ? ' · tryckte fel knapp' : lit ? sv` · knappen ${ARR(p.dir)} lyser` : '';
+        logic = sv`Styrsystemet ser bara ${ARR(p.dir)} på ${fl(p.floor)} – inte vart hen ska.${e ? sv` ${e.name} tar anropet (~${Math.round(eta(e, p.floor, p.dir))}s)` : ''}`;
       } else if (p.assigned !== null) {
         const e = S.elevators[p.assigned];
-        now += ` · ${e.name} är här om ~${Math.round(eta(e, p.floor, p.dir))}s`;
-        logic = costBased() ? `Kostnad hämtning+resa${S.strategy === 'eco' ? '+energi' : ''}: ${costLine(p, e.id)}`
-          : S.strategy === 'nearest' ? `Närmaste hiss: ${e.name} (${Math.abs(Math.round(e.pos - p.floor))} vån bort)` : `Slumpen valde ${e.name}`;
-      } else if (!liftsAvailable()) { now += ' · hissarna går inte'; logic = `Tar trapporna om ~${Math.max(0, Math.ceil(p.patience - (S.t - p.waitStart)))}s`; }
+        now += sv` · ${e.name} är här om ~${Math.round(eta(e, p.floor, p.dir))}s`;
+        logic = costBased() ? sv`Kostnad hämtning+resa${S.strategy === 'eco' ? '+energi' : ''}: ${costLine(p, e.id)}`
+          : S.strategy === 'nearest' ? sv`Närmaste hiss: ${e.name} (${Math.abs(Math.round(e.pos - p.floor))} vån bort)` : sv`Slumpen valde ${e.name}`;
+      } else if (!liftsAvailable()) { now += ' · hissarna går inte'; logic = sv`Tar trapporna om ~${Math.max(0, Math.ceil(p.patience - (S.t - p.waitStart)))}s`; }
       else { now += ' · alla hissar fulla'; logic = 'Väntar på att en hiss får plats'; }
       break;
     }
-    case 'boarding': now = `Går in i hiss ${p.car.name}`; logic = 'Dörrarna hålls öppna tills hen är inne'; break;
+    case 'boarding': now = sv`Går in i hiss ${p.car.name}`; logic = 'Dörrarna hålls öppna tills hen är inne'; break;
     case 'ride': {
       const e = p.car, r = plannedRoute(e), idx = r.indexOf(p.dest);
-      now = `I hiss ${e.name} vid våning ${fl(Math.round(e.pos))} · åkt ${Math.round(S.t - p.rideStart)}s`;
-      if (!S.power && e.mode === 'normal') { now = `INSTÄNGD i hiss ${e.name} i ${Math.round(p.trapT || 0)}s`; logic = 'Väntar på ström eller nödsänkning'; }
-      else logic = `Rutt: ${r.map(f => (f === p.dest ? `<u>${fl(f)}</u>` : fl(f))).join(' → ')} · ${idx <= 0 ? 'nästa stopp är målet' : idx === 1 ? 'målet efter ett stopp' : `målet efter ${idx} stopp`}`;
+      now = sv`I hiss ${e.name} vid våning ${fl(Math.round(e.pos))} · åkt ${Math.round(S.t - p.rideStart)}s`;
+      if (!S.power && e.mode === 'normal') { now = sv`INSTÄNGD i hiss ${e.name} i ${Math.round(p.trapT || 0)}s`; logic = 'Väntar på ström eller nödsänkning'; }
+      else logic = sv`Rutt: ${r.map(f => (f === p.dest ? `<u>${fl(f)}</u>` : fl(f))).join(' → ')} · ${idx <= 0 ? 'nästa stopp är målet' : idx === 1 ? 'målet efter ett stopp' : sv`målet efter ${idx} stopp`}`;
       break;
     }
-    case 'exiting': now = `Kliver av på ${fl(p.floor)}`; logic = p.spot ? `På väg: ${esc(p.spot.desc.toLowerCase())}` : 'På väg ut genom entrén'; break;
-    case 'stairs': now = `Går mot trapphuset på ${fl(p.floor)}`; logic = `Ska gå ${Math.abs(p.dest - p.floor)} våningar till ${fl(p.dest)}`; break;
-    case 'instairs': now = `I trapphuset på väg till ${fl(p.dest)}`; logic = `Framme om ~${Math.max(0, Math.ceil(p.timer))}s`; break;
+    case 'exiting': now = sv`Kliver av på ${fl(p.floor)}`; logic = p.spot ? sv`På väg: ${esc(p.spot.desc.toLowerCase())}` : 'På väg ut genom entrén'; break;
+    case 'stairs': now = sv`Går mot trapphuset på ${fl(p.floor)}`; logic = sv`Ska gå ${Math.abs(p.dest - p.floor)} våningar till ${fl(p.dest)}`; break;
+    case 'instairs': now = sv`I trapphuset på väg till ${fl(p.dest)}`; logic = sv`Framme om ~${Math.max(0, Math.ceil(p.timer))}s`; break;
     // (flyttgubbarna vid lastkajen är "inne" utan en plats – roomDesc i describe.js)
-    case 'office': now = p.sleeping && p.spot?.bed ? `Sover i sängen (${fl(p.floor)}) 💤` : `${roomDesc(p)} (${FL[p.floor].short})`; logic = `Nästa beslut om ~${Math.max(0, Math.round(p.timer / activityRate(hour())))}s`; break;
-    case 'away': now = 'Är inte i huset just nu'; logic = `Kommer tillbaka: ${phaseName(p.returnAt).toLowerCase()}`; break;
-    case 'incar': now = `Kör in i garaget på ${fl(p.floor)}`; logic = 'Parkerar och går sedan till hissarna'; break;
+    case 'office': now = p.sleeping && p.spot?.bed ? sv`Sover i sängen (${fl(p.floor)}) 💤` : `${roomDesc(p)} (${FL[p.floor].short})`; logic = sv`Nästa beslut om ~${Math.max(0, Math.round(p.timer / activityRate(hour())))}s`; break;
+    case 'away': now = 'Är inte i huset just nu'; logic = sv`Kommer tillbaka: ${phaseName(p.returnAt).toLowerCase()}`; break;
+    case 'incar': now = sv`Kör in i garaget på ${fl(p.floor)}`; logic = 'Parkerar och går sedan till hissarna'; break;
     case 'assembly': now = 'Väntar på återsamlingsplatsen'; logic = 'Går in igen när branden är släckt'; break;
   }
   return `<div class="track"><div class="tk-top"><div class="pic"></div><div class="tk-id"><div class="tk-name">${esc(p.name)}</div>`

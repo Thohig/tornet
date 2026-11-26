@@ -17,6 +17,7 @@ import { foldInc, select } from './hud.js';
 import { toggleSound, unlockSound } from './sound.js';
 import { toggleMusic } from './music.js';
 import { toggleAuto } from './director.js';
+import { sv } from './sv.js';
 /** @typedef {import('./people.js').Person} Person */
 
 // ---------- Uppspelning och inställningar ----------
@@ -84,10 +85,10 @@ function bus() {
   const x = VIEW.x0 + 200, y = surf(LOBBY) - 90; // (i hallen – rummen till vänster om VIEW.x0 syns inte)
   if (!n) {
     const h = busFrom();
-    const text = h === null ? 'STÄNGT – KOM IMORGON!' : `FÖRST KL ${clockStr(h)}!`;
+    const text = h === null ? 'STÄNGT – KOM IMORGON!' : sv`FÖRST KL ${clockStr(h)}!`;
     S.fx.push({ x, y, text, color: '#ff5d52', life: 2.5, size: 24 });
     log(h === null ? 'Bussen vände – takterrassen och Sky Café hinner inte ta emot en tur till i dag'
-      : `Bussen vände – takterrassen och Sky Café är stängda, Stadsturen kan komma från ${clockStr(h)}`, 'sys');
+      : sv`Bussen vände – takterrassen och Sky Café är stängda, Stadsturen kan komma från ${clockStr(h)}`, 'sys');
     return;
   }
   S.fx.push({ x, y, text: 'TURISTBUSS!', color: '#ff8c42', life: 2, size: 30 });

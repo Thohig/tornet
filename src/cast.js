@@ -2,6 +2,7 @@
 // Datan (namn, utseende, repliker) ligger i CAST i config.js; här finns deras beteenden.
 // Allt slumpas med simuleringens rng, så stamgästerna gör samma sak varje gång med samma frö.
 import { stream } from './rng.js';
+import { sv } from './sv.js';
 const { pick, rng } = stream('repliker');
 import { CAST, CAFE, LOBBY, OFFICE_FLOORS, SPOTS, floorOpen, floorWith, idx, shaftCX } from './config.js';
 import { S, log } from './state.js';
@@ -31,7 +32,7 @@ export function flushSay(p) { if (p.sayLater) { speak(p, p.sayLater); p.sayLater
 /** @param {Person} p */
 export function speak(p, text) {
   p.say = { text, until: S.t + 8 };
-  pev(p, `Säger: "${text}"`);
+  pev(p, sv`Säger: "${text}"`);
   log(`💬 ${p.name}: "${text}"`, 'person', null, p.id);
 }
 /** @param {Person} p */
@@ -55,10 +56,10 @@ function spawnCastEmployee(c) {
   p.homeSpot = staff[0];
   p.leaveAt = c.leaveAt; p.lunchAt = c.lunchAt; p.lunched = false; p.cups = 0;
   if (p.look.acc === 1) p.cargo = { kind: 'portfölj', name: 'portfölj', kg: 3 };
-  setTrip(p, p.home, `Till jobbet – ${p.title}`);
+  setTrip(p, p.home, sv`Till jobbet – ${p.title}`);
   S.people.push(p);
-  pev(p, `Kliver in i entrén som vanligt · ${p.title}`);
-  log(`★ ${p.name} kommer till jobbet (${p.title.split(' –')[0]})`, 'person', null, p.id);
+  pev(p, sv`Kliver in i entrén som vanligt · ${p.title}`);
+  log(sv`★ ${p.name} kommer till jobbet (${p.title.split(' –')[0]})`, 'person', null, p.id);
   return p;
 }
 /** Boende som blir stamgäster (Majken, Lill-Olle) – anropas när de boende flyttar in på morgonen @param {Person} p */
@@ -108,7 +109,7 @@ export function castNext(p, h) {
   if (p.quirk !== 'kaffe' || p.floor !== p.home || h >= 17.5 || !floorOpen(CAFE, h) || !floorOpen(CAFE, h + 1.2) || rng() > 0.55) return null;
   p.cups = (p.cups || 0) + 1; S.stats.cups++;
   say(p, 'coffee', { n: p.cups }, true);
-  return [CAFE, `Kaffe nummer ${p.cups}`];
+  return [CAFE, sv`Kaffe nummer ${p.cups}`];
 }
 /** Doris håller upp dörren när någon är på väg till kön på våningen (en gång per stopp) @param {Elevator} e */
 export function doorHold(e, f) {

@@ -14,6 +14,7 @@
 // panels.js (`chaosBtn`)
 import { anyIncident, chaosIn, systems } from './systems.js';
 import { stream } from './rng.js';
+import { sv } from './sv.js';
 const { pick, rand } = stream('kaos');
 import { S, incidentOver, log, notice } from './state.js';
 import { FIRE_FLOORS, startFire } from './incidents.js';
@@ -110,9 +111,9 @@ export function chaosTick(dt) {
 /** @param {Chaos} C */
 function endChaos(C) {
   const min = Math.max(1, Math.round((S.t - C.t0) / 60)), names = ks => ks.map(k => chaosNames()[k]).join(' · ');
-  log(`✅ Murphys lag är över – huset klarade ${C.did.length} saker som gick fel`, 'alert');
+  log(sv`✅ Murphys lag är över – huset klarade ${C.did.length} saker som gick fel`, 'alert');
   incidentOver('chaos', '✅ Murphys lag är över',
-    `${C.did.length} saker gick fel på ${min} min: ${names(C.did)}.` + (C.missed.length ? ` Det här hann aldrig hända: ${names(C.missed)}.` : ''));
+    sv`${C.did.length} saker gick fel på ${min} min: ${names(C.did)}.` + (C.missed.length ? sv` Det här hann aldrig hända: ${names(C.missed)}.` : ''));
   S.chaos = null;
 }
 /** nytt dygn från början (resetDay): knappen är plomberad igen */

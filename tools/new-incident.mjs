@@ -2,7 +2,7 @@
 //
 //   npm run new-incident -- duva "Duvan i hallen" "Pigeon in the hall" 🐦
 //
-// Skapar det som varje incident behöver (CLAUDE.md, ”Ny incident”) så att den går att framkalla direkt:
+// Texter med värden skrivs sv`…` (src/sv.js). Skapar det som varje incident behöver (CLAUDE.md, ”Ny incident”) så att den går att framkalla direkt:
 //   src/<nyckel>.js     modulen: egen slumpström, typen, start/tick/reset, när den kan börja; tar slut av sig själv
 //   src/state.js        fältet S.<nyckel> i INIT
 //   src/systems.js      posten i registret (före vädret): tick, reset, on, trigger, förvarningen
@@ -50,6 +50,7 @@ import { stream } from './rng.js';
 const { rand } = stream('${key}');
 import { S, incidentOver, log } from './state.js';
 import { incidentStarted } from './incidents.js';
+import { sv } from './sv.js';
 
 /**
  * ${name} (S.${key}): t0 = när den började, ph = 'on' → 'done', len = hur länge den håller på (s).
@@ -75,7 +76,7 @@ export function ${key}Tick(_dt) {
   // TODO: det som händer medan den pågår
   if (X.ph === 'on' && S.t - X.t0 >= X.len) {
     X.ph = 'done';
-    incidentOver('${key}', '✅ ${q(name)} är över', \`Det tog \${Math.round(S.t - X.t0)} s.\`);
+    incidentOver('${key}', '✅ ${q(name)} är över', sv\`Det tog \${Math.round(S.t - X.t0)} s.\`);
     S.${key} = null;
   }
 }
@@ -111,7 +112,7 @@ edit('src/incui.js', s => {
       // TODO: ett kort med val (alert) när spelaren kan göra något: chiefLine, acts, choice, hint
       const X = S.${key};
       if (X && X.ph === 'on') parts.push(card('${key}', 'info ${key}', '${icon} ${q(name)}', \`
-          \${line(\`TODO: vad som händer. Över \${cd(X.t0 + X.len - S.t)}.\`)}\`));
+          \${line(sv\`TODO: vad som händer. Över \${cd(X.t0 + X.len - S.t)}.\`)}\`));
     },
     shots: (add) => {
       const X = S.${key};
@@ -133,6 +134,7 @@ edit('src/lang-en.js', s => s.replace(/\n\};\s*$/, `
   "TODO: förvarningen": "TODO: the warning",
   "TODO: förvarningen…": "TODO: the warning…",
   "TODO: vad som händer. Över {0}.": "TODO: what happens. Over {0}.",
+  "Det tog {0} s.": "It took {0} s.",
 };
 `));
 // (mallar som redan finns läggs inte in två gånger)

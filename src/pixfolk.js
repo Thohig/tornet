@@ -15,6 +15,7 @@ import { vpick, vrand } from './rng.js';
 import { VIEW, tinyText } from './view.js';
 import { ants, ARROW, box, g, INK, label, line, lo, pill, place, R, X, Y } from './pixcore.js';
 import { blinkOf, hoseSpray } from './pixcars.js';
+import { sv } from './sv.js';
 /** @typedef {import('./people.js').Person} Person */
 
 /** @param {Person} p */
@@ -175,7 +176,7 @@ export function drawCallPx() {
   }
   const reply = S.t - C.t0 >= CALL_REPLY;
   const str = reply ? 'Hissjouren: "Uppfattat – vi skickar en kollega direkt!"'
-    : C.trapped ? `${p.name}: "Jouren? Folk sitter fast i ${C.trapped} – skicka en till!"` : `${p.name}: "Jouren? ${C.n} hissar trasiga i kö – skicka en till!"`;
+    : C.trapped ? sv`${p.name}: "Jouren? Folk sitter fast i ${C.trapped} – skicka en till!"` : sv`${p.name}: "Jouren? ${C.n} hissar trasiga i kö – skicka en till!"`;
   bubble(str, at.x, at.y - 18, reply ? '#fff6a8' : '#ffffff');
 }
 
@@ -213,7 +214,7 @@ function trackNote(p, x, yb, side) {
 export function drawHoverPx() {
   if (S.hoverDoor !== null && S.hoverDoor !== undefined && !S.hover) {
     const f = S.hoverDoor, n = peopleBehindDoor(f).length;
-    const t = n ? `${FL[f].short}: ${n} inne – klicka för att spåra` : `${FL[f].short}: ingen inne`;
+    const t = n ? sv`${FL[f].short}: ${n} inne – klicka för att spåra` : sv`${FL[f].short}: ingen inne`;
     label(t, X(LAND_X0) + 3, Y(floorY(f) - 80) - 4, '#ffffff', INK, 'left');
   }
   const p = S.hover;

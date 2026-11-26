@@ -12,6 +12,7 @@
 // inte hann (`missed`). Turisterna tar aldrig trappan själva; i rummen bestämmer de inget (`tourNext`) – guiden
 // flyttar gruppen. Egen slumpström `turistbuss`
 import { stream } from './rng.js';
+import { sv } from './sv.js';
 const { rand, pick, rng } = stream('turistbuss');
 import { fl } from './util.js';
 import { BX1, CAFE, END_H, DOOR_X, GROUND_Y, LOBBY, ROOF, activityRate, floorOpen, roomScale, timeScale } from './config.js';
@@ -84,13 +85,13 @@ export function spawnBus() {
   S.tour = { ph: 'in', x: BUS_FROM, stops, si: -1, members: [], guide: -1, n0: 0,
     stay: 0, waitT: 0, graceT: 0, departH: departure(h, stops.slice(0, -1)), honkT: 0, honked: false, hurried: false,
     lost: [], missed: [], aboard: 0, t0: S.t, arriveH: h, backH: 0 };
-  log(`🚌 ${BUS_NAME} svänger in mot hållplatsen – en guidad tur med ${TOUR_N} turister`, 'sys');
+  log(sv`🚌 ${BUS_NAME} svänger in mot hållplatsen – en guidad tur med ${TOUR_N} turister`, 'sys');
   return TOUR_N + 1;
 }
 /** gruppen kliver av bussen och går in i entrén, guiden först */
 function arrive(T) {
   const g = makePerson('vis', LOBBY, -30);
-  g.guide = true; g.tour = true; g.polite = true; g.space = 9; g.title = `Guide på ${BUS_NAME}`;
+  g.guide = true; g.tour = true; g.polite = true; g.space = 9; g.title = sv`Guide på ${BUS_NAME}`;
   g.look.shirt = '#ff8c42'; g.look.tie = false; // (orange väst, som flaggan)
   // (var och en kommer in i huset direkt, så att nästa får ett namn som ingen annan bär)
   const all = [g];
@@ -104,12 +105,12 @@ function arrive(T) {
   }
   for (const p of all) {
     setTrip(p, T.stops[0], why(T.stops[0]));
-    pev(p, p.guide ? `Kliver av bussen med flaggan i högsta hugg · guidar ${TOUR_N} turister` : `Kliver av turistbussen · ${p.why}`);
+    pev(p, p.guide ? sv`Kliver av bussen med flaggan i högsta hugg · guidar ${TOUR_N} turister` : sv`Kliver av turistbussen · ${p.why}`);
   }
   T.members = all.map(p => p.id); T.guide = g.id; T.n0 = all.length; T.si = 0; T.ph = 'go';
-  speak(g, `Välkomna till Tornet! Följ flaggan – först ${place(T.stops[0])}!`);
-  notice('bus', `🚌 ${BUS_NAME}`, `${TOUR_N} turister och guiden ${g.name} ska se ${route(T)}. Bussen går ${clockStr(T.departH)}.`, { floor: LOBBY });
-  log(`🚌 ${BUS_NAME} står vid hållplatsen: guiden ${g.name} och ${TOUR_N} turister ska se ${route(T)} – bussen går ${clockStr(T.departH)}`, 'sys');
+  speak(g, sv`Välkomna till Tornet! Följ flaggan – först ${place(T.stops[0])}!`);
+  notice('bus', `🚌 ${BUS_NAME}`, sv`${TOUR_N} turister och guiden ${g.name} ska se ${route(T)}. Bussen går ${clockStr(T.departH)}.`, { floor: LOBBY });
+  log(sv`🚌 ${BUS_NAME} står vid hållplatsen: guiden ${g.name} och ${TOUR_N} turister ska se ${route(T)} – bussen går ${clockStr(T.departH)}`, 'sys');
 }
 /** gruppens medlemmar som fortfarande är med (inte tappade, inte ute ur huset) */
 function crew(T) {
@@ -124,9 +125,9 @@ function gathered(T, live) {
   const f = T.stops[T.si], g = guideOf(T, live);
   T.ph = 'at'; T.waitT = 0;
   T.stay = STAY[stopKind(f)];
-  if (g) speak(g, f === ROOF ? pick([`…${live.length - 1}, ${live.length}! Alla här. Där borta ser ni hela stan!`, `${live.length}! Ingen kvar i hissen? Titta, där är tunnelbanebron!`])
-    : pick([`${live.length}, alla här! Tjugo minuter fika – sedan samlas vi vid hissarna.`, `…och ${live.length}! Kanelbullarna här är kända i hela stan.`]));
-  log(`🚩 ${BUS_NAME}: alla ${live.length} framme på ${place(f)} (${fl(f)})`, 'person', null, T.guide);
+  if (g) speak(g, f === ROOF ? pick([sv`…${live.length - 1}, ${live.length}! Alla här. Där borta ser ni hela stan!`, sv`${live.length}! Ingen kvar i hissen? Titta, där är tunnelbanebron!`])
+    : pick([sv`${live.length}, alla här! Tjugo minuter fika – sedan samlas vi vid hissarna.`, sv`…och ${live.length}! Kanelbullarna här är kända i hela stan.`]));
+  log(sv`🚩 ${BUS_NAME}: alla ${live.length} framme på ${place(f)} (${fl(f)})`, 'person', null, T.guide);
 }
 /** vidare till nästa stopp – eller direkt till bussen om det är bråttom */
 function moveOn(T, live, rush) {
@@ -139,7 +140,7 @@ function moveOn(T, live, rush) {
     releaseSpot(p);
     setTrip(p, to, why(to), last);
   }
-  if (g) speak(g, rush ? 'Nu får vi skynda oss – bussen går snart!' : last ? 'Dags att gå tillbaka till bussen, följ flaggan!' : `Följ flaggan – nu ${place(to)}!`);
+  if (g) speak(g, rush ? 'Nu får vi skynda oss – bussen går snart!' : last ? 'Dags att gå tillbaka till bussen, följ flaggan!' : sv`Följ flaggan – nu ${place(to)}!`);
   T.ph = last ? 'back' : 'go';
   if (last) T.backH = hour();
 }
@@ -148,10 +149,10 @@ function leaveBehind(T, live) {
   const f = T.stops[T.si], g = guideOf(T, live), left = live.filter(p => !there(p, f));
   for (const p of left) {
     p.tour = false; T.lost.push(p.name);
-    pev(p, `Tappade bort ${BUS_NAME} – får klara sig själv`);
+    pev(p, sv`Tappade bort ${BUS_NAME} – får klara sig själv`);
   }
-  if (g && left.length) speak(g, left.length > 1 ? `Vi kan inte vänta längre – ${left.map(p => p.name).join(' och ')} får hitta bussen själva.` : `Vi kan inte vänta längre – ${left[0].name} får hitta bussen själv.`);
-  log(`🚩 ${BUS_NAME} går vidare utan ${left.length} som inte kom fram till ${place(f)}`, 'person', null, T.guide);
+  if (g && left.length) speak(g, left.length > 1 ? sv`Vi kan inte vänta längre – ${left.map(p => p.name).join(' och ')} får hitta bussen själva.` : sv`Vi kan inte vänta längre – ${left[0].name} får hitta bussen själv.`);
+  log(sv`🚩 ${BUS_NAME} går vidare utan ${left.length} som inte kom fram till ${place(f)}`, 'person', null, T.guide);
   return live.filter(p => p.tour);
 }
 /** bussen tutar: de som är på väg ut springer sista biten */
@@ -159,7 +160,7 @@ function honk(T, live) {
   S.fx.push({ x: BUS_STOP_X + 20, y: GROUND_Y - 44, text: 'TUUT!', color: '#ffd23f', life: 1.4, size: 18 });
   if (!T.honked) {
     T.honked = true;
-    log(`🚌 ${BUS_NAME} tutar – det är avgång och ${live.length} är inte ombord än`, 'sys');
+    log(sv`🚌 ${BUS_NAME} tutar – det är avgång och ${live.length} är inte ombord än`, 'sys');
   }
   for (const p of live) if (!p.hurry) { p.hurry = true; p.speedMul *= 1.6; pev(p, 'Bussen tutar – springer!'); }
 }
@@ -167,15 +168,15 @@ function honk(T, live) {
 function depart(T, live) {
   for (const p of live) {
     p.tour = false; T.missed.push(p.name);
-    pev(p, `Missade bussen – ${BUS_NAME} gick utan hen`);
+    pev(p, sv`Missade bussen – ${BUS_NAME} gick utan hen`);
   }
   T.ph = 'out';
   const late = Math.round((hour() - T.departH) * 60), on = T.aboard;
-  const when = late > 2 ? `${late} min sent` : 'i tid';
-  const miss = T.missed.length ? ` – ${T.missed.length} missade bussen` : '';
-  const lost = T.lost.length ? `, ${T.lost.length} tappades bort på vägen` : '';
-  log(`🚌 ${BUS_NAME} går ${when} med ${on} av ${T.n0} ombord${miss}`, 'sys');
-  dayEvent('bus', `🚌 ${BUS_NAME}`, `${T.n0 - 1} turister och guiden såg ${route(T)}. Bussen gick ${when} med ${on} av ${T.n0} ombord${miss}${lost}.`);
+  const when = late > 2 ? sv`${late} min sent` : 'i tid';
+  const miss = T.missed.length ? sv` – ${T.missed.length} missade bussen` : '';
+  const lost = T.lost.length ? sv`, ${T.lost.length} tappades bort på vägen` : '';
+  log(sv`🚌 ${BUS_NAME} går ${when} med ${on} av ${T.n0} ombord${miss}`, 'sys');
+  dayEvent('bus', `🚌 ${BUS_NAME}`, sv`${T.n0 - 1} turister och guiden såg ${route(T)}. Bussen gick ${when} med ${on} av ${T.n0} ombord${miss}${lost}.`);
 }
 
 /** varje steg (sim.js) */
@@ -225,12 +226,12 @@ export function tourTick(dt) {
  *  guiden och tittar på utsikten. Annars (Sky Café) väljer man plats som vanligt (null). @param {Person} p */
 export function tourSpot(p, f) {
   if (f !== ROOF || !S.tour) return null;
-  if (p.guide) return { x: DOOR_X + 18, k: 'stand', face: 1, desc: `Berättar om utsikten för ${BUS_NAME}`, temp: true, win: 'hall' };
+  if (p.guide) return { x: DOOR_X + 18, k: 'stand', face: 1, desc: sv`Berättar om utsikten för ${BUS_NAME}`, temp: true, win: 'hall' };
   return { x: DOOR_X + rand(36, 290), k: 'stand', face: rng() < 0.6 ? -1 : 1, desc: pick(['Tittar på utsikten', 'Fotograferar stan', 'Lyssnar på guiden', 'Pekar ut tunnelbanebron']), temp: true, win: 'hall' };
 }
 /** vad en turist bestämmer sig för i ett rum (decideNext i people.js): guiden sköter gruppen, man stannar tills hen säger till @param {Person} p */
 export function tourNext(p) {
   if (p.tour && S.tour) return null;
-  return [p.exitFloor, p.guide ? 'Turen är slut – går hem' : `Har tappat bort ${BUS_NAME} – går ut på egen hand`];
+  return [p.exitFloor, p.guide ? 'Turen är slut – går hem' : sv`Har tappat bort ${BUS_NAME} – går ut på egen hand`];
 }
 export function tourReset() { S.tour = null; }

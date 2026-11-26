@@ -8,6 +8,7 @@
 // dygnets temperatur (kyla → skorstenseffekt: dörrarna i entrén tar emot; värme → motorerna kyls sämre) och stormen
 // (incident med val: svajläge/normal drift, `windAt`, `exposure`; ibland slår blixten ut strömmen, `strikeAt`)
 import { stream } from './rng.js';
+import { sv } from './sv.js';
 const { rand, rng } = stream('väder');
 import { clamp, fl } from './util.js';
 import { LOBBY, SKY } from './config.js';
@@ -26,7 +27,7 @@ export function weatherReset() {
   const temp = Math.round(rand(-18, 24));
   S.weather = { temp, cold: clamp((2 - temp) / 18, 0, 1) };
   S.storm = null;
-  if (S.weather.cold > 0) notice('cold', `❄️ Kall dag: ${temp} °C`,
+  if (S.weather.cold > 0) notice('cold', sv`❄️ Kall dag: ${temp} °C`,
     'Skorstenseffekten: varm luft stiger i schakten och suger in kall luft genom entrén. Hissdörrarna på E stänger trögt och tar ibland emot.',
     { floor: LOBBY });
 }
@@ -69,11 +70,11 @@ export function setWeather(kind) {
   const temp = kind === 'cold' ? Math.round(rand(-22, -14)) : Math.round(rand(29, 34));
   if (S.weather.temp === temp) return false;
   S.weather = { temp, cold: clamp((2 - temp) / 18, 0, 1) };
-  if (kind === 'cold') notice('cold', `❄️ Kall dag: ${temp} °C`,
+  if (kind === 'cold') notice('cold', sv`❄️ Kall dag: ${temp} °C`,
     'Skorstenseffekten: varm luft stiger i schakten och suger in kall luft genom entrén. Hissdörrarna på E stänger trögt och tar ibland emot.', { floor: LOBBY });
-  else notice('heatwave', `☀️ Värmebölja: ${temp} °C`,
+  else notice('heatwave', sv`☀️ Värmebölja: ${temp} °C`,
     'Maskinrummen kyls sämre i värmen – motorerna blir lättare överhettade, och driftchefen startar extrafläktarna tidigare.');
-  log(kind === 'cold' ? `❄️ Kölden slår till: ${temp} °C` : `☀️ Värmebölja: ${temp} °C i skuggan`, 'alert');
+  log(kind === 'cold' ? sv`❄️ Kölden slår till: ${temp} °C` : sv`☀️ Värmebölja: ${temp} °C i skuggan`, 'alert');
   return true;
 }
 export function setStormMode(m) {
@@ -92,7 +93,7 @@ export function stormTick(dt) {
       e.windLock = lock;
       // utan passagerare ska den hem direkt (även om den var på väg att hämta någon när vinden stängde den)
       if (lock && !e.passengers.length && !e.carCalls.size) e.parkTarget = e.home;
-      log(lock ? `🌬️ ${e.name} stängs för vinden – parkerar på ${fl(e.home)}` : `🌬️ ${e.name} öppnar igen – vinden har mojnat`, 'alert', e.color);
+      log(lock ? sv`🌬️ ${e.name} stängs för vinden – parkerar på ${fl(e.home)}` : sv`🌬️ ${e.name} öppnar igen – vinden har mojnat`, 'alert', e.color);
     }
     if (e.windLock && e.mode === 'normal' && e.state === 'idle' && !e.passengers.length && !e.carCalls.size && Math.round(e.pos) !== e.home) e.parkTarget = e.home;
     // normal drift i storm: linorna slår i schaktet – hissen går sönder vid nästa stopp
@@ -100,7 +101,7 @@ export function stormTick(dt) {
     if (St.mode === 'none' && x > 0 && w > 0.55 && e.state === 'moving' && e.mode === 'normal' && !e.breakNext && S.power) {
       if (rng() < STORM_FAULT_K * x * (w - 0.4) * dt) {
         e.breakNext = true; e.stormFault = true; St.faults++; S.stats.stormFaults++;
-        log(`🌬️ Linorna i ${e.name}s schakt slår i stormen – vajerlarm, hissen går sönder vid nästa stopp`, 'alert', e.color);
+        log(sv`🌬️ Linorna i ${e.name}s schakt slår i stormen – vajerlarm, hissen går sönder vid nästa stopp`, 'alert', e.color);
       }
     }
   }
@@ -113,9 +114,9 @@ export function stormTick(dt) {
     }
   }
   if (S.t - St.t0 >= St.len) {
-    log(`✅ Stormen har bedarrat${St.faults ? ` · ${St.faults} vajerlarm` : ''}`, 'alert');
+    log(sv`✅ Stormen har bedarrat${St.faults ? sv` · ${St.faults} vajerlarm` : ''}`, 'alert');
     incidentOver('storm', '✅ Stormen har bedarrat',
-      `Stormen varade ${Math.round(St.len)} s. ${St.faults ? `Linorna slog i schaktet och gav ${St.faults} vajerlarm.` : 'Inga vajerlarm.'}`
+      sv`Stormen varade ${Math.round(St.len)} s. ${St.faults ? sv`Linorna slog i schaktet och gav ${St.faults} vajerlarm.` : 'Inga vajerlarm.'}`
       + (St.mode === 'sway' ? ' Svajläget höll de höga hissarna lugna.' : '') + (St.struck ? ' Blixten slog ut strömmen mitt i ovädret.' : ''));
     for (const e of S.elevators) e.windLock = false;
     S.storm = null;

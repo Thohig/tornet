@@ -6,6 +6,7 @@
 // (determinismen och facit påverkas inte). Översättningarna står i lang-en.js: svensk mall → engelsk mall, där
 // {0}, {1} … (och {n}, {who} … i repliker) är värden – namn, våningar, siffror eller andra texter, som i sin tur
 // översätts. En text utan egen mall ("A · B – C") delas vid avskiljarna och sätts ihop av de bitar som har mallar.
+// En text som sv`…` gjorde (sv.js) har sin mall med sig och slår upp den direkt, utan att gissa.
 // Saknas en mall visas svenskan. Matchningen bryr sig inte om emoji, stora/små bokstäver eller extra mellanslag.
 //
 // Översikt:
@@ -20,6 +21,7 @@
 // svensk text i koden = en post i `lang-en.js` (`npm run lang` listar det som saknas); lagren i pixcore.js har
 // språket i nyckeln
 import EN from './lang-en.js';
+import { MADE } from './sv.js';
 
 /** @type {'en'|'sv'} */
 let lang = 'sv';
@@ -115,10 +117,27 @@ function tr2(s, depth) {
   const hit = cache.get(s);
   if (hit !== undefined) return hit;
   /** @type {[string, number]} */
-  const out = depth > 5 ? [s, miss0(s)] : find(s, depth);
+  const out = depth > 5 ? [s, miss0(s)] : made(s, depth) || find(s, depth);
   if (cache.size > 30000) cache.clear();
   cache.set(s, out);
   return out;
+}
+/**
+ * En text som sv`…` gjorde (sv.js): mallen och värdena är kända – mallen ur lang-en.js med värdena översatta för
+ * sig. null = texten är inte gjord av sv, eller mallen saknas (då matchas den som förut). @returns {[string, number]|null}
+ */
+function made(s, depth) {
+  const m = MADE.get(s);
+  if (!m) return null;
+  const en = EN[m.key];
+  if (!en) return null;
+  let miss = 0;
+  const r = en.replace(/\{(\d+)\}/g, (all, i) => {
+    const v = m.vals[+i];
+    if (v === undefined) return all;
+    const [x, ms] = tr2(v, depth + 1); miss += ms; return x;
+  });
+  return [r, miss];
 }
 const miss0 = s => (NAMEISH.test(norm(s)) ? 0 : (norm(s).match(/\p{L}/gu) || []).length);
 /** @returns {[string, number]} */

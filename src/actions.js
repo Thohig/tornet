@@ -25,6 +25,7 @@ import { startChaos } from './chaos.js';
 import { gondolaText, setGondolaHow } from './gondola.js';
 import { setDogLock } from './dog.js';
 import { setLeakMode } from './leak.js';
+import { sv } from './sv.js';
 
 /** Byt styrlogik: hallknapparna nollställs och alla väntande fördelas om. */
 export function changeStrategy(k) {
@@ -35,7 +36,7 @@ export function changeStrategy(k) {
   for (const e of S.elevators) { e.parkTarget = null; e.sleep = false; }
   S.peakMode = null;
   rebuildPicks();
-  log(`Styrlogik bytt till ${STRAT_NAMES[k]} – alla väntande fördelas om`, 'sys');
+  log(sv`Styrlogik bytt till ${STRAT_NAMES[k]} – alla väntande fördelas om`, 'sys');
 }
 /** inställningar som spelaren kan ändra under dygnet */
 const SETTINGS = ['mistakes', 'maint'];
@@ -58,8 +59,8 @@ export const ACTIONS = {
   trigger: (type, target = null) => triggerAny(type, target),
   fireMode: m => { if (!S.fire) return; setFireMode(m); playerChose('fire', FIRE_TEXT[m], { inc: 'fire' }); },
   generator: () => { if (!S.outage) return; startGenerator(); playerChose('power', 'Reservkraften startad', { inc: 'power' }); },
-  autoRescue: () => { if (!S.outage) return; toggleAutoRescue(); playerChose('power', `Auto-räddning ${S.outage.auto ? 'på' : 'av'}`, { inc: 'power' }); },
-  rescue: id => { if (!S.outage) return; startRescue(car(id), 'manual'); playerChose('power', `Nödsänk ${car(id).name}`, { inc: 'power', car: id }); },
+  autoRescue: () => { if (!S.outage) return; toggleAutoRescue(); playerChose('power', sv`Auto-räddning ${S.outage.auto ? 'på' : 'av'}`, { inc: 'power' }); },
+  rescue: id => { if (!S.outage) return; startRescue(car(id), 'manual'); playerChose('power', sv`Nödsänk ${car(id).name}`, { inc: 'power', car: id }); },
   carOff: id => toggleOff(car(id)),
   strategy: k => { changeStrategy(k); playerChose('strategy', STRAT_NAMES[k]); },
   setting: (key, v) => { if (SETTINGS.includes(key)) S[key] = v; },
@@ -67,7 +68,7 @@ export const ACTIONS = {
   chief: on => setChief(on),
   chiefBack: key => chiefBack(key),
   stormMode: m => { if (!S.storm) return; setStormMode(m); playerChose('storm', m === 'sway' ? 'Svajläge' : 'Kör som vanligt', { inc: 'storm' }); },
-  fan: id => { startFan(car(id)); if (car(id).hot) playerChose(`heat${id}`, `Extrafläkten i ${car(id).name}`, { inc: 'heat', car: id }); },
+  fan: id => { startFan(car(id)); if (car(id).hot) playerChose(`heat${id}`, sv`Extrafläkten i ${car(id).name}`, { inc: 'heat', car: id }); },
   service: id => orderService(car(id)),
   visitor: (f, x) => spawnVisitor(f, x),
   bus: () => spawnBus(),

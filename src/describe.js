@@ -4,6 +4,7 @@ import { fl } from './util.js';
 import { FL } from './config.js';
 import { S } from './state.js';
 import { eta } from './dispatch.js';
+import { sv } from './sv.js';
 /** @typedef {import('./people.js').Person} Person */
 
 /** personalens poster (crew.js): läget när de sitter där
@@ -16,8 +17,8 @@ export function stateInfo(p) {
   switch (p.state) {
     case 'toQueue': return ['GÅR TILL HISSARNA', '#9fb3ff'];
     case 'wait': return [p.mood === 2 ? 'VÄNTAR – ARG!' : 'VÄNTAR', p.mood === 2 ? '#ff5d52' : '#ffe14d'];
-    case 'boarding': return [`KLIVER PÅ ${p.car.name}`, p.car.color];
-    case 'ride': return [(!S.power && p.car.mode === 'normal') || (p.car.mode === 'broken' && p.car.fault && p.car.fault.trapped) ? `INSTÄNGD I ${p.car.name}!` : `ÅKER I ${p.car.name}`, p.car.color];
+    case 'boarding': return [sv`KLIVER PÅ ${p.car.name}`, p.car.color];
+    case 'ride': return [(!S.power && p.car.mode === 'normal') || (p.car.mode === 'broken' && p.car.fault && p.car.fault.trapped) ? sv`INSTÄNGD I ${p.car.name}!` : sv`ÅKER I ${p.car.name}`, p.car.color];
     case 'exiting': return ['KLIVER AV', '#7cf06b'];
     case 'stairs': case 'instairs': return ['TAR TRAPPAN', '#22c55e'];
     case 'office':
@@ -45,21 +46,21 @@ export function roomDesc(p) {
 }
 export function noteDetail(p) {
   if (p.dead) return 'Har lämnat huset';
-  const via = p.goal !== p.dest && p.state !== 'office' ? ` (byter på ${fl(p.dest)})` : '';
+  const via = p.goal !== p.dest && p.state !== 'office' ? sv` (byter på ${fl(p.dest)})` : '';
   switch (p.state) {
-    case 'toQueue': return `Ska till ${fl(p.goal ?? p.dest)}${via}`;
+    case 'toQueue': return sv`Ska till ${fl(p.goal ?? p.dest)}${via}`;
     case 'wait': {
-      let s = `→ ${fl(p.goal ?? p.dest)}${via} · väntat ${Math.round(S.t - p.waitStart)} s`;
-      if (p.assigned !== null) { const e = S.elevators[p.assigned]; s += ` · ${e.name} om ~${Math.round(eta(e, p.floor, p.dir))} s`; }
+      let s = sv`→ ${fl(p.goal ?? p.dest)}${via} · väntat ${Math.round(S.t - p.waitStart)} s`;
+      if (p.assigned !== null) { const e = S.elevators[p.assigned]; s += sv` · ${e.name} om ~${Math.round(eta(e, p.floor, p.dir))} s`; }
       return s;
     }
-    case 'boarding': case 'ride': return `→ ${fl(p.dest)}${p.goal !== p.dest ? ` (sedan ${fl(p.goal)})` : ''} · åkt ${Math.round(S.t - (p.rideStart || S.t))} s`;
+    case 'boarding': case 'ride': return sv`→ ${fl(p.dest)}${p.goal !== p.dest ? sv` (sedan ${fl(p.goal)})` : ''} · åkt ${Math.round(S.t - (p.rideStart || S.t))} s`;
     case 'exiting': return p.spot ? p.spot.desc : 'På väg ut';
-    case 'stairs': case 'instairs': return `Trappan till ${fl(p.dest)}`;
+    case 'stairs': case 'instairs': return sv`Trappan till ${fl(p.dest)}`;
     case 'office': return `${roomDesc(p)} (${FL[p.floor].short})`;
     case 'away': return 'Inte i huset just nu';
     case 'assembly': return 'Väntar på återsamlingsplatsen utanför entrén';
-    case 'incar': return `Kör in i garaget på ${fl(p.floor)}`;
+    case 'incar': return sv`Kör in i garaget på ${fl(p.floor)}`;
     case 'rope': return S.pano && S.pano.setup === 'ladder' ? 'På stegbilens stege, på väg ner till gatan' : 'Hänger i selen längs fasaden';
   }
   return '';

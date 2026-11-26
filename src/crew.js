@@ -28,6 +28,7 @@ import { windAt } from './weather.js';
 import { WIND_STOP } from './hoist.js';
 import { visningSpot } from './visning.js';
 import { gondolaStuck } from './gondola.js';
+import { sv } from './sv.js';
 /** @typedef {import('./people.js').Person} Person */
 
 /** @typedef {import('./config.js').CrewDef} CrewDef */
@@ -86,7 +87,7 @@ export function spawnCrew(id, atStart = false, from = LOBBY) {
     const first = crewNext(p, hour()) || [pf, 'Till jobbet'];
     setTrip(p, first[0], first[1], false);
     pev(p, `${from === LOBBY ? 'Kliver in i entrén' : 'Kliver ur flyttbilen vid lastkajen'} · ${c.title} · ${p.why}`);
-    log(`${c.icon} ${pn(p)} (${c.role}) kommer till jobbet`, 'person', null, p.id);
+    log(sv`${c.icon} ${pn(p)} (${c.role}) kommer till jobbet`, 'person', null, p.id);
   }
   return p;
 }
@@ -133,7 +134,7 @@ function offReason(p, h) {
   const c = CREW_BY[p.crewId];
   if (c.post === 'chief' && S.chief && !S.chief.on) return 'Går på rast – du får ta besluten så länge';
   // (nattskiftet efter ett mjukt dygnsskifte sitter kvar på posten tills avlösaren är i huset)
-  if (h < c.from && !(p.shiftEnd && !relieved(c))) return `Hänger av sig jackan i personalrummet – passet börjar kl ${Math.floor(c.from)}`;
+  if (h < c.from && !(p.shiftEnd && !relieved(c))) return sv`Hänger av sig jackan i personalrummet – passet börjar kl ${Math.floor(c.from)}`;
   // (fönsterputsaren som satt fast i gondolen tar inte gondolen mer i dag, gondola.js)
   if (p.offDuty) return c.post === 'gondola' ? 'Tar inte gondolen mer i dag – kaffe i personalrummet' : 'Av passet – väntar i personalrummet';
   if (c.post === 'gondola') return gondolaOff();
@@ -199,7 +200,7 @@ export function crewNext(p, h) {
   if (shiftOver(p, h, busy)) {
     if (!mayLeave(p)) return null;
     const next = relief(c);
-    return [p.exitFloor, c.post === 'terrace' ? 'Flytten är klar – åker med flyttbilen' : c.sub ? `${subFor()} är tillbaka – tackar för sig och går` : `Passet är slut${next ? ` – ${next.name} tar över` : ''}`];
+    return [p.exitFloor, c.post === 'terrace' ? 'Flytten är klar – åker med flyttbilen' : c.sub ? sv`${subFor()} är tillbaka – tackar för sig och går` : sv`Passet är slut${next ? sv` – ${next.name} tar över` : ''}`];
   }
   // rasten är slut (eller larmet går för den som behövs i kontrollrummet)
   if (p.onBreak && ((busy && c.urgent) || S.t >= p.breakUntil)) {
@@ -234,7 +235,7 @@ export function crewNext(p, h) {
   if (taken || !ok(pf)) return p.floor === BREAK || p.floor === LOBBY || !ok(BREAK) ? null : [BREAK, 'Väntar i personalrummet på att få ta över', false];
   // på våningen men inte på posten (stod och väntade): sätt dig
   if (p.floor === pf) return sitDown(p, pf);
-  return [pf, busy && c.urgent ? 'Larm! Skyndar tillbaka till kontrollrummet' : `Tillbaka till jobbet${p.floor === BREAK ? '' : ` på ${c.post === 'gondola' ? 'taket' : 'posten'}`}`, false];
+  return [pf, busy && c.urgent ? 'Larm! Skyndar tillbaka till kontrollrummet' : (p.floor === BREAK ? 'Tillbaka till jobbet' : c.post === 'gondola' ? 'Tillbaka till jobbet på taket' : 'Tillbaka till jobbet på posten'), false];
 }
 /** byt plats på samma våning (från posten till rastmålet eller tvärtom) @param {Person} p */
 function sitDown(p, f) {
@@ -284,10 +285,10 @@ export function callJanitor(kind, f, why, desc, x) {
     p.duty = duty;
     if (p.state === 'office') p.timer = 0;
     pev(p, `Uppdrag: ${why}`);
-    log(`🔧 ${pn(p)} (vaktmästare): ${why}`, 'person', null, p.id);
+    log(sv`🔧 ${pn(p)} (vaktmästare): ${why}`, 'person', null, p.id);
   } else {
     p = spawnStaff('vaktmästare', false, { title: 'Jourvaktmästare (inringd)', jour: true, duty });
-    log(`☎️ Ingen vaktmästare i huset – jourvaktmästaren ${pn(p)} rings in: ${why}`, 'alert', null, p.id);
+    log(sv`☎️ Ingen vaktmästare i huset – jourvaktmästaren ${pn(p)} rings in: ${why}`, 'alert', null, p.id);
   }
   return p;
 }

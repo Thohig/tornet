@@ -1,5 +1,6 @@
 // Hissarna: rörelse, dörrar, av-/påstigning och incidentlägen.
 import { stream } from './rng.js';
+import { sv } from './sv.js';
 const { rand, rng } = stream('hissar');
 import { ARR, fl } from './util.js';
 import { ACC, CAP, DOOR_T, DWELL, EL, LOBBY, VMAX, shaftCX, CAR_H, floorY } from './config.js';
@@ -96,12 +97,12 @@ export function releaseCalls(e, why, keep = /** @type {((p: any) => boolean)|nul
   for (const p of S.people) {
     if (p.state === 'wait' && p.assigned === e.id && !(keep && keep(p))) {
       p.assigned = null; n++;
-      pev(p, `Hiss ${e.name} ${why} – systemet letar en ny hiss åt mig`);
+      pev(p, sv`Hiss ${e.name} ${why} – systemet letar en ny hiss åt mig`);
     }
   }
   let calls = 0;
   for (const c of Object.values(S.calls)) if (c.car === e.id) { c.car = null; calls++; }
-  if (n) log(n > 1 ? `${e.name} ${why} – släpper ${n} hämtningar` : `${e.name} ${why} – släpper en hämtning`, 'move', e.color);
+  if (n) log(n > 1 ? sv`${e.name} ${why} – släpper ${n} hämtningar` : sv`${e.name} ${why} – släpper en hämtning`, 'move', e.color);
   if (n || calls) rebuildPicks();
 }
 /** Byter hissens läge. Alla byten går hit: lämnar hissen normal drift släpps väntande hämtningar direkt,
@@ -148,7 +149,7 @@ function zoneReroute(e, f) {
     const pd = deckFloor(e, p, drop);
     if (allowedDest(e, p) || p.dest === pd) continue;
     e.carCalls.delete(posOf(e, p.dest)); p.viaStairs = true; p.dest = pd; e.carCalls.add(drop);
-    pev(p, `Brandzonen spärrad – hiss ${e.name} släpper av mig på ${fl(pd)}, sen trappan`);
+    pev(p, sv`Brandzonen spärrad – hiss ${e.name} släpper av mig på ${fl(pd)}, sen trappan`);
     if (drop === f) here = true;
   }
   return here;
@@ -171,7 +172,7 @@ export function idleEval(e, dt) {
   e.idleTime = 0;
   if (e.dir !== 0 && aheadOf(e, f, e.dir)) { e.state = 'moving'; return; }
   if (e.dir !== 0 && aheadOf(e, f, -e.dir)) {
-    log(`${e.name} vänder ${ARR(-e.dir)} – inga fler mål ${ARR(e.dir)}`, 'move', e.color);
+    log(sv`${e.name} vänder ${ARR(-e.dir)} – inga fler mål ${ARR(e.dir)}`, 'move', e.color);
     e.dir = -e.dir; e.state = 'moving'; return;
   }
   const near = stops.reduce((a, b) => (Math.abs(b - f) < Math.abs(a - f) ? b : a));
@@ -252,7 +253,7 @@ export function arrive(e, f) {
   e.state = 'doors'; e.doorPhase = 'opening'; e.dwell = 0; e.dwellNeed = DWELL;
   e.lastOff = 0; e.lastOn = 0; e.trips++; e.target = null;
   heatOnStop(e); levelStart(e);
-  for (const p of e.passengers) if (posOf(e, p.dest) !== f) pev(p, `Hiss ${e.name} stannar på ${fl(deckFloor(e, p, f))} (inte mitt mål)`);
+  for (const p of e.passengers) if (posOf(e, p.dest) !== f) pev(p, sv`Hiss ${e.name} stannar på ${fl(deckFloor(e, p, f))} (inte mitt mål)`);
 }
 /** @param {Elevator} e */
 export function updateDoors(e, dt) {
@@ -280,7 +281,7 @@ export function updateDoors(e, dt) {
       // spökstopp: dörrarna öppnade men ingen klev av eller på (felknapp, bus eller tomt anrop)
       if (!e.lastOff && !e.lastOn && e.skipTrip !== e.trips) {
         S.stats.ghostStops++;
-        log(`👻 ${e.name} stannade på ${fl(f)} – ingen klev av eller på`, 'move', e.color);
+        log(sv`👻 ${e.name} stannade på ${fl(f)} – ingen klev av eller på`, 'move', e.color);
       }
     }
     return;
@@ -291,7 +292,7 @@ export function updateDoors(e, dt) {
   e.door = Math.max(0, e.door - dt / (DOOR_T * slow));
   if (e.fightAt > 0 && !e.fought && e.door <= e.fightAt) {
     e.fought = true; e.bounce = 0.3; S.stats.doorFights++;
-    log(`❄️ ${e.name}: dörren tar emot i entrén – kalldraget trycker (skorstenseffekten)`, 'move', e.color);
+    log(sv`❄️ ${e.name}: dörren tar emot i entrén – kalldraget trycker (skorstenseffekten)`, 'move', e.color);
     S.fx.push({ x: shaftCX(e.id), y: floorY(f) - CAR_H - 26, text: 'FSSSS!', color: '#bfeaff', life: 1.2, size: 14 });
   }
   if (e.door <= 0) { e.state = 'idle'; e.doorPhase = null; e.idleTime = 0; }
@@ -333,10 +334,10 @@ export function unload(e, f) {
     p.trips++; p.offCar = e.id; p.offAt = p.floor; // (vilken hiss hen kom med – ambulansens hiss väntar på dem)
     S.stats.rideSum += ride; S.stats.rideN++; S.stats.served++;
     if (e.deck2 && p.deck === 1) { S.stats.upperDeck++; p.fromUpper = true; }
-    pev(p, `Kliver av hiss ${e.name} på ${fl(p.floor)}${e.deck2 ? (p.deck ? ' (övre däcket)' : ' (nedre däcket)') : ''} · åkte ${Math.round(ride)}s`);
-    log(`${pn(p)} kliver av ${e.name} på ${fl(p.floor)}`, 'person', null, p.id);
+    pev(p, sv`Kliver av hiss ${e.name} på ${fl(p.floor)}${e.deck2 ? (p.deck ? ' (övre däcket)' : ' (nedre däcket)') : ''} · åkte ${Math.round(ride)}s`);
+    log(sv`${pn(p)} kliver av ${e.name} på ${fl(p.floor)}`, 'person', null, p.id);
     maybeStumble(e, p);
-    if (p.viaStairs) { p.viaStairs = false; toStairs(p, `Fortsätter till ${fl(p.goal)} via trapporna`); continue; }
+    if (p.viaStairs) { p.viaStairs = false; toStairs(p, sv`Fortsätter till ${fl(p.goal)} via trapporna`); continue; }
     arriveOnFloor(p);
   }
   e.lastOff = out.length;
@@ -353,10 +354,10 @@ export function exitAll(e, f, why) {
 export function exitOne(e, p, pf, why) {
   e.passengers = e.passengers.filter(q => q !== p);
   exitPassenger(e, p, pf);
-  if (p.goal === pf) { pev(p, `Kliver av hiss ${e.name} på ${fl(pf)}`); arriveOnFloor(p); return; }
+  if (p.goal === pf) { pev(p, sv`Kliver av hiss ${e.name} på ${fl(pf)}`); arriveOnFloor(p); return; }
   p.dir = Math.sign(p.goal - pf);
-  if (liftsAvailable() && allowed(pf) && allowed(p.goal)) { setTrip(p, p.goal, p.why); pev(p, `${why} – ställer mig i kön igen`); }
-  else toStairs(p, `${why} – tar trapporna`);
+  if (liftsAvailable() && allowed(pf) && allowed(p.goal)) { setTrip(p, p.goal, p.why); pev(p, sv`${why} – ställer mig i kön igen`); }
+  else toStairs(p, sv`${why} – tar trapporna`);
 }
 /** @param {Elevator} e */
 export function load(e, f) {
@@ -373,11 +374,11 @@ export function load(e, f) {
     const mine = buttons && !keyed(p) ? p.bank === e.group && e.legs.some(l => l.includes(p.floor) && l.includes(p.dest)) && allowedDest(e, p) && !e.vipLock && !e.indep : p.assigned === e.id;
     if (!mine) {
       if (buttons && !keyed(p)) continue;
-      if (p.assigned !== null && !seen(p)) { pev(p, `Hiss ${e.name} öppnar – men jag ska ta ${EL[p.assigned].name}`); }
+      if (p.assigned !== null && !seen(p)) { pev(p, sv`Hiss ${e.name} öppnar – men jag ska ta ${EL[p.assigned].name}`); }
       continue;
     }
     if (e.dir !== 0 && p.dir !== e.dir) {
-      if (!seen(p)) { pev(p, `Min hiss ${e.name} öppnade men ska ${ARR(e.dir)} först – väntar kvar`); }
+      if (!seen(p)) { pev(p, sv`Min hiss ${e.name} öppnade men ska ${ARR(e.dir)} först – väntar kvar`); }
       continue;
     }
     // den som nyss fick kliva av för överlast försöker inte igen vid samma stopp
@@ -390,7 +391,7 @@ export function load(e, f) {
     const room = p.space + (S.strategy === 'peak' && S.peakMode ? 2 : 0);
     if (!keyed(p) && n >= room && S.t - p.waitStart < 20 && !slotsFull(e)) {
       p.crowdSkip = stop; S.stats.crowdSkips++; e.skipTrip = e.trips;
-      pev(p, `Hiss ${e.name} ser trång ut (${e.passengers.length + e.reserved} personer) – väntar hellre på nästa`);
+      pev(p, sv`Hiss ${e.name} ser trång ut (${e.passengers.length + e.reserved} personer) – väntar hellre på nästa`);
       if (!buttons) { p.assigned = null; p.avoid = e.id; rebuildPicks(); }
       continue;
     }
@@ -406,8 +407,8 @@ export function load(e, f) {
     etaOutcome(p);
     if (p.mood >= 2) S.stats.angry++;
     p.rideStart = S.t;
-    pev(p, `Kliver på hiss ${e.name} efter ${Math.round(w)}s väntan`);
-    log(`${pn(p)} kliver på ${e.name} (väntat ${Math.round(w)}s)`, 'person', null, p.id);
+    pev(p, sv`Kliver på hiss ${e.name} efter ${Math.round(w)}s väntan`);
+    log(sv`${pn(p)} kliver på ${e.name} (väntat ${Math.round(w)}s)`, 'person', null, p.id);
   }
   // KNAPPAR: hissen som står här åt det hållet släcker knappen i hallen
   if (boarded && buttons) for (const d of [1, -1]) if (d === e.dir) { clearCall(e.group, f, d); if (e.deck2) clearCall(e.group, f + 1, d); }
@@ -435,7 +436,7 @@ export function restoreElevator(e) {
     // i full fart hinner korgen inte bromsa till en våning som ligger närmare än bromssträckan –
     // den stannar på nästa och kör tillbaka (en fysisk gräns, inte ett val av styrningen)
     for (const p of e.passengers) {
-      if (!canBrakeTo(e, posOf(e, p.dest))) pev(p, `Hiss ${e.name} hinner inte bromsa till ${fl(p.dest)} – vänder på nästa våning`);
+      if (!canBrakeTo(e, posOf(e, p.dest))) pev(p, sv`Hiss ${e.name} hinner inte bromsa till ${fl(p.dest)} – vänder på nästa våning`);
     }
   }
   else e.state = 'idle';
@@ -468,9 +469,9 @@ export function recallStep(e, dt) {
     e.door = Math.min(1, e.door + dt / DOOR_T);
     if (e.door >= 1) {
       e.doorPhase = 'open';
-      if (e.passengers.length) exitAll(e, e.home, `Brandåterkallning – alla ut på ${fl(e.home)}`);
+      if (e.passengers.length) exitAll(e, e.home, sv`Brandåterkallning – alla ut på ${fl(e.home)}`);
       setMode(e, 'locked'); e.rs = null;
-      log(`🚒 ${e.name} står avstängd i ${fl(e.home)} med öppna dörrar`, 'alert', e.color);
+      log(sv`🚒 ${e.name} står avstängd i ${fl(e.home)} med öppna dörrar`, 'alert', e.color);
     }
   }
 }
@@ -490,7 +491,7 @@ export function rescueStep(e, dt) {
       exitAll(e, e.floor, 'Räddad ur hissen med reservkraft');
       setMode(e, 'dead'); e.rs = null;
       if (S.outage) S.outage.busy = null;
-      log(`🔋 ${e.name} nödsänkt till ${fl(e.floor)} – ${n} personer ute`, 'alert', e.color);
+      log(sv`🔋 ${e.name} nödsänkt till ${fl(e.floor)} – ${n} personer ute`, 'alert', e.color);
     }
   }
 }
@@ -510,9 +511,9 @@ export function kickOff(e, p) {
   e.overloadFlash = 2;
   e.dwell = Math.min(e.dwell, e.dwellNeed - 1); // dörrarna hålls öppna en stund medan det piper
   const kg = Math.round(loadKg(e) + personKg(p));
-  const what = p.cargo ? ` (med ${p.cargo.name})` : '';
-  pev(p, `PIIIP! Hiss ${e.name} är överlastad (${kg}/${e.ratedKg} kg) – jag får kliva av${what} och vänta på nästa`);
-  log(`⚖️ ${e.name} överlastad ${kg}/${e.ratedKg} kg – ${pn(p)}${what} kliver av`, 'alert', e.color, p.id);
+  const what = p.cargo ? sv` (med ${p.cargo.name})` : '';
+  pev(p, sv`PIIIP! Hiss ${e.name} är överlastad (${kg}/${e.ratedKg} kg) – jag får kliva av${what} och vänta på nästa`);
+  log(sv`⚖️ ${e.name} överlastad ${kg}/${e.ratedKg} kg – ${pn(p)}${what} kliver av`, 'alert', e.color, p.id);
   S.fx.push({ x: shaftCX(e.id), y: floorY(e.floor) - CAR_H - 30, text: 'BZZT!', color: '#ff5d52', life: 1.4 });
   rebuildPicks();
 }

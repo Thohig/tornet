@@ -7,6 +7,7 @@
 // (en andel `TRAIN_SHARE` av morgonens anställda) och på, sista tåget (`S.trainDone`: alla med `exitFloor` stationen
 // går ut genom entrén)
 import { stream } from './rng.js';
+import { sv } from './sv.js';
 const { rand, randi, rng } = stream('tåg');
 // påstigningen har en egen ström: vilka som står på perrongen beror på styrlogiken, och får inte flytta hur många
 // som kliver av nästa tåg
@@ -99,7 +100,7 @@ function arrive(T, h, rate) {
   T.emp = Math.round(emp); T.n = T.emp + vis;
   T.n = Math.max(0, Math.min(T.n, MAXP - S.people.length));
   T.emp = Math.min(T.emp, T.n);
-  if (T.n > 0) log(`🚇 Tåget stannar på ${fl(STATION)} – ${T.n} kliver av`, 'sys');
+  if (T.n > 0) log(sv`🚇 Tåget stannar på ${fl(STATION)} – ${T.n} kliver av`, 'sys');
 }
 /** en person kliver av vid en av dörrarna */
 function alight(T) {
@@ -114,7 +115,7 @@ function alight(T) {
     if (p) {
       if (p.goal !== LOBBY) p.exitFloor = STATION;
       else p.why = 'Genväg från tunnelbanan upp till gatan';
-      pev(p, `Kliver av tåget · ${p.why}`);
+      pev(p, sv`Kliver av tåget · ${p.why}`);
     }
   }
   T.off++;
@@ -129,7 +130,7 @@ function board() {
     p.dead = true; p.state = 'gone';
     S.stats.trainOut++;
     pev(p, 'Kliver på tåget – hejdå!');
-    log(`${pn(p)} tar tåget hem`, 'person', null, p.id);
+    log(sv`${pn(p)} tar tåget hem`, 'person', null, p.id);
   }
 }
 function depart(T) {
@@ -157,7 +158,7 @@ function lastTrainGone() {
     else if (p.toTrain && p.state === 'exiting') { p.toTrain = false; setTrip(p, LOBBY, why, true); }
     pev(p, why);
   }
-  log(`🚇 Sista tåget har gått${n ? ` – ${n} får ta sig ut genom entrén` : ''}`, 'sys');
+  log(sv`🚇 Sista tåget har gått${n ? sv` – ${n} får ta sig ut genom entrén` : ''}`, 'sys');
 }
 /** Spelaren: tågstörning – nästa tåg blir försenat och kommer med dubbelt så många (alla som samlats sedan förra) */
 export function delayTrain() {
@@ -165,7 +166,7 @@ export function delayTrain() {
   const d = rand(30, 45);
   S.trainNext = Math.max(S.trainNext, S.t) + d;
   S.trainDelay = { t0: S.t, until: S.trainNext };
-  notice('train', '🚇 Tågstörning', `Signalfel i tunneln: nästa tåg är ${Math.round(d)} s försenat. Folk samlas på stationerna längs linjen – när tåget väl kommer kliver dubbelt så många av på perrongen.`, { floor: STATION });
+  notice('train', '🚇 Tågstörning', sv`Signalfel i tunneln: nästa tåg är ${Math.round(d)} s försenat. Folk samlas på stationerna längs linjen – när tåget väl kommer kliver dubbelt så många av på perrongen.`, { floor: STATION });
   log('🚇 Tågstörning: signalfel i tunneln – nästa tåg är försenat', 'alert');
   return true;
 }

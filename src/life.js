@@ -1,5 +1,6 @@
 // Husets liv: bilar i garaget, leveranser vid lastkajen, de boendes dygnsrutiner och VIP-besök med helikopter.
 import { stream } from './rng.js';
+import { sv } from './sv.js';
 const { pick, rand, rng } = stream('liv');
 // buden är ankomster: en egen ström, som dras lika många gånger oavsett hur det går för hissarna
 const BUD = stream('bud');
@@ -35,7 +36,7 @@ export function arriveByCar(p, parked = false) {
     setTrip(p, p.goal, p.why);
     p.state = 'incar'; p.x = auto.x;
     S.stats.carsIn++;
-    pev(p, `Kör in i garaget på ${fl(s.floor)} och parkerar`);
+    pev(p, sv`Kör in i garaget på ${fl(s.floor)} och parkerar`);
   }
   return true;
 }
@@ -52,8 +53,8 @@ export function leaveBuilding(p) {
   if (p.kind === 'res' && !p.movedOut) {
     const ev = p.sched.find(e => !e.done && e.go === 'home');
     p.state = 'away'; p.returnAt = ev ? ev.at : 99; p.spot = null;
-    pev(p, `Går ut · ${p.why}${ev ? ` – tillbaka ca ${clockStr(ev.at)}` : ''}`);
-    log(`${pn(p)} går hemifrån · ${p.why}`, 'person', null, p.id);
+    pev(p, sv`Går ut · ${p.why}${ev ? sv` – tillbaka ca ${clockStr(ev.at)}` : ''}`);
+    log(sv`${pn(p)} går hemifrån · ${p.why}`, 'person', null, p.id);
     return;
   }
   // en flyttgubbe som går (utrymd vid brand) lämnar det hen packade eller bar i lägenheten – samma steg, så att
@@ -65,7 +66,7 @@ export function leaveBuilding(p) {
   }
   p.dead = true;
   pev(p, p.movedOut ? 'Flyttar härifrån – hejdå huset!' : 'Lämnar huset – hejdå!');
-  log(`${pn(p)} lämnar huset${p.exitFloor !== LOBBY ? ` (från ${fl(p.exitFloor)})` : ''}`, 'person', null, p.id);
+  log(sv`${pn(p)} lämnar huset${p.exitFloor !== LOBBY ? sv` (från ${fl(p.exitFloor)})` : ''}`, 'person', null, p.id);
 }
 /** Branden är släckt: tillbaka in från återsamlingsplatsen – dit man var på väg, eller hem om det har blivit sent @param {Person} p */
 export function backFromAssembly(p) {
@@ -81,7 +82,7 @@ export function fireReturn(p, why) {
   p.evacFrom = undefined;
   if (to === undefined || to === LOBBY || to === p.exitFloor || h >= 21 || !floorOpen(to, h) && to !== p.home) return false;
   setTrip(p, to, why, false);
-  pev(p, `Branden är släckt – går in igen till ${fl(to)}`);
+  pev(p, sv`Branden är släckt – går in igen till ${fl(to)}`);
   return true;
 }
 function autoTick(dt) {
@@ -124,10 +125,10 @@ function spawnCourier() {
   const p = makePerson('staff', DOCK, S.truck.x + 150);
   p.role = 'bud'; p.exitFloor = DOCK; p.cargo = { kind: 'paket', name: 'paketkärra', kg: 40 };
   const g = BUD.pick(goals);
-  setTrip(p, g, `Levererar paket till ${FL[g].short}`);
+  setTrip(p, g, sv`Levererar paket till ${FL[g].short}`);
   S.people.push(p); S.truck.sent++;
-  pev(p, `Lastar av paket vid lastkajen · ${p.why} (${fl(g)})`);
-  log(`📦 ${pn(p)} levererar till ${fl(g)} – tar varuhissen`, 'person', null, p.id);
+  pev(p, sv`Lastar av paket vid lastkajen · ${p.why} (${fl(g)})`);
+  log(sv`📦 ${pn(p)} levererar till ${fl(g)} – tar varuhissen`, 'person', null, p.id);
 }
 
 // ---------- De boende ----------
@@ -163,7 +164,7 @@ function routine(type) {
 }
 const TYPE_NAMES = { worker: 'jobbar inne i stan', child: 'går i skolan', student: 'pluggar', pensioner: 'pensionär', vd: 'VD med långa dagar', artist: 'konstnär – nattuggla' };
 /** @param {Person} p */
-export const residentDesc = p => `Bor på ${fl(p.home)} (${p.apt ? 'höger' : 'vänster'} lägenhet) · ${TYPE_NAMES[p.rtype] || ''}`;
+export const residentDesc = p => sv`Bor på ${fl(p.home)} (${p.apt ? 'höger' : 'vänster'} lägenhet) · ${TYPE_NAMES[p.rtype] || ''}`;
 /** de boende i husets lägenheter; only(f, apt) = bara de lägenheter där det inte bor någon (dygnsskiftet) */
 function makeResidents(only = (/** @type {number} */ _f, /** @type {number} */ _apt) => true) {
   HOUSEHOLDS.forEach((apts, i) => {
@@ -227,8 +228,8 @@ function awayTick(p) {
   p.floor = LOBBY; p.exitFloor = LOBBY; p.x = -30 - rand(0, 20);
   setTrip(p, p.home, ev ? ev.why : 'Hem');
   if (p.hasCar && !arriveByCar(p)) p.exitFloor = LOBBY; // garaget fullt – går in genom entrén
-  pev(p, `Kommer hem · ${p.why}`);
-  log(`${pn(p)} kommer hem till ${fl(p.home)}`, 'person', null, p.id);
+  pev(p, sv`Kommer hem · ${p.why}`);
+  log(sv`${pn(p)} kommer hem till ${fl(p.home)}`, 'person', null, p.id);
 }
 
 // ---------- VIP-besök med helikopter ----------
@@ -238,7 +239,7 @@ function heliTick(dt) {
   const H = S.heli;
   if (!H) {
     const due = S.fire ? null : S.vipVisits.find(v => !v.done && h >= v.at); // (vid brandlarm väntar helikoptern)
-    if (due) { due.done = true; S.heli = { state: 'land', y: -260, visit: due }; log(`🚁 En helikopter närmar sig takterrassen – VIP-besök till ${FL[due.goal].short}!`, 'alert'); }
+    if (due) { due.done = true; S.heli = { state: 'land', y: -260, visit: due }; log(sv`🚁 En helikopter närmar sig takterrassen – VIP-besök till ${FL[due.goal].short}!`, 'alert'); }
     return;
   }
   if (H.state === 'land') {
@@ -256,7 +257,7 @@ export function vipNow() {
   if (ROOF < 0 || S.heli || S.fire || S.people.some(p => p.vip)) return false;
   const v = { at: hour(), goal: pick(OFFICE_FLOORS), done: true };
   S.heli = { state: 'land', y: -260, visit: v };
-  log(`🚁 En helikopter närmar sig takterrassen – oanmält VIP-besök till ${FL[v.goal].short}!`, 'alert');
+  log(sv`🚁 En helikopter närmar sig takterrassen – oanmält VIP-besök till ${FL[v.goal].short}!`, 'alert');
   return true;
 }
 function spawnVips(v) {
@@ -266,12 +267,12 @@ function spawnVips(v) {
     p.vip = true; p.exitFloor = ROOF;
     if (i === 0) { p.name = pick(VIP_NAMES); p.look.tie = true; p.look.shirt = '#1b1033'; }
     else { p.name = `Livvakt ${i}`; p.look.acc = 3; p.look.shirt = '#2b2d6e'; }
-    setTrip(p, v.goal, i === 0 ? `VIP-besök på ${FL[v.goal].short}` : `Eskorterar ${S.people.find(q => q.vip && q.name && !q.name.startsWith('Livvakt'))?.name || 'VIP:en'}`);
+    setTrip(p, v.goal, i === 0 ? sv`VIP-besök på ${FL[v.goal].short}` : `Eskorterar ${S.people.find(q => q.vip && q.name && !q.name.startsWith('Livvakt'))?.name || 'VIP:en'}`);
     S.people.push(p);
-    pev(p, `Kliver ur helikoptern på taket · ${p.why}`);
+    pev(p, sv`Kliver ur helikoptern på taket · ${p.why}`);
   }
   S.stats.vips++;
-  log(`👔 VIP-gruppen kliver ur helikoptern och ska till ${fl(v.goal)}`, 'alert');
+  log(sv`👔 VIP-gruppen kliver ur helikoptern och ska till ${fl(v.goal)}`, 'alert');
 }
 
 // ---------- Dygnets start och varje steg ----------

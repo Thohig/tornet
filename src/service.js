@@ -22,6 +22,7 @@
 // utanför den. Arbetsledaren från hissjouren (Stig, rollen `arbetsledare`, `S.foreman`) kommer vid linbrott och vid
 // andra inringningen samma dag
 import { stream } from './rng.js';
+import { sv } from './sv.js';
 const { pick, rand, rng } = stream('drift');
 import { fl } from './util.js';
 import { BALANCE, DOOR_T, FLOOR_M, FLOOR_H, CAR_H, VMAX, floorY, shaftCX, timeScale, tempoWear } from './config.js';
@@ -113,10 +114,10 @@ export function breakDown(e, what) {
   e.state = 'doors'; e.doorPhase = 'open';
   bounceBoarders(e);
   const n = e.passengers.length;
-  if (n) exitAll(e, e.floor, `Hiss ${e.name} gick sönder (${what})`);
+  if (n) exitAll(e, e.floor, sv`Hiss ${e.name} gick sönder (${what})`);
   e.carCalls.clear();
   S.stats.faults++;
-  log(`🔧 ${e.name} gick sönder på ${fl(e.floor)}: ${what}${n ? ` – ${n} passagerare kliver ut` : ''}`, 'alert', e.color);
+  log(sv`🔧 ${e.name} gick sönder på ${fl(e.floor)}: ${what}${n ? sv` – ${n} passagerare kliver ut` : ''}`, 'alert', e.color);
   rerouteStranded();
   S.fx.push({ x: shaftCX(e.id), y: floorY(e.floor) - CAR_H - 30, text: 'KLONK!', color: '#ff9f1c', life: 1.6 });
   rebuildPicks();
@@ -130,9 +131,9 @@ export function triggerFault(target = null) {
   const busy = ok.filter(e => e.passengers.length || e.carCalls.size);
   const e = target && ok.includes(target) ? target : pick(busy.length ? busy : ok);
   // ibland stannar korgen tvärt mellan två våningar med folk i (de sitter fast tills teknikern får igång den)
-  if (target && e.passengers.length && rng() < TRAP_CHANCE) { e.trapNext = true; log(`🔧 ${e.name} hackar och gnisslar…`, 'alert', e.color); return true; }
+  if (target && e.passengers.length && rng() < TRAP_CHANCE) { e.trapNext = true; log(sv`🔧 ${e.name} hackar och gnisslar…`, 'alert', e.color); return true; }
   if (e.state === 'doors' && e.door >= 1 && e.stops.has(e.floor)) breakDown(e, pick(FAULTS));
-  else { e.breakNext = true; log(`🔧 ${e.name} låter konstigt… den går sönder vid nästa stopp`, 'alert', e.color); }
+  else { e.breakNext = true; log(sv`🔧 ${e.name} låter konstigt… den går sönder vid nästa stopp`, 'alert', e.color); }
   return true;
 }
 /** andelen av de slumpade hissfelen (med folk ombord) där korgen stannar mellan två våningar */
@@ -149,8 +150,8 @@ export function trapBreak(e) {
   e.floor = Math.round(e.pos); e.carCalls.clear();
   e.fault = { what, kind: K.kind, tool: K.tool, t0: S.t, need: rand(K.need[0], K.need[1]), trapped: true, n: e.passengers.length, nextTalk: S.t + rand(2, 4) };
   S.stats.faults++;
-  for (const p of e.passengers) pev(p, `Hiss ${e.name} tvärstannade mellan två våningar – vi sitter fast! (${what})`);
-  log(`🔧 ${e.name} tvärstannade mellan två våningar: ${what} – ${e.passengers.length} sitter fast`, 'alert', e.color);
+  for (const p of e.passengers) pev(p, sv`Hiss ${e.name} tvärstannade mellan två våningar – vi sitter fast! (${what})`);
+  log(sv`🔧 ${e.name} tvärstannade mellan två våningar: ${what} – ${e.passengers.length} sitter fast`, 'alert', e.color);
   S.fx.push({ x: shaftCX(e.id), y: floorY(e.pos) - CAR_H - 30, text: 'KLONK!', color: '#ff9f1c', life: 1.6 });
   rerouteStranded();
   rebuildPicks();
@@ -221,29 +222,29 @@ export function techNext(p) {
     if (inFireZone(jobFloor(e))) {
       if (e.fault) e.fault.done = p.workT;
       e.techId = null; p.job = null; p.workT = 0;
-      pev(p, `Hiss ${e.name} är i brandzonen – jobbet får vänta tills det är släckt`);
+      pev(p, sv`Hiss ${e.name} är i brandzonen – jobbet får vänta tills det är släckt`);
     } else if (e.mode === 'broken' || e.mode === 'snapped' || e.hold) return [jobFloor(e), p.task, false];
     p.job = null;
   }
   const e = chooseJob(p);
   if (!e) return [p.exitFloor, p.extra ? 'Kön är tom – åker hem igen' : 'Inga fler hissjobb – åker hem'];
   p.job = e.id; e.techId = p.id; p.workT = (e.fault && e.fault.done) || 0; // (ett avbrutet jobb fortsätter där det slutade)
-  if (e.mode === 'snapped') p.task = `Räddar ${e.passengers.length} instängda ur hiss ${e.name} (linbrott)`;
-  else if (e.mode === 'broken') p.task = e.fault.cable ? `Byter bärlinor i hiss ${e.name}` : `Lagar hiss ${e.name}: ${e.fault.what}`;
+  if (e.mode === 'snapped') p.task = sv`Räddar ${e.passengers.length} instängda ur hiss ${e.name} (linbrott)`;
+  else if (e.mode === 'broken') p.task = e.fault.cable ? sv`Byter bärlinor i hiss ${e.name}` : sv`Lagar hiss ${e.name}: ${e.fault.what}`;
   else {
     e.hold = true;
     // gruppen behöver en vaken hiss medan den här är på service
     const twin = S.elevators.find(x => x !== e && x.group === e.group && x.sleep);
-    if (twin) { twin.sleep = false; twin.sleepT = 0; log(`☀️ ${twin.name} vaknar – ${e.name} ska på service`, 'park', twin.color); }
-    p.task = e.serviceAsap ? `Nivåjustering och service på hiss ${e.name}` : `Nattservice på hiss ${e.name} (slitage ${Math.round(e.wear * 100)} %)`;
-    log(`🔧 ${e.name} tas ur trafik för ${e.serviceAsap ? 'beställd service' : 'nattservice'} – kör hem till ${fl(e.home)}`, 'alert', e.color);
+    if (twin) { twin.sleep = false; twin.sleepT = 0; log(sv`☀️ ${twin.name} vaknar – ${e.name} ska på service`, 'park', twin.color); }
+    p.task = e.serviceAsap ? sv`Nivåjustering och service på hiss ${e.name}` : sv`Nattservice på hiss ${e.name} (slitage ${Math.round(e.wear * 100)} %)`;
+    log(sv`🔧 ${e.name} tas ur trafik för ${e.serviceAsap ? 'beställd service' : 'nattservice'} – kör hem till ${fl(e.home)}`, 'alert', e.color);
     rerouteStranded();
   }
   return [jobFloor(e), p.task, false]; // jobbet kan ligga i entrén – det är ingen hemgång
 }
 function callTech(why) {
   S.techCallAt = S.t + rand(8, 15);
-  log(`📞 ${why} – hissteknikern är på väg`, 'alert');
+  log(sv`📞 ${why} – hissteknikern är på väg`, 'alert');
 }
 /** @param {Person} p */
 const hasJob = p => p.job !== null && p.job !== undefined;
@@ -251,16 +252,16 @@ const hasJob = p => p.job !== null && p.job !== undefined;
 function callExtra(t, queued) {
   const n = queued.length, names = queued.map(e => e.name).join(', '), stuck = queued.find(trapping);
   // (sitter det folk fast är det det samtalet handlar om)
-  const what = stuck ? `folk sitter fast i ${stuck.name}` : `${n} trasiga hissar står i kö (${names})`;
+  const what = stuck ? sv`folk sitter fast i ${stuck.name}` : sv`${n} trasiga hissar står i kö (${names})`;
   S.techCall = { by: t.id, t0: S.t, until: S.t + CALL_T, n, cars: queued.map(e => e.id), trapped: stuck ? stuck.name : null };
   S.extraAt = S.t + CALL_T + rand(12, 20);
   S.stats.extraTechs++;
   // andra gången samma dag: hissjouren skickar arbetsledaren också
   if (S.stats.extraTechs === 2) foremanFor(queued[0], S.extraAt + 6);
-  pev(t, `Ringer hissjouren: ${what} – ber om en extra tekniker`);
-  log(`📞 ${pn(t)} ringer hissjouren – ${what}, en extra tekniker skickas`, 'alert', null, t.id);
+  pev(t, sv`Ringer hissjouren: ${what} – ber om en extra tekniker`);
+  log(sv`📞 ${pn(t)} ringer hissjouren – ${what}, en extra tekniker skickas`, 'alert', null, t.id);
   notice('tech', '📞 Teknikern ringer in en kollega',
-    `${t.name} lagar ${S.elevators[t.job].name}, men ${stuck ? `folk sitter fast i ${stuck.name} och kan inte vänta` : `${n} trasiga hissar till står i kö (${names})`}. Hen ringer hissjouren, som skickar en extra tekniker. Kollegan tar de köade hissarna och åker hem när kön är tom.`,
+    sv`${t.name} lagar ${S.elevators[t.job].name}, men ${stuck ? sv`folk sitter fast i ${stuck.name} och kan inte vänta` : sv`${n} trasiga hissar till står i kö (${names})`}. Hen ringer hissjouren, som skickar en extra tekniker. Kollegan tar de köade hissarna och åker hem när kön är tom.`,
     { act: `person:${t.id}`, actLabel: '📹 Följ teknikern' });
 }
 // ---------- Arbetsledaren från hissjouren ----------
@@ -276,9 +277,9 @@ function foremanFor(e, at) {
 /** Arbetsledarens nästa beslut (rollogiken i people.js) @param {Person} p */
 export function foremanNext(p) {
   const e = S.elevators[p.watch];
-  if (!e || (e.mode !== 'snapped' && e.mode !== 'broken')) return [p.exitFloor, `${e ? e.name : 'Hissen'} går igen – åker tillbaka till jouren`];
+  if (!e || (e.mode !== 'snapped' && e.mode !== 'broken')) return [p.exitFloor, sv`${e ? e.name : 'Hissen'} går igen – åker tillbaka till jouren`];
   const f = jobFloor(e);
-  p.task = e.mode === 'snapped' ? `Inspekterar linbrottet i ${e.name}` : `Ser till att ${e.name} blir lagad`;
+  p.task = e.mode === 'snapped' ? sv`Inspekterar linbrottet i ${e.name}` : sv`Ser till att ${e.name} blir lagad`;
   // (false: hissen kan stå i entrén, som är utgången – det är ingen hemgång)
   return [f, `Hissjouren: ${p.task.toLowerCase()}`, false];
 }
@@ -289,7 +290,7 @@ function foremanTick() {
   const e = S.elevators[F.car];
   if (e.mode !== 'snapped' && e.mode !== 'broken') return;
   const p = spawnStaff('arbetsledare', false, { watch: e.id, title: FOREMAN.title, name: FOREMAN.name, look: { ...FOREMAN.look } });
-  log(`🦺 ${pn(p)} från hissjouren kommer för att titta på ${e.name}`, 'alert', e.color, p.id);
+  log(sv`🦺 ${pn(p)} från hissjouren kommer för att titta på ${e.name}`, 'alert', e.color, p.id);
 }
 function techTick(dt) {
   foremanTick();
@@ -298,7 +299,7 @@ function techTick(dt) {
     if (p.role !== 'hisstekniker' || !trappedIn(p) || p.offDuty) continue;
     // (hen går av passet: kollegan som kommer tar över, och när hen är ute går hen hem och vilar)
     p.offDuty = true;
-    pev(p, `Sitter själv fast i hiss ${p.car.name} – ringer hissjouren efter en kollega`);
+    pev(p, sv`Sitter själv fast i hiss ${p.car.name} – ringer hissjouren efter en kollega`);
     if (!hasJob(p)) continue;
     const cur = S.elevators[p.job];
     if (cur.fault) cur.fault.done = p.workT;
@@ -314,7 +315,7 @@ function techTick(dt) {
     if (t) {
       const cur = S.elevators[t.job];
       if (cur.fault) cur.fault.done = t.workT;
-      pev(t, `Larm: folk sitter fast i hiss ${waiting.name} – lämnar ${cur.name} så länge`);
+      pev(t, sv`Larm: folk sitter fast i hiss ${waiting.name} – lämnar ${cur.name} så länge`);
       t.job = null; t.workT = 0;
       if (t.state === 'office') t.timer = Math.min(t.timer, 0.5);
     }
@@ -329,7 +330,7 @@ function techTick(dt) {
       // påbörjad nattservice utan tekniker: hissen stängs och går i trafik igen (servas en annan natt)
       else if (e.mode === 'service') {
         e.hold = false; restoreElevator(e);
-        log(`🔧 ${e.name}: nattservicen avbröts – hissen går i trafik igen`, 'alert', e.color);
+        log(sv`🔧 ${e.name}: nattservicen avbröts – hissen går i trafik igen`, 'alert', e.color);
       }
     }
   }
@@ -354,7 +355,7 @@ function techTick(dt) {
     // (kön kan ha hunnit tömmas, eller det brinner – då kommer ingen)
     if (!S.fire && queuedFaults().length) {
       const x = spawnStaff('hisstekniker', true);
-      log(`🔧 Extra tekniker ${pn(x)} är på plats – tar ${hasJob(x) ? S.elevators[x.job].name : 'kön'}`, 'alert', null, x.id);
+      log(sv`🔧 Extra tekniker ${pn(x)} är på plats – tar ${hasJob(x) ? S.elevators[x.job].name : 'kön'}`, 'alert', null, x.id);
     }
   }
   for (const t of techs()) workTick(t, dt);
@@ -374,8 +375,8 @@ function workTick(t, dt) {
     if (e.homeT < 0.5 || e.passengers.length || e.reserved) return;
     setMode(e, 'service'); e.sleep = false; e.floor = e.home; e.state = 'doors'; e.doorPhase = 'open'; e.dir = 0;
     e.serviceNeed = rand(0.3, 0.5) * 3600 / timeScale(hour()); // en knapp halvtimme i speltid
-    pev(t, `Öppnar hiss ${e.name} och börjar serva`);
-    log(`🔧 ${pn(t)} servar ${e.name} på ${fl(e.home)}`, 'alert', e.color, t.id);
+    pev(t, sv`Öppnar hiss ${e.name} och börjar serva`);
+    log(sv`🔧 ${pn(t)} servar ${e.name} på ${fl(e.home)}`, 'alert', e.color, t.id);
     return;
   }
   if (e.mode === 'snapped') { evacStep(e, t); return; }
@@ -386,25 +387,25 @@ function workTick(t, dt) {
   if (e.mode === 'broken' && e.fault.cable) {
     S.stats.repairs++; S.stats.downSec += S.t - e.fault.t0;
     e.wear = 0.05; // nya linor och en genomgång av hela hissen
-    log(`✅ ${e.name} har nya bärlinor efter ${Math.round(e.fault.need * 10) / 10} timmars arbete i schaktet – provkör och går i trafik igen`, 'alert', e.color);
-    pev(t, `Nya linor i hiss ${e.name} – provkört och klart`);
-    incidentOver('cable', `✅ Nya bärlinor i ${e.name}`, `Linbytet efter linbrottet tog ${Math.round(e.fault.need * 10) / 10} speltimmar. Hissen är genomgången från topp till botten och går i trafik igen.`, { car: e.id });
+    log(sv`✅ ${e.name} har nya bärlinor efter ${Math.round(e.fault.need * 10) / 10} timmars arbete i schaktet – provkör och går i trafik igen`, 'alert', e.color);
+    pev(t, sv`Nya linor i hiss ${e.name} – provkört och klart`);
+    incidentOver('cable', sv`✅ Nya bärlinor i ${e.name}`, sv`Linbytet efter linbrottet tog ${Math.round(e.fault.need * 10) / 10} speltimmar. Hissen är genomgången från topp till botten och går i trafik igen.`, { car: e.id });
     e.fault = null; e.dir = -1; // korgen står mellan två våningar: kör ner till närmaste stopp
   } else if (e.mode === 'broken') {
     const down = S.t - e.fault.t0;
     if (e.fault.trapped) {
-      for (const p of e.passengers) { pev(p, `Hissen rullar igen – efter ${Math.round(p.trapT || 0)} s mellan två våningar`); p.trapT = 0; }
-      incidentOver('fault', `✅ De instängda i ${e.name} är fria`, `${e.fault.n} satt fast mellan två våningar i ${Math.round(down)} s tills ${t.name} fick igång hissen (${e.fault.what}).`, { car: e.id });
+      for (const p of e.passengers) { pev(p, sv`Hissen rullar igen – efter ${Math.round(p.trapT || 0)} s mellan två våningar`); p.trapT = 0; }
+      incidentOver('fault', sv`✅ De instängda i ${e.name} är fria`, sv`${e.fault.n} satt fast mellan två våningar i ${Math.round(down)} s tills ${t.name} fick igång hissen (${e.fault.what}).`, { car: e.id });
     }
     S.stats.repairs++; S.stats.downSec += down;
     e.wear = Math.max(0.1, e.wear * 0.8); // lagad, men fortfarande sliten – bara service nollställer
-    log(`✅ ${e.name} är lagad efter ${Math.round(down)} s (${e.fault.what})`, 'alert', e.color);
-    pev(t, `Hiss ${e.name} är lagad`);
+    log(sv`✅ ${e.name} är lagad efter ${Math.round(down)} s (${e.fault.what})`, 'alert', e.color);
+    pev(t, sv`Hiss ${e.name} är lagad`);
     e.fault = null;
   } else {
     S.stats.serviced++;
-    log(`✅ Nattservice klar på ${e.name} – slitaget ${Math.round(e.wear * 100)} % → 5 %`, 'alert', e.color);
-    pev(t, `Servicen på hiss ${e.name} är klar`);
+    log(sv`✅ Nattservice klar på ${e.name} – slitaget ${Math.round(e.wear * 100)} % → 5 %`, 'alert', e.color);
+    pev(t, sv`Servicen på hiss ${e.name} är klar`);
     e.wear = 0.05; e.serviceAsap = false;
   }
   e.hold = false; e.techId = null;
@@ -425,8 +426,8 @@ export function fireCrank(t) {
     const stops = [...e.stops], below = stops.filter(f => f <= e.pos + 1e-6).sort((a, b) => b - a);
     const to = below.length ? below[0] : stops.sort((a, b) => Math.abs(a - e.pos) - Math.abs(b - e.pos))[0];
     e.fault.crank = { to, by: t.id, open: false };
-    pev(t, `Brandlarm! Vevar ner hiss ${e.name} för hand till ${fl(to)} och släpper ut de instängda först`);
-    log(`🔧 Brandlarm: ${pn(t)} vevar ner ${e.name} för hand till ${fl(to)} – ${e.passengers.length} instängda släpps ut`, 'alert', e.color, t.id);
+    pev(t, sv`Brandlarm! Vevar ner hiss ${e.name} för hand till ${fl(to)} och släpper ut de instängda först`);
+    log(sv`🔧 Brandlarm: ${pn(t)} vevar ner ${e.name} för hand till ${fl(to)} – ${e.passengers.length} instängda släpps ut`, 'alert', e.color, t.id);
     for (const p of e.passengers) pev(p, `Teknikern vevar ner hissen för hand – vi ska ut!`);
   }
   return true;
@@ -446,8 +447,8 @@ function crankTick(e, dt) {
   for (const p of e.passengers) if (inFireZone(e.floor) || inFireZone(p.goal)) { p.evac = true; p.evacFrom = p.goal; p.goal = evacFloor(p); p.leaving = true; p.why = 'BRANDLARM – utrymning!'; }
   exitAll(e, e.floor, 'Utsläppt ur hissen för hand');
   e.fault.trapped = false; e.fault.crank = null;
-  log(`🔧 ${e.name} nedvevad till ${fl(e.floor)} – ${n} ute`, 'alert', e.color);
-  incidentOver('fault', `✅ De instängda i ${e.name} är ute`, `${n} satt fast mellan två våningar i ${Math.round(down)} s. När brandlarmet gick vevade ${t ? t.name : 'teknikern'} ner korgen för hand till ${fl(e.floor)} och släppte ut dem. Hissen lagas när branden är släckt.`, { car: e.id });
+  log(sv`🔧 ${e.name} nedvevad till ${fl(e.floor)} – ${n} ute`, 'alert', e.color);
+  incidentOver('fault', sv`✅ De instängda i ${e.name} är ute`, sv`${n} satt fast mellan två våningar i ${Math.round(down)} s. När brandlarmet gick vevade ${t ? t.name : 'teknikern'} ner korgen för hand till ${fl(e.floor)} och släppte ut dem. Hissen lagas när branden är släckt.`, { car: e.id });
   if (t && t.state === 'office') t.timer = Math.min(t.timer, 0.3); // (och utryms själv)
   rerouteStranded();
 }
@@ -470,13 +471,13 @@ export const snapDue = e => e.snapNext && e.mode === 'normal' && e.state === 'mo
 /** Spelaren eller slumpen: linorna i en hiss i fart går av (helst en med folk i). Står alla still knarrar
  *  linorna i en hiss, och de går av mitt emellan två våningar på dess nästa åktur. @returns {boolean} går linorna av */
 export function triggerCable(target = null) {
-  if (target) { if (!cableCandidate(target)) return false; target.snapNext = true; log(`🪢 Linorna i ${target.name} fransar sig – de går av på nästa åktur!`, 'alert', target.color); return true; }
+  if (target) { if (!cableCandidate(target)) return false; target.snapNext = true; log(sv`🪢 Linorna i ${target.name} fransar sig – de går av på nästa åktur!`, 'alert', target.color); return true; }
   const ok = S.elevators.filter(cableCandidate);
   if (!ok.length) return false;
   const now = ok.filter(e => e.state === 'moving' && midFloor(e)), busy = now.filter(e => e.passengers.length);
   if (now.length) { snapCable(pick(busy.length ? busy : now)); return true; }
   const e = pick(ok); e.snapNext = true;
-  log(`🪢 Det knarrar oroväckande i bärlinorna på ${e.name}…`, 'alert', e.color);
+  log(sv`🪢 Det knarrar oroväckande i bärlinorna på ${e.name}…`, 'alert', e.color);
   return true;
 }
 /** Linorna går av: korgen börjar falla (snapStep tar över tills fångapparaten griper). @param {Elevator} e */
@@ -492,8 +493,8 @@ export function snapCable(e) {
   if (stopAt < e.minF + 0.3) stopAt = Math.floor(e.pos) + rand(0.12, 0.25);
   e.snap = { ph: 'fall', t0: S.t, stopAt, caughtT: 0, exitF: 0, n: e.passengers.length, out: 0, nextOut: 0, climb: 0 };
   S.stats.cables++;
-  for (const p of e.passengers) pev(p, `PANG! Något small i taket på hiss ${e.name} – vi faller!`);
-  log(`🪢 LINBROTT i ${e.name}! Bärlinorna gick av – korgen faller${e.passengers.length ? ` med ${e.passengers.length} ombord` : ''}`, 'alert', e.color);
+  for (const p of e.passengers) pev(p, sv`PANG! Något small i taket på hiss ${e.name} – vi faller!`);
+  log(sv`🪢 LINBROTT i ${e.name}! Bärlinorna gick av – korgen faller${e.passengers.length ? ` med ${e.passengers.length} ombord` : ''}`, 'alert', e.color);
   S.fx.push({ x: shaftCX(e.id), y: floorY(e.pos) - CAR_H - 30, text: 'PANG!', color: '#ff2d55', life: 1.6 });
   rerouteStranded();
   rebuildPicks();
@@ -524,9 +525,9 @@ function caught(e) {
   const between = Math.abs(e.pos - Math.round(e.pos)) > 0.05;
   for (const p of e.passengers) {
     p.mood = 2; p.trapNoted = true;
-    pev(p, `Fångapparaten tog tag – hiss ${e.name} hänger ${between ? `mellan ${fl(Math.floor(e.pos))} och ${fl(Math.ceil(e.pos))}` : `vid ${fl(Math.round(e.pos))}`}. Vi trycker på larmknappen!`);
+    pev(p, sv`Fångapparaten tog tag – hiss ${e.name} hänger ${between ? `mellan ${fl(Math.floor(e.pos))} och ${fl(Math.ceil(e.pos))}` : `vid ${fl(Math.round(e.pos))}`}. Vi trycker på larmknappen!`);
   }
-  log(`🛑 Fångapparaten i ${e.name} grep – korgen står fast ${between ? 'mellan två våningar' : `vid ${fl(Math.round(e.pos))}`}${e.passengers.length ? `, ${e.passengers.length} instängda` : ''}`, 'alert', e.color);
+  log(sv`🛑 Fångapparaten i ${e.name} grep – korgen står fast ${between ? 'mellan två våningar' : `vid ${fl(Math.round(e.pos))}`}${e.passengers.length ? sv`, ${e.passengers.length} instängda` : ''}`, 'alert', e.color);
 }
 /** de instängda väntar i den fastkörda korgen (var den tom stängs den av för linbyte, steget efter att den fångades) @param {Elevator} e */
 function trappedTick(e, dt) {
@@ -544,8 +545,8 @@ function evacStep(e, t) {
   if (s.ph === 'fall') return;
   if (s.ph === 'trapped') {
     s.ph = 'evac'; s.nextOut = S.t + s.climb;
-    pev(t, `Nödöppnar schaktdörren på ${fl(s.exitF)}, klättrar ner på korgtaket och öppnar takluckan`);
-    log(`🧗 ${pn(t)} öppnar takluckan på ${e.name} – utrymningen börjar`, 'alert', e.color, t.id);
+    pev(t, sv`Nödöppnar schaktdörren på ${fl(s.exitF)}, klättrar ner på korgtaket och öppnar takluckan`);
+    log(sv`🧗 ${pn(t)} öppnar takluckan på ${e.name} – utrymningen börjar`, 'alert', e.color, t.id);
     for (const p of e.passengers) pev(p, 'Takluckan öppnas – hissteknikern är här!');
     return;
   }
@@ -554,9 +555,9 @@ function evacStep(e, t) {
   if (p) {
     // en utrymd tekniker lämnar över till kollegan och går hem och vilar
     if (p.role === 'hisstekniker') { p.offDuty = true; p.job = null; p.goal = p.exitFloor; p.leaving = true; p.why = 'Kollegan tar över – går hem och vilar'; }
-    exitOne(e, p, s.exitF, `Ute ur hiss ${e.name} genom takluckan`);
+    exitOne(e, p, s.exitF, sv`Ute ur hiss ${e.name} genom takluckan`);
     s.out++; s.nextOut = S.t + s.climb;
-    pev(p, `Klättrade ut genom takluckan och uppför stegen till ${fl(s.exitF)} – efter ${Math.round(S.t - s.t0)} s`);
+    pev(p, sv`Klättrade ut genom takluckan och uppför stegen till ${fl(s.exitF)} – efter ${Math.round(S.t - s.t0)} s`);
   }
   if (!e.passengers.length) cableDown(e, t);
 }
@@ -567,14 +568,14 @@ export function cableStatus(e) {
   if (e.mode === 'snapped') {
     const s = e.snap, n = e.passengers.length;
     if (s.ph === 'fall') return `Korgen faller – fångapparaten griper strax!`;
-    if (s.ph === 'evac' && mine) return `${t.name} tar ut folk genom takluckan till ${fl(s.exitF)} – ${s.out} ute, ${n} kvar`;
-    const who = mine ? `${t.name} är på väg till ${fl(s.exitF)}` : t ? `Teknikern ${t.name} gör klart ett annat jobb först` : S.techCallAt !== null ? 'Hissjouren är larmad' : `Väntar på hissjouren${S.fire ? ' (brand)' : ''}`;
-    return `${n} instängda i ${Math.round(S.t - s.t0)} s · ${who}`;
+    if (s.ph === 'evac' && mine) return sv`${t.name} tar ut folk genom takluckan till ${fl(s.exitF)} – ${s.out} ute, ${n} kvar`;
+    const who = mine ? sv`${t.name} är på väg till ${fl(s.exitF)}` : t ? sv`Teknikern ${t.name} gör klart ett annat jobb först` : S.techCallAt !== null ? 'Hissjouren är larmad' : sv`Väntar på hissjouren${S.fire ? ' (brand)' : ''}`;
+    return sv`${n} instängda i ${Math.round(S.t - s.t0)} s · ${who}`;
   }
   const F = e.fault;
-  if (!here) return mine ? `${t.name} är på väg för att byta linorna` : 'Linorna ska bytas – väntar på hissteknikern';
+  if (!here) return mine ? sv`${t.name} är på väg för att byta linorna` : 'Linorna ska bytas – väntar på hissteknikern';
   const left = Math.max(0, F.need - t.workT);
-  return `${t.name} byter linor i schaktet (${Math.round(100 * Math.min(1, t.workT / F.need))} %) · klar om ~${left < 1 ? `${Math.max(1, Math.round(left * 60))} min` : `${Math.round(left * 10) / 10} h`} speltid`;
+  return sv`${t.name} byter linor i schaktet (${Math.round(100 * Math.min(1, t.workT / F.need))} %) · klar om ~${left < 1 ? `${Math.max(1, Math.round(left * 60))} min` : `${Math.round(left * 10) / 10} h`} speltid`;
 }
 /** alla är ute (eller korgen var tom): hissen står avstängd medan linorna byts @param {Elevator} e */
 function cableDown(e, t = null) {
@@ -585,8 +586,8 @@ function cableDown(e, t = null) {
   // (brandzonen kan ha lagt stopp och parkering på den fastkörda korgen – de gäller inte efter linbytet)
   e.carCalls.clear(); e.parkTarget = null;
   S.stats.faults++;
-  if (s.n) log(`✅ Alla ${s.n} ute ur ${e.name} efter ${Math.round(S.t - s.t0)} s – hissen stängs av medan linorna byts`, 'alert', e.color);
-  if (t) { t.workT = 0; t.task = `Byter bärlinor i hiss ${e.name}`; pev(t, `Alla är ute – nu ska nya linor in i schaktet på ${e.name}`); }
+  if (s.n) log(sv`✅ Alla ${s.n} ute ur ${e.name} efter ${Math.round(S.t - s.t0)} s – hissen stängs av medan linorna byts`, 'alert', e.color);
+  if (t) { t.workT = 0; t.task = sv`Byter bärlinor i hiss ${e.name}`; pev(t, sv`Alla är ute – nu ska nya linor in i schaktet på ${e.name}`); }
   rebuildPicks();
 }
 
@@ -614,7 +615,7 @@ export function restoreFault(e, k) {
     e.pos = e.floor = f; e.state = 'doors'; e.doorPhase = 'open';
   }
   e.fault = { what: k.what, kind: k.kind, tool: k.tool, t0: S.t, need: k.need, done: k.done, cable: k.cable, exitF: k.exitF };
-  log(`🔧 ${e.name} är fortfarande ${k.cable ? 'utan bärlinor' : 'trasig'} sedan i går (${k.what})${k.done ? ' – teknikern fortsätter där hen slutade' : ''}`, 'alert', e.color);
+  log(sv`🔧 ${e.name} är fortfarande ${k.cable ? 'utan bärlinor' : 'trasig'} sedan i går (${k.what})${k.done ? ' – teknikern fortsätter där hen slutade' : ''}`, 'alert', e.color);
 }
 
 // ---------- Motorvärme ----------
@@ -633,19 +634,19 @@ function heatTick(e, dt) {
   e.heat -= e.heat * dt / (e.fan ? FAN_TAU : HEAT_TAU * (1 + Math.max(0, S.weather.temp - 15) * 0.03));
   if (!e.hot && e.heat >= 1 && e.mode === 'normal') {
     e.hot = true; e.hotT0 = S.t; S.stats.heatStops++;
-    log(`🌡️ ${e.name}: motorn är överhettad – överhettningsskyddet löser ut, hissen tar inga nya resenärer`, 'alert', e.color);
+    log(sv`🌡️ ${e.name}: motorn är överhettad – överhettningsskyddet löser ut, hissen tar inga nya resenärer`, 'alert', e.color);
   } else if (e.hot && e.heat < COOL_AT) {
     e.hot = false;
-    log(`🌡️ ${e.name}: motorn har svalnat – i trafik igen`, 'alert', e.color);
-    incidentOver('heat', `✅ ${e.name} har svalnat`, `Motorn var överhettad i ${Math.round(S.t - e.hotT0)} s${e.fan ? ' – extrafläkten kylde den fortare' : ''}. Hissen går i trafik igen.`, { car: e.id });
+    log(sv`🌡️ ${e.name}: motorn har svalnat – i trafik igen`, 'alert', e.color);
+    incidentOver('heat', sv`✅ ${e.name} har svalnat`, sv`Motorn var överhettad i ${Math.round(S.t - e.hotT0)} s${e.fan ? ' – extrafläkten kylde den fortare' : ''}. Hissen går i trafik igen.`, { car: e.id });
   }
-  if (e.fan && !e.hot && e.heat < 0.25) { e.fan = false; log(`🌀 ${e.name}: extrafläkten stängs av`, 'alert', e.color); }
+  if (e.fan && !e.hot && e.heat < 0.25) { e.fan = false; log(sv`🌀 ${e.name}: extrafläkten stängs av`, 'alert', e.color); }
 }
 /** Spelaren startar extrafläkten i maskinrummet @param {Elevator} e */
 export function startFan(e) {
   if (!e || e.fan) return;
   e.fan = true;
-  log(`🌀 Extrafläkten startas i ${e.name}s maskinrum – motorn kyls snabbare (drar ${FAN_KW} kW)`, 'alert', e.color);
+  log(sv`🌀 Extrafläkten startas i ${e.name}s maskinrum – motorn kyls snabbare (drar ${FAN_KW} kW)`, 'alert', e.color);
 }
 /** Slumpad incident: kylfläkten hakar upp sig och motorn i en hiss som kör mycket blir het */
 /** @returns {boolean} blev någon motor het */
@@ -655,7 +656,7 @@ export function triggerHeat(target = null) {
   const busy = ok.filter(e => e.passengers.length || e.carCalls.size);
   const e = target && ok.includes(target) ? target : pick(busy.length ? busy : ok);
   e.heat = Math.max(e.heat, 1.05);
-  log(`🌡️ Kylningen i ${e.name}s maskinrum hakar upp sig – motorn blir het`, 'alert', e.color);
+  log(sv`🌡️ Kylningen i ${e.name}s maskinrum hakar upp sig – motorn blir het`, 'alert', e.color);
   return true;
 }
 
@@ -680,13 +681,13 @@ export function maybeStumble(e, p) {
   const cm = Math.round(Math.abs(e.level) * 350);
   S.stats.stumbles++;
   p.mood = Math.max(p.mood || 0, 1);
-  pev(p, `Snubblar på tröskeln – hiss ${e.name} stod ${cm} cm ${e.level < 0 ? 'för lågt' : 'för högt'}!`);
-  log(`🦶 ${pn(p)} snubblade på tröskeln i ${e.name} (nivåfel ${cm} cm, slitage ${Math.round(e.wear * 100)} %)`, 'alert', e.color, p.id);
+  pev(p, sv`Snubblar på tröskeln – hiss ${e.name} stod ${cm} cm ${e.level < 0 ? 'för lågt' : 'för högt'}!`);
+  log(sv`🦶 ${pn(p)} snubblade på tröskeln i ${e.name} (nivåfel ${cm} cm, slitage ${Math.round(e.wear * 100)} %)`, 'alert', e.color, p.id);
   S.fx.push({ x: shaftCX(e.id), y: floorY(e.floor) - CAR_H - 30, text: 'OJ!', color: '#ffe14d', life: 1.2 });
   if (!(S.t - (e.stumbleNoted ?? -99) < 40)) {
     e.stumbleNoted = S.t;
-    notice('stumble', `🦶 Snubbel i hiss ${e.name}`,
-      `${p.name} snubblade på tröskeln på ${fl(e.floor)}: korgen stod ${cm} cm ${e.level < 0 ? 'för lågt' : 'för högt'}. Linorna i ${e.name} är slitna (${Math.round(e.wear * 100)} %) och töjer sig när folk kliver på och av.`,
+    notice('stumble', sv`🦶 Snubbel i hiss ${e.name}`,
+      sv`${p.name} snubblade på tröskeln på ${fl(e.floor)}: korgen stod ${cm} cm ${e.level < 0 ? 'för lågt' : 'för högt'}. Linorna i ${e.name} är slitna (${Math.round(e.wear * 100)} %) och töjer sig när folk kliver på och av.`,
       { car: e.id, floor: e.floor, act: `level:${e.id}`, actLabel: '🔧 Beställ service nu' });
   }
 }
@@ -694,7 +695,7 @@ export function maybeStumble(e, p) {
 export function orderService(e) {
   if (!e || e.serviceAsap || e.mode !== 'normal') return;
   e.serviceAsap = true;
-  log(`🔧 Service beställd för ${e.name} – hissteknikern larmas`, 'alert', e.color);
+  log(sv`🔧 Service beställd för ${e.name} – hissteknikern larmas`, 'alert', e.color);
 }
 
 export function serviceTick(dt) {

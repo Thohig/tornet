@@ -17,6 +17,7 @@ import { ants, box, CY, g, INK, label, line, lo, PUFF, R, X, Y } from './pixcore
 import { winFig } from './pixhall.js';
 import { shaftBot, shaftTop } from './pixbuilding.js';
 import { bark, DOGS, hotOf, phoneOn, speech, talking } from './pixfolk.js';
+import { sv } from './sv.js';
 /** @typedef {import('./elevators.js').Elevator} Elevator */
 /** @typedef {import('./people.js').Person} Person */
 
@@ -217,7 +218,7 @@ export function drawCarPx(e) {
   }
   if (e.zoneLock) label('SPÄRRAD', x + cw / 2, yt - 11, '#ff2d55', '#ffffff');
   if (e.mode === 'locked') label('AVSTÄNGD', x + cw / 2, yt - 11, '#ff2d55', '#ffffff');
-  if (e.mode === 'recall') label(`→ TILL ${fl(e.home)}`, x + cw / 2, yt - 11, '#ff8c42');
+  if (e.mode === 'recall') label(sv`→ TILL ${fl(e.home)}`, x + cw / 2, yt - 11, '#ff8c42');
   if (e.mode === 'rescue') label('NÖDSÄNK', x + cw / 2, yt - 11, '#7dff9a');
   if (e.mode === 'normal' && S.power && e.restartAt && S.t < e.restartAt) label('OMSTART', x + cw / 2, yt - 11, '#7dff9a');
   if (e.mode === 'lift' || e.liftWant) label(e.mode === 'lift' ? 'FLYTTLASS' : '→ FLYTTLASS', x + cw / 2, yt - 11, '#ff8c42');

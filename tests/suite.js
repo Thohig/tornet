@@ -34,6 +34,7 @@ import { CREW, NAMES, CAST } from '../src/config.js';
 import { PANO, ladderReach, PANO_CREW_S, PANO_DEFAULT_S } from '../src/pano.js';
 import { STOPS as VSTOPS } from '../src/visning.js';
 import { getLang, setLang, tr } from '../src/lang.js';
+import { MADE, sv } from '../src/sv.js';
 import EN_TEXTS from '../src/lang-en.js';
 import { CUES, PIECES, layout, partOf } from '../src/scoreData.js';
 import { hz, onGrid } from '../src/music.js';
@@ -2981,6 +2982,25 @@ test('Kuppen under rundvisningen: Berit och gästen blir över, smyger i trappor
   assert(lines.some(l => /var var vi/.test(l)), 'Berit fortsatte aldrig rundvisningen');
   assert(S.people.some(p => p.id === berit) || hour() >= 19, 'Berit försvann');
   return `${seen.caught ? 'gripna' : 'borta'} · ${lines.length} repliker efteråt`;
+});
+
+test('sv`…`: samma svenska sträng som utan sv, och engelskan ur mallen med värdena översatta för sig', () => {
+  const car = 'X1', floor = 'Entrén';
+  const s = sv`${car} går varm – fläkten på.`;
+  assert(s === `${car} går varm – fläkten på.`, `sv ändrade strängen: ${s}`);
+  assert(sv`Utan värden` === 'Utan värden', 'sv utan värden');
+  assert(MADE.get(s)?.key === '{0} går varm – fläkten på.', `mallen: ${MADE.get(s)?.key}`);
+  // ett värde som själv är gjort av sv översätts med sin egen mall
+  const inner = sv`${floor} är ur funktion – går till ${'6'} i stället`;
+  setLang('en');
+  try {
+    assert(tr(s) === 'X1 is running hot – fan on.', tr(s));
+    assert(tr(inner) === 'The lobby is out of order – walking to 6 instead', tr(inner));
+    const outer = sv`${inner} går varm – fläkten på.`;
+    assert(tr(outer) === 'The lobby is out of order – walking to 6 instead is running hot – fan on.', tr(outer));
+  } finally { setLang('sv'); }
+  assert(tr(s) === s, 'svenska ska visas som den är');
+  return 'samma sträng · mallen ur lang-en.js · värden med egna mallar';
 });
 
 test('Språket: svenska är standard, loggen och dagböckerna blir engelska och svenska visar allt som det är', () => {

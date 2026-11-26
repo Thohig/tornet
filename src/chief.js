@@ -33,6 +33,7 @@ import { setLeakMode } from './leak.js';
 import { changeStrategy } from './actions.js';
 import { STRAT_NAMES } from './config.js';
 import { systems } from './systems.js';
+import { sv } from './sv.js';
 
 /** dagens och nattens driftchef (personalen i CREW, config.js – kontrollrummet byter skift klockan 22) */
 export const CHIEFS = CREW.filter(c => c.post === 'chief');
@@ -114,7 +115,7 @@ export function setChief(on) {
   const C = S.chief;
   if (!C || C.on === !!on) return;
   C.on = !!on;
-  log(on ? `🧑‍💼 ${chiefOnDuty().name} går tillbaka till kontrollbordet – huset sköter sig självt` : `🧑‍💼 ${chiefOnDuty().name} går på rast – alla beslut väntar på dig`, 'chief');
+  log(on ? sv`🧑‍💼 ${chiefOnDuty().name} går tillbaka till kontrollbordet – huset sköter sig självt` : sv`🧑‍💼 ${chiefOnDuty().name} går på rast – alla beslut väntar på dig`, 'chief');
   lookUp(p => p.role === 'driftchef'); // (cheferna reser sig direkt)
 }
 /** beslutet om en incident gäller inte längre: korten visar inget, och spelaren har inte längre tagit över */
@@ -160,12 +161,12 @@ function stormTick() {
   const w = windAt(), u = (S.t - St.t0) / St.len;
   if (St.mode === 'none' && w > SWAY_AT && u < 0.75 && S.t - C.stormT > 6) {
     C.stormT = S.t; setStormMode('sway');
-    decide('storm', 'Svajläge', `vinden passerade ${windMs()} m/s – de höga hissarna saktar in innan linorna börjar slå i schaktet`, { inc: 'storm', say: 'Svajläge! Sakta i höga zonen.' });
+    decide('storm', 'Svajläge', sv`vinden passerade ${windMs()} m/s – de höga hissarna saktar in innan linorna börjar slå i schaktet`, { inc: 'storm', say: 'Svajläge! Sakta i höga zonen.' });
   } else if (St.mode === 'sway' && w < CALM_AT && u > 0.5 && S.t - C.stormT > 6) {
     C.stormT = S.t; setStormMode('none');
-    decide('storm', 'Normal drift igen', `vinden har mojnat till ${windMs()} m/s`, { inc: 'storm', say: 'Det mojnar – full fart igen.' });
+    decide('storm', 'Normal drift igen', sv`vinden har mojnat till ${windMs()} m/s`, { inc: 'storm', say: 'Det mojnar – full fart igen.' });
   } else if (!C.dec.storm) {
-    decide('storm', 'Full fart så länge', `${windMs()} m/s – svajläge först när det blåser över ${Math.round(SWAY_AT * 32)} m/s`, { inc: 'storm', say: 'Vi kör på tills det blåser upp.' });
+    decide('storm', 'Full fart så länge', sv`${windMs()} m/s – svajläge först när det blåser över ${Math.round(SWAY_AT * 32)} m/s`, { inc: 'storm', say: 'Vi kör på tills det blåser upp.' });
   }
 }
 
@@ -178,9 +179,9 @@ function fireTick() {
   const zmax = F.floor - 2;
   if (zmax - LOBBY >= 3 && F.mode !== 'zone') {
     setFireMode('zone');
-    decide('fire', `Brandzon: hissarna kör E–${fl(zmax)}`, `branden är på ${fl(F.floor)}, högt upp – hissarna under zonen kan köra ut folk medan de över tar trappan`, { inc: 'fire', floor: F.floor, say: `Brandzon! Hissarna under ${fl(F.floor - 1)} kör.` });
+    decide('fire', sv`Brandzon: hissarna kör E–${fl(zmax)}`, sv`branden är på ${fl(F.floor)}, högt upp – hissarna under zonen kan köra ut folk medan de över tar trappan`, { inc: 'fire', floor: F.floor, say: sv`Brandzon! Hissarna under ${fl(F.floor - 1)} kör.` });
   } else {
-    decide('fire', 'Alla hissar återkallade', `branden är på ${fl(F.floor)}, för nära entrén för att köra hissar under den – alla tar trappan`, { inc: 'fire', floor: F.floor, say: 'Alla hissar ner – trapporna gäller!' });
+    decide('fire', 'Alla hissar återkallade', sv`branden är på ${fl(F.floor)}, för nära entrén för att köra hissar under den – alla tar trappan`, { inc: 'fire', floor: F.floor, say: 'Alla hissar ner – trapporna gäller!' });
   }
 }
 
@@ -192,7 +193,7 @@ function powerTick() {
   if (O.genAt === null && S.t - O.t0 > 3) {
     if (trapped) {
       startGenerator();
-      decide('power', 'Reservkraften startas', `${trapped} sitter fast – reservkraften räcker till att nödsänka en hiss i taget`, { inc: 'power', say: 'Starta reservkraften!' });
+      decide('power', 'Reservkraften startas', sv`${trapped} sitter fast – reservkraften räcker till att nödsänka en hiss i taget`, { inc: 'power', say: 'Starta reservkraften!' });
     } else if (!S.chief.dec.power) decide('power', 'Väntar ut avbrottet', 'ingen sitter fast i hissarna – reservkraften behövs inte', { inc: 'power', say: 'Ingen fast – vi väntar.' });
   }
   if (O.gen && !O.auto) {
@@ -209,10 +210,10 @@ function heatTick() {
     if (e.fan || !free(key) || e.mode === 'dead') continue;
     if (e.hot) {
       startFan(e);
-      decide(key, `Extrafläkten i ${e.name}`, `motorn är överhettad (${Math.round(35 + e.heat * 65)} °C) – fläkten kyler ungefär fyra gånger snabbare`, { inc: 'heat', car: e.id, say: `Fläkten på i ${e.name}!` });
+      decide(key, sv`Extrafläkten i ${e.name}`, sv`motorn är överhettad (${Math.round(35 + e.heat * 65)} °C) – fläkten kyler ungefär fyra gånger snabbare`, { inc: 'heat', car: e.id, say: sv`Fläkten på i ${e.name}!` });
     } else if (rush && e.heat >= WARM_AT + 0.12 && e.mode === 'normal') {
       startFan(e);
-      decide(key, `Extrafläkten i ${e.name}`, `motorn går varm (${Math.round(35 + e.heat * 65)} °C) mitt i rusningen – kyler innan skyddet löser ut`, { inc: 'heat', car: e.id, say: `${e.name} går varm – fläkten på.` });
+      decide(key, sv`Extrafläkten i ${e.name}`, sv`motorn går varm (${Math.round(35 + e.heat * 65)} °C) mitt i rusningen – kyler innan skyddet löser ut`, { inc: 'heat', car: e.id, say: sv`${e.name} går varm – fläkten på.` });
     }
   }
 }
@@ -231,7 +232,7 @@ function serviceTick(dt) {
   if (!e) return;
   C.svcN++;
   orderService(e);
-  decide('service', `Service för ${e.name}`, `slitaget är ${Math.round(e.wear * 100)} % – bättre en service nu i lugnet än ett hissfel i rusningen`, { car: e.id, say: `Ring teknikern – ${e.name} behöver service.` });
+  decide('service', sv`Service för ${e.name}`, sv`slitaget är ${Math.round(e.wear * 100)} % – bättre en service nu i lugnet än ett hissfel i rusningen`, { car: e.id, say: sv`Ring teknikern – ${e.name} behöver service.` });
 }
 
 // --- Rusningsläge: Smart → Rusning när kön växer i en rusning, tillbaka när den är över ---
@@ -247,12 +248,12 @@ function strategyTick(dt) {
     if (C.rushT > RUSH_HOLD) {
       C.rushT = 0; C.stratBy = 'chief';
       changeStrategy('peak');
-      decide('strategy', `Byter till ${STRAT_NAMES.peak}`, `${w.length} väntar i snitt ${Math.round(avg)} s – rusningsläget kör hissarna dit folket kommer`, { say: 'Kön växer – rusningsläge!' });
+      decide('strategy', sv`Byter till ${STRAT_NAMES.peak}`, sv`${w.length} väntar i snitt ${Math.round(avg)} s – rusningsläget kör hissarna dit folket kommer`, { say: 'Kön växer – rusningsläge!' });
     }
   } else if (S.strategy === 'peak' && C.stratBy === 'chief' && !rush) {
     C.stratBy = null;
     changeStrategy('smart');
-    decide('strategy', `Tillbaka till ${STRAT_NAMES.smart}`, 'rusningen är över', { say: 'Rusningen är över – Smart igen.' });
+    decide('strategy', sv`Tillbaka till ${STRAT_NAMES.smart}`, 'rusningen är över', { say: 'Rusningen är över – Smart igen.' });
   }
 }
 
@@ -263,7 +264,7 @@ function moveTick() {
   if (!C.seen.movePlan && M.route === 'auto' && free('move')) {
     C.seen.movePlan = true;
     decide('move', 'Flytten: vägen planeras möbel för möbel', M.hoist
-      ? `XL-möblerna tar hissbalken utanpå, de stora när det är kö till varuhissen – resten i ${M.smart ? 'varuhissen, som bara låses för de tunga lassen' : 'varuhissen'}`
+      ? sv`XL-möblerna tar hissbalken utanpå, de stora när det är kö till varuhissen – resten i ${M.smart ? 'varuhissen, som bara låses för de tunga lassen' : 'varuhissen'}`
       : 'allt går i varuhissen', { say: 'Flyttdag – jag håller koll på varuhissen.' });
   }
   if (M.windChoice === null && free('move') && hoistHalt() === 'blåst' && M.items.some(it => it.st === 'hatch')) {
@@ -285,9 +286,9 @@ export function panoChiefTick() {
   const how = windy && reach ? 'ladder' : 'rope';
   if (!setPanoHow(how, 'chief')) return;
   const where = P.toF === LOBBY ? 'ner till gatan' : 'in på takterrassen';
-  if (how === 'ladder') decide('pano', 'Stegbilen från gatan', `${windMs()} m/s är för blåsigt för repet, och stegen når upp till ${e.name}`, { inc: 'pano', car: e.id, say: 'Stegbilen – det blåser för mycket för rep!' });
-  else if (windy) decide('pano', 'Firas ner – när vinden mojnar', `stegbilen når inte upp till ${e.name}, och i ${windMs()} m/s kan räddarna inte fira någon – de väntar på taket`, { inc: 'pano', car: e.id, say: 'Vi får vänta ut vinden…' });
-  else decide('pano', 'Firas ner med rep från taket', `hydrauliken går inte att veva – räddningstjänsten firar ner dem en i taget ${where}`, { inc: 'pano', car: e.id, say: `Fira ner dem från taket!` });
+  if (how === 'ladder') decide('pano', 'Stegbilen från gatan', sv`${windMs()} m/s är för blåsigt för repet, och stegen når upp till ${e.name}`, { inc: 'pano', car: e.id, say: 'Stegbilen – det blåser för mycket för rep!' });
+  else if (windy) decide('pano', 'Firas ner – när vinden mojnar', sv`stegbilen når inte upp till ${e.name}, och i ${windMs()} m/s kan räddarna inte fira någon – de väntar på taket`, { inc: 'pano', car: e.id, say: 'Vi får vänta ut vinden…' });
+  else decide('pano', 'Firas ner med rep från taket', sv`hydrauliken går inte att veva – räddningstjänsten firar ner dem en i taget ${where}`, { inc: 'pano', car: e.id, say: `Fira ner dem från taket!` });
 }
 
 // --- Fönsterputsaren sitter fast: lastluckan om gondolen hänger vid en och det är lugnt, annars vevar vaktmästaren
@@ -297,17 +298,17 @@ export function gondolaChiefTick() {
   const G = S.gondola, C = S.chief;
   if (!G || G.ph !== 'stuck' || !free('gondola')) return;
   if (S.t - G.t0 < 2) return; // (chefen hinner se det på skärmen)
-  const windy = gondolaWindy(), where = `utanför ${fl(G.f)}`;
+  const windy = gondolaWindy(), where = sv`utanför ${fl(G.f)}`;
   if (!C.dec.gondola) {
     if (G.hatchF >= 0 && !windy && setGondolaHow('hatch', 'chief'))
-      decide('gondola', 'In genom lastluckan', `gondolen hänger vid lastluckan på ${fl(G.hatchF)} – vaktmästaren öppnar och Hasse kliver in`, { inc: 'gondola', floor: G.hatchF, say: 'Öppna lastluckan åt Hasse!' });
+      decide('gondola', 'In genom lastluckan', sv`gondolen hänger vid lastluckan på ${fl(G.hatchF)} – vaktmästaren öppnar och Hasse kliver in`, { inc: 'gondola', floor: G.hatchF, say: 'Öppna lastluckan åt Hasse!' });
     else if (setGondolaHow('crank', 'chief'))
-      decide('gondola', 'Vaktmästaren vevar upp gondolen', `${windy ? 'det blåser för mycket för rep och lucka – ' : ''}vinschen går att veva för hand från taket, en våning i taget`, { inc: 'gondola', floor: G.f, say: 'Upp på taket och veva!' });
+      decide('gondola', 'Vaktmästaren vevar upp gondolen', sv`${windy ? 'det blåser för mycket för rep och lucka – ' : ''}vinschen går att veva för hand från taket, en våning i taget`, { inc: 'gondola', floor: G.f, say: 'Upp på taket och veva!' });
     return;
   }
   // vevandet tar för lång tid: räddningstjänsten (när det inte blåser)
   if (G.how === 'crank' && !windy && S.t - G.t0 > GONDOLA_SLOW_S && setGondolaHow('rope', 'chief'))
-    decide('gondola', 'Räddningstjänsten firar ner honom', `vevandet går för långsamt – Hasse hänger fortfarande ${where}`, { inc: 'gondola', floor: G.f, say: 'Ring räddningstjänsten – det går för sakta!' });
+    decide('gondola', 'Räddningstjänsten firar ner honom', sv`vevandet går för långsamt – Hasse hänger fortfarande ${where}`, { inc: 'gondola', floor: G.f, say: 'Ring räddningstjänsten – det går för sakta!' });
 }
 
 // --- Hunden: låt den springa medan vaktmästaren och ägaren jagar den; springer den runt för länge spärras
@@ -317,10 +318,10 @@ export function dogChiefTick() {
   const D = S.dog, C = S.chief;
   if (!D || D.ph !== 'loose' || !free('dog')) return;
   if (S.t - D.t0 < 2) return;
-  if (!C.dec.dog) { decide('dog', 'Låter hunden springa', `vaktmästaren hjälper till att jaga ${D.name} – hissarna går som vanligt så länge`, { inc: 'dog', floor: D.f, say: `Fånga ${D.name}, någon!` }); return; }
+  if (!C.dec.dog) { decide('dog', 'Låter hunden springa', sv`vaktmästaren hjälper till att jaga ${D.name} – hissarna går som vanligt så länge`, { inc: 'dog', floor: D.f, say: sv`Fånga ${D.name}, någon!` }); return; }
   const dog = S.people.find(p => p.id === D.dog && !p.dead);
   if (!D.lock && S.t - D.t0 > DOG_LOCK_S && dog && dog.state === 'office' && setDogLock(true, 'chief'))
-    decide('dog', `Spärrar hissarna på ${fl(D.f)}`, `${D.name} har sprungit runt i över en minut – på en våning är hon lätt att fånga, och den som väntar där får ta trappan`, { inc: 'dog', floor: D.f, say: `Stäng hissarna på ${fl(D.f)}!` });
+    decide('dog', sv`Spärrar hissarna på ${fl(D.f)}`, sv`${D.name} har sprungit runt i över en minut – på en våning är hon lätt att fånga, och den som väntar där får ta trappan`, { inc: 'dog', floor: D.f, say: sv`Stäng hissarna på ${fl(D.f)}!` });
 }
 
 // --- Vattenläckan: hissarna i de blöta schakten står still – utom i rusningen när bara en våning är blöt, då
@@ -333,13 +334,13 @@ export function leakChiefTick() {
   const waiting = S.people.filter(p => p.state === 'wait').length, cars = L.cars.map(id => S.elevators[id].name).join(', ') || 'inga';
   if (!C.dec.leak) {
     if (L.wet.length <= 1 && waiting >= LEAK_BUSY && setLeakMode('run', 'chief'))
-      decide('leak', 'Hissarna kör vidare tills kranen är stängd', `bara ${fl(L.src)} är blöt och ${waiting} väntar på hiss – vi chansar en stund`, { inc: 'leak', floor: L.src, say: 'Kör på – Bosse, kranen!' });
+      decide('leak', 'Hissarna kör vidare tills kranen är stängd', sv`bara ${fl(L.src)} är blöt och ${waiting} väntar på hiss – vi chansar en stund`, { inc: 'leak', floor: L.src, say: 'Kör på – Bosse, kranen!' });
     else if (setLeakMode('stop', 'chief'))
-      decide('leak', 'Hissarna i de blöta schakten står still', `vatten i schaktet kan kortsluta styrningen (${cars}) – folk får ta trappan en stund`, { inc: 'leak', floor: L.src, say: 'Stoppa de blöta hissarna!' });
+      decide('leak', 'Hissarna i de blöta schakten står still', sv`vatten i schaktet kan kortsluta styrningen (${cars}) – folk får ta trappan en stund`, { inc: 'leak', floor: L.src, say: 'Stoppa de blöta hissarna!' });
     return;
   }
   if (L.mode === 'run' && (L.wet.length >= 3 || L.shorts.length) && setLeakMode('stop', 'chief'))
-    decide('leak', 'Nu stoppas de blöta hissarna', L.shorts.length ? `${S.elevators[L.shorts[0]].name} har redan kortslutits` : `vattnet har nått ${L.wet.length} våningar`, { inc: 'leak', floor: L.src, say: 'Stopp! Det rinner för mycket.' });
+    decide('leak', 'Nu stoppas de blöta hissarna', L.shorts.length ? sv`${S.elevators[L.shorts[0]].name} har redan kortslutits` : sv`vattnet har nått ${L.wet.length} våningar`, { inc: 'leak', floor: L.src, say: 'Stopp! Det rinner för mycket.' });
 }
 
 // --- Kuppen: polisens insatsledare – vänta ut dem (strömmen klipps inte), gå in via garaget där skåpbilen står ---
@@ -358,7 +359,7 @@ function heistChiefTick() {
     decide('heist', 'Insatsstyrkan går in via garaget', 'skåpbilen står vid lastkajen – utan den kommer de ingenstans', { ...o, say: 'Vi tar dem vid lastkajen.' });
   } else if (Hs.signal && !C.seen.heistSignal) {
     C.seen.heistSignal = true;
-    decide('heist', 'Ljussignal från taket – vi går in tidigare', `${Hs.heroWho || 'någon'} vet var de är`, { ...o, say: 'Vi har kontakt – snart går vi in!' });
+    decide('heist', 'Ljussignal från taket – vi går in tidigare', sv`${Hs.heroWho || 'någon'} vet var de är`, { ...o, say: 'Vi har kontakt – snart går vi in!' });
   }
 }
 
@@ -370,14 +371,14 @@ function watchTick() {
     const broken = e.mode === 'broken' || e.mode === 'snapped';
     if (broken && !C.seen[k]) {
       C.seen[k] = true;
-      if (e.mode === 'snapped') note(k, `Linbrott i ${e.name}!`, 'fångapparaten håller – teknikern larmas för utrymning genom takluckan', { car: e.id });
-      else if (e.fault && e.fault.trapped) note(k, `${e.name} står mellan två våningar`, `${e.passengers.length} sitter fast – teknikern går före allt annat`, { car: e.id });
-      else note(k, `${e.name} är trasig`, 'teknikern är larmad – trafiken tar de andra hissarna', { car: e.id });
+      if (e.mode === 'snapped') note(k, sv`Linbrott i ${e.name}!`, 'fångapparaten håller – teknikern larmas för utrymning genom takluckan', { car: e.id });
+      else if (e.fault && e.fault.trapped) note(k, sv`${e.name} står mellan två våningar`, sv`${e.passengers.length} sitter fast – teknikern går före allt annat`, { car: e.id });
+      else note(k, sv`${e.name} är trasig`, 'teknikern är larmad – trafiken tar de andra hissarna', { car: e.id });
     } else if (!broken && C.seen[k]) delete C.seen[k];
   }
-  if (S.medic && S.medic.state !== 'done' && !C.seen.medic) { C.seen.medic = true; note('medic', 'Ambulansen får förtur', `${S.medic.pname} har svimmat på ${fl(S.medic.floor)} – en hiss reserveras åt båren`); }
+  if (S.medic && S.medic.state !== 'done' && !C.seen.medic) { C.seen.medic = true; note('medic', 'Ambulansen får förtur', sv`${S.medic.pname} har svimmat på ${fl(S.medic.floor)} – en hiss reserveras åt båren`); }
   if (!S.medic || S.medic.state === 'done') delete C.seen.medic;
-  if (S.techCall && !C.seen.call) { C.seen.call = true; note('call', 'Hissjouren skickar en extra tekniker', `${S.techCall.n} trasiga hissar står i kö`); }
+  if (S.techCall && !C.seen.call) { C.seen.call = true; note('call', 'Hissjouren skickar en extra tekniker', sv`${S.techCall.n} trasiga hissar står i kö`); }
   if (!S.techCall) delete C.seen.call;
 }
 

@@ -17,6 +17,7 @@ import { BX1, DOOR_T, EL, HATCH_FLOORS, LOBBY, SEAM_F, TOP, TOWER_X1, floorY } f
 import { S, hour, log } from './state.js';
 import { moveTo, restoreElevator, setMode, vmaxOf } from './elevators.js';
 import { windAt } from './weather.js';
+import { sv } from './sv.js';
 /** @typedef {import('./elevators.js').Elevator} Elevator */
 
 /** huset har ett smalt torn med fasad att putsa (och en takskena) */
@@ -105,12 +106,12 @@ function balkTick(dt, work, parked) {
   const H = S.hoist, M = S.move;
   const halt = hoistHalt();
   if (halt !== H.halted) {
-    if (halt && H.phase !== 'idle') log(`🏗️ Hissbalken stannar – ${halt}${H.item !== null && M ? ` (${M.items[H.item].name} hänger kvar)` : ''}`, 'alert');
+    if (halt && H.phase !== 'idle') log(sv`🏗️ Hissbalken stannar – ${halt}${H.item !== null && M ? sv` (${M.items[H.item].name} hänger kvar)` : ''}`, 'alert');
     else if (!halt && H.halted && H.phase !== 'idle') log('🏗️ Hissbalken kör igen', 'move');
     H.halted = halt;
   }
   if (H.phase === 'idle') {
-    if (work && parked) { H.phase = 'rig'; H.t = 0; log(`🏗️ Hissbalken svängs ut över fasaden på ${fl(M.floor)} – de tyngsta möblerna ska ut genom lastluckan`, 'alert'); }
+    if (work && parked) { H.phase = 'rig'; H.t = 0; log(sv`🏗️ Hissbalken svängs ut över fasaden på ${fl(M.floor)} – de tyngsta möblerna ska ut genom lastluckan`, 'alert'); }
     return;
   }
   if (halt) return; // (står still – lasten hänger kvar där den är)
@@ -130,7 +131,7 @@ function balkTick(dt, work, parked) {
     if (!next) { H.phase = 'fetch'; return; }
     next.st = 'hoist'; H.item = next.id; H.phase = 'lower';
     S.fx.push({ x: TOWER_X1[TOP] + 16, y: H.y - 20, text: 'HÅLL I!', color: '#ffd23f', life: 1.4 });
-    log(`🏗️ ${cap(next.name)} lyfts ut genom lastluckan på ${fl(M.floor)} och sänks ner mot terrassen`, 'move');
+    log(sv`🏗️ ${cap(next.name)} lyfts ut genom lastluckan på ${fl(M.floor)} och sänks ner mot terrassen`, 'move');
     return;
   }
   if (H.phase === 'lower') {
@@ -138,7 +139,7 @@ function balkTick(dt, work, parked) {
     if (H.y === TERRACE_Y) {
       const x = M.items[/** @type {number} */ (H.item)];
       x.st = 'terrace'; H.item = null; H.phase = 'fetch';
-      log(`🏗️ ${cap(x.name)} står på terrassen – rullas över till panoramahissen`, 'move');
+      log(sv`🏗️ ${cap(x.name)} står på terrassen – rullas över till panoramahissen`, 'move');
     }
     return;
   }
@@ -172,7 +173,7 @@ function liftTick() {
   setMode(P, 'lift');
   P.liftWant = false; P.parkTarget = null; P.sleep = false; P.target = null;
   S.hoist.lift = P.door > 0 ? 'closeE' : 'up'; S.hoist.liftT = 0;
-  log(`🚚 ${P.name} går i lastläge – kör upp till terrassen och hämtar flyttlasset`, 'alert', P.color);
+  log(sv`🚚 ${P.name} går i lastläge – kör upp till terrassen och hämtar flyttlasset`, 'alert', P.color);
 }
 /** Ett steg för panoramahissen i lastläge (anropas från updateElevator när strömmen är på) @param {Elevator} e */
 export function liftStep(e, dt) {
@@ -191,7 +192,7 @@ export function liftStep(e, dt) {
       H.liftT += dt;
       if (H.liftT < LOAD_T) return;
       const x = M && M.state === 'on' ? M.items.find(y => y.st === 'terrace') : null;
-      if (x) { x.st = 'lift'; H.liftItem = x.id; log(`🚚 ${cap(x.name)} rullas in i ${e.name} på terrassen`, 'move', e.color); H.lift = 'closeT'; return; }
+      if (x) { x.st = 'lift'; H.liftItem = x.id; log(sv`🚚 ${cap(x.name)} rullas in i ${e.name} på terrassen`, 'move', e.color); H.lift = 'closeT'; return; }
       // inget att hämta: något hänger fortfarande i balken – vänta, annars ner tom
       if (M && M.state === 'on' && M.items.some(y => y.st === 'hoist' || y.st === 'hatch') && H.liftT < 40) return;
       H.lift = 'closeT';
@@ -209,14 +210,14 @@ export function liftStep(e, dt) {
       if (H.liftItem !== null && M) {
         const x = M.items[H.liftItem];
         x.st = 'truck'; M.truck++; M.done++; M.hoisted++; S.stats.moveLoads++;
-        log(`🚚 ${cap(x.name)} rullas ut genom entrén till flyttbilen (${M.truck}/${M.loads})`, 'move', e.color);
+        log(sv`🚚 ${cap(x.name)} rullas ut genom entrén till flyttbilen (${M.truck}/${M.loads})`, 'move', e.color);
       }
       H.liftItem = null;
       // mer på väg? då kör den upp igen, annars tillbaka i vanlig trafik
       if (M && M.state === 'on' && M.items.some(y => y.st === 'terrace' || y.st === 'hoist')) { H.lift = 'closeE'; return; }
       H.lift = null;
       restoreElevator(e);
-      log(`🚚 ${e.name} går i vanlig trafik igen`, 'move', e.color);
+      log(sv`🚚 ${e.name} går i vanlig trafik igen`, 'move', e.color);
     }
   }
 }
@@ -227,13 +228,13 @@ export function hoistStatus(M) {
   if (!xl.length) return '';
   const H = S.hoist, C = S.cleaner, it = H.item !== null ? M.items[H.item] : null;
   const name = x => x.name.replace('(!)', '');
-  if (H.halted && H.phase !== 'idle') return `Hissbalken står still (${H.halted})${it ? ` – ${name(it)} hänger kvar utanför fasaden` : ''}.`;
+  if (H.halted && H.phase !== 'idle') return sv`Hissbalken står still (${H.halted})${it ? sv` – ${name(it)} hänger kvar utanför fasaden` : ''}.`;
   const lift = M.items.find(x => x.st === 'lift'), terr = M.items.find(x => x.st === 'terrace'), hatch = M.items.find(x => x.st === 'hatch');
-  if (lift) return `${cap(name(lift))} åker panoramahissen ner till entrén.`;
-  if (it) return `${cap(name(it))} hänger i hissbalken och sänks ner mot takterrassen.`;
-  if (terr) return `${cap(name(terr))} står på terrassen och väntar på panoramahissen.`;
-  if (hatch) return H.phase === 'idle' && !C.parked ? `${cap(name(hatch))} står vid lastluckan – putsaren hissas upp så att hissbalken får takskenan.` : `${cap(name(hatch))} står vid lastluckan – hissbalken hämtar.`;
+  if (lift) return sv`${cap(name(lift))} åker panoramahissen ner till entrén.`;
+  if (it) return sv`${cap(name(it))} hänger i hissbalken och sänks ner mot takterrassen.`;
+  if (terr) return sv`${cap(name(terr))} står på terrassen och väntar på panoramahissen.`;
+  if (hatch) return H.phase === 'idle' && !C.parked ? sv`${cap(name(hatch))} står vid lastluckan – putsaren hissas upp så att hissbalken får takskenan.` : sv`${cap(name(hatch))} står vid lastluckan – hissbalken hämtar.`;
   const done = xl.filter(x => x.st === 'truck');
-  if (done.length === xl.length) return `Hissbalken är klar: ${xl.map(name).join(' och ')} gick utanpå fasaden och med panoramahissen.`;
-  return `${cap(xl.map(name).join(' och '))} är för tungt för varuhissen – det ska ut genom lastluckan med hissbalken.`;
+  if (done.length === xl.length) return sv`Hissbalken är klar: ${xl.map(name).join(' och ')} gick utanpå fasaden och med panoramahissen.`;
+  return sv`${cap(xl.map(name).join(' och '))} är för tungt för varuhissen – det ska ut genom lastluckan med hissbalken.`;
 }

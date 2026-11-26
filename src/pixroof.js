@@ -16,6 +16,7 @@ import { box, CY, g, HELI, INK, label, line, lo, pill, PUFF, R, RELIGHT_S, wheel
 import { BASE_Y, SEAM_Y, shaftTop, stackedAbove, UX1 } from './pixbuilding.js';
 import { stairSign, winFig } from './pixhall.js';
 import { blinkOf } from './pixcars.js';
+import { sv } from './sv.js';
 /** @typedef {import('./elevators.js').Elevator} Elevator */
 
 // ---------- Flyttdagen ----------
@@ -296,9 +297,9 @@ export function drawOutagePx() {
 }
 export function drawBannersPx() {
   const list = [];
-  if (S.fire) list.push([`🔥 BRAND PÅ VÅNING ${fl(S.fire.floor)}${!S.fire.brigade ? '' : S.fire.outAt === null ? ' – BRANDKÅREN GÅR IN' : ' – BRANDKÅREN SLÄCKER'}`, '#ff2d55']);
-  if (!S.power) list.push([`⚡ STRÖMAVBROTT${S.outage && S.outage.gen ? ' – RESERVKRAFT' : ''}`, '#6366f1']);
-  if (S.storm) list.push([`🌬️ STORM${S.storm.mode === 'sway' ? ' – SVAJLÄGE' : ''}`, '#2a5db0']);
+  if (S.fire) list.push([sv`🔥 BRAND PÅ VÅNING ${fl(S.fire.floor)}${!S.fire.brigade ? '' : S.fire.outAt === null ? ' – BRANDKÅREN GÅR IN' : ' – BRANDKÅREN SLÄCKER'}`, '#ff2d55']);
+  if (!S.power) list.push([sv`⚡ STRÖMAVBROTT${S.outage && S.outage.gen ? ' – RESERVKRAFT' : ''}`, '#6366f1']);
+  if (S.storm) list.push([sv`🌬️ STORM${S.storm.mode === 'sway' ? ' – SVAJLÄGE' : ''}`, '#2a5db0']);
   // mitt i det som syns: på mobilen i närbild är bilden bredare än skärmen och flyttad panX css-pixlar i sidled
   // (view.js) – mitt i hela bilden hamnar skylten halvvägs utanför. Får den inte plats blir texten mindre.
   const k = lo.width / Math.max(1, (W - VIEW.x0) * VIEW.scale); // låga pixlar per css-pixel
@@ -400,5 +401,5 @@ export function drawBrigadePx() {
     g.drawImage(personSprite(p, 'side', 0, 1, { blink: blinkOf(p) }), x0 + 1 + i * 5 - (i % 2), fy - PERSON_H - (i % 2) * 2);
     g.globalAlpha = 1;
   });
-  label(`ÅTERSAMLING ${out.length}`, x0 + 2, fy - PERSON_H - 12, '#ffffff', '#c81e3a', 'left');
+  label(sv`ÅTERSAMLING ${out.length}`, x0 + 2, fy - PERSON_H - 12, '#ffffff', '#c81e3a', 'left');
 }

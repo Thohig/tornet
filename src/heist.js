@@ -18,6 +18,7 @@
 // som inte är spärrad (skåpbilen, helikopter på taket, tunnelbanan – egen slumpström `kuppen`) eller grips. Ingen
 // skjuter, ingen dör
 import { stream } from './rng.js';
+import { sv } from './sv.js';
 const { pick } = stream('kuppen');
 import { CAFE, CONTROL, DOCK, DOOR_X, LOBBY, ROOF, STATION, TOP, floorWith, floorY } from './config.js';
 import { S, incidentOver, log, notice } from './state.js';
@@ -94,7 +95,7 @@ export function orderHeist() {
   if (startHeist()) return true;
   if (!heistBlock()) return false;
   S.heistWait = S.t;
-  log(`🚐 En skåpbil från ${VAN_NAME} kör runt kvarteret – gänget väntar ${heistBlock()}`, 'alert');
+  log(sv`🚐 En skåpbil från ${VAN_NAME} kör runt kvarteret – gänget väntar ${heistBlock()}`, 'alert');
   return true;
 }
 
@@ -107,7 +108,7 @@ export function startHeist(warned = false) {
     holdT: 0, police: false, policeAt: 0, plan: 'garage', train: 'go', power: 'wait', drill: 0, drillOff: 0, gold: GOLD,
     route: '', fleeF: -1, fleeT: 0, stormAt: 0, signal: false, outcome: '', caught: false, hostages: 0, idFrom: S.nextId,
     talkT: 0, talkN: 0, tied: false };
-  log(`🚐 En skåpbil från ${VAN_NAME} backar in vid lastkajen – fem män i overall kliver ur`, 'alert');
+  log(sv`🚐 En skåpbil från ${VAN_NAME} backar in vid lastkajen – fem män i overall kliver ur`, 'alert');
   incidentStarted(DOCK);
   return true;
 }
@@ -119,12 +120,12 @@ function spawnGang() {
     const p = blankPerson('staff', DOCK, 150 + i * 16, { name: g.name, kg: 88, fit: 0.6, speedMul: 1.05, walkPhase: i * 1.7, depth: -2 - i,
       patience: 10, space: 9, polite: false,
       look: { skin: ['#f6c48f', '#ffdbb8', '#d9a066', '#e0ac7a', '#ffe4c8'][i], shirt: g.shirt, pants: g.shirt, hair: 0, hairC: '#1b1033', tie: false, tieC: '#ffe14d', stripe: true, acc: 4 } });
-    p.role = 'rånare'; p.robber = true; p.exitFloor = DOCK; p.task = g.task; p.title = `Rånare (${g.job === 'ledare' ? 'ledaren' : g.job === 'borr' ? 'borrar' : g.job === 'vakt' ? 'vaktar gisslan' : 'chaufför'})`;
+    p.role = 'rånare'; p.robber = true; p.exitFloor = DOCK; p.task = g.task; p.title = sv`Rånare (${g.job === 'ledare' ? 'ledaren' : g.job === 'borr' ? 'borrar' : g.job === 'vakt' ? 'vaktar gisslan' : 'chaufför'})`;
     if (g.job === 'borr') p.cargo = { kind: 'verktygslåda', name: 'borrmaskin', kg: 14 };
     S.people.push(p);
     Hs.gang.push(p.id);
     setTrip(p, postOf(g.job), g.task, false);
-    pev(p, `Kliver ur skåpbilen vid lastkajen · ${g.task}`);
+    pev(p, sv`Kliver ur skåpbilen vid lastkajen · ${g.task}`);
   });
   const L = robber('ledare');
   if (L) speak(L, 'Okej grabbar – precis som vi övade. Varuhissen!');
@@ -227,22 +228,22 @@ function heroTick() {
   const winded = Hs.steps > 300 ? ' (flåsar)' : '';
   if (Hs.heroStep === 1) {
     heroGo(p, ELEC, 'Smyger i trappan till elcentralen');
-    if (there(p, ELEC)) { Hs.heroStep = 2; Hs.heroT = S.t + HERO_WORK; speak(p, `Puh${winded}… här är elcentralen. Vilken säkring är borren?`); }
+    if (there(p, ELEC)) { Hs.heroStep = 2; Hs.heroT = S.t + HERO_WORK; speak(p, sv`Puh${winded}… här är elcentralen. Vilken säkring är borren?`); }
   } else if (Hs.heroStep === 2 && S.t >= Hs.heroT) {
     Hs.drillOff = S.t + DRILL_PAUSE; Hs.heroStep = 3;
     speak(p, 'Säkring 5B – borta! Nu får de vänta.');
-    tell(`Säkring 5B – där! Nu tystnar borren på ${fl(BANK)}:an en stund. Nästa: upp på taket, så polisen ser oss.`);
-    log(`🔌 ${pn(p)} slår av strömmen till borren i elcentralen på ${fl(ELEC)} – borren tystnar`, 'alert', null, p.id);
+    tell(sv`Säkring 5B – där! Nu tystnar borren på ${fl(BANK)}:an en stund. Nästa: upp på taket, så polisen ser oss.`);
+    log(sv`🔌 ${pn(p)} slår av strömmen till borren i elcentralen på ${fl(ELEC)} – borren tystnar`, 'alert', null, p.id);
   } else if (Hs.heroStep === 3) {
     const top = ROOF >= 0 ? ROOF : TOP;
     heroGo(p, top, 'Smyger upp till taket – ska signalera till polisen');
-    if (there(p, top)) { Hs.heroStep = 4; Hs.heroT = S.t + HERO_WORK; speak(p, `${Hs.steps} trappsteg${winded}… Ficklampan – kort, kort, kort, lång!`); }
+    if (there(p, top)) { Hs.heroStep = 4; Hs.heroT = S.t + HERO_WORK; speak(p, sv`${Hs.steps} trappsteg${winded}… Ficklampan – kort, kort, kort, lång!`); }
   } else if (Hs.heroStep === 4 && S.t >= Hs.heroT) {
     Hs.heroStep = 5; Hs.signal = true;
     if (Hs.police) Hs.stormAt = Math.max(S.t + 15, Hs.stormAt - SIGNAL_S);
     speak(p, 'De blinkar tillbaka! De har sett oss!');
     tell('De blinkar tillbaka från gatan – polisen vet var rånarna är. Nu väntar vi här uppe, där ingen letar.');
-    log(`🔦 ${pn(p)} signalerar med ficklampan från taket – insatsstyrkan vet var gänget är`, 'alert', null, p.id);
+    log(sv`🔦 ${pn(p)} signalerar med ficklampan från taket – insatsstyrkan vet var gänget är`, 'alert', null, p.id);
   }
 }
 
@@ -257,16 +258,16 @@ function hold() {
   const L = robber('ledare');
   if (L) speak(L, 'Ingen rör sig – och ingen rör hissarna!');
   log('🚐 RÅN! Gänget har tagit driftcentralen – hissarna är kapade, alla samlas i Sky Café', 'alert');
-  notice('heist', '🚐 Rån i Tornet', `Ett gäng från ${VAN_NAME} har tagit driftcentralen och kapat hissarna. Alla som jobbar och är på besök samlas som gisslan i Sky Café; de boende låser in sig. Två av dem borrar i valvet på ${fl(BANK)}:an.`, { floor: BANK });
+  notice('heist', '🚐 Rån i Tornet', sv`Ett gäng från ${VAN_NAME} har tagit driftcentralen och kapat hissarna. Alla som jobbar och är på besök samlas som gisslan i Sky Café; de boende låser in sig. Två av dem borrar i valvet på ${fl(BANK)}:an.`, { floor: BANK });
   if (h) {
     Hs.hero = h.id; Hs.heroWho = h.name; Hs.heroStep = 1;
     const v = S.visning;
     if (v && h.id === v.host) {
       tell('Psst – rånare! De har tagit driftcentralen och kapat hissarna. Men mig har de missat, och dig. Följ med – jag kan trapporna i det här huset utan och innan.');
       const k = crewPerson('kicki');
-      if (k) speak(k, `${h.name}?! Det är rånare här! … Ja, jag sitter under disken.`);
+      if (k) speak(k, sv`${h.name}?! Det är rånare här! … Ja, jag sitter under disken.`);
     } else speak(h, 'Vad var det där? … Rånare?! Inte i mitt hus.');
-    log(`🤫 ${pn(h)} blev över – rånarna missade hen`, 'alert', null, h.id);
+    log(sv`🤫 ${pn(h)} blev över – rånarna missade hen`, 'alert', null, h.id);
   }
 }
 function flee() {
@@ -278,8 +279,8 @@ function flee() {
   Hs.fleeF = ROUTES[Hs.route].f;
   Hs.gold = 0;
   const L = robber('ledare');
-  if (L) speak(L, `Valvet är öppet! Ta guldet – vi drar med ${ROUTES[Hs.route].name}!`);
-  log(`💰 Valvet är öppet! Gänget tar ${GOLD} guldtackor och flyr mot ${ROUTES[Hs.route].name} (${fl(Hs.fleeF)})`, 'alert');
+  if (L) speak(L, sv`Valvet är öppet! Ta guldet – vi drar med ${ROUTES[Hs.route].name}!`);
+  log(sv`💰 Valvet är öppet! Gänget tar ${GOLD} guldtackor och flyr mot ${ROUTES[Hs.route].name} (${fl(Hs.fleeF)})`, 'alert');
   for (const p of gang()) if (jobOf(p) === 'borr') p.cargo = { kind: 'guld', name: 'guldtackor', kg: 14 };
 }
 /** är flyktvägen spärrad? (polisen vid lastkajen eller på taket, tåget stoppat, stormen) */
@@ -297,16 +298,16 @@ function caught(how) {
   Hs.caught = true;
   for (const p of gang()) { p.caught = true; p.exitFloor = LOBBY; p.cargo = null; }
   Hs.gold = GOLD;
-  end(`${how} Alla fem är gripna.`);
+  end(sv`${how} Alla fem är gripna.`);
 }
 /** gänget kom undan */
 function escaped() {
   const Hs = /** @type {Heist} */ (H());
   // (alla står vid flyktvägen: in i bilen, helikoptern eller tåget – och borta)
   const how = { van: 'Hoppar in i skåpbilen', heli: 'Klättrar in i helikoptern', train: 'Kliver på tunnelbanan' }[Hs.route];
-  for (const p of gang()) { releaseSpot(p); pev(p, `${how} – borta med guldet`); p.dead = true; }
+  for (const p of gang()) { releaseSpot(p); pev(p, sv`${how} – borta med guldet`); p.dead = true; }
   if (Hs.route === 'van') Hs.van = 'out';
-  end(`Gänget kom undan med ${ROUTES[Hs.route].name} och ${GOLD} guldtackor.`);
+  end(sv`Gänget kom undan med ${ROUTES[Hs.route].name} och ${GOLD} guldtackor.`);
 }
 /** kuppen är över: hissarna släpps, gisslan går, sammanfattningen */
 function end(text) {
@@ -318,8 +319,8 @@ function end(text) {
     if (p.hero) p.hero = false;
   }
   for (const p of gang()) if (p.state === 'office') { releaseSpot(p); const r = robberNext(p); if (r) setTrip(p, r[0], r[1], r[2]); }
-  const hero = Hs.heroWho ? ` ${Hs.heroWho} blev över och smög ${Hs.steps} trappsteg${Hs.heroStep >= 3 ? ', slog av strömmen till borren' : ''}${Hs.signal ? ' och signalerade till polisen från taket' : ''}.` : '';
-  const sum = `${text} Guldtackor kvar i valvet: ${Hs.gold} av ${GOLD}. ${Hs.hostages} var gisslan i Sky Café.${hero}`;
+  const hero = Hs.heroWho ? sv` ${Hs.heroWho} blev över och smög ${Hs.steps} trappsteg${Hs.heroStep >= 3 ? ', slog av strömmen till borren' : ''}${Hs.signal ? ' och signalerade till polisen från taket' : ''}.` : '';
+  const sum = sv`${text} Guldtackor kvar i valvet: ${Hs.gold} av ${GOLD}. ${Hs.hostages} var gisslan i Sky Café.${hero}`;
   Hs.outcome = sum;
   log(Hs.caught ? '🚓 Kuppen är över – gänget är gripet' : '🚐 Kuppen är över – gänget kom undan', 'alert');
   incidentOver('heist', Hs.caught ? '🚓 Kuppen på 5:an – gripna' : '🚐 Kuppen på 5:an – borta', sum, { floor: BANK });
@@ -388,12 +389,12 @@ export function heistTick(dt) {
     if (Hs.drill >= 1) { flee(); return; }
   }
   if (Hs.police && S.t >= Hs.stormAt) {
-    caught(Hs.ph === 'hold' ? `Insatsstyrkan gick in via ${Hs.plan === 'garage' ? 'garaget' : 'taket'} och tog gänget innan valvet var öppet.` : `Insatsstyrkan gick in via ${Hs.plan === 'garage' ? 'garaget' : 'taket'} och tog gänget på väg ut.`);
+    caught(Hs.ph === 'hold' ? sv`Insatsstyrkan gick in via ${Hs.plan === 'garage' ? 'garaget' : 'taket'} och tog gänget innan valvet var öppet.` : sv`Insatsstyrkan gick in via ${Hs.plan === 'garage' ? 'garaget' : 'taket'} och tog gänget på väg ut.`);
     return;
   }
   if (S.t - Hs.t0 > HEIST_MAX) { caught('Gänget gav upp efter förhandlingar med polisen.'); return; }
   if (Hs.ph === 'flee') {
-    if (blocked(Hs.route)) { caught(`Polisen väntade vid ${ROUTES[Hs.route].name}.`); return; }
+    if (blocked(Hs.route)) { caught(sv`Polisen väntade vid ${ROUTES[Hs.route].name}.`); return; }
     const g = gang();
     if (g.length && g.every(p => there(p, Hs.fleeF))) { escaped(); return; }
     if (S.t - Hs.fleeT > FLEE_MAX) caught('Gänget hann aldrig ut – polisen tog dem i trapphuset.');
@@ -409,10 +410,10 @@ function talk(Hs) {
     () => host.length && speak(host[n % host.length], ['Tror du de hinner till lunch?', 'Kanelbullarna tar slut snart', 'Det här ska jag berätta för barnbarnen', 'Han där borta ser nervös ut', 'Undrar om banken är försäkrad'][n % 5]),
     () => guard && speak(guard, ['Sitt still nu!', 'Ingen tittar ut genom fönstret!', 'Är det kaffe där? … Nej, sitt still!'][n % 3]),
     () => dj && speak(dj, ['Kanal 97 – live från Tornet: rånare i huset!', 'Vi sänder direkt: polisen på gatan!', 'Nästa låt tillägnas gisslan på 6:an!'][n % 3]),
-    () => S.heist && S.heist.drill > 0 && S.heist.ph === 'hold' && robber('borr') && speak(/** @type {Person} */ (robber('borr')), S.t < S.heist.drillOff ? 'Vem drog ur sladden?!' : `${Math.round(S.heist.drill * 100)} % – snart igenom!`),
+    () => S.heist && S.heist.drill > 0 && S.heist.ph === 'hold' && robber('borr') && speak(/** @type {Person} */ (robber('borr')), S.t < S.heist.drillOff ? 'Vem drog ur sladden?!' : sv`${Math.round(S.heist.drill * 100)} % – snart igenom!`),
   ];
   lines[n % lines.length]();
 }
 export function heistReset() { S.heist = null; S.heistWait = null; }
 /** förvarningen: skåpbilen har stått länge (incidents.js) */
-export const HEIST_WARN = `🚐 En skåpbil från ${VAN_NAME} står vid lastkajen med motorn igång…`;
+export const HEIST_WARN = sv`🚐 En skåpbil från ${VAN_NAME} står vid lastkajen med motorn igång…`;

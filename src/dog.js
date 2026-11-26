@@ -17,6 +17,7 @@
 // spelaren (`act('dog', 'lock'|'free')`) kan spärra hissarna på hundens våning (`dogLockFloor`, i `canTake` i
 // dispatch.js – bara de som jagar kommer därifrån). Egen slumpström `hunden`
 import { stream } from './rng.js';
+import { sv } from './sv.js';
 const { pick, rand, rng } = stream('hunden');
 import { cap, fl } from './util.js';
 import { EL, FL, FLOORS, LOBBY, SKY, floorWith } from './config.js';
@@ -59,23 +60,23 @@ export function startDog() {
   const f = owner ? owner.floor : SPA, name = pick(DOG_NAMES);
   const dog = blankPerson('vis', f, owner ? owner.x + 14 : 300, { name, look: { ...DOG_LOOK }, kg: owner && owner.cargo ? owner.cargo.kg : 8,
     fit: 0, speedMul: 1.7, depth: -1, patience: 999, space: 9, polite: false });
-  dog.role = 'hund'; dog.dog = true; dog.title = owner ? `Pudel – ${owner.name}s` : 'Pudel från kenneln på Vovve Spa';
+  dog.role = 'hund'; dog.dog = true; dog.title = owner ? sv`Pudel – ${owner.name}s` : 'Pudel från kenneln på Vovve Spa';
   dog.task = SNIFF[0];
   let chaser = owner;
   if (owner) {
     owner.cargo = null;
     owner.chase = true;
     // (ägaren lämnar kön och ropar efter hunden)
-    const x = owner.x; setTrip(owner, owner.floor, `Ropar på ${name}`, false); owner.x = x;
-    pev(owner, `${name} slet sig ur kopplet! ${name.toUpperCase()}! KOM HIT!`);
+    const x = owner.x; setTrip(owner, owner.floor, sv`Ropar på ${name}`, false); owner.x = x;
+    pev(owner, sv`${name} slet sig ur kopplet! ${name.toUpperCase()}! KOM HIT!`);
   } else {
     // hundfrisören från Vovve Spa springer efter
     chaser = makePerson('staff', SPA, 420);
     chaser.role = 'hundfrisör'; chaser.chase = true; chaser.title = 'Hundfrisör på Vovve Spa'; chaser.exitFloor = LOBBY;
     chaser.state = 'office'; chaser.timer = 0.5;
-    chaser.spot = { x: 420, k: 'stand', face: -1, temp: true, win: 'hall', desc: `Ropar på ${name}` };
+    chaser.spot = { x: 420, k: 'stand', face: -1, temp: true, win: 'hall', desc: sv`Ropar på ${name}` };
     S.people.push(chaser);
-    pev(chaser, `${name} smet ut ur kenneln! Efter henne!`);
+    pev(chaser, sv`${name} smet ut ur kenneln! Efter henne!`);
   }
   S.people.push(dog);
   S.dog = { t0: S.t, ph: 'loose', dog: dog.id, owner: chaser ? chaser.id : -1, jan: -1, name, f, lock: false, lockBy: '',
@@ -84,7 +85,7 @@ export function startDog() {
   const first = dogNext(dog) || [LOBBY, 'Springer!', false];
   setTrip(dog, first[0], first[1], false);
   S.fx.push({ x: dog.x, y: 0, text: 'VOFF!', color: '#ffffff', life: 1.4 });
-  log(owner ? `🐕 ${name} sliter sig ur kopplet hos ${pn(owner)} på ${fl(f)} – hunden är lös i huset!` : `🐕 Pudeln ${name} smiter ut ur kenneln på Vovve Spa (${fl(f)}) – hunden är lös i huset!`, 'alert', null, dog.id);
+  log(owner ? sv`🐕 ${name} sliter sig ur kopplet hos ${pn(owner)} på ${fl(f)} – hunden är lös i huset!` : sv`🐕 Pudeln ${name} smiter ut ur kenneln på Vovve Spa (${fl(f)}) – hunden är lös i huset!`, 'alert', null, dog.id);
   incidentStarted(f);
   return true;
 }
@@ -93,7 +94,7 @@ export function setDogLock(lock, by) {
   const D = S.dog;
   if (!D || D.ph !== 'loose' || D.lock === !!lock) return false;
   D.lock = !!lock; D.lockBy = by;
-  log(lock ? `🐕 Hissarna på ${fl(D.f)} tar inga nya – ${D.name} ska inte komma därifrån` : `🐕 Hissarna på ${fl(D.f)} går som vanligt igen`, 'alert');
+  log(lock ? sv`🐕 Hissarna på ${fl(D.f)} tar inga nya – ${D.name} ska inte komma därifrån` : sv`🐕 Hissarna på ${fl(D.f)} går som vanligt igen`, 'alert');
   const dog = byId(D.dog);
   // (hunden som står i kön ger upp och nosar runt i hallen)
   if (lock && dog && dog.state === 'wait') { setTrip(dog, dog.floor, 'Hissen kommer inte – nosar runt i hallen', false); }
@@ -112,7 +113,7 @@ export function dogNext(p) {
   for (const d of EL) if (!d.freight && d.stops.includes(here)) for (const f of d.stops) if (f !== here && !inFireZone(f) && f !== SKY) opts.add(f);
   if (!opts.size) return null;
   const f = pick([...opts].sort((a, b) => a - b));
-  return [f, `Springer till ${fl(f)}`, false];
+  return [f, sv`Springer till ${fl(f)}`, false];
 }
 /** hundens plats i hallen när den stannar @param {Person} p */
 export function dogSpot(p) {
@@ -124,13 +125,13 @@ export function chaseNext(p) {
   const D = S.dog;
   if (!D || D.ph !== 'loose') { p.chase = false; return null; }
   if (p.floor === D.f || inFireZone(D.f)) return null;
-  return [D.f, `Jagar ${D.name} – hunden är på ${fl(D.f)}`, false];
+  return [D.f, sv`Jagar ${D.name} – hunden är på ${fl(D.f)}`, false];
 }
 /** platsen för den som jagar: nära hunden i hallen @param {Person} p */
 export function chaseSpot(p) {
   const D = S.dog, dog = D ? byId(D.dog) : null;
   return { x: dog && dog.floor === p.floor ? Math.max(300, dog.x - 30) : 360, k: 'stand', face: 1, temp: true, win: 'hall',
-    desc: D ? `Ropar på ${D.name}` : 'Andas ut' };
+    desc: D ? sv`Ropar på ${D.name}` : 'Andas ut' };
 }
 /** hundens rumstid (i speltid, som personalen): lite längre för varje stopp – den börjar bli trött */
 export const dogTimer = () => rand(4, 8) * (1 + (S.dog ? S.dog.stops : 0) * 0.15);
@@ -156,10 +157,10 @@ export function dogTick(dt) {
   }
   // vaktmästaren jagar också
   let jan = byId(D.jan);
-  if (!jan || !jan.duty || jan.duty.kind !== 'dog') { jan = callJanitor('dog', D.f, `Hjälper till att fånga ${D.name}`, `Försöker locka till sig ${D.name}`); D.jan = jan.id; }
-  else moveDuty(jan, D.f, `Jagar ${D.name} – hunden är på ${fl(D.f)}`, `Försöker locka till sig ${D.name}`);
+  if (!jan || !jan.duty || jan.duty.kind !== 'dog') { jan = callJanitor('dog', D.f, sv`Hjälper till att fånga ${D.name}`, sv`Försöker locka till sig ${D.name}`); D.jan = jan.id; }
+  else moveDuty(jan, D.f, sv`Jagar ${D.name} – hunden är på ${fl(D.f)}`, sv`Försöker locka till sig ${D.name}`);
   // trött: hunden lägger sig och väntar på att bli hämtad
-  if (!D.tired && S.t - D.t0 > DOG_TIRED_S) { D.tired = true; log(`🐕 ${D.name} är trött och lägger sig på ${fl(dog.floor)}`, 'alert', null, dog.id); }
+  if (!D.tired && S.t - D.t0 > DOG_TIRED_S) { D.tired = true; log(sv`🐕 ${D.name} är trött och lägger sig på ${fl(dog.floor)}`, 'alert', null, dog.id); }
   // fångad: någon som jagar står på samma våning medan hunden står still
   const near = dog.state === 'office' ? S.people.find(p => !p.dead && p.floor === dog.floor && p.state === 'office' && (p.chase || onDuty(p, 'dog'))) : null;
   D.catchT = near ? D.catchT + dt : 0;
@@ -180,23 +181,23 @@ function finish(D, by, how) {
   if (dog) { releaseSpot(dog); dog.dead = true; dog.state = 'away'; }
   if (owner) {
     // ägaren får tillbaka hunden i koppel (hundfrisören bär tillbaka den till kenneln)
-    owner.cargo = { kind: 'pudel', name: D.kennel ? `${D.name} (rymlingen)` : 'pudel i koppel', kg: 8 };
+    owner.cargo = { kind: 'pudel', name: D.kennel ? sv`${D.name} (rymlingen)` : 'pudel i koppel', kg: 8 };
     owner.chase = false;
     if (owner.state === 'office') owner.timer = 0;
-    pev(owner, how === 'caught' ? `Äntligen! ${D.name} är fångad – hem nu, och kopplet sitter KVAR` : `${D.name} sprang ut på gatan – där är hon!`);
+    pev(owner, how === 'caught' ? sv`Äntligen! ${D.name} är fångad – hem nu, och kopplet sitter KVAR` : sv`${D.name} sprang ut på gatan – där är hon!`);
   }
   for (const p of S.people) if (p.chase && p !== owner) p.chase = false;
   const sec = Math.round(D.t1 - D.t0), n = D.floors.length;
-  const line = how === 'caught' ? `${by && by.id === D.owner ? (D.kennel ? 'hundfrisören' : 'ägaren') : by ? by.name : 'någon'} fångade ${D.name} på ${fl(D.f)}` : `${D.name} sprang ut genom entrén och hittades på gatan`;
-  log(`🐕 ${cap(line)} efter ${sec} s`, 'alert');
-  incidentOver('dog', `🐕 ${D.name} är fångad`, `${D.name} var lös i ${sec} s, hann till ${n} ${n === 1 ? 'våning' : 'våningar'} och åkte hiss ${D.rides} ${D.rides === 1 ? 'gång' : 'gånger'} – ${line}.`
+  const line = how === 'caught' ? sv`${by && by.id === D.owner ? (D.kennel ? 'hundfrisören' : 'ägaren') : by ? by.name : 'någon'} fångade ${D.name} på ${fl(D.f)}` : sv`${D.name} sprang ut genom entrén och hittades på gatan`;
+  log(sv`🐕 ${cap(line)} efter ${sec} s`, 'alert');
+  incidentOver('dog', sv`🐕 ${D.name} är fångad`, sv`${D.name} var lös i ${sec} s, hann till ${n} ${n === 1 ? 'våning' : 'våningar'} och åkte hiss ${D.rides} ${D.rides === 1 ? 'gång' : 'gånger'} – ${line}.`
     + (D.lock ? ' Hissarna på hundens våning var spärrade en stund.' : ''), { floor: D.f });
 }
 /** hundfrisörens nästa beslut: tillbaka till kenneln med hunden, sedan ut @param {Person} p */
 export function groomerNext(p) {
   if (p.chase) return chaseNext(p);
   if (p.cargo && SPA >= 0) {
-    if (p.floor !== SPA) return [SPA, `Bär tillbaka ${p.cargo.name} till kenneln`, false];
+    if (p.floor !== SPA) return [SPA, sv`Bär tillbaka ${p.cargo.name} till kenneln`, false];
     // (hundfrisören går in i salongen igen – hen jobbar där)
     p.cargo = null; pev(p, 'Pudeln är tillbaka i kenneln – och dörren är LÅST');
     releaseSpot(p); p.dead = true;

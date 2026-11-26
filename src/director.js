@@ -21,6 +21,7 @@ import { VIEW, camMax, camTarget, detachCam, keepX, seeH } from './view.js';
 import { personHead } from './render.js';
 import { cleanerAt } from './hoist.js';
 import { BUS_NAME } from './tour.js';
+import { sv } from './sv.js';
 /** @typedef {import('./people.js').Person} Person */
 
 const HOLD = 16;     // sekunder (verklig tid) en vanlig tagning varar
@@ -106,16 +107,16 @@ function shots() {
   // Stadsturen: bussen som kommer och går (gatan), guiden med flaggan och gruppen på takterrassen
   const T = S.tour;
   if (T) {
-    if (T.ph === 'in') add('bus', 62, 'street', 0, `🚌 ${BUS_NAME} kommer`);
-    else if (T.ph === 'out') add('bus', 56, 'street', 0, `🚌 ${BUS_NAME} åker${T.missed.length ? ` utan ${T.missed.length}` : ''}`);
-    else if (T.ph === 'back' && T.honked) add('bus', 66, 'street', 0, `🚌 ${BUS_NAME} tutar – ${T.n0 - T.lost.length - T.aboard} är inte ombord`);
+    if (T.ph === 'in') add('bus', 62, 'street', 0, sv`🚌 ${BUS_NAME} kommer`);
+    else if (T.ph === 'out') add('bus', 56, 'street', 0, sv`🚌 ${BUS_NAME} åker${T.missed.length ? ` utan ${T.missed.length}` : ''}`);
+    else if (T.ph === 'back' && T.honked) add('bus', 66, 'street', 0, sv`🚌 ${BUS_NAME} tutar – ${T.n0 - T.lost.length - T.aboard} är inte ombord`);
     const gd = S.people.find(p => p.id === T.guide && p.guide && !p.dead);
-    if (gd && gd.state !== 'office' && visible(gd)) add('guide', 46, 'person', gd.id, `🚩 ${name1(gd)} leder ${BUS_NAME}`);
-    if (T.ph === 'at' && T.stops[T.si] === ROOF && ROOF >= 0) add('tourRoof', 36, 'floor', ROOF, `📸 ${BUS_NAME} på takterrassen`);
+    if (gd && gd.state !== 'office' && visible(gd)) add('guide', 46, 'person', gd.id, sv`🚩 ${name1(gd)} leder ${BUS_NAME}`);
+    if (T.ph === 'at' && T.stops[T.si] === ROOF && ROOF >= 0) add('tourRoof', 36, 'floor', ROOF, sv`📸 ${BUS_NAME} på takterrassen`);
   }
   // återsamlingsplatsen och när de utrymda går in igen
   const outside = S.people.filter(p => p.state === 'assembly').length;
-  if (outside >= 4) add('assembly', 40 + Math.min(outside, 20), 'floor', LOBBY, `🧍 ${outside} på återsamlingsplatsen`);
+  if (outside >= 4) add('assembly', 40 + Math.min(outside, 20), 'floor', LOBBY, sv`🧍 ${outside} på återsamlingsplatsen`);
   // blixten slår ner, och strömmen kommer tillbaka våning för våning
   if (S.storm && S.storm.struck !== null && S.t - S.storm.struck < 3) add('strike', 97, 'floor', ROOF >= 0 ? ROOF : TOP, '⚡ Blixten slår ner!', true);
   if (S.powerBack !== null && S.t - S.powerBack < 4) add('relight', 66, 'floor', LOBBY, '💡 Strömmen är tillbaka');
@@ -123,7 +124,7 @@ function shots() {
     const crew = S.people.filter(p => p.medic && !p.dead && visible(p));
     const amb = crew.find(p => p.cargo && p.cargo.kind.startsWith('bår')) || crew[0];
     if (amb) add('medic', 90, 'person', amb.id, '🚑 Ambulansen');
-    else add('medicF', 80, 'floor', S.medic.floor, `🚑 ${S.medic.pname} har svimmat`);
+    else add('medicF', 80, 'floor', S.medic.floor, sv`🚑 ${S.medic.pname} har svimmat`);
   }
   // helikoptern är sevärd när den landar och lyfter – parkerad står den kvar hela VIP-besöket (timmar)
   if (S.heli && ROOF >= 0) {
@@ -135,18 +136,18 @@ function shots() {
   // husets personal (crew.js): skyndar tillbaka till kontrollrummet när larmet går, byter skift och tar rast
   for (const p of S.people) {
     if (p.dead) continue;
-    if (p.role === 'arbetsledare' && visible(p)) { add(`crew${p.id}`, 38, 'person', p.id, `🦺 ${p.name} från hissjouren`); continue; }
+    if (p.role === 'arbetsledare' && visible(p)) { add(`crew${p.id}`, 38, 'person', p.id, sv`🦺 ${p.name} från hissjouren`); continue; }
     if (!p.crewId) continue;
     const moving = p.state !== 'office' && visible(p), c = CREW_BY[p.crewId], pf = postFloor(c.post);
-    if (moving && p.goal === pf && alarm() && c.urgent) add(`crew${p.id}`, 64, 'person', p.id, `🏃 ${p.name} skyndar tillbaka till kontrollrummet`);
-    else if (moving && p.leaving) add(`crew${p.id}`, 30, 'person', p.id, `${c.icon} ${p.name} går hem – passet är slut`);
+    if (moving && p.goal === pf && alarm() && c.urgent) add(`crew${p.id}`, 64, 'person', p.id, sv`🏃 ${p.name} skyndar tillbaka till kontrollrummet`);
+    else if (moving && p.leaving) add(`crew${p.id}`, 30, 'person', p.id, sv`${c.icon} ${p.name} går hem – passet är slut`);
     else if (moving && p.onBreak) add(`crew${p.id}`, 22, 'person', p.id, `☕ ${p.name}: ${p.breakWhy.toLowerCase()}`);
-    else if (p.state === 'office' && p.onBreak && p.floor === BREAK && BREAK >= 0) add(`brk${p.id}`, 24, 'floor', BREAK, `☕ ${p.name} fikar i personalrummet`);
+    else if (p.state === 'office' && p.onBreak && p.floor === BREAK && BREAK >= 0) add(`brk${p.id}`, 24, 'floor', BREAK, sv`☕ ${p.name} fikar i personalrummet`);
   }
   // teknikern ringer in en extra tekniker: korgen hen lagar eller våningen hen står på
   if (S.techCall && S.t < S.techCall.until) {
     const t = S.people.find(p => p.id === S.techCall.by && !p.dead);
-    if (t) add('call', 82, t.state === 'ride' ? 'car' : 'floor', t.state === 'ride' ? t.car.id : t.floor, `📞 ${name1(t)} ringer hissjouren`);
+    if (t) add('call', 82, t.state === 'ride' ? 'car' : 'floor', t.state === 'ride' ? t.car.id : t.floor, sv`📞 ${name1(t)} ringer hissjouren`);
   }
   for (const e of S.elevators) {
     const n = e.passengers.length;
@@ -159,35 +160,35 @@ function shots() {
     if (e.mode === 'rescue') {
       if (!r || r.t1 !== null) rescues.set(e.id, { t0: S.t, floor: e.rescueTarget, t1: null, seen: S.t });
       const t0 = rescues.get(e.id).t0;
-      add(`rescue${e.id}`, 96, 'car', e.id, e.rs === 'open' ? `🔋 Dörrarna i ${e.name} går upp – ${n} kliver ut`
-        : `🔋 ${e.name} nödsänks till ${fl(e.rescueTarget)} · ${n} instängda`, S.t - t0 < 1);
+      add(`rescue${e.id}`, 96, 'car', e.id, e.rs === 'open' ? sv`🔋 Dörrarna i ${e.name} går upp – ${n} kliver ut`
+        : sv`🔋 ${e.name} nödsänks till ${fl(e.rescueTarget)} · ${n} instängda`, S.t - t0 < 1);
     } else if (r) {
       if (r.t1 === null) r.t1 = S.t;
       // (efterspelet viker när nästa hiss börjar nödsänkas – sänkningarna är korta och får inte missas)
-      if (S.t - r.t1 < RESCUE_AFTER && !lowering) add(`rescue${e.id}`, 90, 'car', e.id, `🔋 Ute ur ${e.name} på ${fl(r.floor)}`);
+      if (S.t - r.t1 < RESCUE_AFTER && !lowering) add(`rescue${e.id}`, 90, 'car', e.id, sv`🔋 Ute ur ${e.name} på ${fl(r.floor)}`);
       else rescues.delete(e.id);
     }
-    if (!S.power && n && e.mode !== 'rescue') add(`dark${e.id}`, 70 + n, 'car', e.id, `⚡ Fast i ${e.name}`);
+    if (!S.power && n && e.mode !== 'rescue') add(`dark${e.id}`, 70 + n, 'car', e.id, sv`⚡ Fast i ${e.name}`);
     // linbrottet: hissen vars linor fransar sig följs redan när den kör (samma nyckel som själva linbrottet,
     // så att kameran står kvar när det smäller), fallet och fångapparaten klipper in direkt
     if (e.snapNext && e.mode === 'normal') {
-      if (e.state === 'moving') add(`snap${e.id}`, 95, 'car', e.id, `🪢 ${e.name} kör – linorna håller inte länge`, true);
-      else add(`snapwait${e.id}`, 30, 'car', e.id, `🪢 Linorna i ${e.name} fransar sig`);
+      if (e.state === 'moving') add(`snap${e.id}`, 95, 'car', e.id, sv`🪢 ${e.name} kör – linorna håller inte länge`, true);
+      else add(`snapwait${e.id}`, 30, 'car', e.id, sv`🪢 Linorna i ${e.name} fransar sig`);
     }
     if (e.mode === 'snapped') {
       const s = e.snap, now = s.ph === 'fall' || (s.ph === 'trapped' && S.t - s.caughtT < 2);
       add(`snap${e.id}`, s.ph === 'evac' ? 92 : now ? 99 : 96, 'car', e.id,
-        s.ph === 'evac' ? `🧗 Utrymning ur ${e.name}` : s.ph === 'fall' ? `🪢 ${e.name} faller!` : now ? `🪢 Fångapparaten tog i ${e.name}` : `🪢 Linbrott i ${e.name}`, now);
+        s.ph === 'evac' ? sv`🧗 Utrymning ur ${e.name}` : s.ph === 'fall' ? sv`🪢 ${e.name} faller!` : now ? sv`🪢 Fångapparaten tog i ${e.name}` : sv`🪢 Linbrott i ${e.name}`, now);
     }
-    else if (e.mode === 'broken' && e.fault.cable && e.techId !== null) add(`cable${e.id}`, 22, 'car', e.id, `🔧 Linbyte i ${e.name}`);
-    if (e.mode === 'broken' && n && !(e.fault && e.fault.pano)) add(`broken${e.id}`, 70, 'car', e.id, `🔧 ${e.name} har stannat`);
-    if (e.hot) add(`hot${e.id}`, 45, 'car', e.id, `🌡️ ${e.name} är överhettad`);
-    if ((e.overloadFlash || 0) > 1) add(`over${e.id}`, 50, 'car', e.id, `⚖️ Överlast i ${e.name}`);
-    if (S.storm && e.facade) add('storm', 55, 'car', e.id, `🌬️ ${e.name} i stormen`);
+    else if (e.mode === 'broken' && e.fault.cable && e.techId !== null) add(`cable${e.id}`, 22, 'car', e.id, sv`🔧 Linbyte i ${e.name}`);
+    if (e.mode === 'broken' && n && !(e.fault && e.fault.pano)) add(`broken${e.id}`, 70, 'car', e.id, sv`🔧 ${e.name} har stannat`);
+    if (e.hot) add(`hot${e.id}`, 45, 'car', e.id, sv`🌡️ ${e.name} är överhettad`);
+    if ((e.overloadFlash || 0) > 1) add(`over${e.id}`, 50, 'car', e.id, sv`⚖️ Överlast i ${e.name}`);
+    if (S.storm && e.facade) add('storm', 55, 'car', e.id, sv`🌬️ ${e.name} i stormen`);
     if (S.move && S.move.state === 'on' && e.freight) add('move', 35, 'car', e.id, '🚚 Flyttgubbarna');
-    if (e.mode === 'service') add(`svc${e.id}`, 12, 'car', e.id, `🔧 Service på ${e.name}`);
+    if (e.mode === 'service') add(`svc${e.id}`, 12, 'car', e.id, sv`🔧 Service på ${e.name}`);
     // fullsatt hiss i fart
-    if (n >= 4 && Math.abs(e.v || 0) > 0.5) add(`full${e.id}`, 14 + n * 1.5, 'car', e.id, `🛗 ${e.name} med ${n} pers`);
+    if (n >= 4 && Math.abs(e.v || 0) > 0.5) add(`full${e.id}`, 14 + n * 1.5, 'car', e.id, sv`🛗 ${e.name} med ${n} pers`);
   }
   if (S.train && STATION >= 0) add('train', 48, 'floor', STATION, '🚇 Tåget kommer');
   if (S.truck && DOCK >= 0) add('truck', 28, 'floor', DOCK, '🚚 Leveransbilen');
@@ -202,22 +203,22 @@ function shots() {
   const HB = S.hoist;
   if (HB && S.move && (HB.phase === 'lower' || HB.phase === 'hook')) {
     const it = HB.item !== null ? S.move.items[HB.item] : S.move.items.find(i => i.st === 'hatch');
-    add('hoist', 78, 'hoist', 0, `🏗️ ${it ? cap(it.name.replace('(!)', '').trim()) : 'Flyttlasset'} i hissbalken`);
+    add('hoist', 78, 'hoist', 0, sv`🏗️ ${it ? cap(it.name.replace('(!)', '').trim()) : 'Flyttlasset'} i hissbalken`);
   }
-  for (const e of S.elevators) if (e.mode === 'lift' && HB && HB.liftItem !== null) add('liftload', 40, 'car', e.id, `🚚 Flyttlass i ${e.name}`);
+  for (const e of S.elevators) if (e.mode === 'lift' && HB && HB.liftItem !== null) add('liftload', 40, 'car', e.id, sv`🚚 Flyttlass i ${e.name}`);
   // ---------- folk ----------
   const queue = new Map();
   for (const p of S.people) {
     if (p.dead) continue;
     if (p.say && p.say.until > S.t + 1 && visible(p)) add(`say${p.id}`, 52, 'person', p.id, `💬 ${name1(p)}`);
-    if (p.vip && p.state !== 'office' && visible(p)) add(`vip${p.id}`, 40, 'person', p.id, `⭐ ${name1(p)} (VIP)`);
+    if (p.vip && p.state !== 'office' && visible(p)) add(`vip${p.id}`, 40, 'person', p.id, sv`⭐ ${name1(p)} (VIP)`);
     if (p.state === 'wait') {
       queue.set(p.floor, (queue.get(p.floor) || 0) + 1);
-      if (p.mood >= 2) add(`sur${p.id}`, Math.min(45, 22 + p.waited / 4), 'person', p.id, `😤 ${name1(p)} har väntat ${Math.round(p.waited)} s`);
+      if (p.mood >= 2) add(`sur${p.id}`, Math.min(45, 22 + p.waited / 4), 'person', p.id, sv`😤 ${name1(p)} har väntat ${Math.round(p.waited)} s`);
     }
     if (p.cast && p.state !== 'office' && visible(p)) add(`cast${p.id}`, 18, 'person', p.id, `★ ${name1(p)}`);
   }
-  for (const [f, n] of queue) if (n >= 5) add(`q${f}`, 16 + n, 'floor', f, `👥 ${n} väntar på ${fl(f)}`);
+  for (const [f, n] of queue) if (n >= 5) add(`q${f}`, 16 + n, 'floor', f, sv`👥 ${n} väntar på ${fl(f)}`);
   // reserv: entrén och en slumpad hiss i rörelse
   add('lobby', 6, 'floor', LOBBY, '🚪 Entrén');
   const moving = S.elevators.filter(e => Math.abs(e.v || 0) > 0.5);
@@ -413,7 +414,7 @@ export function crewNow() {
     const t = camTarget();
     return { who, auto: false, cut: false,
       doing: 'Du har kameran',
-      show: t ? `📹 Du följer ${t.kind === 'car' ? `hiss ${S.elevators[t.id].name}` : t.kind === 'floor' ? `våning ${fl(t.id)}` : (S.people.find(p => p.id === t.id) || { name: 'någon' }).name}` : '📹 Fri kamera – du scrollar själv',
+      show: t ? sv`📹 Du följer ${t.kind === 'car' ? `hiss ${S.elevators[t.id].name}` : t.kind === 'floor' ? sv`våning ${fl(t.id)}` : (S.people.find(p => p.id === t.id) || { name: 'någon' }).name}` : '📹 Fri kamera – du scrollar själv',
       thought: S.paused ? 'Pausat. Jag hämtar mer kaffe.' : 'Säg till när jag ska ta över bilden igen (A).' };
   }
   if (!s) return { who, auto: true, cut: false, doing: 'Letar efter något att visa', show: '🎬 …', thought: 'Skärmarna, skärmarna…' };
@@ -426,13 +427,13 @@ export function crewNow() {
   // den fullsatta hissen glesnar medan kameran följer den: texten och tanken följer med (inga sardiner med en passagerare)
   if (s.key.startsWith('full')) {
     const e = S.elevators[s.id], n = e.passengers.length;
-    s.why = `🛗 ${e.name} med ${n} pers`;
-    if (n < 4) return { who, auto: true, cut: false, doing: `Följer hiss ${e.name}`, show: s.why,
+    s.why = sv`🛗 ${e.name} med ${n} pers`;
+    if (n < 4) return { who, auto: true, cut: false, doing: sv`Följer hiss ${e.name}`, show: s.why,
       thought: n === 0 ? 'Tom nu – alla klev av.' : n === 1 ? 'Nu är det bara en kvar där inne.' : 'Det glesnade fort.' };
   }
-  const doing = s.kind === 'car' ? `Följer hiss ${S.elevators[s.id].name}`
-    : s.kind === 'person' ? `Följer ${(S.people.find(p => p.id === s.id) || { name: 'någon' }).name.split(' ')[0]}`
-    : s.kind === 'floor' ? `Visar våning ${fl(s.id)}`
+  const doing = s.kind === 'car' ? sv`Följer hiss ${S.elevators[s.id].name}`
+    : s.kind === 'person' ? sv`Följer ${(S.people.find(p => p.id === s.id) || { name: 'någon' }).name.split(' ')[0]}`
+    : s.kind === 'floor' ? sv`Visar våning ${fl(s.id)}`
     : s.kind === 'cleaner' ? 'Zoomar in på fasaden' : 'Följer hissbalken';
   if (away) return { who, auto: true, cut: S.anim - s.t0 < 1.2, doing: away.onBreak ? 'på rast – kameran sköter sig själv' : 'borta från skärmen – kameran sköter sig själv', show: s.why,
     thought: away.onBreak ? `(${away.breakWhy})` : '(på väg tillbaka till skärmen)' };

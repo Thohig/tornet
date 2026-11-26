@@ -1,5 +1,11 @@
 # Ändringar
 
+## 2026-11-26 – sv`…`: texterna vet sin mall
+- **`src/sv.js`:** sv`Flyttbilen väntar – ${vad} står vid lastkajen` ger samma svenska sträng som en vanlig mallsträng, men sparar mallen och värdena. `tr()` i lang.js slår upp strängen och översätter mallen ur `lang-en.js` med värdena översatta för sig, i stället för att gissa var värdena börjar och slutar. Texter som inte är gjorda av sv, eller vars mall saknas, översätts som förut. Taggen heter `sv` och inte `t`, eftersom `t` redan är namnet på en tid i 41 moduler och skulle skugga taggen.
+- **815 mallsträngar** med värden och svensk text som visas fick taggen i en omvandling med acorn (inte html, nycklar, färger eller konsolen). 981 av 1 168 loggade texter under fyra kaosdygn går nu via sv. Jämfört med förut översätts 12 av 1 431 texter annorlunda, och alla blir bättre (”Auto rescue :” → ”Auto rescue:”, ”⚡ POWER CUT” mitt i en mening, ”Back to work on posten”). Dygnen är identiska och simuleringen är lika snabb.
+- **`npm run lang -- --check`** (i `quick` och `check`) kräver att varje sv`…` har sin mall i `lang-en.js` exakt så som den står i koden – utan att spela ett dygn. 44 mallar saknades och är tillagda.
+- `npm run new-incident` skriver sitt skelett med sv. Html i panelen (korten med `<b>${…}</b>`) delas i textnoder och översätts fortfarande genom att matcha mallarna.
+
 ## 2026-11-26 – provspelning med ögon, git-kroken, kortare rader och CLAUDE.md
 - **`npm run playtest` tittar på bilden** (`npm run check:ui`). Delen `ögon` tar skärmdumpar av fasta ögonblick (`?seed=…&h=…&follow=…`) på datorn, mobilen och mobilen på tvären. Playwrights klocka och ett fast frö för grafikens slump gör att samma ögonblick ger samma bild. Varje bild jämförs pixel för pixel med facit i `tools/playtest-out/ögon/bas/`, skillnaderna ritas i rött och samlas i `…/ögon/index.html`, och `--godta` gör de nya bilderna till facit. Delarna väljs med `--del=kaos,ögon`.
 - **Text över text:** `TEXTLOG` i pixart.js sparar var varje text i bilden hamnade och vilken ritfunktion som ritade den. Provspelningen grupperar krockarna efter ritfunktionerna. Det som får täcka (korgen framför våningsdisplayen, ljudeffekterna, det spelaren följer) står i `FRONT`, och kända krockar som inte är rättade står i `KNOWN` (TODO.md). Svenska som blivit kvar i bilden letas nu också upp, inte bara i panelen.

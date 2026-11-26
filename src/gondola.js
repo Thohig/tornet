@@ -19,6 +19,7 @@
 // firar ner honom till takterrassen (`ropeY`, stannar i blåst). Hasse går sedan av passet (`p.offDuty` →
 // personalrummet) och gondolen vevas upp tom. Egen slumpström `gondolen`
 import { stream } from './rng.js';
+import { sv } from './sv.js';
 const { rand } = stream('gondolen');
 import { fl } from './util.js';
 import { FL, floorY, FLOORS, HATCH_FLOORS, INNER_X1, LOBBY, ROOF, TERRACE_F } from './config.js';
@@ -77,7 +78,7 @@ export function triggerGondola() {
   C.scrub = false;
   const h = cleanerPerson();
   if (h) pev(h, 'Vinschen kärvar – gondolen sitter fast mitt på fasaden!');
-  log(`🪟 Gondolens vinsch kärvar – ${h ? h.name : 'fönsterputsaren'} sitter fast utanför våning ${fl(f)}`, 'alert');
+  log(sv`🪟 Gondolens vinsch kärvar – ${h ? h.name : 'fönsterputsaren'} sitter fast utanför våning ${fl(f)}`, 'alert');
   S.fx.push({ x: INNER_X1 + 60, y: y - 40, text: 'KNARRK!', color: '#ff9f1c', life: 1.6 });
   incidentStarted(f);
   return true;
@@ -97,11 +98,11 @@ export function setGondolaHow(how, by) {
     dutyDone(jan); G.jan = -1;
     if (!G.crew && !G.crewAt) G.crewAt = S.t + GONDOLA_CREW_S;
   } else if (jan && was !== 'rope') moveDuty(jan, dutyFloor(G), dutyWhy(G), dutyDesc(G));
-  if (by === 'hasse') log(`🪟 Ingen säger något – Hasse ringer själv vaktmästaren: ${HOW_TEXT[how].toLowerCase()}`, 'alert');
+  if (by === 'hasse') log(sv`🪟 Ingen säger något – Hasse ringer själv vaktmästaren: ${HOW_TEXT[how].toLowerCase()}`, 'alert');
   return true;
 }
 const dutyFloor = G => (G.how === 'hatch' ? G.hatchF : ROOF);
-const dutyWhy = G => (G.how === 'hatch' ? `Till ${fl(G.hatchF)} – öppnar lastluckan åt fönsterputsaren` : 'Upp på taket – vevar upp gondolen för hand');
+const dutyWhy = G => (G.how === 'hatch' ? sv`Till ${fl(G.hatchF)} – öppnar lastluckan åt fönsterputsaren` : 'Upp på taket – vevar upp gondolen för hand');
 const dutyDesc = G => (G.how === 'hatch' ? 'Öppnar lastluckan och sträcker ut en hand åt Hasse' : 'Vevar upp gondolen för hand – en våning i taget');
 
 // ---------- Varje steg ----------
@@ -178,13 +179,13 @@ function finish(G, h, how) {
   h.floor = to; h.offDuty = true; h.state = 'office'; h.x = INNER_X1 - 30; h.timer = 1;
   h.spot = { x: INNER_X1 - 30, k: 'stand', face: -1, temp: true, win: 'hall', desc: 'Står på fast mark igen – benen skakar' };
   const sec = Math.round(G.t1 - G.t0), who = jan ? jan.name : 'vaktmästaren';
-  const line = how === 'crank' ? `${who} vevade upp gondolen till taket för hand`
-    : how === 'hatch' ? `${who} öppnade lastluckan på ${fl(to)} och Hasse klev in`
+  const line = how === 'crank' ? sv`${who} vevade upp gondolen till taket för hand`
+    : how === 'hatch' ? sv`${who} öppnade lastluckan på ${fl(to)} och Hasse klev in`
     : 'räddningstjänsten firade ner honom med rep till takterrassen';
-  pev(h, `Nere efter ${sec} s – jag tar inte gondolen mer i dag`);
-  log(`✅ Fönsterputsaren är nere – ${line}`, 'alert', null, h.id);
+  pev(h, sv`Nere efter ${sec} s – jag tar inte gondolen mer i dag`);
+  log(sv`✅ Fönsterputsaren är nere – ${line}`, 'alert', null, h.id);
   incidentOver('gondola', '✅ Fönsterputsaren är nere',
-    `${h.name} hängde fast utanför våning ${fl(G.f)} i ${sec} s – ${line}. Han putsar inget mer i dag, och gondolen vevas upp tom.`
+    sv`${h.name} hängde fast utanför våning ${fl(G.f)} i ${sec} s – ${line}. Han putsar inget mer i dag, och gondolen vevas upp tom.`
     + (S.move && S.move.state === 'on' && S.move.hoist ? ' Hissbalken fick vänta på takskenan under tiden.' : ''), { floor: to });
 }
 
@@ -199,8 +200,8 @@ function spawnRescuer(i) {
   const first = gondolaCrewNext(p) || [ROOF, 'Räddningstjänsten: upp på taket med repet', false];
   setTrip(p, first[0], first[1], false);
   S.people.push(p);
-  pev(p, `Kliver ur räddningsbilen med rep och sele · ${p.why}`);
-  log(`🚒 ${pn(p)} (räddningstjänsten) går in`, 'person', null, p.id);
+  pev(p, sv`Kliver ur räddningsbilen med rep och sele · ${p.why}`);
+  log(sv`🚒 ${pn(p)} (räddningstjänsten) går in`, 'person', null, p.id);
 }
 /** räddarens nästa beslut (rollogiken i people.js): upp på taket, hem när Hasse är nere @param {Person} p */
 export function gondolaCrewNext(p) {

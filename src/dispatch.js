@@ -6,6 +6,7 @@
 // perrongen, möter tåget, väntar inte i entrén när tåget kommer) och Energisnål (`ecoCost`); dubbeldäck via
 // `posOf`/`deckOf`/`allowedPos`
 import { stream } from './rng.js';
+import { sv } from './sv.js';
 const { pick, rand, rng } = stream('styrning');
 import { ARR, K, fl } from './util.js';
 import { ACC, CAP, DOOR_T, STOP_COST, TOP, VMAX, FULL_LOAD, LOBBY, EL, STATION, idx } from './config.js';
@@ -243,7 +244,7 @@ export function learnedFloor(e, h) {
 
 /** @param {Person} p */
 export function requestRide(p) {
-  pev(p, `Tänker: jag ska till ${fl(p.dest)} ${ARR(p.dir)}`);
+  pev(p, sv`Tänker: jag ska till ${fl(p.dest)} ${ARR(p.dir)}`);
   if (!keyed(p)) {
     if (!S.learnToday) S.learnToday = emptyLearn();
     S.learnToday[learnBin(hour())][p.floor]++;
@@ -254,7 +255,7 @@ export function requestRide(p) {
     p.retypeAt = S.t + rand(2, 4);
     S.stats.wrongPress++;
     pev(p, 'Slog in fel våning på terminalen – slår in igen');
-    log(`🙈 ${pn(p)} slog in fel våning på ${fl(p.floor)} och börjar om`, 'button', null, p.id);
+    log(sv`🙈 ${pn(p)} slog in fel våning på ${fl(p.floor)} och börjar om`, 'button', null, p.id);
     return;
   }
   const open = S.elevators.find(e => operational(e) && canTake(e, p) && (prio(p) || !e.vipLock) && e.id !== p.avoid
@@ -262,8 +263,8 @@ export function requestRide(p) {
     && (e.dir === p.dir || e.dir === 0) && !isFull(e));
   if (open && allowedFor(p, p.dest) && allowedDest(open, p)) {
     p.assigned = open.id;
-    pev(p, `Hiss ${open.name} står redan öppen här och ska åt rätt håll – får den direkt`);
-    log(`${pn(p)} ${fl(p.floor)}→${fl(p.dest)} · ${open.name} står redan här`, 'assign', open.color, p.id);
+    pev(p, sv`Hiss ${open.name} står redan öppen här och ska åt rätt håll – får den direkt`);
+    log(sv`${pn(p)} ${fl(p.floor)}→${fl(p.dest)} · ${open.name} står redan här`, 'assign', open.color, p.id);
     rebuildPicks();
     return;
   }
@@ -387,17 +388,17 @@ export function dispatchPerson(p) {
   } else if (S.strategy === 'nearest') {
     chosen = cands.reduce((a, b) => (Math.abs(b.pos - posOf(b, p.floor)) < Math.abs(a.pos - posOf(a, p.floor)) ? b : a));
     const dist = Math.abs(Math.round(chosen.pos - posOf(chosen, p.floor)));
-    info = `närmast (${dist} vån bort)`; why = `närmast, ${dist} våningar bort`;
+    info = sv`närmast (${dist} vån bort)`; why = sv`närmast, ${dist} våningar bort`;
   } else {
     const costs = cands.map(e => ({ e, c: personCost(e, p) }));
     const best = costs.reduce((a, b) => (b.c < a.c ? b : a));
     chosen = best.e;
     info = costs.map(x => `${x.e.name}:${Math.round(x.c)}s`).join(' ');
-    why = `billigast – hämtning + resa ≈ ${Math.round(best.c)}s` + (stopFloors(chosen).includes(p.dest) ? `, ska redan till ${fl(p.dest)}` : '');
+    why = sv`billigast – hämtning + resa ≈ ${Math.round(best.c)}s` + (stopFloors(chosen).includes(p.dest) ? sv`, ska redan till ${fl(p.dest)}` : '');
   }
   p.assigned = chosen.id; chosen.parkTarget = null; predict(p, chosen);
-  pev(p, `Systemet ger mig hiss ${chosen.name} (${why})`);
-  log(`${pn(p)} ${fl(p.floor)}→${fl(p.dest)} · hiss ${chosen.name} · ${info}`, 'assign', chosen.color, p.id);
+  pev(p, sv`Systemet ger mig hiss ${chosen.name} (${why})`);
+  log(sv`${pn(p)} ${fl(p.floor)}→${fl(p.dest)} · hiss ${chosen.name} · ${info}`, 'assign', chosen.color, p.id);
   rebuildPicks();
 }
 export function reoptimize() {
@@ -415,8 +416,8 @@ export function reoptimize() {
     }
     if (best && bc < cc * 0.6 && cc - bc > 6) {
       p.assigned = best.id; best.parkTarget = null; predict(p, best);
-      pev(p, `Omfördelning! ${cur.name} → ${best.name} (${Math.round(cc)}s → ${Math.round(bc)}s)`);
-      log(`↻ ${pn(p)} flyttas ${cur.name}→${best.name} (${Math.round(cc)}s → ${Math.round(bc)}s)`, 'reopt', best.color, p.id);
+      pev(p, sv`Omfördelning! ${cur.name} → ${best.name} (${Math.round(cc)}s → ${Math.round(bc)}s)`);
+      log(sv`↻ ${pn(p)} flyttas ${cur.name}→${best.name} (${Math.round(cc)}s → ${Math.round(bc)}s)`, 'reopt', best.color, p.id);
       rebuildPicks();
     }
   }
@@ -457,7 +458,7 @@ export function maybePark(e) {
     const h = hour(), f = Math.round(e.pos), lf = h < 20 && h >= 6.5 ? learnedFloor(e, h) : null;
     if (lf !== null && lf > f) {
       e.parkTarget = lf; S.stats.learnedParks++;
-      log(`🧠 ${e.name} parkerar uppåt på ${fl(lf)} (lärt sig att det brukar bli kö där – tom hiss uppåt återmatar el)`, 'park', e.color);
+      log(sv`🧠 ${e.name} parkerar uppåt på ${fl(lf)} (lärt sig att det brukar bli kö där – tom hiss uppåt återmatar el)`, 'park', e.color);
     }
     return;
   }
@@ -469,7 +470,7 @@ export function maybePark(e) {
   if (target !== f) {
     e.parkTarget = target;
     if (learned) S.stats.learnedParks++;
-    log(`${learned ? '🧠 ' : ''}${e.name} parkerar på ${fl(target)} (${why})`, 'park', e.color);
+    log(sv`${learned ? '🧠 ' : ''}${e.name} parkerar på ${fl(target)} (${why})`, 'park', e.color);
   }
   e.idleTime = 0;
 }

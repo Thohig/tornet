@@ -17,6 +17,7 @@
 // läget `rope`, `riderPos`). Driftchefen väljer (`pano` i chief.js), spelaren via `act('panoRescue',
 // 'rope'|'ladder')`, annars räddningsledaren efter `PANO_DEFAULT_S`
 import { stream } from './rng.js';
+import { sv } from './sv.js';
 const { rand, rng } = stream('panorama');
 import { CAR_H, CAR_W, EL, FLOOR_H, GROUND_Y, INNER_X1, LOBBY, ROOF, SEAM_F, TERRACE_F, floorY, shaftCX } from './config.js';
 import { S, incidentOver, log } from './state.js';
@@ -56,7 +57,7 @@ export function triggerPano() {
   const e = PANO ? S.elevators[PANO.id] : null;
   if (!panoCandidate(e) || S.pano) return false;
   e.panoNext = true;
-  log(`🔩 ${e.name} hackar på fasaden – det luktar hydraulolja…`, 'alert', e.color);
+  log(sv`🔩 ${e.name} hackar på fasaden – det luktar hydraulolja…`, 'alert', e.color);
   return true;
 }
 /** når stegbilen korgen? @param {Elevator} e */
@@ -86,8 +87,8 @@ export function panoStick(e) {
     n: e.passengers.length, out: 0, t: 0, next: 0, t1: 0, toF: high ? TERRACE_F : LOBBY, noted: '',
     rider: null };
   S.stats.faults++; S.stats.panoStuck++;
-  for (const p of e.passengers) pev(p, `Hiss ${e.name} tvärstannade utanpå huset – vi hänger på fasaden! (hydrauliken)`);
-  log(`🛗 ${e.name} sitter fast på fasaden mellan två våningar – ${e.passengers.length} instängda, räddningstjänsten larmas`, 'alert', e.color);
+  for (const p of e.passengers) pev(p, sv`Hiss ${e.name} tvärstannade utanpå huset – vi hänger på fasaden! (hydrauliken)`);
+  log(sv`🛗 ${e.name} sitter fast på fasaden mellan två våningar – ${e.passengers.length} instängda, räddningstjänsten larmas`, 'alert', e.color);
   S.fx.push({ x: shaftCX(e.id), y: floorY(e.pos) - CAR_H - 30, text: 'KLONK!', color: '#ff9f1c', life: 1.6 });
   rerouteStranded();
   rebuildPicks();
@@ -102,7 +103,7 @@ export function setPanoHow(how, by) {
   if (how === 'ladder' && !ladderReach(e)) return false;
   if (P.how === how) return true;
   P.how = how; P.by = by;
-  if (by === 'crew') log(`🚒 Räddningsledaren bestämmer: ${PANO_TEXT[how].toLowerCase()}`, 'alert', e.color);
+  if (by === 'crew') log(sv`🚒 Räddningsledaren bestämmer: ${PANO_TEXT[how].toLowerCase()}`, 'alert', e.color);
   // räddarna går dit metoden kräver
   for (const p of S.people) if (p.rescue && p.state === 'office') p.timer = 0;
   return true;
@@ -121,7 +122,7 @@ export function panoTick() {
   // räddningstjänsten kommer (och kommer tillbaka om räddarna fick gå, t.ex. vid brand)
   if (S.t >= P.crewAt && !S.fire && !S.people.some(p => p.rescue && !p.dead)) {
     if (P.crew) log('🚒 Räddningstjänsten är tillbaka vid panoramahissen', 'alert', e.color);
-    else log(`🚒 Räddningstjänsten är på plats vid ${e.name}`, 'alert', e.color);
+    else log(sv`🚒 Räddningstjänsten är på plats vid ${e.name}`, 'alert', e.color);
     P.crew = true;
     for (let i = 0; i < 2; i++) spawnRescuer(i);
   }
@@ -134,7 +135,7 @@ export function panoTick() {
   if (P.ph === 'stuck') {
     if (P.how === 'rope' ? !crewAt(ROOF) : !crewAt(LOBBY)) return;
     P.ph = 'rig'; P.t = S.t + (P.how === 'rope' ? RIG_T : RAISE_T); P.setup = P.how;
-    log(P.how === 'rope' ? `🧗 Räddarna riggar ett rep på taket ovanför ${e.name}` : `🚒 Stegbilen reser stegen upp mot ${e.name}`, 'alert', e.color);
+    log(P.how === 'rope' ? sv`🧗 Räddarna riggar ett rep på taket ovanför ${e.name}` : sv`🚒 Stegbilen reser stegen upp mot ${e.name}`, 'alert', e.color);
     for (const p of e.passengers) pev(p, P.how === 'rope' ? 'Räddningstjänsten är på taket ovanför oss!' : 'Stegbilen kommer – de reser stegen mot oss!');
     return;
   }
@@ -162,7 +163,7 @@ export function panoTick() {
   e.passengers = e.passengers.filter(q => q !== p);
   p.state = 'rope'; p.ropeF = toF;
   P.rider = { id: p.id, t0: S.t, dur, y0, y1, how: P.setup };
-  pev(p, P.setup === 'rope' ? `Selen på – firas ner längs fasaden till ${toF === LOBBY ? 'gatan' : 'takterrassen'}` : 'Klättrar ut på stegen och ner mot gatan');
+  pev(p, P.setup === 'rope' ? sv`Selen på – firas ner längs fasaden till ${toF === LOBBY ? 'gatan' : 'takterrassen'}` : 'Klättrar ut på stegen och ner mot gatan');
   if (p.cast) say(p, 'rope');
 }
 /** framme på terrassen eller gatan: vidare dit hen skulle @param {Person} p @param {Elevator} e */
@@ -173,18 +174,18 @@ function land(P, e, p) {
   exitOne(e, p, f, P.setup === 'rope' ? 'Nedfirad från panoramahissen' : 'Nedklättrad från panoramahissen');
   // (från gatan in genom entrén, från terrassen in genom panoramahissens lastdörr)
   p.x = f === LOBBY ? -30 : INNER_X1 - 8;
-  pev(p, `${P.setup === 'rope' ? 'Firad ner' : 'Nere på gatan'} efter ${Math.round(S.t - P.t0)} s på fasaden – ${rng() < 0.5 ? 'benen skakar' : 'aldrig mer panoramahiss'}`);
-  log(`🧗 ${pn(p)} är nere ${f === LOBBY ? 'på gatan' : 'på takterrassen'} (${P.out}/${P.n})`, 'alert', e.color, p.id);
+  pev(p, sv`${P.setup === 'rope' ? 'Firad ner' : 'Nere på gatan'} efter ${Math.round(S.t - P.t0)} s på fasaden – ${rng() < 0.5 ? 'benen skakar' : 'aldrig mer panoramahiss'}`);
+  log(sv`🧗 ${pn(p)} är nere ${f === LOBBY ? 'på gatan' : 'på takterrassen'} (${P.out}/${P.n})`, 'alert', e.color, p.id);
 }
 /** @param {Elevator} e */
 function finish(P, e) {
   P.ph = 'done'; P.t1 = S.t;
   e.fault.trapped = false; // (nu kan teknikern laga hydrauliken)
   for (const p of S.people) if (p.rescue && p.state === 'office') p.timer = Math.min(p.timer, 1);
-  const how = P.setup === 'rope' ? `räddningstjänsten firade ner ${P.n === 1 ? 'hen' : 'dem en i taget'} med rep från taket` : `${P.n === 1 ? 'hen' : 'de'} klättrade ner för stegbilens stege`;
-  log(`✅ Alla ute ur ${e.name} – ${P.out} räddade på ${Math.round(S.t - P.t0)} s`, 'alert', e.color);
-  incidentOver('pano', `✅ Alla är ute ur ${e.name}`,
-    `${P.n} satt fast på fasaden i ${Math.round(S.t - P.t0)} s – ${how}. Hissteknikern byter hydraulventilen innan ${e.name} går igen.`, { car: e.id });
+  const how = P.setup === 'rope' ? sv`räddningstjänsten firade ner ${P.n === 1 ? 'hen' : 'dem en i taget'} med rep från taket` : sv`${P.n === 1 ? 'hen' : 'de'} klättrade ner för stegbilens stege`;
+  log(sv`✅ Alla ute ur ${e.name} – ${P.out} räddade på ${Math.round(S.t - P.t0)} s`, 'alert', e.color);
+  incidentOver('pano', sv`✅ Alla är ute ur ${e.name}`,
+    sv`${P.n} satt fast på fasaden i ${Math.round(S.t - P.t0)} s – ${how}. Hissteknikern byter hydraulventilen innan ${e.name} går igen.`, { car: e.id });
 }
 
 // ---------- Räddarna ----------
@@ -198,8 +199,8 @@ function spawnRescuer(i) {
   const first = rescueNext(p) || [LOBBY, 'Räddningstjänsten: vid panoramahissen', false];
   setTrip(p, first[0], first[1], false);
   S.people.push(p);
-  pev(p, `Kliver ur räddningsbilen med rep och sele · ${p.why}`);
-  log(`🚒 ${pn(p)} (räddningstjänsten) går in`, 'person', null, p.id);
+  pev(p, sv`Kliver ur räddningsbilen med rep och sele · ${p.why}`);
+  log(sv`🚒 ${pn(p)} (räddningstjänsten) går in`, 'person', null, p.id);
 }
 /** räddarens nästa beslut (rollogiken i people.js): taket för repet, gatan (entrén) för stegbilen, hem när det är klart @param {Person} p */
 export function rescueNext(p) {

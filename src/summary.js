@@ -13,6 +13,7 @@
 import { esc } from './util.js';
 import { STRAT_NAMES } from './config.js';
 import { S } from './state.js';
+import { sv } from './sv.js';
 
 // ---------- Betygen ----------
 export function grade(avg) {
@@ -79,11 +80,11 @@ export const STATS = [
   { k: 'moveLoads', label: 'Flyttlass 🚚', g: 'inc', w: 1 },
   { k: 'stumbles', label: 'Snubblade 🦶', g: 'inc', w: 1, better: -1 },
   { k: 'doorFights', label: 'Dörren tog emot ❄️', g: 'inc', w: 1 },
-  { k: 'gripes', label: '★ Gunnar gnällde', g: 'folk', w: 1, fun: n => `Gunnar gnällde ${n} ${n === 1 ? 'gång' : 'gånger'}` },
-  { k: 'cups', label: '★ Kurts kaffekoppar ☕', g: 'folk', w: 1, fun: n => `Kurt drack ${n} ${n === 1 ? 'kopp' : 'koppar'} kaffe` },
-  { k: 'chats', label: '★ Majken pratade 💬', g: 'folk', w: 1, fun: n => `Majken pratade ${n} ${n === 1 ? 'gång' : 'gånger'} i hissen` },
-  { k: 'holds', label: 'Höll upp dörren', g: 'folk', w: 1, fun: n => `${n} höll upp dörren åt någon` },
-  { k: 'closePresses', label: 'Tryckte på STÄNG', g: 'folk', w: 1, fun: n => `${n} tryckte otåligt på STÄNG` },
+  { k: 'gripes', label: '★ Gunnar gnällde', g: 'folk', w: 1, fun: n => sv`Gunnar gnällde ${n} ${n === 1 ? 'gång' : 'gånger'}` },
+  { k: 'cups', label: '★ Kurts kaffekoppar ☕', g: 'folk', w: 1, fun: n => sv`Kurt drack ${n} ${n === 1 ? 'kopp' : 'koppar'} kaffe` },
+  { k: 'chats', label: '★ Majken pratade 💬', g: 'folk', w: 1, fun: n => sv`Majken pratade ${n} ${n === 1 ? 'gång' : 'gånger'} i hissen` },
+  { k: 'holds', label: 'Höll upp dörren', g: 'folk', w: 1, fun: n => sv`${n} höll upp dörren åt någon` },
+  { k: 'closePresses', label: 'Tryckte på STÄNG', g: 'folk', w: 1, fun: n => sv`${n} tryckte otåligt på STÄNG` },
   { k: 'carsIn', label: 'Bilar in i garaget', g: 'hus', w: 1 },
   { k: 'deliveries', label: 'Paketleveranser', g: 'hus', w: 1 },
   { k: 'vips', label: 'VIP-besök 🚁', g: 'hus', w: 1 },
@@ -132,9 +133,9 @@ function headline(D) {
   const kind = busy === 0 ? 'Lugnt dygn' : busy <= 2 ? 'Händelserikt dygn' : 'Kaosdygn';
   // (hela meningar i varje gren: lang-en.js översätter mallarna, en svensk ändelse som eget värde blir kvar på svenska)
   const wait = avgWait(st).toFixed(1);
-  if (!n) return `${kind} – ${st.served} resor med snittväntan ${wait} s.`;
-  return n === 1 ? `${kind} – ${st.served} resor med snittväntan ${wait} s, 1 incident.`
-    : `${kind} – ${st.served} resor med snittväntan ${wait} s, ${n} incidenter.`;
+  if (!n) return sv`${kind} – ${st.served} resor med snittväntan ${wait} s.`;
+  return n === 1 ? sv`${kind} – ${st.served} resor med snittväntan ${wait} s, 1 incident.`
+    : sv`${kind} – ${st.served} resor med snittväntan ${wait} s, ${n} incidenter.`;
 }
 /** stamgästernas rad: de två mest anmärkningsvärda */
 function funLine(st) {
@@ -156,7 +157,7 @@ export function summaryHtml(D = lastDay(), prev = dayBefore()) {
   const keys = STATS.filter(d => d.w >= 3 || (d.w === 2 && statVal(d, st) > 0)).map(d => row(d, st, pst)).join('');
   const mine = D.chief.filter(d => d.by === 'player').length;
   const chief = D.chief.length
-    ? `<details class="sdet"><summary>🧑‍💼 Beslut: ${D.chief.length - mine} av driftchefen${mine ? `, ${mine} av dig` : ''}</summary><ul class="sevents">${D.chief.map(d =>
+    ? `<details class="sdet"><summary>🧑‍💼 Beslut: ${D.chief.length - mine} av driftchefen${mine ? sv`, ${mine} av dig` : ''}</summary><ul class="sevents">${D.chief.map(d =>
       `<li><span class="ct">${d.time}</span> ${d.by === 'player' ? '👤' : '🧑‍💼'} <b>${esc(d.text)}</b>${d.why ? ` <span class="why">– ${esc(d.why)}</span>` : ''}</li>`).join('')}</ul></details>`
     : '';
   return `<div class="summary">

@@ -32,6 +32,7 @@ import { nextTrainMin } from './train.js';
 import { techOf } from './service.js';
 import { detours } from './systems.js';
 import { cap, fl } from './util.js';
+import { sv } from './sv.js';
 /** @typedef {import('./people.js').Person} Person */
 /** @typedef {import('./elevators.js').Elevator} Elevator */
 
@@ -99,17 +100,17 @@ function keyHolder(v) {
 function startUnlock(v, f) {
   const b = byId(v.host);
   // (väktaren som guidar har nycklarna själv)
-  if (b && b.role === 'väktare' && !b.crewId) { v.unlock = { f, by: b.id, who: b.name, ph: 'open' }; return `${cap(placeName(f))} har stängt – men jag har nycklarna.`; }
+  if (b && b.role === 'väktare' && !b.crewId) { v.unlock = { f, by: b.id, who: b.name, ph: 'open' }; return sv`${cap(placeName(f))} har stängt – men jag har nycklarna.`; }
   let k = keyHolder(v), called = false;
   // (jourvaktmästaren: uppdraget finns redan när hen kliver in, så att första resan går dit – keyNext)
   v.unlock = { f, by: k ? k.id : -1, who: k ? k.name : '', ph: 'come' };
   if (!k) { k = spawnStaff('vaktmästare', false, { keys: f, jour: true, title: 'Jourvaktmästare (inringd med nycklarna)' }); called = true; }
   k.keys = f; v.unlock.by = k.id; v.unlock.who = k.name;
   if (k.state === 'office') k.timer = 0;
-  pev(k, `Ska låsa upp ${placeName(f)} åt rundvisningen`);
-  log(`🔑 ${k.name} (${called ? 'jourvaktmästare' : k.role}) låser upp ${placeName(f)} åt rundvisningen`, 'person', null, k.id);
-  return called ? `${cap(placeName(f))} har stängt nu – jag ringer jourvaktmästaren, som har nycklarna.`
-    : `${cap(placeName(f))} har stängt nu – jag ringer ${k.name}, som har nycklarna.`;
+  pev(k, sv`Ska låsa upp ${placeName(f)} åt rundvisningen`);
+  log(sv`🔑 ${k.name} (${called ? 'jourvaktmästare' : k.role}) låser upp ${placeName(f)} åt rundvisningen`, 'person', null, k.id);
+  return called ? sv`${cap(placeName(f))} har stängt nu – jag ringer jourvaktmästaren, som har nycklarna.`
+    : sv`${cap(placeName(f))} har stängt nu – jag ringer ${k.name}, som har nycklarna.`;
 }
 /** gruppen går vidare: nyckelbäraren låser efter dem och återgår till det hen gjorde */
 function relock(v) {
@@ -128,7 +129,7 @@ export function keyNext(p) {
   const u = S.visning && S.visning.unlock;
   if (u && u.by === -1 && p.keys === u.f) u.by = p.id;
   if (!u || u.by !== p.id) { p.keys = null; return undefined; }
-  if (p.floor !== u.f) return [u.f, `Låser upp ${placeName(u.f)} åt rundvisningen`, false];
+  if (p.floor !== u.f) return [u.f, sv`Låser upp ${placeName(u.f)} åt rundvisningen`, false];
   return null;
 }
 /** hur länge (verkliga sekunder) innan vikarien kliver in i entrén efter samtalet */
@@ -162,7 +163,7 @@ const DETOURS = 3;
 /** @type {Stop[]} */
 export const STOPS = [
   { k: 'entre', title: 'Entrén', f: () => LOBBY, way: () => '',
-    text: () => `Välkommen till Tornet! Det här är entrén – karuselldörren, receptionen och rulltrappan upp till mellanplanet. Här finns inga hissknappar: man säger vart man ska, och Hiss-O-Matic 3000 ger en en egen hiss. Bubblan över huvudet visar målet och hissen. ${BUILDING.elevators.length} hissar, ${FL.length} våningar – ${V() && V().sub ? `och i dag sköter ${kickiName()} disken medan jag visar dig runt.` : 'och i dag är det jag som visar dig runt.'}`,
+    text: () => sv`Välkommen till Tornet! Det här är entrén – karuselldörren, receptionen och rulltrappan upp till mellanplanet. Här finns inga hissknappar: man säger vart man ska, och Hiss-O-Matic 3000 ger en en egen hiss. Bubblan över huvudet visar målet och hissen. ${BUILDING.elevators.length} hissar, ${FL.length} våningar – ${V() && V().sub ? sv`och i dag sköter ${kickiName()} disken medan jag visar dig runt.` : 'och i dag är det jag som visar dig runt.'}`,
     focus: ['follow'] },
   { k: 'drift', title: 'Driftcentralen', f: () => CONTROL, way: () => 'Först ner till driftcentralen på P1 – hjärtat i huset.',
     text: () => driftText(), spot: ['#lower'] },
@@ -203,33 +204,33 @@ const talkS = t => Math.max(STAY_MIN, t.split(/\s+/).length / WPS + 3);
 function driftText() {
   const c = chiefOnDuty(), last = S.chief && S.chief.log.filter(d => !d.info).slice(-1)[0];
   const why = last ? last.why.charAt(0).toLowerCase() + last.why.slice(1) : '';
-  const said = last ? ` Senast bestämde hen: "${last.text}" – ${why}` : ' I dag har hen inte behövt bestämma något stort än – men skärmarna har hen koll på.';
+  const said = last ? sv` Senast bestämde hen: "${last.text}" – ${why}` : ' I dag har hen inte behövt bestämma något stort än – men skärmarna har hen koll på.';
   const away = S.chief && !S.chief.on ? ' Fast just nu har du tagit över besluten själv – chefen fikar.' : '';
-  return `Här sitter ${c.name}, driftchefen. När något händer – brand, storm, strömavbrott – bestämmer hen och säger varför; det står på skylten längst ner i bilden.${said}.${away} Bredvid sitter bildproducenten som klipper bilden när regissören 🎬 är på.`.replace('..', '.');
+  return sv`Här sitter ${c.name}, driftchefen. När något händer – brand, storm, strömavbrott – bestämmer hen och säger varför; det står på skylten längst ner i bilden.${said}.${away} Bredvid sitter bildproducenten som klipper bilden när regissören 🎬 är på.`.replace('..', '.');
 }
 function perrongText() {
   const m = nextTrainMin();
   const now = S.train && S.train.state === 'stop' ? 'Titta – tåget står inne just nu, och en hel klump folk kliver av på en gång. Då får hissarna brått!'
     : S.train ? 'Hör du? Tåget är på väg in.' : m === null ? 'Tunnelbanan har stängt för natten, men i morgon bitti går tågen tätt igen.'
-      : `Nästa tåg kommer om ungefär ${m} minuter. När det stannar kliver en hel klump folk av på en gång – då får hissarna brått.`;
-  return `Under huset ligger tunnelbanan. ${now} Expressen X1 och panoramahissen går ända ner hit, så man kan åka från perrongen direkt upp till taket.`;
+      : sv`Nästa tåg kommer om ungefär ${m} minuter. När det stannar kliver en hel klump folk av på en gång – då får hissarna brått.`;
+  return sv`Under huset ligger tunnelbanan. ${now} Expressen X1 och panoramahissen går ända ner hit, så man kan åka från perrongen direkt upp till taket.`;
 }
 function skyText() {
   const open = floorOpen(CAFE, hour());
   const n = S.people.filter(p => p.floor === CAFE && p.state === 'office' && !p.crewId && !onTour(p)).length;
-  const cafe = open ? (n > 2 ? `Sky Café har ${n} gäster just nu – kanelbullarna är kända i hela stan.` : 'Sky Café är nästan tomt just nu – passa på!') : 'Sky Café har stängt för i dag, men utsikten är gratis.';
-  return `Det här är sky lobbyn på 6:an. Hissarna har zoner: L-hissarna går i den låga zonen och H-hissarna i den höga – staplade i samma schakt! Den som ska mellan zonerna byter hiss här. ${cafe} Under Styrning kan du välja hur hissarna tänker.`;
+  const cafe = open ? (n > 2 ? sv`Sky Café har ${n} gäster just nu – kanelbullarna är kända i hela stan.` : 'Sky Café är nästan tomt just nu – passa på!') : 'Sky Café har stängt för i dag, men utsikten är gratis.';
+  return sv`Det här är sky lobbyn på 6:an. Hissarna har zoner: L-hissarna går i den låga zonen och H-hissarna i den höga – staplade i samma schakt! Den som ska mellan zonerna byter hiss här. ${cafe} Under Styrning kan du välja hur hissarna tänker.`;
 }
 function takText() {
   const w = S.storm ? ' Håll i dig – det blåser rejält i dag!' : '';
   const heli = S.heli ? ' Och där – en helikopter på väg ner!' : '';
   const hasse = S.cleaner && !S.cleaner.parked ? ' Där nere hänger Hasse i gondolen och putsar fönster.' : '';
-  return `Takterrassen! Härifrån ser man hela stan.${w}${heli}${hasse} Under Framkalla kan du själv ställa till med något: brand, storm, ett hissfel, en flyttbil … Huset sköter sig ändå.`;
+  return sv`Takterrassen! Härifrån ser man hela stan.${w}${heli}${hasse} Under Framkalla kan du själv ställa till med något: brand, storm, ett hissfel, en flyttbil … Huset sköter sig ändå.`;
 }
 function slutText() {
   const n = V() ? V().seen.length : 0;
-  const ev = n ? ` Och du fick se ${n === 1 ? 'en riktig händelse' : `${n} riktiga händelser`} på köpet!` : '';
-  return `Det var allt – tack för sällskapet!${ev} Huset sköter sig självt, så luta dig tillbaka och titta, eller ställ till det lite. Vill du gå runt igen frågar du bara mig. Välkommen åter!`;
+  const ev = n ? sv` Och du fick se ${n === 1 ? 'en riktig händelse' : sv`${n} riktiga händelser`} på köpet!` : '';
+  return sv`Det var allt – tack för sällskapet!${ev} Huset sköter sig självt, så luta dig tillbaka och titta, eller ställ till det lite. Vill du gå runt igen frågar du bara mig. Välkommen åter!`;
 }
 
 // ---------- Händelserna som guiden lägger om rutten för ----------
@@ -242,19 +243,19 @@ function happening(v, here, urgent) {
   if (S.fire) {
     const F = S.fire;
     list.push(mk(`fire:${F.t0}`, LOBBY, 'Brandlarm', 'Brandlarm! Lugnt – vi går ner till entrén, som alla andra',
-      () => `Här ute är vi säkra. Larmet ${F.mode === 'recall' ? 'återkallade alla hissar – de står i entrén med dörrarna öppna, så alla tar trappan' : F.mode === 'zone' ? 'gjorde brandzon: hissarna går bara under branden' : 'gick, men hissarna kör som vanligt'}. Varuhissen blir brandhiss när brandkåren kommer, och ${kickiName()} visar ut folk genom entrén. Ingen går in dit det brinner.`,
+      () => sv`Här ute är vi säkra. Larmet ${F.mode === 'recall' ? 'återkallade alla hissar – de står i entrén med dörrarna öppna, så alla tar trappan' : F.mode === 'zone' ? 'gjorde brandzon: hissarna går bara under branden' : 'gick, men hissarna kör som vanligt'}. Varuhissen blir brandhiss när brandkåren kommer, och ${kickiName()} visar ut folk genom entrén. Ingen går in dit det brinner.`,
       () => !S.fire, 'Brandlarmet hann tystna innan vi kom ut – skönt!', true));
   }
   const heist = S.heist;
   if (heist && heist.ph !== 'done') list.push(mk(`heist:${heist.t0}`, -2, 'Kuppen', '', () => '', () => !heist || heist.ph === 'done', ''));
   if (S.storm) {
     list.push(mk(`storm:${S.storm.t0}`, CONTROL, 'Stormen', 'Hör du hur det viner? Det blir storm – kom, vi går till driftcentralen',
-      () => `Nu ska du se på ${chiefOnDuty().name}. I storm svajar tornet, och linorna slår i schakten. ${S.storm.mode === 'sway' ? 'Hissarna går i svajläge – långsamt, och de högsta stannar.' : 'Än så länge kör hissarna som vanligt – men det är chefen som bestämmer om de ska gå i svajläge.'}`,
+      () => sv`Nu ska du se på ${chiefOnDuty().name}. I storm svajar tornet, och linorna slår i schakten. ${S.storm.mode === 'sway' ? 'Hissarna går i svajläge – långsamt, och de högsta stannar.' : 'Än så länge kör hissarna som vanligt – men det är chefen som bestämmer om de ska gå i svajläge.'}`,
       () => !S.storm, 'Stormen bedarrade innan vi kom fram.'));
   }
   if (S.outage) {
     list.push(mk(`power:${S.outage.t0}`, here, 'Strömavbrott', 'Oj, mörkt! Strömmen gick',
-      () => `Oj – strömmen gick! Hissarna står still, och den som sitter i en korg får vänta. Reservkraften startar, och sedan kör hissarna ner till närmaste våning en i taget. ${S.outage.gen ? 'Där – reservkraften är igång!' : 'Det tar en liten stund.'}`,
+      () => sv`Oj – strömmen gick! Hissarna står still, och den som sitter i en korg får vänta. Reservkraften startar, och sedan kör hissarna ner till närmaste våning en i taget. ${S.outage.gen ? 'Där – reservkraften är igång!' : 'Det tar en liten stund.'}`,
       () => !S.outage, '', true));
   }
   for (const e of S.elevators) {
@@ -262,10 +263,10 @@ function happening(v, here, urgent) {
     if ((e.mode !== 'broken' && e.mode !== 'snapped') || (e.fault && e.fault.pano)) continue; // (panoramahissen på fasaden: se nedan)
     const f = e.mode === 'snapped' && e.snap ? e.snap.exitF : nearStop(e);
     const tech = techOf(e);
-    list.push(mk(`car:${e.id}:${e.fault ? e.fault.t0 : e.snap ? e.snap.t0 : 0}`, f, `${e.name} står still`, `Oj – ${e.name} har stannat${stuck ? ' med folk i' : ''}! Kom, vi går och tittar`,
-      () => e.mode === 'snapped' ? `Det här händer nästan aldrig: linorna i ${e.name} gick av! Fångapparaten tog tag, och nu kryper de instängda ut genom takluckan.`
-        : `${e.name} har krånglat${stuck ? ' – och det sitter folk i den' : ''}. ${tech ? `Där är ${tech.name}, hissteknikern – hen lagar den.` : 'Hisstekniker är på väg.'} Det står i panelen vad som är fel och när den går igen.`,
-      () => e.mode !== 'broken' && e.mode !== 'snapped', `${e.name} hann bli lagad innan vi kom dit – snabbt jobbat!`));
+    list.push(mk(`car:${e.id}:${e.fault ? e.fault.t0 : e.snap ? e.snap.t0 : 0}`, f, sv`${e.name} står still`, sv`Oj – ${e.name} har stannat${stuck ? ' med folk i' : ''}! Kom, vi går och tittar`,
+      () => e.mode === 'snapped' ? sv`Det här händer nästan aldrig: linorna i ${e.name} gick av! Fångapparaten tog tag, och nu kryper de instängda ut genom takluckan.`
+        : sv`${e.name} har krånglat${stuck ? ' – och det sitter folk i den' : ''}. ${tech ? sv`Där är ${tech.name}, hissteknikern – hen lagar den.` : 'Hisstekniker är på väg.'} Det står i panelen vad som är fel och när den går igen.`,
+      () => e.mode !== 'broken' && e.mode !== 'snapped', sv`${e.name} hann bli lagad innan vi kom dit – snabbt jobbat!`));
   }
   // (incidenterna i registret: panoramahissen på fasaden … – systems.js)
   for (const d of detours(here)) list.push(mk(d.k, d.f, d.title, d.oj, d.there, d.over, d.missed, !!d.hold));
@@ -300,10 +301,10 @@ export function orderVisning(now = false) {
     log('🛎️ Rundvisning beställd – den som kan tar den direkt', 'sys');
     return true;
   }
-  const when = soon ? 'Hon ringer efter en vikarie till disken och börjar sedan.' : h < c.from ? `Hon börjar när hon kommer till disken kl ${Math.floor(c.from)}.`
+  const when = soon ? 'Hon ringer efter en vikarie till disken och börjar sedan.' : h < c.from ? sv`Hon börjar när hon kommer till disken kl ${Math.floor(c.from)}.`
     : 'Hon börjar så fort hon sitter i receptionen.';
-  notice('visning', '🛎️ Rundvisning beställd', `${c.name} visar runt. ${when}`, { floor: LOBBY });
-  log(`🛎️ En rundvisning är beställd hos ${c.name} i receptionen`, 'sys');
+  notice('visning', '🛎️ Rundvisning beställd', sv`${c.name} visar runt. ${when}`, { floor: LOBBY });
+  log(sv`🛎️ En rundvisning är beställd hos ${c.name} i receptionen`, 'sys');
   return true;
 }
 /** Gå vidare till nästa stopp (guiden slutar prata) */
@@ -339,8 +340,8 @@ function spawnGuest() {
     walkPhase: 1, speedMul: 1, depth: -2, patience: 30, kg: 75, fit: 0, space: 9, polite: true });
   g.guest = true; g.touring = true; g.title = 'Gäst på rundvisning (du)';
   S.people.push(g);
-  setTrip(g, LOBBY, `Rundvisning med ${guideName()}`, false);
-  pev(g, `Kliver in i entrén · ska gå på rundvisning med ${guideName()}`);
+  setTrip(g, LOBBY, sv`Rundvisning med ${guideName()}`, false);
+  pev(g, sv`Kliver in i entrén · ska gå på rundvisning med ${guideName()}`);
   return g;
 }
 /** guiden och gästen går till stoppet (eller händelsen) – de som redan är där står kvar */
@@ -374,16 +375,16 @@ function arrived(v) {
     v.stay = Math.max(talkS(txt), DETOUR_MIN);
     v.log.push(d.title);
     v.focus = ['events', 'follow']; v.spot = [];
-    log(`🛎️ Rundvisningen: ${guideName()} visar ${d.title.toLowerCase()}`, 'person', null, v.host);
+    log(sv`🛎️ Rundvisningen: ${guideName()} visar ${d.title.toLowerCase()}`, 'person', null, v.host);
     return;
   }
   const st = STOPS[v.si], u = v.unlock && v.unlock.f === st.f() && v.unlock.ph === 'open' ? v.unlock : null;
-  const txt = (u && u.by !== v.host ? `Tack, ${u.who}, för att du låste upp! ` : '') + st.text();
+  const txt = (u && u.by !== v.host ? sv`Tack, ${u.who}, för att du låste upp! ` : '') + st.text();
   v.seenStops.push(st.k);
   line(v, txt, `at:${st.k}`);
   v.stay = talkS(txt);
   v.focus = st.focus || []; v.spot = st.spot || [];
-  log(`🛎️ Rundvisningen: ${st.title} (${fl(st.f())})`, 'person', null, v.host);
+  log(sv`🛎️ Rundvisningen: ${st.title} (${fl(st.f())})`, 'person', null, v.host);
 }
 /** nästa stopp på rutten (hoppar över dem som inte finns just nu) */
 function nextStop(from) {
@@ -401,9 +402,9 @@ function finish(v, how) {
     if (g.state === 'office' && !g.evac) { releaseSpot(g); setTrip(g, g.exitFloor, 'Tackar för rundvisningen och går', true); }
   }
   if (b) { b.touring = false; b.timer = Math.min(b.timer, 1); }
-  const what = v.log.length ? ` och fick se ${v.log.map(s => s.toLowerCase()).join(', ')}` : '';
-  if (v.seenStops.length) dayEvent('visning', '🛎️ Rundvisningen', `${b ? b.name : guideName()} visade runt: ${v.seenStops.length} stopp${what}.${v.sub ? ` ${kickiName()} skötte disken under tiden.` : ''}`);
-  log(`🛎️ Rundvisningen är ${how === 'klar' ? 'slut' : how}`, 'sys');
+  const what = v.log.length ? sv` och fick se ${v.log.map(s => s.toLowerCase()).join(', ')}` : '';
+  if (v.seenStops.length) dayEvent('visning', '🛎️ Rundvisningen', sv`${b ? b.name : guideName()} visade runt: ${v.seenStops.length} stopp${what}.${v.sub ? sv` ${kickiName()} skötte disken under tiden.` : ''}`);
+  log(sv`🛎️ Rundvisningen är ${how === 'klar' ? 'slut' : how}`, 'sys');
 }
 
 /** varje steg (sim.js) */
@@ -418,7 +419,7 @@ export function visningTick(dt) {
       // ingen guide i huset: väktaren eller driftchefen tar den (chefen säger varför)
       const si = /** @type {{ p: Person, why: string }} */ (standIn());
       b = si.p;
-      chiefNote('visning', `${b.name} tar rundvisningen`, si.why);
+      chiefNote('visning', sv`${b.name} tar rundvisningen`, si.why);
     }
     // (guiden lämnar disken eller rasten – rundvisningen bestämmer vart hen går)
     if (b.onBreak) { b.onBreak = false; b.breakWhere = ''; speak(b, 'Rundvisning nu? Rasten får vänta!'); }
@@ -426,13 +427,13 @@ export function visningTick(dt) {
     v.sub = needsSub(b);
     v.guest = spawnGuest().id;
     if (v.sub) {
-      speak(b, `Hej, ${b.name} på Tornet – kan ni skicka en vikarie till disken?`);
+      speak(b, sv`Hej, ${b.name} på Tornet – kan ni skicka en vikarie till disken?`);
       v.line = 'Hej! Jag ringer bara efter en vikarie till disken – sedan går vi.'; v.lineN++; v.lineK = 'call';
-      log(`☎️ ${b.name} ringer Kontorsservice: ${kickiName()} ska sköta receptionen under rundvisningen`, 'person', null, b.id);
+      log(sv`☎️ ${b.name} ringer Kontorsservice: ${kickiName()} ska sköta receptionen under rundvisningen`, 'person', null, b.id);
     } else {
       v.callUntil = S.t;
-      v.line = `Hej! Jag heter ${b.name} – i dag är det jag som visar dig runt. Vi börjar i entrén.`; v.lineN++; v.lineK = 'call';
-      log(`🛎️ ${b.name} tar rundvisningen`, 'person', null, b.id);
+      v.line = sv`Hej! Jag heter ${b.name} – i dag är det jag som visar dig runt. Vi börjar i entrén.`; v.lineN++; v.lineK = 'call';
+      log(sv`🛎️ ${b.name} tar rundvisningen`, 'person', null, b.id);
     }
     return;
   }
@@ -440,7 +441,7 @@ export function visningTick(dt) {
     if (!v.sub) { v.ph = 'swap'; return; }
     if (S.t < v.callAt) return;
     const k = crewPerson('kicki') || spawnCrew('kicki');
-    if (k) { v.kicki = k.id; pev(k, `Ska sköta receptionen medan ${guideName()} visar runt`); }
+    if (k) { v.kicki = k.id; pev(k, sv`Ska sköta receptionen medan ${guideName()} visar runt`); }
     v.ph = 'swap';
     return;
   }
@@ -465,7 +466,7 @@ export function visningTick(dt) {
   if (!b) { finish(v, 'avbruten'); return; }
   if (!g || g.state === 'away' || (g.leaving && !g.evac && g.state !== 'assembly')) { finish(v, 'avbruten'); return; }
   // Kicki tar hand om larmen i entrén (en replik när larmet går)
-  if (k && alarm() && !v.kickiSaid && k.floor === LOBBY) { v.kickiSaid = true; speak(k, S.fire ? 'Lugnt, lugnt – den här vägen ut!' : `Oj, larm! Jag har koll här – ${b ? b.name : guideName()}, fortsätt du!`); }
+  if (k && alarm() && !v.kickiSaid && k.floor === LOBBY) { v.kickiSaid = true; speak(k, S.fire ? 'Lugnt, lugnt – den här vägen ut!' : sv`Oj, larm! Jag har koll här – ${b ? b.name : guideName()}, fortsätt du!`); }
   if (!alarm()) v.kickiSaid = false;
   // kuppen: guiden och gästen gömmer sig och smyger (heist.js flyttar dem) – rundvisningen fortsätter efteråt
   if (alarmHeist()) { v.paused = true; return; }
@@ -544,7 +545,7 @@ export function visningSpot(p, f) {
   const isB = p.id === v.host;
   const x = f === LOBBY ? (isB ? 300 : 322) : DOOR_X + (isB ? 26 : 48);
   return { x, k: 'stand', face: isB ? 1 : -1, temp: true, win: 'hall', tour: true,
-    desc: isB ? 'Visar runt – berättar för gästen' : `Lyssnar på ${guideName()}` };
+    desc: isB ? 'Visar runt – berättar för gästen' : sv`Lyssnar på ${guideName()}` };
 }
 /** vad gästen bestämmer sig för i ett rum (decideNext i people.js): stannar så länge rundvisningen pågår @param {Person} p */
 export function guestNext(p) {

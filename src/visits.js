@@ -16,6 +16,7 @@
 // i dörren, repor utan filtar; tappade lass; lastkajen har plats för en bil) och ambulans (bår, förtur via
 // VIP-låset, `medicClear`)
 import { stream } from './rng.js';
+import { sv } from './sv.js';
 const { pick, rand, rng, shuffle } = stream('händelser');
 import { cap, fl } from './util.js';
 import { BOHAG, BOHAG_BY_TYPE, CAR_H, DOCK, DOOR_X, FL, HOME_FLOORS, LOBBY, floorWith, floorY, shaftCX } from './config.js';
@@ -125,7 +126,7 @@ export function moveNow() {
   if (M && M.state === 'planned') { M.at = Math.min(M.at, hour()); return true; }
   if (M) return false; // (en flytt per dygn)
   S.move = planMove(costBased(), hour());
-  if (S.move) log(`🚚 Flyttbilen svänger in mot lastkajen – ${S.move.who} flyttar i dag`, 'alert');
+  if (S.move) log(sv`🚚 Flyttbilen svänger in mot lastkajen – ${S.move.who} flyttar i dag`, 'alert');
   return !!S.move;
 }
 /** de som bor i lägenheten som töms */
@@ -155,7 +156,7 @@ export function setMoveRoute(r) {
   const M = S.move;
   if (!M || M.state === 'done' || !MOVE_ROUTES.includes(r) || M.route === r) return;
   M.route = r;
-  log(`🚚 Flytten: ${{ auto: 'styrningen planerar vägen för varje möbel', varu: 'allt går i varuhissen', balk: 'de stora möblerna går utanpå med hissbalken' }[r]}`, 'alert');
+  log(sv`🚚 Flytten: ${{ auto: 'styrningen planerar vägen för varje möbel', varu: 'allt går i varuhissen', balk: 'de stora möblerna går utanpå med hissbalken' }[r]}`, 'alert');
 }
 export function setMoveBlankets(on) {
   const M = S.move;
@@ -196,8 +197,8 @@ function moveTick(dt) {
     // familjen kommer hem och packar (den som är ute vänder hem)
     for (const p of family(M)) { p.moving = true; if (p.state === 'away') p.returnAt = Math.min(p.returnAt, hour() + 0.3); }
     if (!M.smart || M.blankets) { V.indep = true; V.parkTarget = null; V.sleep = false; releaseCalls(V, M.blankets ? 'kläs med skyddsfiltar (flyttdag)' : 'går i oberoende drift (flyttdag)'); }
-    log(`🚚 Flyttdag: ${M.who} flyttar från ${fl(M.floor)} – Flyttfirman Lyft & Bär kommer med ${M.crew + 1} man för ${M.loads} lass`
-      + (M.blankets ? ` · först kläs ${V.name} med skyddsfiltar` : ''), 'alert', V.color);
+    log(sv`🚚 Flyttdag: ${M.who} flyttar från ${fl(M.floor)} – Flyttfirman Lyft & Bär kommer med ${M.crew + 1} man för ${M.loads} lass`
+      + (M.blankets ? sv` · först kläs ${V.name} med skyddsfiltar` : ''), 'alert', V.color);
     return;
   }
   if (M.state !== 'on') return;
@@ -214,7 +215,7 @@ function moveTick(dt) {
     const carriers = crew.filter(p => !p.loader).length, need = leftInFlat(M) || M.items.some(it => it.st === 'carried');
     if (need && !carriers) {
       for (let i = 0; i < M.crew; i++) spawnMover(M, i, false);
-      log(`🚚 Flyttgubbarna från Lyft & Bär är tillbaka och fortsätter flytten från ${fl(M.floor)}`, 'alert', V ? V.color : null);
+      log(sv`🚚 Flyttgubbarna från Lyft & Bär är tillbaka och fortsätter flytten från ${fl(M.floor)}`, 'alert', V ? V.color : null);
     }
     if (!crew.some(p => p.loader) && M.items.some(it => it.st !== 'truck')) spawnMover(M, M.crew, true);
   }
@@ -222,14 +223,14 @@ function moveTick(dt) {
   // (Smart väljer varuhissen, de enkla lägena väntar; spelaren kan välja själv)
   const atHatch = M.items.filter(it => it.st === 'hatch');
   if (hoistHalt() === 'blåst' && atHatch.length) {
-    if (!M.notes.wind) { M.notes.wind = true; log(`🌬️ Blåsten stoppar hissbalken – ${atHatch.map(it => it.name).join(' och ')} står vid lastluckan`, 'alert'); }
+    if (!M.notes.wind) { M.notes.wind = true; log(sv`🌬️ Blåsten stoppar hissbalken – ${atHatch.map(it => it.name).join(' och ')} står vid lastluckan`, 'alert'); }
     if ((M.windChoice ?? (M.smart ? 'varu' : 'wait')) === 'varu' && !vDown(V)) {
       for (const it of atHatch) { it.st = 'home'; it.forceV = true; }
       log('🚚 Det som stod vid lastluckan bärs ner i varuhissen i stället', 'move');
     }
   }
   // varuhissen gick sönder mitt i flytten: det som går tar hissbalken
-  if (vDown(V) && M.hoist && !M.notes.vdown && V && V.mode !== 'normal') { M.notes.vdown = true; log(`🚚 ${V.name} ${outText(V.mode) || 'går inte'} – flyttgubbarna tar allt med hissbalken`, 'alert', V.color); }
+  if (vDown(V) && M.hoist && !M.notes.vdown && V && V.mode !== 'normal') { M.notes.vdown = true; log(sv`🚚 ${V.name} ${outText(V.mode) || 'går inte'} – flyttgubbarna tar allt med hissbalken`, 'alert', V.color); }
   // varuhissen: filtarna hängs upp i början; sedan låser Smart den bara för de stora möblerna,
   // de enkla lägena så länge bärarna jobbar (det som är kvar efter dem går med hissbalken)
   if (V && !V.ffCar) { // (under branden är varuhissen brandkårens)
@@ -249,7 +250,7 @@ function moveTick(dt) {
     M.loadT += dt;
     if (M.loadT >= LOAD_T[pile.size]) {
       M.loadT = 0; pile.st = 'truck'; M.truck++;
-      pev(loader, `Lastar in ${pile.name} i flyttbilen (${M.truck}/${M.loads})`);
+      pev(loader, sv`Lastar in ${pile.name} i flyttbilen (${M.truck}/${M.loads})`);
     }
   }
   if (loader && M.truck >= M.loads && loader.state === 'office' && loader.timer > 1) { loader.timer = 0.2; }
@@ -257,10 +258,10 @@ function moveTick(dt) {
     M.state = 'done'; M.t1 = S.t;
     if (V) V.indep = false;
     S.stats.moves++;
-    const broken = M.broken ? `, ${M.broken} tappade` : '', scratches = !M.blankets && M.scratches ? `, ${M.scratches} repor utan filtar` : '';
-    const pivots = M.pivots ? `, ${M.pivots} ${M.pivots === 1 ? 'möbel' : 'möbler'} fick vändas i dörren` : '';
-    dayEvent('move', `🚚 Flytten från ${fl(M.floor)} är klar`, `${M.who} flyttade: ${M.loads} lass på ${Math.round(S.t - M.t0)} s${broken}${scratches}${pivots}.`);
-    log(`🚚 Flytten från ${fl(M.floor)} är klar – ${M.loads} lass på ${Math.round(S.t - M.t0)} s${M.pivots ? ` (${M.pivots} gånger fick en möbel vändas i hissdörren)` : ''} · ${V ? V.name : 'varuhissen'} går i vanlig trafik igen`, 'alert', V ? V.color : null);
+    const broken = M.broken ? sv`, ${M.broken} tappade` : '', scratches = !M.blankets && M.scratches ? sv`, ${M.scratches} repor utan filtar` : '';
+    const pivots = M.pivots ? sv`, ${M.pivots} ${M.pivots === 1 ? 'möbel' : 'möbler'} fick vändas i dörren` : '';
+    dayEvent('move', sv`🚚 Flytten från ${fl(M.floor)} är klar`, sv`${M.who} flyttade: ${M.loads} lass på ${Math.round(S.t - M.t0)} s${broken}${scratches}${pivots}.`);
+    log(sv`🚚 Flytten från ${fl(M.floor)} är klar – ${M.loads} lass på ${Math.round(S.t - M.t0)} s${M.pivots ? sv` (${M.pivots} gånger fick en möbel vändas i hissdörren)` : ''} · ${V ? V.name : 'varuhissen'} går i vanlig trafik igen`, 'alert', V ? V.color : null);
   }
 }
 /** sekunder för lastaren att lasta in ett lass i flyttbilen */
@@ -273,14 +274,14 @@ function spawnMover(M, i, loader) {
   p.role = 'flyttgubbe'; p.mover = true; p.exitFloor = DOCK; p.loader = loader; p.item = null;
   p.cargo = FILTAR();
   p.look.shirt = '#ff8c42'; p.look.tie = false; p.look.acc = 0; // tröja i flyttfirmans orange
-  p.task = loader ? 'Lastar flyttbilen vid lastkajen' : `Bär ut bohaget från ${fl(M.floor)}`;
+  p.task = loader ? 'Lastar flyttbilen vid lastkajen' : sv`Bär ut bohaget från ${fl(M.floor)}`;
   if (loader) {
     // lastaren stannar vid bilen (arbetet sköts av moveTick)
     p.goal = DOCK; p.dest = DOCK; p.state = 'office'; p.timer = 1e9; p.why = 'Lastar flyttbilen';
-  } else setTrip(p, M.floor, `Lyft & Bär: flyttar ut från ${fl(M.floor)}`);
+  } else setTrip(p, M.floor, sv`Lyft & Bär: flyttar ut från ${fl(M.floor)}`);
   S.people.push(p);
-  pev(p, loader ? 'Öppnar flyttbilens bakdörrar vid lastkajen – tar emot det som bärs ner' : `Kliver ur flyttbilen vid lastkajen · ${p.why}`);
-  log(`🚚 ${pn(p)} (flyttgubbe) ${loader ? 'lastar flyttbilen vid lastkajen' : `åker upp till ${fl(M.floor)}`}`, 'person', null, p.id);
+  pev(p, loader ? 'Öppnar flyttbilens bakdörrar vid lastkajen – tar emot det som bärs ner' : sv`Kliver ur flyttbilen vid lastkajen · ${p.why}`);
+  log(sv`🚚 ${pn(p)} (flyttgubbe) ${loader ? 'lastar flyttbilen vid lastkajen' : sv`åker upp till ${fl(M.floor)}`}`, 'person', null, p.id);
 }
 /** rumstimern när en flyttgubbe kommer fram (people.js): i lägenheten reserveras nästa lass @param {Person} p */
 export function moverTimer(p) {
@@ -290,7 +291,7 @@ export function moverTimer(p) {
   const it = M.items.find(x => x.st === 'home');
   if (!it) return 0.5;
   it.st = 'packing'; p.item = it.id;
-  if (big(it)) pev(p, it.key === 'piano' ? 'Spänner fast pianot på kärran – försiktigt!' : `Skruvar isär ${it.name.replace(/^(en|ett) /, '')}`);
+  if (big(it)) pev(p, it.key === 'piano' ? 'Spänner fast pianot på kärran – försiktigt!' : sv`Skruvar isär ${it.name.replace(/^(en|ett) /, '')}`);
   let t = rand(PACK_T[it.size][0], PACK_T[it.size][1]);
   // Smart: kartongerna får vänta en stund när buden står i kö vid varuhissen
   if (M.smart && M.route === 'auto' && it.size === 'S' && freightQueue() >= 2) {
@@ -308,14 +309,14 @@ export function moverNext(p) {
     if (p.item !== null && p.item !== undefined) {
       const it = M.items[p.item];
       it.st = 'dock'; M.done++; M.viaV++; S.stats.moveLoads++; p.item = null;
-      pev(p, `Ställer av ${it.name} vid flyttbilen (${M.done}/${M.loads})`);
+      pev(p, sv`Ställer av ${it.name} vid flyttbilen (${M.done}/${M.loads})`);
       p.cargo = FILTAR();
       // ibland tappas något (det mesta klarar sig)
       if ((it.size === 'S' || it.size === 'M') && rng() < 0.06) {
         M.broken++; S.stats.moveBroken++;
         S.fx.push({ x: DOOR_X + 40, y: floorY(DOCK) - 40, text: 'KRASCH!', color: '#ff5d52', life: 1.6, size: 14 });
-        log(`💥 KRASCH! ${it.size === 'S' ? 'En flyttkartong' : cap(it.name)} tappas vid flyttbilen – det klirrar`, 'alert', null, p.id);
-        for (const q of family(M)) pev(q, it.size === 'S' ? 'Hörde du? Det var nog porslinet …' : `Nej! ${cap(it.name)}!`);
+        log(sv`💥 KRASCH! ${it.size === 'S' ? 'En flyttkartong' : cap(it.name)} tappas vid flyttbilen – det klirrar`, 'alert', null, p.id);
+        for (const q of family(M)) pev(q, it.size === 'S' ? 'Hörde du? Det var nog porslinet …' : sv`Nej! ${cap(it.name)}!`);
       }
     }
     if (!leftInFlat(M)) return [p.exitFloor, 'Allt är nerburet – åker hem'];
@@ -327,13 +328,13 @@ export function moverNext(p) {
     // med hissbalken: ställs vid lastluckan – balken tar den – och bäraren tar nästa lass
     if (viaHoist(M, it)) {
       it.st = 'hatch'; it.via = 'balk'; p.item = null;
-      pev(p, `Ställer ${it.name} vid lastluckan – hissbalken tar den ner till terrassen`);
-      return [M.floor, `Ställer ${it.name} vid lastluckan`, false];
+      pev(p, sv`Ställer ${it.name} vid lastluckan – hissbalken tar den ner till terrassen`);
+      return [M.floor, sv`Ställer ${it.name} vid lastluckan`, false];
     }
     it.st = 'carried'; it.via = 'varu';
     p.cargo = { kind: it.sprite, name: it.name, kg: it.kg };
-    p.task = `Bär ${it.name}`;
-    return [DOCK, `Bär ner ${it.name} till flyttbilen`, false]; // (lastkajen är utgången – men det är ingen hemgång)
+    p.task = sv`Bär ${it.name}`;
+    return [DOCK, sv`Bär ner ${it.name} till flyttbilen`, false]; // (lastkajen är utgången – men det är ingen hemgång)
   }
   return [DOCK, leftInFlat(M) ? 'Tillbaka till flyttbilen' : 'Inget mer att bära – tillbaka till flyttbilen', false];
 }
@@ -352,7 +353,7 @@ export function moveBoard(e, p) {
   if (big(it) && !M.blankets && rng() < 0.35) {
     M.scratches++; e.wear += 0.03;
     S.fx.push({ x: shaftCX(e.id), y: floorY(e.floor) - CAR_H - 10, text: 'SKRRT!', color: '#ffd23f', life: 1.2 });
-    log(`🪵 ${cap(it.name)} skrapar i väggen i ${e.name} – inga skyddsfiltar`, 'move', e.color, p.id);
+    log(sv`🪵 ${cap(it.name)} skrapar i väggen i ${e.name} – inga skyddsfiltar`, 'move', e.color, p.id);
   }
   if (!it.long || it.pivoted || rng() >= 0.45) return false;
   it.pivoted = true; M.pivots++;
@@ -367,20 +368,20 @@ export function moveBoard(e, p) {
       it.st = 'hatch'; it.via = 'balk';
       p.timer = moverTimer(p);
       S.fx.push({ x: shaftCX(e.id), y: floorY(e.floor) - CAR_H - 26, text: 'FAST!', color: '#ff5d52', life: 1.8, size: 14 });
-      pev(p, `${name} går inte in i hissen hur vi än vrider – vi bär den till lastluckan, hissbalken får ta den`);
-      log(`🛋️ ${name} fastnar helt i dörren till ${e.name} – bärs tillbaka och tar hissbalken i stället`, 'alert', e.color, p.id);
+      pev(p, sv`${name} går inte in i hissen hur vi än vrider – vi bär den till lastluckan, hissbalken får ta den`);
+      log(sv`🛋️ ${name} fastnar helt i dörren till ${e.name} – bärs tillbaka och tar hissbalken i stället`, 'alert', e.color, p.id);
       return true;
     }
     e.dwellNeed = Math.max(e.dwellNeed, e.dwell + rand(10, 14));
     if (!M.blankets) { M.scratches++; e.wear += 0.04; }
     S.fx.push({ x: shaftCX(e.id), y: floorY(e.floor) - CAR_H - 26, text: 'TRYCK!', color: '#ff5d52', life: 2, size: 14 });
-    log(`🛋️ ${name} fastnar helt i dörren till ${e.name} – flyttgubbarna trycker in den med våld`, 'alert', e.color, p.id);
+    log(sv`🛋️ ${name} fastnar helt i dörren till ${e.name} – flyttgubbarna trycker in den med våld`, 'alert', e.color, p.id);
     return false;
   }
   e.dwellNeed = Math.max(e.dwellNeed, e.dwell + rand(4, 7)); // dörrarna står öppna medan den vänds
   S.fx.push({ x: shaftCX(e.id), y: floorY(e.floor) - CAR_H - 26, text: 'PIVOT!', color: '#ff8c42', life: 1.8, size: 14 });
-  pev(p, `${name} fastnar i dörren – PIVOT! PIVOT! (vänder och vrider)`);
-  log(`🛋️ ${name} fastnar i dörren till ${e.name} – flyttgubbarna vänder och vrider`, 'move', e.color, p.id);
+  pev(p, sv`${name} fastnar i dörren – PIVOT! PIVOT! (vänder och vrider)`);
+  log(sv`🛋️ ${name} fastnar i dörren till ${e.name} – flyttgubbarna vänder och vrider`, 'move', e.color, p.id);
   return false;
 }
 /** de boende som flyttar: packar hemma och går när lägenheten är tom (anropas av resNext i life.js) @param {Person} p */
@@ -419,8 +420,8 @@ function medicTick() {
     const pat = A.taken ? null : S.people.find(p => p.id === A.pid && !p.dead && p.collapsed);
     if (pat) { pat.collapsed = false; if (pat.state === 'office') pat.timer = Math.min(pat.timer, 2); pev(pat, 'Kvicknar till – ambulansen har redan åkt'); }
     S.stats.medicSec += S.t - A.t0;
-    dayEvent('medical', '🚑 Ambulansen har kört', `${A.taken ? `${A.pname} fördes till sjukhuset` : 'Ambulansen åkte tom'} – ${Math.round(S.t - A.t0)} s från larm till avfärd.`);
-    log(`🚑 Ambulansen kör iväg${A.taken ? ` med ${A.pname}` : ''} – ${Math.round(S.t - A.t0)} s från larm till avfärd`, 'alert');
+    dayEvent('medical', '🚑 Ambulansen har kört', sv`${A.taken ? sv`${A.pname} fördes till sjukhuset` : 'Ambulansen åkte tom'} – ${Math.round(S.t - A.t0)} s från larm till avfärd.`);
+    log(sv`🚑 Ambulansen kör iväg${A.taken ? ` med ${A.pname}` : ''} – ${Math.round(S.t - A.t0)} s från larm till avfärd`, 'alert');
   }
 }
 /** uppe hos patienten: på våningen – inte i en hiss eller i trappan (den med akutväskan kan ta trappan ner) @param {Person} p */
@@ -437,7 +438,7 @@ function holdTick(A, crew) {
       const e = S.elevators[p.offCar];
       if (e && e.mode === 'normal' && !outReason(e)) {
         A.car = e.id; A.held = true; e.medicHold = true; e.parkTarget = null;
-        log(`🚑 ${e.name} står kvar på ${fl(A.floor)} med ambulansens nyckel – väntar på personalen och båren`, 'alert', e.color);
+        log(sv`🚑 ${e.name} står kvar på ${fl(A.floor)} med ambulansens nyckel – väntar på personalen och båren`, 'alert', e.color);
         holdClear(e);
       }
     }
@@ -449,7 +450,7 @@ function holdTick(A, crew) {
   const gone = !crew.some(p => upstairs(A, p)), out = !gone && !!outReason(e);
   if (!gone && !out) return;
   e.medicHold = false; A.car = null;
-  if (out) log(`🚑 ${e.name} kan inte vänta längre på ambulansen – personalen får en annan hiss med förtur`, 'alert', e.color);
+  if (out) log(sv`🚑 ${e.name} kan inte vänta längre på ambulansen – personalen får en annan hiss med förtur`, 'alert', e.color);
 }
 /**
  * Ambulansen (S.medic): patienten, var, ambulanspersonalen (state: called → …) och hissen de låser.
@@ -468,7 +469,7 @@ export function startMedical() {
   pev(p, p.floor === floorWith('aerobic') ? 'Svimmar mitt i passet! Någon ringer 112' : 'Mår dåligt och svimmar – någon ringer 112');
   S.medic = { pid: p.id, pname: p.name, floor: p.floor, where, t0: S.t, crewAt: S.t + rand(6, 10), state: 'called', taken: false, t1: 0, car: null, held: false, spotX: p.spot ? p.spot.x : 300 };
   S.stats.medical++;
-  log(`🚑 ${pn(p)} har svimmat på ${where} (${fl(p.floor)}) – ambulans larmad`, 'alert', null, p.id);
+  log(sv`🚑 ${pn(p)} har svimmat på ${where} (${fl(p.floor)}) – ambulans larmad`, 'alert', null, p.id);
   return true;
 }
 function spawnMedic(A, i) {
@@ -477,10 +478,10 @@ function spawnMedic(A, i) {
   p.cargo = i ? { kind: 'väska', name: 'akutväska', kg: 10 } : { kind: 'bår', name: 'bår', kg: 30 };
   p.look.shirt = '#2ec4b6'; p.look.pants = '#2ec4b6'; p.look.tie = false; p.look.acc = 0;
   p.task = 'Tar hand om patienten';
-  setTrip(p, A.floor, `Ambulans: akut till ${A.where}`);
+  setTrip(p, A.floor, sv`Ambulans: akut till ${A.where}`);
   S.people.push(p);
-  pev(p, `Springer in i entrén med ${p.cargo.name} · ${p.why}`);
-  log(`🚑 ${pn(p)} (ambulanssjukvårdare) på väg till ${fl(A.floor)}`, 'person', null, p.id);
+  pev(p, sv`Springer in i entrén med ${p.cargo.name} · ${p.why}`);
+  log(sv`🚑 ${pn(p)} (ambulanssjukvårdare) på väg till ${fl(A.floor)}`, 'person', null, p.id);
 }
 /** ambulanspersonalens nästa beslut (anropas från personernas rollogik) @param {Person} p */
 export function medicNext(p) {
@@ -492,10 +493,10 @@ export function medicNext(p) {
     A.taken = true; A.state = 'transport';
     releaseSpot(pat);
     pat.dead = true; pat.collapsed = false;
-    pev(pat, `Läggs på båren och bärs ut till ambulansen av ${p.name}`);
-    p.cargo = { kind: 'bårP', name: `bår med ${pat.name}`, kg: 30 + pat.kg };
-    log(`🚑 ${pat.name} bärs ut på bår från ${fl(A.floor)}`, 'alert', null, p.id);
-    return [p.exitFloor, `Bär ${pat.name} till ambulansen`];
+    pev(pat, sv`Läggs på båren och bärs ut till ambulansen av ${p.name}`);
+    p.cargo = { kind: 'bårP', name: sv`bår med ${pat.name}`, kg: 30 + pat.kg };
+    log(sv`🚑 ${pat.name} bärs ut på bår från ${fl(A.floor)}`, 'alert', null, p.id);
+    return [p.exitFloor, sv`Bär ${pat.name} till ambulansen`];
   }
   return [p.exitFloor, A.taken ? 'Följer med båren till ambulansen' : 'Patienten är inte här – tillbaka till ambulansen'];
 }
@@ -512,11 +513,11 @@ function holdClear(e) {
   for (const p of out) {
     const pf = deckFloor(e, p, f);
     if (p.dest === pf) continue;
-    pev(p, `Ambulansen behöver hiss ${e.name} – jag kliver av här på ${fl(pf)} och tar en annan hiss`);
+    pev(p, sv`Ambulansen behöver hiss ${e.name} – jag kliver av här på ${fl(pf)} och tar en annan hiss`);
     p.dest = pf;
   }
   e.carCalls = new Set(e.passengers.map(p => posOf(e, p.dest)));
-  log(`🚑 ${e.name}: ${out.length} passagerare kliver av på ${fl(f)} – hissen väntar på ambulansen`, 'alert', e.color);
+  log(sv`🚑 ${e.name}: ${out.length} passagerare kliver av på ${fl(f)} – hissen väntar på ambulansen`, 'alert', e.color);
   if (e.state === 'doors' && e.doorPhase === 'open') unload(e, f);
 }
 /** @param {Elevator} e */
@@ -541,11 +542,11 @@ export function medicClear(e) {
   for (const p of out) {
     const pf = deckFloor(e, p, at);
     if (p.dest === pf) continue;
-    pev(p, `Ambulansen behöver hiss ${e.name} – jag får kliva av på ${fl(pf)} och ta en annan hiss`);
+    pev(p, sv`Ambulansen behöver hiss ${e.name} – jag får kliva av på ${fl(pf)} och ta en annan hiss`);
     p.dest = pf;
   }
   e.carCalls = new Set(e.passengers.map(p => posOf(e, p.dest)));
-  log(`🚑 ${e.name}: ${out.length} passagerare kliver av på ${fl(at)} – ambulansen har förtur`, 'alert', e.color);
+  log(sv`🚑 ${e.name}: ${out.length} passagerare kliver av på ${fl(at)} – ambulansen har förtur`, 'alert', e.color);
   if (e.state === 'doors' && e.doorPhase === 'open') unload(e, at);
 }
 /** @param {Elevator} e */

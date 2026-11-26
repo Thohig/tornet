@@ -1,5 +1,6 @@
 // Simuleringssteget, fast tidssteg och nollställning av dagar.
 import { setSeed, stream } from './rng.js';
+import { sv } from './sv.js';
 // ankomsterna har en ström per sort, så att t.ex. fler besökare inte flyttar när de anställda kommer
 const EMP = stream('anställda'), VIS = stream('besökare'), DOG = stream('hundägare'), TOUR = stream('turister'), GYM = stream('kvällspass');
 const WEAR = stream('slitage');
@@ -105,7 +106,7 @@ function nightModeTick(dt) {
   const night = costBased() && S.power && (eco || (h >= 22.5 && h < 29.5));
   const waiting = S.people.filter(p => p.state === 'wait');
   if (!night) {
-    for (const e of S.elevators) if (e.sleep) { e.sleep = false; log(`☀️ ${e.name} vaknar ur nattläget`, 'park', e.color); }
+    for (const e of S.elevators) if (e.sleep) { e.sleep = false; log(sv`☀️ ${e.name} vaknar ur nattläget`, 'park', e.color); }
     return;
   }
   // gruppens vakthiss: den första som kan köra (en trasig hiss, en på service eller en avstängd räknas inte)
@@ -114,7 +115,7 @@ function nightModeTick(dt) {
   const keeper = g => S.elevators.find(x => x.group === g && usable(x));
   for (const e of S.elevators) {
     const k = keeper(e.group);
-    if (k === e && e.sleep) { e.sleep = false; e.sleepT = 0; log(`☀️ ${e.name} vaknar – den ska hålla vakt i gruppen`, 'park', e.color); }
+    if (k === e && e.sleep) { e.sleep = false; e.sleepT = 0; log(sv`☀️ ${e.name} vaknar – den ska hålla vakt i gruppen`, 'park', e.color); }
   }
   // (natten går fort: 8 s väntan är nästan en speltimme)
   if ((waiting.length > 3 || waiting.some(p => S.t - p.waitStart > 8)) && S.t >= (S.wakeAt || 0)) {
@@ -123,7 +124,7 @@ function nightModeTick(dt) {
     const queue = [...waiting].sort((a, b) => a.waitStart - b.waitStart);
     for (const p of queue) {
       const z = S.elevators.find(e => e.sleep && usable(e) && canTake(e, p));
-      if (z) { z.sleep = false; z.sleepT = 0; S.wakeAt = S.t + 3; log(`⏰ ${z.name} väcks ur nattläget – det bildas kö`, 'park', z.color); return; }
+      if (z) { z.sleep = false; z.sleepT = 0; S.wakeAt = S.t + 3; log(sv`⏰ ${z.name} väcks ur nattläget – det bildas kö`, 'park', z.color); return; }
     }
   }
   // (en kö som en hiss inte kan ta – t.ex. i en annan zon – hindrar den inte från att somna)
@@ -133,7 +134,7 @@ function nightModeTick(dt) {
     e.sleepT = idle ? (e.sleepT || 0) + dt : 0;
     // en hiss per grupp är alltid vaken
     if (e !== keeper(e.group) && !e.sleep && e.sleepT > 8 && !waiting.some(p => canTake(e, p))) {
-      e.sleep = true; log(`🌙 ${e.name} går i viloläge på ${fl(Math.round(e.pos))} – sparar energi`, 'park', e.color);
+      e.sleep = true; log(sv`🌙 ${e.name} går i viloläge på ${fl(Math.round(e.pos))} – sparar energi`, 'park', e.color);
     }
   }
 }
@@ -173,11 +174,11 @@ export function step(dt) {
     if (lock && !e.vipLock) {
       const medic = e.medicHold || holders.some(p => p.medic), rescue = !medic && holders.some(p => p.rescue);
       const who = medic ? 'ambulansen' : rescue ? 'räddningstjänsten' : 'VIP-gruppen';
-      log(medic ? `🚑 Förtur: ${e.name} reserveras för ambulansen` : rescue ? `🚒 Förtur: ${e.name} reserveras för räddningstjänsten`
-        : `👔 VIP-läge: ${e.name} reserveras för VIP-gruppen`, 'alert', e.color);
+      log(medic ? sv`🚑 Förtur: ${e.name} reserveras för ambulansen` : rescue ? sv`🚒 Förtur: ${e.name} reserveras för räddningstjänsten`
+        : sv`👔 VIP-läge: ${e.name} reserveras för VIP-gruppen`, 'alert', e.color);
       // de som redan hade fått hissen får en annan
       e.vipLock = lock;
-      releaseCalls(e, `reserveras för ${who}`, prio);
+      releaseCalls(e, sv`reserveras för ${who}`, prio);
       // ambulansen har förtur: passagerarna som inte ska åt samma håll kliver av vid nästa stopp
       if (medic) medicClear(e);
       rebuildPicks();
@@ -271,10 +272,10 @@ export function rollDay() {
   chiefRoll();
   crewRoll();
   const y = S.yesterday.stats, avg = y.waitN ? y.waitSum / y.waitN : 0;
-  notice('day', `🌅 Dag ${S.day} börjar`, y.incidents === 1 ? `I går: ${y.served} resor, snittväntan ${avg.toFixed(1)} s, en incident. Huset rullar vidare – det som pågick fortsätter.`
-    : `I går: ${y.served} resor, snittväntan ${avg.toFixed(1)} s, ${y.incidents} incidenter. Huset rullar vidare – det som pågick fortsätter.`,
+  notice('day', sv`🌅 Dag ${S.day} börjar`, y.incidents === 1 ? sv`I går: ${y.served} resor, snittväntan ${avg.toFixed(1)} s, en incident. Huset rullar vidare – det som pågick fortsätter.`
+    : sv`I går: ${y.served} resor, snittväntan ${avg.toFixed(1)} s, ${y.incidents} incidenter. Huset rullar vidare – det som pågick fortsätter.`,
     { act: 'yesterday', actLabel: 'Gårdagen' });
-  log(`🌅 Dag ${S.day} börjar – huset rullar vidare`, 'sys');
+  log(sv`🌅 Dag ${S.day} börjar – huset rullar vidare`, 'sys');
 }
 export function newSim(seed, opts = {}) {
   S.seed = seed >>> 0; S.day = opts.day || 1; S.log = []; S.fx = []; S.elevators = [];

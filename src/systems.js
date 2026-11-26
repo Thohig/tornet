@@ -37,6 +37,7 @@ import { cableCandidate, foremanNext, techNext, triggerCable, triggerFault, trig
 import { busyCars, cableRisk, ffNext, FIRE_FLOORS, incidentStarted, incPick, startFire, startOutage } from './incidents.js';
 import { dogChiefTick, gondolaChiefTick, leakChiefTick, panoChiefTick } from './chief.js';
 import { arrivalRate } from './sim.js';
+import { sv } from './sv.js';
 /** @typedef {import('./elevators.js').Elevator} Elevator */
 /** @typedef {import('./incidents.js').IncPick} IncPick */
 /** @typedef {import('./people.js').Person} Person */
@@ -86,13 +87,13 @@ export function systems() {
     // --- incidenterna i incidents.js och service.js ---
     { key: 'fire', on: () => !!S.fire, trigger: t => startFire(FIRE_FLOORS.includes(t) ? t : undefined),
       weight: () => !S.fire && 1, pick: () => ({ floor: incPick(OFFICE_FLOORS.slice(1)) }),
-      warnS: 10, warn: (_e, W) => `👃 Det luktar bränt på våning ${fl(W.floor)}…`, hit: W => startFire(W.floor),
+      warnS: 10, warn: (_e, W) => sv`👃 Det luktar bränt på våning ${fl(W.floor)}…`, hit: W => startFire(W.floor),
       roles: { 'brandman': ffNext } },
     { key: 'power', on: () => !!S.outage, trigger: () => startOutage(), weight: () => S.power && 1,
       warnS: 6, warn: () => '💡 Lamporna i huset flimrar…', hit: () => startOutage() },
     { key: 'fault', trigger: (_t, e) => triggerFault(e), weight: () => busyCars().length > 0 && 1.2,
       pick: () => { const busy = busyCars(), act = busy.filter(e => e.passengers.length || e.carCalls.size); return { car: incPick(act.length ? act : busy).id }; },
-      warnS: 8, warn: e => `🔩 ${e.name} låter konstigt – det gnisslar i korgen…`, hit: (_W, e) => { if (e) triggerFault(e); },
+      warnS: 8, warn: e => sv`🔩 ${e.name} låter konstigt – det gnisslar i korgen…`, hit: (_W, e) => { if (e) triggerFault(e); },
       roles: { 'hisstekniker': techNext, 'arbetsledare': foremanNext }, chaos: { step: 'cars', name: '🔧 hissfel', run: () => triggerFault() } },
     { key: 'storm', on: () => !!S.storm, trigger: () => { if (startStorm()) incidentStarted(null); }, weight: () => !S.storm && 0.8,
       warnS: 14, warn: () => '🌥️ Det mörknar över staden och vinden friskar i…', hit: () => { if (startStorm()) incidentStarted(null); } },
@@ -100,18 +101,18 @@ export function systems() {
     { key: 'heat', trigger: (_t, e) => triggerHeat(e),
       weight: () => { const busy = busyCars(); return busy.length > 0 && 0.4 + Math.max(0, S.weather.temp - 15) * 0.06 + Math.max(...busy.map(e => e.heat)) * 0.6; },
       pick: () => ({ car: [...busyCars()].sort((a, b) => b.heat - a.heat || b.passengers.length - a.passengers.length)[0].id }),
-      warnS: 10, warn: e => `🌡️ Motorn i ${e.name}s maskinrum brummar ansträngt…`, hit: (_W, e) => { if (e) triggerHeat(e); } },
+      warnS: 10, warn: e => sv`🌡️ Motorn i ${e.name}s maskinrum brummar ansträngt…`, hit: (_W, e) => { if (e) triggerHeat(e); } },
     // linorna i den mest slitna hissen kan gå av (bara om de är rejält slitna)
     { key: 'cable', trigger: (_t, e) => triggerCable(e), weight: () => { const cr = cableRisk(); return !!cr && cr.w; },
       pick: () => ({ car: cableRisk().e.id }),
-      warnS: 40, warn: e => `🪢 Det knarrar i bärlinorna på ${e.name} – de är slitna (${Math.round(e.wear * 100)} %)…`,
+      warnS: 40, warn: e => sv`🪢 Det knarrar i bärlinorna på ${e.name} – de är slitna (${Math.round(e.wear * 100)} %)…`,
       hit: (_W, e) => { if (!e) return; e.creak = false; if (cableCandidate(e)) triggerCable(e); },
       chaos: { step: 'cars', name: '🪢 linbrott', run: () => triggerCable() } },
     // panoramahissen kan fastna på fasaden (bara när den kör med folk)
     { key: 'pano', on: () => !!S.pano, trigger: () => triggerPano(),
       weight: () => { const P = PANO ? S.elevators[PANO.id] : null; return panoCandidate(P) && P.passengers.length > 0 && !S.pano && 0.3; },
       pick: () => ({ car: PANO.id }),
-      warnS: 10, warn: e => `🔩 ${e.name} hackar på fasaden – det luktar hydraulolja…`,
+      warnS: 10, warn: e => sv`🔩 ${e.name} hackar på fasaden – det luktar hydraulolja…`,
       hit: (_W, e) => { if (e && panoCandidate(e) && !S.pano) e.panoNext = true; },
       chief: { tick: panoChiefTick, done: () => !S.pano || S.pano.ph === 'done' },
       roles: { 'räddare': p => (p.gondola ? undefined : rescueNext(p)) }, chaos: { step: 'cars', name: '🧗 fast på fasaden', run: () => triggerPano() },

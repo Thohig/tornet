@@ -71,6 +71,7 @@ import { act } from './actions.js';
 import { chaosReady } from './chaos.js';
 import { LEAK_FLOORS } from './leak.js';
 import { incUi } from './incui.js';
+import { sv } from './sv.js';
 
 const side = $('side'), portrait = $('portrait');
 
@@ -80,7 +81,7 @@ const side = $('side'), portrait = $('portrait');
 /** @type {{ view: null|'roster'|'log'|'stats'|'set'|'yesterday', open: Set<string>, fireFloor: string, squeezed: Set<string>, key: string, tour: TourPanel|null, chaosArm: number, tab: null|string, mkey: string }} */
 const UI = { view: null, open: new Set(), fireFloor: '', squeezed: new Set(), key: '', tour: null, chaosArm: 0, tab: null, mkey: '' };
 /** knappen som beställer en rundvisning hos den som guidar härnäst (Berit på dagen, kvällsvärden annars) */
-const tourBtn = () => { const n = guideName(); return ikon('visning:now', '🛎️', `Be ${n} visa runt`, `${n} ringer efter en vikarie till disken och visar en gäst runt i huset – du följer med`, false, S.visning ? ' disabled' : ''); };
+const tourBtn = () => { const n = guideName(); return ikon('visning:now', '🛎️', sv`Be ${n} visa runt`, sv`${n} ringer efter en vikarie till disken och visar en gäst runt i huset – du följer med`, false, S.visning ? ' disabled' : ''); };
 /** Rundvisningen (intro.js): ett eget block överst, blocken i focus fälls ut och lyfts fram, och det som
  *  matchar väljarna i spot blinkar (även textskylten i bilden). null = ingen rundvisning. */
 export function setTour(t) { UI.tour = t; UI.view = null; updatePanel(); }
@@ -89,7 +90,7 @@ const focused = k => !!UI.tour && UI.tour.focus.includes(k);
 const VIEWS = { roster: ['📋', 'Register', 'Alla i huset just nu – klicka på någon för att följa hen'], log: ['📜', 'Logg', 'Allt som har hänt, med filter'],
   set: ['⚙️', 'Inställningar', 'Felknappar, underhåll och vad som händer när dygnet tar slut'], stats: ['🏆', 'Resultat', 'Dagens siffror och betyg'] };
 /** vyer som inte har en egen länk: gårdagens sammanfattning (öppnas från informationsrutan eller resultatet) */
-const VIEW_TITLE = v => (v === 'yesterday' ? `🌅 Dag ${lastDay()?.day ?? ''}` : VIEWS[v].slice(0, 2).join(' '));
+const VIEW_TITLE = v => (v === 'yesterday' ? sv`🌅 Dag ${lastDay()?.day ?? ''}` : VIEWS[v].slice(0, 2).join(' '));
 extraActions.view = b => { UI.view = UI.view === b || b === 'back' ? null : /** @type {any} */ (b); if (UI.view) UI.tab = 'more'; S.logDirty = true; };
 extraActions.yesterday = () => { if (lastDay()) { UI.view = 'yesterday'; UI.tab = 'more'; S.logDirty = true; } };
 extraActions.open = b => { UI.open.add(b); UI.view = null; };
@@ -141,17 +142,17 @@ function scanMarks() {
   // det som saknar starttid märks när det slår om från av till på
   const rise = (key, on, icon, text, act) => { if (on && !was.get(key)) add(`${key}@${S.t}`, icon, text, act); was.set(key, on); };
   const top = ROOF >= 0 ? ROOF : TOP;
-  if (S.fire) add(`fire${S.fire.t0}`, '🔥', `Brand på ${fl(S.fire.floor)}`, `show:${S.fire.floor}`);
+  if (S.fire) add(`fire${S.fire.t0}`, '🔥', sv`Brand på ${fl(S.fire.floor)}`, `show:${S.fire.floor}`);
   if (S.outage) add(`out${S.outage.t0}`, '⚡', 'Strömavbrott', `show:${LOBBY}`);
   if (S.storm) add(`storm${S.storm.t0}`, '🌬️', 'Storm', `show:${top}`);
   if (S.storm && S.storm.struck !== null) add(`strike${S.storm.struck}`, '🌩️', 'Blixten slog ner', `show:${top}`);
-  if (S.medic) add(`medic${S.medic.t0}`, '🚑', `Ambulans till ${S.medic.pname}`, `show:${S.medic.floor}`);
+  if (S.medic) add(`medic${S.medic.t0}`, '🚑', sv`Ambulans till ${S.medic.pname}`, `show:${S.medic.floor}`);
   rise('move', !!(S.move && S.move.state === 'on'), '🚚', 'Flyttdag', `show:${LOBBY}`);
   rise('heli', !!S.heli, '🚁', 'VIP-helikopter', `show:${top}`);
   for (const e of S.elevators) {
     if (e.mode === 'snapped') add(`snap${e.id}:${e.snap.t0}`, '🪢', `Linbrott i ${e.name}`, `follow:${e.id}`);
-    if (e.mode === 'broken' && e.fault && !e.fault.cable) add(`fault${e.id}:${e.fault.t0}`, '🔧', e.fault.trapped ? `${e.name} stannade mellan två våningar` : `${e.name} gick sönder`, `follow:${e.id}`);
-    rise(`hot${e.id}`, !!e.hot, '🌡️', `${e.name} överhettad`, `follow:${e.id}`);
+    if (e.mode === 'broken' && e.fault && !e.fault.cable) add(`fault${e.id}:${e.fault.t0}`, '🔧', e.fault.trapped ? sv`${e.name} stannade mellan två våningar` : sv`${e.name} gick sönder`, `follow:${e.id}`);
+    rise(`hot${e.id}`, !!e.hot, '🌡️', sv`${e.name} överhettad`, `follow:${e.id}`);
   }
 }
 function timelineHtml() {
@@ -166,8 +167,8 @@ function warnHtml() {
   const W = S.warn;
   if (!W) return '';
   const car = W.car !== undefined && W.car !== null ? S.elevators[W.car] : null;
-  const text = { fire: `👃 Det luktar bränt på ${fl(W.floor)}`, power: '💡 Lamporna flimrar …', storm: '🌥️ Ett oväder drar in',
-    heat: `🌡️ Motorn i ${car ? car.name : 'en hiss'} brummar`, cable: `🪢 Linorna i ${car ? car.name : 'en hiss'} knarrar`, fault: `🔩 ${car ? car.name : 'En hiss'} gnisslar`, heist: '🚐 En skåpbil står vid lastkajen med motorn igång' }[W.type] || '⚠️ Något är på gång';
+  const text = { fire: sv`👃 Det luktar bränt på ${fl(W.floor)}`, power: '💡 Lamporna flimrar …', storm: '🌥️ Ett oväder drar in',
+    heat: sv`🌡️ Motorn i ${car ? car.name : 'en hiss'} brummar`, cable: sv`🪢 Linorna i ${car ? car.name : 'en hiss'} knarrar`, fault: sv`🔩 ${car ? car.name : 'En hiss'} gnisslar`, heist: '🚐 En skåpbil står vid lastkajen med motorn igång' }[W.type] || '⚠️ Något är på gång';
   const act = car ? `follow:${car.id}` : `show:${W.floor ?? (W.type === 'storm' ? (ROOF >= 0 ? ROOF : TOP) : LOBBY)}`;
   return `<button class="warnrow" data-act="${act}" data-hint="<b>Förvarning:</b> något är på gång – klicka för att visa var">${esc(text)}<span>visa</span></button>`;
 }
@@ -208,9 +209,9 @@ const flagsHtml = () => `<span class="pl-lang">${flagBtn('sv')}${flagBtn('en')}<
 /** kamerans verktyg: ikoner i uppspelningsraden (vad regissören visar står på textskylten i bilden) */
 function camTools() {
   const c = crewNow(), who = c ? esc(c.who.name) : 'Regissören';
-  return ikon('auto', '🎬', 'Regissören', VIEW.auto ? `${who} klipper bilden till det mest sevärda. Klicka i bilden för att ta kameran själv – ${who} tar den igen när du släpper den. (A) stänger av regissören.`
-    : VIEW.autoWant ? `Du har kameran – ${who} tar den igen när du slutar följa eller har låtit bli att scrolla en stund. (A) stänger av regissören.`
-    : `Du har kameran. Klicka (A) så klipper ${who} bilden åt dig.`, VIEW.autoWant)
+  return ikon('auto', '🎬', 'Regissören', VIEW.auto ? sv`${who} klipper bilden till det mest sevärda. Klicka i bilden för att ta kameran själv – ${who} tar den igen när du släpper den. (A) stänger av regissören.`
+    : VIEW.autoWant ? sv`Du har kameran – ${who} tar den igen när du slutar följa eller har låtit bli att scrolla en stund. (A) stänger av regissören.`
+    : sv`Du har kameran. Klicka (A) så klipper ${who} bilden åt dig.`, VIEW.autoWant)
     + ikon('cinema', '🎞️', 'Biografläget', 'Bara bilden och textskylten (H)')
     + ikon('tags', '🏷️', 'Namnbrickor', 'Namnen över alla i bild (T)', S.tags)
     + ikon('sound', soundOn() ? '🔊' : '🔇', 'Ljud', soundOn() ? 'Ljudet är på (M)' : 'Ljudet är av (M)', soundOn());
@@ -225,18 +226,18 @@ function radioHtml(mode) {
   return `<div class="radio${mode === 'row' ? ' one' : ''}" data-act="view:log" data-hint="<b>Driftradion:</b> det senaste som hänt. Klicka för hela loggen.">${radio}</div>`;
 }
 function followHtml(F) {
-  if (F.kind === 'car') return { head: `📹 Följer hiss ${esc(F.e.name)}`, body: carHtml(F.e) };
+  if (F.kind === 'car') return { head: sv`📹 Följer hiss ${esc(F.e.name)}`, body: carHtml(F.e) };
   if (F.kind === 'floor') {
     const f = F.f, w = S.wl && S.wl[f] ? S.wl[f].u.length + S.wl[f].d.length : 0, inside = peopleBehindDoor(f).length;
     const acts = [
-      inside ? ikon(`inside:${f}`, '👤', 'Följ någon därinne', `${inside} är inne på våningen – klicka igen för nästa`) : '',
+      inside ? ikon(`inside:${f}`, '👤', 'Följ någon därinne', sv`${inside} är inne på våningen – klicka igen för nästa`) : '',
       FIRE_FLOORS.includes(f) ? ikon(`trig:fire:${f}`, '🔥', 'Brand här', 'Det börjar brinna på den här våningen', false, S.fire ? ' disabled' : '') : '',
       LEAK_FLOORS.includes(f) ? ikon(`trig:leak:${f}`, '🚿', 'Vattenläcka här', 'Ett vattenrör spricker på den här våningen – vattnet rinner nedåt', false, S.leak ? ' disabled' : '') : '',
       ikon(`visit:${f}`, '🚶', 'Släpp in en besökare', 'En besökare kommer till våningen', false, S.fire ? ' disabled' : ''),
       f === LOBBY ? tourBtn() : '',
       f === LOBBY ? ikon('bus', '🚌', 'Turistbuss!', 'Stadsturen: en guide och fjorton turister ska se takterrassen och Sky Café. Kommer bara när de har öppet (ungefär 07:30–16)', false, S.fire || S.tour ? ' disabled' : '') : '',
     ].join('');
-    return { head: `📹 Våning ${fl(f)} · ${esc(FL[f].name)}`, body: `<div class="fl-info">${w} väntar på hiss · ${inside} inne${f === CONTROL ? ' · driftcentralen' : ''}</div><div class="row">${acts}</div>` };
+    return { head: sv`📹 Våning ${fl(f)} · ${esc(FL[f].name)}`, body: `<div class="fl-info">${w} väntar på hiss · ${inside} inne${f === CONTROL ? ' · driftcentralen' : ''}</div><div class="row">${acts}</div>` };
   }
   const p = F.p, cam = VIEW.camSel;
   return { head: `${cam ? '📹 Följer' : '🔎 Spårar'} ${esc(p.name)}`,
@@ -286,7 +287,7 @@ function viewHtml(v) {
     + `<div class="lbl">Underhåll</div>${set('maint', [['natt', 'Nattservice'], ['fel', 'Bara vid fel']])}`
     + `<div class="hint">Nattservice håller nere slitaget – utan den slits hissarna dag för dag och går oftare sönder.</div>`
     + `<div class="lbl">Language / Språk</div><div class="row">${btn('lang:en', 'English', getLang() === 'en')}${btn('lang:sv', 'Svenska', getLang() === 'sv')}</div>`
-    + `<div class="lbl">Visa</div><div class="row">${btn('tags', 'Namnbrickor (T)', S.tags)}${btn('sound', `Ljud (M) ${soundOn() ? '🔊' : '🔇'}`, soundOn())}${btn('music', 'Musik ♪', musicOn())}</div>`
+    + `<div class="lbl">Visa</div><div class="row">${btn('tags', 'Namnbrickor (T)', S.tags)}${btn('sound', sv`Ljud (M) ${soundOn() ? '🔊' : '🔇'}`, soundOn())}${btn('music', 'Musik ♪', musicOn())}</div>`
     + `<div class="hint">När ljudet är på: husmusiken följer dygnet (ragtime i rusningen, vals på förmiddagen, jazz till lunch, lounge på kvällen, speldosa på natten) med korta inslag när något händer. Följer du en hiss hörs i stället kassetten i korgen.</div>`;
 }
 /** blocken som kan bli länkar: ikon, namn och förklaring */
@@ -339,7 +340,7 @@ function render(m, F, inc) {
   for (const k of ORDER) {
     const mode = m[k];
     if (!mode) continue;
-    if (mode === 'link') { const [i, n, h] = BLOCKS[k]; links.push(ikon(`open:${k}`, i, n, `${h} – klicka för att fälla ut`)); continue; }
+    if (mode === 'link') { const [i, n, h] = BLOCKS[k]; links.push(ikon(`open:${k}`, i, n, sv`${h} – klicka för att fälla ut`)); continue; }
     let html = '', cls = `blk b-${k} m-${mode}`;
     const fold = k in TITLES && mode === 'full' && (UI.open.has(k) || k === 'trig' || k === 'strat') ? `<button class="blk-x" data-act="fold:${k}" data-hint="Fäll ihop">▁</button>` : '';
     if (focused(k)) cls += ' tour-hi';
@@ -415,8 +416,8 @@ extraActions.wide = () => toggleWide();
 extraActions.spdnext = () => (skipping() ? toggleSkip() : setSpeed(SPEEDS[(SPEEDS.indexOf(S.speed) + 1) % SPEEDS.length]));
 extraActions.skip = () => toggleSkip();
 /** ⏩ till morgonen: knappen syns bara på kvällen och natten (och medan det spolas) */
-const skipBtn = () => (skipping() ? ikon('skip', '⏩', 'Sluta spola', `Spolar natten i ${SKIP_SPEED}× – tryck för att sluta (N)`, true)
-  : canSkip() ? ikon('skip', '⏩', 'Till morgonen', `Spola fram natten i ${SKIP_SPEED}× – stannar på morgonen eller när något händer (N)`) : '');
+const skipBtn = () => (skipping() ? ikon('skip', '⏩', 'Sluta spola', sv`Spolar natten i ${SKIP_SPEED}× – tryck för att sluta (N)`, true)
+  : canSkip() ? ikon('skip', '⏩', 'Till morgonen', sv`Spola fram natten i ${SKIP_SPEED}× – stannar på morgonen eller när något händer (N)`) : '');
 const SPD_TXT = { 0.25: '¼×', 0.5: '½×', 1: '1×', 2: '2×' };
 /** fliken "Nu": dygnet, vädret, stapeln, radion och dagens siffror */
 function nowHtml() {
@@ -450,7 +451,7 @@ function barHtml(F, inc) {
     .map(([k, [i, n, h]]) => ikon(`tab:${k}`, i, n, h, UI.tab === k, k === 'events' && inc.alert ? ' data-alert="1"' : ''));
   return ikon('pause', S.paused ? '▶' : '❚❚', S.paused ? 'Spela' : 'Paus', 'Pausa eller spela', S.paused)
     + ikon('spdnext', skipping() ? '⏩' : SPD_TXT[S.speed] || '1×', 'Fart', 'Tryck för nästa fart: ¼×, ½×, 1×, 2×')
-    + (!skipping() && canSkip() ? ikon('skip', '⏩', 'Till morgonen', `Spola fram natten i ${SKIP_SPEED}× – stannar på morgonen eller när något händer`) : '')
+    + (!skipping() && canSkip() ? ikon('skip', '⏩', 'Till morgonen', sv`Spola fram natten i ${SKIP_SPEED}× – stannar på morgonen eller när något händer`) : '')
     + ikon('wide', VIEW.wide ? '🔎' : '🔍', VIEW.wide ? 'Närbild' : 'Hela bredden', VIEW.wide ? 'Visa huset större – bilden scrollar i sidled (eller dubbeltryck i bilden)' : 'Visa hela husets bredd (eller dubbeltryck i bilden)', VIEW.wide)
     + `<span class="m-sep"></span>` + tabs.join('');
 }

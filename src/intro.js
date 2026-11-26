@@ -21,6 +21,7 @@ import { setTour } from './panels.js';
 import { soundOn } from './sound.js';
 import { esc } from './util.js';
 import { getLang, tr } from './lang.js';
+import { sv } from './sv.js';
 
 const U = {
   /** guiden som kameran följer för rundvisningens skull (id, −1 = ingen) */
@@ -97,8 +98,8 @@ function paint() {
     const mob = document.body.classList.contains('mob');
     key = mob ? 'offer-mob' : 'offer';
     say = mob ? 'Ska jag visa dig runt i huset?'
-      : `Hej och välkommen till Tornet! Jag heter ${who} och sitter i receptionen. Vill du att jag visar dig runt? Huset fortsätter som vanligt under tiden – händer det något går vi och tittar.`;
-    nav = `<span class="sp"></span>${btn('nej', 'Nej tack', `${who} sitter kvar i receptionen – du kan fråga henne sedan (?)`)}${btn('ja', 'Ja tack!', `${who} ringer efter en vikarie och visar sedan runt`, 'tour-go')}`;
+      : sv`Hej och välkommen till Tornet! Jag heter ${who} och sitter i receptionen. Vill du att jag visar dig runt? Huset fortsätter som vanligt under tiden – händer det något går vi och tittar.`;
+    nav = `<span class="sp"></span>${btn('nej', 'Nej tack', sv`${who} sitter kvar i receptionen – du kan fråga henne sedan (?)`)}${btn('ja', 'Ja tack!', sv`${who} ringer efter en vikarie och visar sedan runt`, 'tour-go')}`;
   } else if (v.ph === 'order') {
     key = 'order';
     // den som sitter i receptionen svarar: guiden själv, eller den som går hem snart och lämnar över
@@ -106,7 +107,7 @@ function paint() {
     const nextP = crewPerson(next.id), here = !!nextP && nextP.state !== 'away';
     if (!desk && !here) { who = next.name; say = 'Det ordnar jag! Mitt pass har inte börjat än – jag visar dig runt så fort jag har kommit och satt mig i receptionen.'; }
     else if (!desk || desk.crewId === next.id) { who = next.name; say = 'Det ordnar jag! Jag börjar så fort jag sitter i receptionen.'; }
-    else { who = desk.name; say = `Gärna! Men mitt pass slutar snart – ${next.name} visar dig runt när hon har börjat.`; }
+    else { who = desk.name; say = sv`Gärna! Men mitt pass slutar snart – ${next.name} visar dig runt när hon har börjat.`; }
     nav = `<span class="sp"></span>${btn('end', 'Avbeställ', 'Ingen rundvisning den här gången')}`;
   } else if (v.ph === 'done') {
     if (U.key) { U.key = ''; setTour(null); }
@@ -114,11 +115,11 @@ function paint() {
   } else {
     const on = v.ph === 'go' || v.ph === 'at', st = STOPS[v.si];
     key = `${v.ph}|${v.si}|${v.lineN}|${v.detour ? v.detour.k : ''}|${U.speaking}`;
-    if (on) head = `🛎️ Rundvisning · ${v.detour ? v.detour.title : st.title}${v.ph === 'go' ? ' <span class="dim">· på väg</span>' : ''}`;
+    if (on) head = sv`🛎️ Rundvisning · ${v.detour ? v.detour.title : st.title}${v.ph === 'go' ? ' <span class="dim">· på väg</span>' : ''}`;
     say = v.line || '…';
     dots = `<div class="tour-dots">${STOPS.map((s, j) => `<i class="${v.seenStops.includes(s.k) ? 'was' : j === v.si && !v.detour ? 'now' : ''}"></i>`).join('')}</div>`;
-    nav = btn('follow', '📹', `Följ ${who} med kameran`) + btn('again', '↻', 'Säg det igen', '', !v.line)
-      + `<span class="sp"></span>${on ? btn('next', 'Gå vidare ▶', `${who} slutar prata och går till nästa stopp`, 'tour-next', v.ph !== 'at' || !!v.detour) : ''}`;
+    nav = btn('follow', '📹', sv`Följ ${who} med kameran`) + btn('again', '↻', 'Säg det igen', '', !v.line)
+      + `<span class="sp"></span>${on ? btn('next', 'Gå vidare ▶', sv`${who} slutar prata och går till nästa stopp`, 'tour-next', v.ph !== 'at' || !!v.detour) : ''}`;
     if (v.ph === 'at') { focus = v.focus; spot = v.spot; }
   }
   if (key === U.key) return;

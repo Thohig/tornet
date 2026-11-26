@@ -15,6 +15,7 @@
 // är över: `incidentOver()` (state.js) ger en sammanfattningsruta och folk pratar om den i hissen en stund
 // (`incidentTalk` i cast.js)
 import { stream } from './rng.js';
+import { sv } from './sv.js';
 const { pick, rand, rng } = stream('incidenter');
 // dygnets tidtabell har en egen ström: slumpens nivå (av/lugn/normal/kaos) ändrar inte hur incidenterna själva förlöper
 const T = stream('tidtabell');
@@ -56,7 +57,7 @@ export function startFire(f = pick(OFFICE_FLOORS.slice(1)), auto = true) {
   if (S.fire) return;
   S.fire = { floor: f, t0: S.t, mode: 'none', brigadeAt: S.t + rand(22, 30), brigade: false, outAt: null, attackBy: 0,
     smoked: 0, evac: 0, stairs0: S.stats.stairs, assembled: 0 };
-  log(`🔥 BRAND på våning ${fl(f)}! Larmet går – våning ${fl(f - 1)} och uppåt utryms`, 'alert');
+  log(sv`🔥 BRAND på våning ${fl(f)}! Larmet går – våning ${fl(f - 1)} och uppåt utryms`, 'alert');
   for (const p of S.people) {
     if (!inFireZone(p.floor)) continue;
     const queued = p.state === 'wait' || p.state === 'toQueue', out = evacFloor(p);
@@ -66,7 +67,7 @@ export function startFire(f = pick(OFFICE_FLOORS.slice(1)), auto = true) {
       if (p.goal !== LOBBY) { const x = p.x; p.onBreak = false; setTrip(p, LOBBY, 'BRANDLARM – går ner till entrén', false); p.x = x; }
     } else if (queued && !(p.goal === out && p.leaving)) {
       p.evac = true; p.evacFrom = p.goal; const x = p.x; setTrip(p, out, 'BRANDLARM – utrymning!', true); p.x = x;
-      pev(p, `Brandlarmet går! Ändrar mål till ${fl(out)}`);
+      pev(p, sv`Brandlarmet går! Ändrar mål till ${fl(out)}`);
       // står redan vid utgången (t.ex. VIP-gästerna vid helikoptern på taket): gå ut direkt i stället för att köa
       if (p.floor === out) arriveOnFloor(p);
     } else if (['wait', 'toQueue', 'stairs', 'instairs'].includes(p.state) && p.goal === out && p.leaving) p.evac = true; // redan på väg ut
@@ -89,7 +90,7 @@ export function setFireMode(m) {
     log('🚒 BRANDÅTERKALLNING: alla hissar kör direkt till sin hemvåning (oftast E) och stängs av', 'alert');
   } else if (m === 'zone') {
     const zmax = F.floor - 2; // högsta våningen hissarna får köra till
-    for (const p of S.people) if (p.state === 'wait' && (!allowedFor(p, p.floor) || !allowedFor(p, p.dest))) toStairs(p, `Hissarna kör bara upp till ${fl(zmax)} – tar trapporna`);
+    for (const p of S.people) if (p.state === 'wait' && (!allowedFor(p, p.floor) || !allowedFor(p, p.dest))) toStairs(p, sv`Hissarna kör bara upp till ${fl(zmax)} – tar trapporna`);
     for (const e of S.elevators) {
       const safe = safeFloor(e), drop = safe ?? e.minF;
       // hissar som inte når någon våning utanför zonen kör ner till sin lägsta våning och spärras
@@ -100,9 +101,9 @@ export function setFireMode(m) {
         // hinner hissen inte bromsa till den säkra våningen läggs den om vid nästa stopp (zoneReroute)
         if (!canBrakeTo(e, drop)) continue;
         p.viaStairs = true; p.dest = deckFloor(e, p, drop); e.carCalls.add(drop);
-        pev(p, `Brandzonen spärrad – hiss ${e.name} släpper av mig på ${fl(drop)}, sen trappan`);
+        pev(p, sv`Brandzonen spärrad – hiss ${e.name} släpper av mig på ${fl(drop)}, sen trappan`);
       }
-      if (e.zoneLock) log(`🚧 ${e.name} når ingen våning utanför brandzonen – kör till ${fl(drop)} och stängs av`, 'alert', e.color);
+      if (e.zoneLock) log(sv`🚧 ${e.name} når ingen våning utanför brandzonen – kör till ${fl(drop)} och stängs av`, 'alert', e.color);
       if (e.parkTarget !== null && !allowedPos(e, e.parkTarget)) e.parkTarget = drop;
     }
     // den som väntar på en dubbeldäckare som inte längre får stanna där (eller vid målet) får en ny hiss
@@ -110,7 +111,7 @@ export function setFireMode(m) {
       const e = p.state === 'wait' && p.assigned !== null ? S.elevators[p.assigned] : null;
       if (e && (!allowedPos(e, posOf(e, p.floor)) || !allowedDest(e, p))) p.assigned = null;
     }
-    log(`🚧 BRANDZON SPÄRRAD: hissarna kör bara upp till ${fl(zmax)}`, 'alert');
+    log(sv`🚧 BRANDZON SPÄRRAD: hissarna kör bara upp till ${fl(zmax)}`, 'alert');
   } else {
     log('Brandläge: normal drift – hissarna kör som vanligt (genom röken!)', 'alert');
   }
@@ -128,7 +129,7 @@ export function fireTick() {
     const at = S.people.find(p => p.ff && !p.dead && p.state === 'office' && p.floor === F.floor);
     if (at || S.t >= F.attackBy) {
       F.outAt = S.t + 16;
-      log(at ? `🚒 Brandmännen är framme på ${fl(F.floor)} och släcker` : '🚒 Brandkåren släcker utifrån med stegbilen', 'alert');
+      log(at ? sv`🚒 Brandmännen är framme på ${fl(F.floor)} och släcker` : '🚒 Brandkåren släcker utifrån med stegbilen', 'alert');
     }
   }
   if (F.outAt !== null && S.t >= F.outAt) { endFire(); return; }
@@ -138,21 +139,21 @@ export function fireTick() {
     for (const p of e.passengers) {
       if (p.smoked) continue;
       p.smoked = true; F.smoked++; S.stats.smoked++; p.mood = 2;
-      pev(p, `Rök i hisschaktet! *host host* (hiss ${e.name} vid våning ${fl(Math.round(e.pos))})`);
-      log(`💨 ${pn(p)} fick rök i sig i hiss ${e.name}`, 'alert', e.color, p.id);
+      pev(p, sv`Rök i hisschaktet! *host host* (hiss ${e.name} vid våning ${fl(Math.round(e.pos))})`);
+      log(sv`💨 ${pn(p)} fick rök i sig i hiss ${e.name}`, 'alert', e.color, p.id);
     }
   }
   for (const p of S.people) {
     if (p.state === 'wait' && p.floor === F.floor && S.t - p.waitStart > 4 && !p.smoked) {
       p.smoked = true; F.smoked++; S.stats.smoked++;
       pev(p, 'Står och väntar på hissen mitt i röken! *host*');
-      log(`💨 ${pn(p)} står i röken på ${fl(F.floor)} och väntar på hiss`, 'alert', null, p.id);
+      log(sv`💨 ${pn(p)} står i röken på ${fl(F.floor)} och väntar på hiss`, 'alert', null, p.id);
     }
   }
 }
 export function endFire() {
   const F = S.fire;
-  log(`✅ Branden på ${fl(F.floor)} är släckt · ${F.evac} utrymda · ${F.smoked} rökexponerade`, 'alert');
+  log(sv`✅ Branden på ${fl(F.floor)} är släckt · ${F.evac} utrymda · ${F.smoked} rökexponerade`, 'alert');
   S.fire = null;
   for (const e of S.elevators) {
     e.zoneLock = false;
@@ -172,8 +173,8 @@ export function endFire() {
   }
   const back = S.people.filter(p => p.state === 'assembly').length, stairs = S.stats.stairs - F.stairs0;
   incidentOver('fire', '✅ Branden är släckt',
-    `Branden på våning ${fl(F.floor)} varade ${Math.round(S.t - F.t0)} s. ${F.evac} utrymdes${back ? ` – ${back} väntade på återsamlingsplatsen och går in igen` : ''}`
-    + `${stairs ? `, ${stairs} tog trapporna` : ''}. ${F.smoked ? `${F.smoked} fick rök i sig.` : 'Ingen fick rök i sig.'}`, { floor: F.floor });
+    sv`Branden på våning ${fl(F.floor)} varade ${Math.round(S.t - F.t0)} s. ${F.evac} utrymdes${back ? sv` – ${back} väntade på återsamlingsplatsen och går in igen` : ''}`
+    + `${stairs ? sv`, ${stairs} tog trapporna` : ''}. ${F.smoked ? sv`${F.smoked} fick rök i sig.` : 'Ingen fick rök i sig.'}`, { floor: F.floor });
 }
 // --- Brandkåren ---
 /** så länge brandmännen har på sig att nå branden innan kåren släcker utifrån (s) */
@@ -191,7 +192,7 @@ function brigadeArrives(F) {
     V.indep = true; V.zoneLock = false; V.parkTarget = null; V.sleep = false;
     releaseCalls(V, 'blir brandhiss åt brandkåren');
     car = V;
-    log(`🚒 ${V.name} blir brandhiss – brandmännen åker upp till ${fl(tf)}`, 'alert', V.color);
+    log(sv`🚒 ${V.name} blir brandhiss – brandmännen åker upp till ${fl(tf)}`, 'alert', V.color);
   }
   S.brigade = { t0: S.t, car: car ? car.id : null, floor: F.floor };
   for (let i = 0; i < 3; i++) spawnFirefighter(tf, i, !car);
@@ -201,11 +202,11 @@ function spawnFirefighter(tf, i, walk) {
   p.role = 'brandman'; p.ff = true; p.fit = 1; p.task = 'Släcker branden';
   // mörk utryckningsdräkt och gul hjälm
   p.look.shirt = '#2b2f45'; p.look.pants = '#2b2f45'; p.look.tie = false; p.look.acc = 0; p.look.hair = 1; p.look.hairC = '#ffd23f';
-  setTrip(p, tf, walk ? `Brandkåren: springer upp till ${fl(tf)}` : `Brandkåren: upp till ${fl(tf)} med brandhissen`);
+  setTrip(p, tf, walk ? sv`Brandkåren: springer upp till ${fl(tf)}` : sv`Brandkåren: upp till ${fl(tf)} med brandhissen`);
   S.people.push(p);
   if (walk && p.state === 'toQueue') toStairs(p, 'Brandkåren: springer upp i trapphuset');
-  pev(p, `Springer in i entrén i rökdykarutrustning · ${p.why}`);
-  log(`🚒 ${pn(p)} (brandman) går in`, 'person', null, p.id);
+  pev(p, sv`Springer in i entrén i rökdykarutrustning · ${p.why}`);
+  log(sv`🚒 ${pn(p)} (brandman) går in`, 'person', null, p.id);
 }
 /** brandmannens nästa beslut (anropas från personernas rollogik) @param {Person} p */
 export function ffNext(p) {
@@ -247,8 +248,8 @@ export function startRescue(e, how) {
   for (const f of e.stops) if (f <= e.pos + 1e-6 && f > below) below = f;
   setMode(e, 'rescue'); e.rs = 'move'; e.rescueTarget = below; e.v = 0;
   S.outage.busy = e.id; S.outage.rescued++;
-  log(`🔋 ${how === 'auto' ? 'Auto-räddning' : 'Du'} nödsänker hiss ${e.name} till ${fl(e.rescueTarget)} (${e.passengers.length} instängda${e.passengers.some(p => p.medic) ? ', ambulanspersonalen först' : ''})`, 'alert', e.color);
-  for (const p of e.passengers) pev(p, `Hiss ${e.name} nödsänks på reservkraft – snart ute!`);
+  log(sv`🔋 ${how === 'auto' ? 'Auto-räddning' : 'Du'} nödsänker hiss ${e.name} till ${fl(e.rescueTarget)} (${e.passengers.length} instängda${e.passengers.some(p => p.medic) ? ', ambulanspersonalen först' : ''})`, 'alert', e.color);
+  for (const p of e.passengers) pev(p, sv`Hiss ${e.name} nödsänks på reservkraft – snart ute!`);
 }
 export function outageTick(dt) {
   const O = S.outage;
@@ -259,7 +260,7 @@ export function outageTick(dt) {
     for (const p of e.passengers) {
       p.trapT = (p.trapT || 0) + dt; S.stats.trappedSec += dt;
       if (p.trapT > O.maxTrap) O.maxTrap = p.trapT;
-      if (!p.trapNoted) { if (!O.trapIds.includes(p.id)) O.trapIds.push(p.id); p.trapNoted = true; pev(p, `Hiss ${e.name} tvärstannade – vi sitter fast${Math.abs(e.pos - Math.round(e.pos)) > 0.05 ? ' mellan våningarna' : ''}!`); }
+      if (!p.trapNoted) { if (!O.trapIds.includes(p.id)) O.trapIds.push(p.id); p.trapNoted = true; pev(p, sv`Hiss ${e.name} tvärstannade – vi sitter fast${Math.abs(e.pos - Math.round(e.pos)) > 0.05 ? ' mellan våningarna' : ''}!`); }
       p.mood = p.trapT > 25 ? 2 : p.trapT > 8 ? 1 : 0;
     }
   }
@@ -288,19 +289,19 @@ export function endOutage() {
   for (const e of S.elevators) if (e.mode !== 'snapped') for (const p of e.passengers) { if (p.trapNoted) pev(p, 'Strömmen är tillbaka – hissen rullar igen!'); p.trapT = 0; p.trapNoted = false; }
   // hissarna startar om en i taget, nerifrån och upp (inte alla motorer på en gång)
   S.elevators.forEach((e, i) => { e.restartAt = S.t + 0.8 + i * 0.7; });
-  log(`💡 Strömmen är tillbaka! (totalt ${trapped} instängd-sekunder idag) – hissarna startar om en i taget`, 'alert');
+  log(sv`💡 Strömmen är tillbaka! (totalt ${trapped} instängd-sekunder idag) – hissarna startar om en i taget`, 'alert');
   // startströmmen: ibland blir en motor het när allt går igång samtidigt (en kedja av incidenter)
   if (rng() < 0.4) {
     const c = S.elevators.filter(e => e.mode === 'normal' && !e.hot && !e.hold).sort((a, b) => b.passengers.length - a.passengers.length || b.heat - a.heat)[0];
-    if (c) { c.heat = Math.max(c.heat, 1.02); log(`🌡️ Startströmmen värmer motorn i ${c.name} – överhettningsskyddet löser ut`, 'alert', c.color); }
+    if (c) { c.heat = Math.max(c.heat, 1.02); log(sv`🌡️ Startströmmen värmer motorn i ${c.name} – överhettningsskyddet löser ut`, 'alert', c.color); }
   }
   if (O) {
     const n = O.trapIds.length, st = S.stats.stairs - O.stairs0;
     incidentOver('power', '💡 Strömmen är tillbaka',
       `Avbrottet${O.cause === 'blixt' ? ' (blixtnedslaget)' : ''} varade ${Math.round(S.t - O.t0)} s. `
-      + (n ? `${n} satt fast i hissarna, längst ${Math.round(O.maxTrap)} s.` : 'Ingen satt fast i hissarna.')
-      + (O.rescued > 1 ? ` Reservkraften nödsänkte ${O.rescued} hissar.` : O.rescued ? ' Reservkraften nödsänkte en hiss.' : '')
-      + (st ? ` ${st} tog trapporna.` : '') + ' Hissarna startar om en i taget.');
+      + (n ? sv`${n} satt fast i hissarna, längst ${Math.round(O.maxTrap)} s.` : 'Ingen satt fast i hissarna.')
+      + (O.rescued > 1 ? sv` Reservkraften nödsänkte ${O.rescued} hissar.` : O.rescued ? ' Reservkraften nödsänkte en hiss.' : '')
+      + (st ? sv` ${st} tog trapporna.` : '') + ' Hissarna startar om en i taget.');
   }
 }
 // ---------- Dygnets incidenter: tidtabell och förvarningar ----------
@@ -343,7 +344,7 @@ export function setIncLevel(v) {
   planIncidents(hour());
   if (v !== 'av') S.warn = W;
   else if (W && W.car !== undefined) S.elevators[W.car].creak = false;
-  log(`🎲 Slumpen: ${INC_LEVEL_NAMES[v]}${v === 'av' ? ' – inga fler incidenter av sig själva i dag' : S.incPlan.length === 1 ? ' – en incident kvar i dagens tidtabell' : ` – ${S.incPlan.length} incidenter kvar i dagens tidtabell`}`, 'sys');
+  log(sv`🎲 Slumpen: ${INC_LEVEL_NAMES[v]}${v === 'av' ? ' – inga fler incidenter av sig själva i dag' : S.incPlan.length === 1 ? ' – en incident kvar i dagens tidtabell' : sv` – ${S.incPlan.length} incidenter kvar i dagens tidtabell`}`, 'sys');
 }
 /** linorna i den mest slitna hissen kan gå av (bara om de är rejält slitna) */
 export const cableRisk = () => {
@@ -403,7 +404,7 @@ export function startGenerator() {
 }
 export function toggleAutoRescue(on = !(S.outage && S.outage.auto)) {
   if (!S.outage) return;
-  S.outage.auto = on; log(`Auto-räddning ${on ? 'PÅ – ambulansen först, sedan fullaste hissen' : 'AV'}`, 'alert');
+  S.outage.auto = on; log(sv`Auto-räddning ${on ? 'PÅ – ambulansen först, sedan fullaste hissen' : 'AV'}`, 'alert');
 }
 /** @param {Elevator} e */
 export function toggleOff(e, off = !e.off) {

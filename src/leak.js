@@ -18,6 +18,7 @@
 // blöta golv. Läcker det i labbet är vattnet grönt. Grafiken i pixhall.js (`wetHall`, `drawLeakPx`). Egen slumpström
 // `vattenläcka`
 import { stream } from './rng.js';
+import { sv } from './sv.js';
 const { pick, rng } = stream('vattenläcka');
 import { fl } from './util.js';
 import { BOILER_STAND, CAFE, DOCK, FL, HOME_FLOORS, LOBBY, OFFICE_FLOORS, floorWith } from './config.js';
@@ -73,7 +74,7 @@ export function startLeak(f = null) {
   const jan = callJanitor('leak', DOCK, 'Springer ner till pannrummet – stänger huvudkranen', 'Vrider om huvudkranen i pannrummet', BOILER_STAND);
   S.leak.jan = jan.id;
   for (const p of S.people) if (p.floor === src && p.state === 'office' && !p.role) pev(p, S.leak.green ? 'Det forsar GRÖNT vatten ur taket!' : 'Ett rör har spruckit – det forsar ur taket!');
-  log(`🚿 Ett vattenrör har spruckit på ${fl(src)}${S.leak.green ? ' (och den gröna vätskan i labbet följer med)' : ''} – vattnet rinner nedåt`, 'alert');
+  log(sv`🚿 Ett vattenrör har spruckit på ${fl(src)}${S.leak.green ? ' (och den gröna vätskan i labbet följer med)' : ''} – vattnet rinner nedåt`, 'alert');
   S.fx.push({ x: 380, y: 0, text: 'PLASK!', color: '#3f7cff', life: 1.6 });
   incidentStarted(src);
   noteCars();
@@ -111,7 +112,7 @@ export function leakTick(dt) {
     const low = Math.min(...L.wet);
     if (low > 0) {
       L.wet.push(low - 1);
-      log(`🚿 Vattnet har nått ${fl(low - 1)}`, 'alert');
+      log(sv`🚿 Vattnet har nått ${fl(low - 1)}`, 'alert');
       noteCars();
     }
     L.nextAt = S.t + SPREAD_S;
@@ -134,7 +135,7 @@ export function leakTick(dt) {
       // risken växer med de blöta våningarna i hissens eget schakt (vattnet längre upp rinner inte här)
       if (rng() < SHORT_K * dt * n) {
         L.shorts.push(e.id);
-        log(`⚡ Vattnet når styrningen i ${e.name} – kortslutning!`, 'alert', e.color);
+        log(sv`⚡ Vattnet når styrningen i ${e.name} – kortslutning!`, 'alert', e.color);
         triggerFault(e);
       }
     }
@@ -156,7 +157,7 @@ function shutValve(L, jan) {
   dutyDone(jan);
   lockCars();
   pev(jan, 'Huvudkranen är stängd – nu slutar det rinna');
-  log(`🔧 ${pn(jan)} har stängt huvudkranen i pannrummet – vattnet slutar rinna (${L.wet.length} ${L.wet.length === 1 ? 'våning' : 'våningar'} blöta)`, 'alert', null, jan.id);
+  log(sv`🔧 ${pn(jan)} har stängt huvudkranen i pannrummet – vattnet slutar rinna (${L.wet.length} ${L.wet.length === 1 ? 'våning' : 'våningar'} blöta)`, 'alert', null, jan.id);
   // hissteknikern går igenom de blöta schakten (beställd service – en i taget)
   for (const id of L.cars) if (!L.shorts.includes(id)) orderService(S.elevators[id]);
 }
@@ -166,11 +167,11 @@ function finish(L) {
   lockCars();
   const sec = Math.round(L.shutAt - L.t0), n = L.wet.length;
   const how = L.mode === 'stop' ? 'Hissarna i de blöta schakten stod still tills kranen var stängd.'
-    : L.shorts.length ? `Hissarna körde vidare – ${L.shorts.map(id => S.elevators[id].name).join(' och ')} kortslöts.` : 'Hissarna körde vidare utan att något kortslöts.';
+    : L.shorts.length ? sv`Hissarna körde vidare – ${L.shorts.map(id => S.elevators[id].name).join(' och ')} kortslöts.` : 'Hissarna körde vidare utan att något kortslöts.';
   log(`✅ Vattenläckan är åtgärdad – golven har torkat`, 'alert');
   incidentOver('leak', '✅ Vattenläckan är åtgärdad',
-    `Röret sprack på ${fl(L.src)}${L.green ? ' (i labbet – vattnet var grönt)' : ''}. Vattnet hann till ${n} ${n === 1 ? 'våning' : 'våningar'} innan ${L.who || 'vaktmästaren'} stängde huvudkranen efter ${sec} s. ${how}`
-    + (L.slips ? ` ${L.slips} halkade på de blöta golven.` : '') + (L.cars.length ? ' Teknikern går igenom de blöta schakten.' : ''), { floor: L.src });
+    sv`Röret sprack på ${fl(L.src)}${L.green ? ' (i labbet – vattnet var grönt)' : ''}. Vattnet hann till ${n} ${n === 1 ? 'våning' : 'våningar'} innan ${L.who || 'vaktmästaren'} stängde huvudkranen efter ${sec} s. ${how}`
+    + (L.slips ? sv` ${L.slips} halkade på de blöta golven.` : '') + (L.cars.length ? ' Teknikern går igenom de blöta schakten.' : ''), { floor: L.src });
   S.leak = null;
 }
 /** dygnet börjar om (resetDay) */

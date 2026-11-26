@@ -3,6 +3,7 @@
 // Här finns också felknappar: folk som trycker på båda knapparna, åt fel håll, på fel våning, och
 // barn som trycker på alla knappar. Felen slumpas med simuleringens rng() (deterministiskt).
 import { stream } from './rng.js';
+import { sv } from './sv.js';
 const { rand, rng } = stream('knappar');
 import { ARR, fl } from './util.js';
 import { CAR_H, EL, floorY, shaftCX } from './config.js';
@@ -62,24 +63,24 @@ export function pressHallButton(p) {
   if (!allowed(p.floor) || !allowed(p.dest)) return; // brand: sköts i buttonWaitTick
   // står en hiss i gruppen redan öppen här åt rätt håll kliver man bara in – ingen knapp behövs
   if (S.elevators.some(e => e.group === g && operational(e) && e.state === 'doors' && e.floor === posOf(e, p.floor) && e.doorPhase !== 'closing' && (e.dir === p.dir || e.dir === 0))) {
-    pev(p, `Hiss åt rätt håll står redan öppen vid ${name} – kliver in`);
+    pev(p, sv`Hiss åt rätt håll står redan öppen vid ${name} – kliver in`);
     return;
   }
   if (rng() < mistakeRate(0.03) && hasButton(g, p.floor, -p.dir)) {
     press(g, p.floor, -p.dir);
     p.fixAt = S.t + rand(2, 6);
     S.stats.wrongPress++;
-    pev(p, `Trycker ${ARR(-p.dir)} vid ${name}… oj, fel knapp!`);
-    log(`🙈 ${pn(p)} tryckte ${ARR(-p.dir)} i stället för ${ARR(p.dir)} på ${fl(p.floor)}`, 'button', null, p.id);
+    pev(p, sv`Trycker ${ARR(-p.dir)} vid ${name}… oj, fel knapp!`);
+    log(sv`🙈 ${pn(p)} tryckte ${ARR(-p.dir)} i stället för ${ARR(p.dir)} på ${fl(p.floor)}`, 'button', null, p.id);
     return;
   }
   const fresh = press(g, p.floor, p.dir);
-  pev(p, fresh ? `Trycker på ${ARR(p.dir)} vid ${name}` : `Knappen ${ARR(p.dir)} vid ${name} lyser redan – väntar`);
-  if (fresh) log(`${ARR(p.dir)} ${pn(p)} trycker på ${fl(p.floor)} (${name})`, 'button', null, p.id);
+  pev(p, fresh ? sv`Trycker på ${ARR(p.dir)} vid ${name}` : sv`Knappen ${ARR(p.dir)} vid ${name} lyser redan – väntar`);
+  if (fresh) log(sv`${ARR(p.dir)} ${pn(p)} trycker på ${fl(p.floor)} (${name})`, 'button', null, p.id);
   if (rng() < mistakeRate(0.06) && hasButton(g, p.floor, -p.dir) && press(g, p.floor, -p.dir)) {
     S.stats.wrongPress++;
     pev(p, 'Trycker på båda knapparna – för säkerhets skull');
-    log(`🙈 ${pn(p)} trycker på båda knapparna på ${fl(p.floor)}`, 'button', null, p.id);
+    log(sv`🙈 ${pn(p)} trycker på båda knapparna på ${fl(p.floor)}`, 'button', null, p.id);
   }
 }
 /** Varje steg för den som väntar i KNAPPAR-läget (ersätter tilldelningen i de andra lägena). @param {Person} p */
@@ -93,7 +94,7 @@ export function buttonWaitTick(p, dt) {
   if (!S.elevators.some(e => e.group === p.bank && !outLong(e))) {
     const alt = banksFor(p).filter(g => g !== p.bank);
     if (alt.length && S.elevators.some(e => e.group === alt[0] && !outLong(e))) {
-      pev(p, `${GROUP_NAMES[p.bank] || p.bank} är ur funktion – går till ${GROUP_NAMES[alt[0]] || alt[0]} i stället`);
+      pev(p, sv`${GROUP_NAMES[p.bank] || p.bank} är ur funktion – går till ${GROUP_NAMES[alt[0]] || alt[0]} i stället`);
       pressHallButton(p);
       return;
     }
@@ -101,21 +102,21 @@ export function buttonWaitTick(p, dt) {
   if (p.fixAt && S.t >= p.fixAt) {
     p.fixAt = 0;
     press(p.bank, p.floor, p.dir);
-    pev(p, `Trycker på rätt knapp: ${ARR(p.dir)}`);
+    pev(p, sv`Trycker på rätt knapp: ${ARR(p.dir)}`);
   }
   const call = S.calls[callKey(p.bank, p.floor, p.dir)];
   if (!call && !p.fixAt) {
     // anropet besvarades men jag kom inte med (full hiss, fel håll) – tryck igen när hissen har gått
     // (en trasig hiss som står med öppna dörrar räknas inte)
     const here = S.elevators.some(e => e.group === p.bank && operational(e) && e.state === 'doors' && e.floor === posOf(e, p.floor));
-    if (!here) { press(p.bank, p.floor, p.dir); pev(p, `Trycker på ${ARR(p.dir)} igen`); }
+    if (!here) { press(p.bank, p.floor, p.dir); pev(p, sv`Trycker på ${ARR(p.dir)} igen`); }
   }
   // bara för bilden och spårlappen – styrsystemet läser aldrig personerna
   const c = S.calls[callKey(p.bank, p.floor, p.dir)];
   p.assigned = c ? c.car : null;
   // otålig: trycker om och om igen (det hjälper inte)
   if (p.waited > 25 && rng() < mistakeRate(0.06) * dt) {
-    pev(p, `Trycker på ${ARR(p.dir)} igen… och igen… (det hjälper inte)`);
+    pev(p, sv`Trycker på ${ARR(p.dir)} igen… och igen… (det hjälper inte)`);
     S.fx.push({ x: p.x, y: floorY(p.floor) - 70, text: 'TRYCK!', color: '#ffe14d', life: 0.9, size: 14 });
   }
 }
@@ -130,7 +131,7 @@ export function carButtonMistakes(p, e) {
     for (const f of all) e.carCalls.add(f);
     S.stats.kidPresses++;
     pev(p, 'Trycker på ALLA knappar! Hihi!');
-    log(`🧒 ${pn(p)} trycker på alla knappar i ${e.name}`, 'button', e.color, p.id);
+    log(sv`🧒 ${pn(p)} trycker på alla knappar i ${e.name}`, 'button', e.color, p.id);
     S.fx.push({ x: shaftCX(e.id), y: floorY(e.pos) - CAR_H - 24, text: 'PIP PIP PIP!', color: '#ffe14d', life: 1.4, size: 16 });
     for (const q of e.passengers) if (q !== p && !q.child) q.mood = Math.max(q.mood, 1);
   } else if (rng() < mistakeRate(0.04)) {
@@ -139,8 +140,8 @@ export function carButtonMistakes(p, e) {
       const f = near[0];
       e.carCalls.add(f);
       S.stats.wrongPress++;
-      pev(p, `Kom åt ${fl(f)} också – oj`);
-      log(`🙈 ${pn(p)} kom åt fel knapp i ${e.name} (${fl(f)})`, 'button', e.color, p.id);
+      pev(p, sv`Kom åt ${fl(f)} också – oj`);
+      log(sv`🙈 ${pn(p)} kom åt fel knapp i ${e.name} (${fl(f)})`, 'button', e.color, p.id);
     }
   }
   antiNuisance(e);
@@ -156,7 +157,7 @@ export function antiNuisance(e) {
   e.carCalls.clear();
   for (const q of e.passengers) e.carCalls.add(posOf(e, q.dest));
   S.stats.nuisance++;
-  log(`🧹 ${e.name}: ${n} knappar men bara ${e.passengers.length} ombord – rensar och låter alla trycka igen`, 'button', e.color);
+  log(sv`🧹 ${e.name}: ${n} knappar men bara ${e.passengers.length} ombord – rensar och låter alla trycka igen`, 'button', e.color);
 }
 
 // ---------- Styrsystemet: fördelar hallanropen ----------
@@ -177,8 +178,8 @@ export function assignCalls(reopt = false) {
     if (cur && cars.includes(cur)) {
       const cc = callCost(cur, c);
       if (!(bc < cc * 0.6 && cc - bc > 6)) continue;
-      log(`↻ Anropet ${ARR(c.d)} på ${fl(c.f)} flyttas ${cur.name}→${best.name}`, 'reopt', best.color);
-    } else log(`${best.name} tar anropet ${ARR(c.d)} på ${fl(c.f)} (≈${Math.round(bc)}s)`, 'assign', best.color);
+      log(sv`↻ Anropet ${ARR(c.d)} på ${fl(c.f)} flyttas ${cur.name}→${best.name}`, 'reopt', best.color);
+    } else log(sv`${best.name} tar anropet ${ARR(c.d)} på ${fl(c.f)} (≈${Math.round(bc)}s)`, 'assign', best.color);
     c.car = best.id; best.parkTarget = null; changed = true;
   }
   return changed;

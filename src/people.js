@@ -1,5 +1,6 @@
 // Människor: utseende, resor, beslut, trapphus och platser.
 import { stream } from './rng.js';
+import { sv } from './sv.js';
 const { pick, rand, rng } = stream('folk');
 // vem en ny person är (namn, utseende, vikt, tålamod …) har en egen ström, skild från vad folk gör
 // – en ström för dem som kommer av sig själva (anställda och besökare: samma personer oavsett styrlogik) och en för
@@ -293,11 +294,11 @@ export function spawnEmployee(trainX = null) {
   if (p.leaveAt >= 19) p.overtime = true;
   p.lunchAt = G.rng() < 0.6 ? G.rand(11.2, 12.9) : 99;
   p.lunched = false;
-  setTrip(p, p.home, `Till jobbet på ${FL[p.home].short}`);
+  setTrip(p, p.home, sv`Till jobbet på ${FL[p.home].short}`);
   if (!byTrain && G.rng() < 0.35) arriveByCar(p); // kör till jobbet om det finns plats i garaget
   S.people.push(p);
   pev(p, `${byTrain ? 'Kliver av tunnelbanan' : 'Kliver in i entrén'} · ${p.why} (${fl(p.home)})`);
-  log(`${pn(p)} anländer${byTrain ? ' med tunnelbanan' : ''} · ska till ${fl(p.home)}`, 'person', null, p.id);
+  log(sv`${pn(p)} anländer${byTrain ? ' med tunnelbanan' : ''} · ska till ${fl(p.home)}`, 'person', null, p.id);
   return p;
 }
 export const openFloors = (h = hour()) => OFFICE_FLOORS.concat(CAFE).filter(f => floorOpen(f, h) && floorOpen(f, h + 1.2));
@@ -318,8 +319,8 @@ export function spawnVisitor(floor = 0, x = -30, dest = null, why = null) {
   const p = makePerson('vis', floor, x, G);
   setTrip(p, dest, why || (dest === LOBBY ? 'Ska ut ur huset' : VISIT_WHY[dest]));
   S.people.push(p);
-  pev(p, `${floor === LOBBY ? 'Kliver in i entrén' : `Dyker upp på våning ${fl(floor)}`} · ${p.why} (${fl(dest)})`);
-  log(`${pn(p)} dyker upp på ${fl(floor)} · ska till ${fl(dest)}`, 'person', null, p.id);
+  pev(p, `${floor === LOBBY ? 'Kliver in i entrén' : sv`Dyker upp på våning ${fl(floor)}`} · ${p.why} (${fl(dest)})`);
+  log(sv`${pn(p)} dyker upp på ${fl(floor)} · ska till ${fl(dest)}`, 'person', null, p.id);
   return p;
 }
 
@@ -347,13 +348,13 @@ export function updatePerson(p, dt) {
       p.mood = p.waited > 55 ? 2 : p.waited > 28 ? 1 : 0;
       if (p.mood === 2 && !p.angryNoted) { p.angryNoted = true; pev(p, 'Börjar bli riktigt sur… #@%!'); }
       // ambulanspersonalen väntar inte ut ett strömavbrott: de bär båren i trapporna direkt
-      if ((p.medic || p.ff) && !S.power) { toStairs(p, `Strömavbrott – bär ${p.cargo ? p.cargo.name : 'utrustningen'} i trapporna`); break; }
+      if ((p.medic || p.ff) && !S.power) { toStairs(p, sv`Strömavbrott – bär ${p.cargo ? p.cargo.name : 'utrustningen'} i trapporna`); break; }
       // hissteknikern kan inte vänta på hissen hen ska laga: når bara den trasiga hissen jobbet (t.ex. panoramahissen
       // som gick sönder uppe vid takterrassen) tar hen trappan
-      if (p.role === 'hisstekniker' && p.goal !== undefined && !workingRoute(p)) { toStairs(p, `Ingen hiss som går når ${fl(p.goal)} – tar trappan till jobbet`); break; }
+      if (p.role === 'hisstekniker' && p.goal !== undefined && !workingRoute(p)) { toStairs(p, sv`Ingen hiss som går når ${fl(p.goal)} – tar trappan till jobbet`); break; }
       // tung last (möbler, tunga paket) bärs inte i trapporna: man väntar ut strömavbrottet vid hissen
       if (!S.power && S.outage && p.cargo && p.cargo.kg >= 15) {
-        if (p.darkNoted !== S.outage.t0) { p.darkNoted = S.outage.t0; pev(p, `Strömavbrott – ${p.cargo.name} går inte att bära i trapporna, väntar ut det`); }
+        if (p.darkNoted !== S.outage.t0) { p.darkNoted = S.outage.t0; pev(p, sv`Strömavbrott – ${p.cargo.name} går inte att bära i trapporna, väntar ut det`); }
         castWaitTick(p);
         break;
       }
@@ -378,7 +379,7 @@ export function updatePerson(p, dt) {
         p.state = 'instairs';
         // tung last (båren, möbler) bärs långsammare i trapphuset
         p.timer = p.escalator ? 1.6 : (2 + Math.abs(p.dest - p.floor) * 1.8) * (p.cargo && p.cargo.kg >= 15 ? 1.4 : 1);
-        pev(p, p.escalator ? `Åker rulltrappa ${fl(p.floor)} → ${fl(p.dest)}` : `Går i trapphuset ${fl(p.floor)} → ${fl(p.dest)}`);
+        pev(p, p.escalator ? sv`Åker rulltrappa ${fl(p.floor)} → ${fl(p.dest)}` : sv`Går i trapphuset ${fl(p.floor)} → ${fl(p.dest)}`);
       }
       break;
     case 'instairs':
@@ -402,7 +403,7 @@ export function rerouteStranded() {
     if (p.state !== 'wait' || p.goal === undefined || !stranded(p)) continue;
     const alt = legDest(p.floor, p.goal, p);
     if (alt === p.dest) continue;
-    pev(p, `Vägen via ${fl(p.dest)} är ur funktion – tar en annan väg via ${fl(alt)}`);
+    pev(p, sv`Vägen via ${fl(p.dest)} är ur funktion – tar en annan väg via ${fl(alt)}`);
     const ws = p.waitStart;
     setTrip(p, p.goal, p.why, p.leaving); p.keepWait = true; p.waitStart = ws;
   }
@@ -421,22 +422,22 @@ export function stairsChoice(p, impatient) {
   if (!n) return false;
   if (alwaysStairs(p) && !impatient) {
     S.stats.stairsChoice++; p.stairsByChoice = true;
-    toStairs(p, `${n} våningar ${down ? 'ner' : 'upp'} till fots – som vanligt`);
+    toStairs(p, sv`${n} våningar ${down ? 'ner' : 'upp'} till fots – som vanligt`);
     say(p, 'stairs');
     return true;
   }
   if (!impatient) {
     if (n > (down ? STAIRS_DOWN : STAIRS_UP) || p.fit < (down ? 0.55 : 0.7)) return false;
     S.stats.stairsChoice++; p.stairsByChoice = true;
-    toStairs(p, n === 1 ? `Det är bara en våning – tar trappan ${down ? 'ner' : 'upp'}` : `Bara ${n} våningar ner – tar trappan`);
+    toStairs(p, n === 1 ? sv`Det är bara en våning – tar trappan ${down ? 'ner' : 'upp'}` : sv`Bara ${n} våningar ner – tar trappan`);
     return true;
   }
   if (p.waited < 20 + p.patience * 2 || n > (down ? STAIRS_IMPATIENT_DOWN : STAIRS_IMPATIENT_UP) || p.fit < 0.25) return false;
   // hissen som är på väg hit inom några sekunder väntar man ut
   if (p.assigned !== null && eta(S.elevators[p.assigned], p.floor, p.dir) < 8) return false;
   S.stats.stairsChoice++; p.stairsByChoice = true;
-  toStairs(p, n > 1 ? `Tröttnar på att vänta efter ${Math.round(p.waited)} s – det är bara ${n} våningar, tar trappan`
-    : `Tröttnar på att vänta efter ${Math.round(p.waited)} s – det är bara en våning, tar trappan`);
+  toStairs(p, n > 1 ? sv`Tröttnar på att vänta efter ${Math.round(p.waited)} s – det är bara ${n} våningar, tar trappan`
+    : sv`Tröttnar på att vänta efter ${Math.round(p.waited)} s – det är bara en våning, tar trappan`);
   return true;
 }
 /** Dit man utryms: de som jobbar, bor eller är på besök samlas utanför entrén (återsamlingsplatsen) – även de som
@@ -450,7 +451,7 @@ export const evacFloor = p => (!p.role && !p.vip && !p.movedOut && ['emp', 'vis'
 export function fireDivert(p) {
   if (!S.fire || p.evac || p.role || p.vip || !['emp', 'vis', 'res'].includes(p.kind) || p.goal === undefined || !inFireZone(p.goal)) return false;
   const to = p.goal;
-  pev(p, `Brandlarm på vägen till ${fl(to)} – dit går ingen nu, väntar utanför tills det är släckt`);
+  pev(p, sv`Brandlarm på vägen till ${fl(to)} – dit går ingen nu, väntar utanför tills det är släckt`);
   const ws = p.waitStart;
   p.evac = true; p.evacFrom = to;
   setTrip(p, LOBBY, 'BRANDLARM – väntar utanför tills det är släckt', true);
@@ -464,23 +465,23 @@ export function toStairs(p, why) {
   p.state = 'stairs'; p.assigned = null; p.tx = STAIR_X; p.car = null; p.mood = Math.min(p.mood, 1);
   p.dest = p.goal ?? p.dest; p.dir = Math.sign(p.dest - p.floor); // trappan går hela vägen
   pev(p, why);
-  log(`${pn(p)} tar trapporna ${fl(p.floor)}→${fl(p.dest)}`, 'person', null, p.id);
+  log(sv`${pn(p)} tar trapporna ${fl(p.floor)}→${fl(p.dest)}`, 'person', null, p.id);
 }
 /** @param {Person} p */
 export function stairsDone(p) {
   p.floor = p.dest; p.x = STAIR_X + 4; p.trips++; p.stairsByChoice = false;
-  if (p.escalator) { p.escalator = false; pev(p, `Framme på ${fl(p.floor)} med rulltrappan`); arriveOnFloor(p); return; }
+  if (p.escalator) { p.escalator = false; pev(p, sv`Framme på ${fl(p.floor)} med rulltrappan`); arriveOnFloor(p); return; }
   S.stats.stairs++;
-  pev(p, `Framme på ${fl(p.floor)} via trapporna – flåsar`);
+  pev(p, sv`Framme på ${fl(p.floor)} via trapporna – flåsar`);
   arriveOnFloor(p);
 }
 /** målet har stängt: tillbaka till jobbet (anställda) eller ut ur huset @param {Person} p */
 function turnBack(p) {
   const back = p.kind === 'emp' ? p.home : p.exitFloor;
   const name = FL[p.goal].name;
-  pev(p, `${name} har hunnit stänga – vänder på ${fl(p.floor)}`);
+  pev(p, sv`${name} har hunnit stänga – vänder på ${fl(p.floor)}`);
   const ws = p.waitStart;
-  setTrip(p, back, back === p.exitFloor ? `${name} har hunnit stänga – går ut` : `${name} har hunnit stänga – tillbaka till jobbet`);
+  setTrip(p, back, back === p.exitFloor ? sv`${name} har hunnit stänga – går ut` : sv`${name} har hunnit stänga – tillbaka till jobbet`);
   if (p.state === 'toQueue') { p.keepWait = true; p.waitStart = ws; }
 }
 /** har våningen f (med öppettider) stängt för den här personen? @param {Person} p */
@@ -498,8 +499,8 @@ export function arriveOnFloor(p) {
     p.dest = legDest(p.floor, p.goal, p); p.dir = Math.sign(p.dest - p.floor);
     p.state = 'toQueue'; p.tx = queueSpot(p.floor); p.assigned = null; p.bank = null; p.fixAt = 0;
     if (escalatorHop(p)) { rideEscalator(p); return; }
-    pev(p, `Byter hiss på ${fl(p.floor)} – vidare mot ${fl(p.goal)}`);
-    log(`↹ ${pn(p)} byter hiss på ${fl(p.floor)} (mot ${fl(p.goal)})`, 'person', null, p.id);
+    pev(p, sv`Byter hiss på ${fl(p.floor)} – vidare mot ${fl(p.goal)}`);
+    log(sv`↹ ${pn(p)} byter hiss på ${fl(p.floor)} (mot ${fl(p.goal)})`, 'person', null, p.id);
     return;
   }
   // branden släcktes innan hen hann ut: tillbaka dit hen kom ifrån (i stället för att gå hem för dagen)
@@ -525,9 +526,9 @@ export function boardDone(p) {
   if (moveBoard(e, p)) return; // (flyttdag: en lång möbel kan behöva vändas i dörren – eller fastna helt)
   if (!e.carCalls.has(posOf(e, p.dest))) {
     e.carCalls.add(posOf(e, p.dest));
-    pev(p, `Inne i hiss ${e.name} – ${fl(p.dest)} läggs på hissens stopplista`);
-    log(`${e.name}: ${pn(p)} ska till ${fl(p.dest)} – nytt stopp`, 'car', e.color, p.id);
-  } else pev(p, `Inne i hiss ${e.name} – den ska redan till ${fl(p.dest)}`);
+    pev(p, sv`Inne i hiss ${e.name} – ${fl(p.dest)} läggs på hissens stopplista`);
+    log(sv`${e.name}: ${pn(p)} ska till ${fl(p.dest)} – nytt stopp`, 'car', e.color, p.id);
+  } else pev(p, sv`Inne i hiss ${e.name} – den ska redan till ${fl(p.dest)}`);
   // KNAPPAR: knappanelen i korgen – ibland trycker man fel, och barn trycker gärna på allt
   if (buttonsMode() && !keyed(p)) carButtonMistakes(p, e);
   if (p.cast) castBoard(p, e);
@@ -550,7 +551,7 @@ export function exitDone(p) {
   // framme först efter stängning (resan tog för lång tid): vänder direkt
   else if (!p.role && p.kind !== 'res' && p.floor !== p.home && !floorOpen(p.floor, hour()) && FLOOR_HOURS[p.floor]) {
     p.timer = rand(0.3, 1);
-    pev(p, `${FL[p.floor].name} har redan stängt – vänder direkt`);
+    pev(p, sv`${FL[p.floor].name} har redan stängt – vänder direkt`);
   }
   else if (p.kind === 'res') p.timer = p.floor === p.home ? rand(12, 25) : rand(25, 45);
   // framme vid tunnelbanan men inte på väg med tåget (sista tåget har gått): vidare upp till entrén
@@ -629,15 +630,15 @@ export function decideNext(p) {
   }
   if (h >= p.leaveAt) return [p.exitFloor, p.overtime ? 'Övertiden är slut – hemgång' : 'Arbetsdagen är slut – hemgång'];
   // en stängd våning lämnar man om man inte jobbar där
-  if (!floorOpen(p.floor, h) && p.floor !== p.home) return [p.home, `${FL[p.floor].name} stänger – tillbaka till jobbet`];
-  if (!p.lunched && h >= p.lunchAt && h < 13.6 && p.floor !== CAFE && floorOpen(CAFE, h)) { p.lunched = true; return [CAFE, `Lunchsugen – till ${FL[CAFE].name}`]; }
-  if (p.floor !== p.home) return [p.home, `Tillbaka till jobbet på ${FL[p.home].short}`];
+  if (!floorOpen(p.floor, h) && p.floor !== p.home) return [p.home, sv`${FL[p.floor].name} stänger – tillbaka till jobbet`];
+  if (!p.lunched && h >= p.lunchAt && h < 13.6 && p.floor !== CAFE && floorOpen(CAFE, h)) { p.lunched = true; return [CAFE, sv`Lunchsugen – till ${FL[CAFE].name}`]; }
+  if (p.floor !== p.home) return [p.home, sv`Tillbaka till jobbet på ${FL[p.home].short}`];
   const own = castNext(p, h);
   if (own) return own;
   if (rng() < 0.14 && h < 16.5) {
     // bara dit som har öppet en halvtimme till – resan över zonerna (via entrén och sky lobbyn) tar en stund
     const g = pick(OFFICE_FLOORS.filter(f => f !== p.home && floorOpen(f, h) && floorOpen(f, h + 1.5)).concat([null]));
-    if (g !== null && g !== undefined) return [g, `Möte på ${FL[g].short}`];
+    if (g !== null && g !== undefined) return [g, sv`Möte på ${FL[g].short}`];
   }
   return null;
 }
@@ -656,7 +657,7 @@ export function officeDone(p) {
   releaseSpot(p);
   setTrip(p, r[0], r[1], r[2]);
   if (p.ffStairs) { p.ffStairs = false; if (p.state === 'toQueue') toStairs(p, r[1]); } // (brandmännen: sista biten i trappan)
-  pev(p, `Bestämmer sig: ${r[1]} (${fl(r[0])})`);
+  pev(p, sv`Bestämmer sig: ${r[1]} (${fl(r[0])})`);
   log(`${pn(p)}: ${r[1]} → ${fl(r[0])}`, 'person', null, p.id);
 }
 
@@ -680,8 +681,8 @@ export function spawnStaff(role, extra = false, o = null) {
   setTrip(p, first[0], first[1], first[2]);
   S.people.push(p);
   const title = extra ? 'Extra hisstekniker (inringd)' : p.title || ROLE_NAMES[role];
-  pev(p, `Kliver in i entrén · ${title} · ${p.why}`);
-  log(`${pn(p)} (${title.toLowerCase()}) kommer till jobbet`, 'person', null, p.id);
+  pev(p, sv`Kliver in i entrén · ${title} · ${p.why}`);
+  log(sv`${pn(p)} (${title.toLowerCase()}) kommer till jobbet`, 'person', null, p.id);
   return p;
 }
 /** @param {Person} p */
@@ -700,7 +701,7 @@ function roleNext(p, h) {
       for (let i = 0; i < p.route.length; i++) {
         p.ri = (p.ri + 1) % p.route.length;
         const f = p.route[p.ri];
-        if (f !== p.floor) return [f, f === LOBBY ? 'Väktarrunda: kollar entrén' : `Väktarrunda: kollar våning ${fl(f)}`];
+        if (f !== p.floor) return [f, f === LOBBY ? 'Väktarrunda: kollar entrén' : sv`Väktarrunda: kollar våning ${fl(f)}`];
       }
       return null;
     }

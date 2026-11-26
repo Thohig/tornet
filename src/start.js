@@ -22,6 +22,7 @@ import { extraActions, followCarOnly, followFloor, followPerson } from './input.
 import { repaintAll } from './panels.js';
 import { startAuto } from './director.js';
 import { VIEW } from './view.js';
+import { sv } from './sv.js';
 
 const KEY = { boot: 'tornet.boot', seen: 'tornet.intro', offer: 'tornet.visning', prefs: 'tornet.val', lang: 'tornet.lang' };
 const store = {
@@ -120,8 +121,8 @@ extraActions.lang = l => {
 function bootLines() {
   const cars = BUILDING.elevators.map(e => e.name);
   return ['HISS-O-MATIC 3000 BIOS v3.11  (C) Tornet Fastighets AB 1995', '',
-    `Minnestest ......... 640K OK`, `Våningar ........... ${FL.length} (${fl(0)}–${fl(FL.length - 1)})`,
-    ...cars.map(n => `Kontrollerar hiss ${n.padEnd(3)} ..... OK`),
+    `Minnestest ......... 640K OK`, sv`Våningar ........... ${FL.length} (${fl(0)}–${fl(FL.length - 1)})`,
+    ...cars.map(n => sv`Kontrollerar hiss ${n.padEnd(3)} ..... OK`),
     'Laddar KONTOR95.PAL ........ OK', 'Driftchefen ............ på plats', '', 'Startar Hiss-O-Matic 3000_'].map(l => tr(l));
 }
 function boot(done) {
