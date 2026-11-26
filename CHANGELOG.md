@@ -1,5 +1,13 @@
 # Ändringar
 
+## November 2026 – provspelning: spelet fryser inte, flyttgubbarna, nedräkningarna på engelska
+- **Spelloopen** beställer nästa bildruta först. Förut stoppade ett enda fel i ritningen eller panelen hela spelet (bilden frös), eftersom `requestAnimationFrame` kom sist i `frame()`.
+- **Följer du en flyttgubbe** vid lastkajen kraschade personrutan: de är ”inne” utan en plats (`p.spot`). Nu står våningen där, som i spårlappen.
+- **En tom text** i pixelgrafiken (spårlappen över en person) kastade ett fel i `drawImage` – `text()` ritar inget i stället.
+- **Engelska:** nedräkningarna i korten (”arriving nu”, ”om en halv minut”) uppdateras på plats och översattes inte – nu gör de det. Kuppkortet saknade en punkt efter borren (”21 % Polisen spärrar gatan …”) och ”via taket”, sammanfattningen ”signalerade till polisen från taket”, flyttkortet ”Skyddsfiltar: ja”, regissörens skylt ”kassaskåp i hissbalken” och personrutans ”1 stopp före målet” blev kvar på svenska. Bitar som börjar med ” och ” passar nu mallen utan ”och” när en text delas.
+- **Skylten för expressens övre däck** på mellanplanet var bredare än sin platta och krockade med företagsskylten (”GLADA TANDEN DENTAL”). Plattan får bredden av texten och flyttar ner en rad när de skulle krocka.
+- **Uppspelningsraden** i en smal panel (skärmar runt 1280 px): när ⏩ kom på kvällen hamnade ? på en egen rad. Knapparna krymper i stället.
+
 ## November 2026 – provspelning: läckkortet, kortens ordning, ”The lobby”, mobilen på tvären, nedräkningar i ord
 - **Vattenläckans kort** bad spelaren ”ta över beslutet” med gråa knappar och driftchefens rad ”hissarna i de blöta schakten står still” även efter att huvudkranen stängts – då kör hissarna igen. Nu säger kortet att hissarna kör som vanligt, slutar blinka och fälls ihop som en informationsruta.
 - **Incidentkorten** står med de som går att åtgärda först och de farligaste överst (brand, strömavbrott, kuppen, fasaden). Under Murphys lag hamnade branden förut längst ner under hunden och läckan.

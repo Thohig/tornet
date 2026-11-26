@@ -30,7 +30,8 @@ const entries = Object.entries(EN);
 for (const [sv, en] of Object.entries(EN)) {
   if (!en) continue;
   // ", ska redan till {0}" passar också "ska redan till 6" när en text delas i bitar
-  const cut = t => t.replace(/^\s*[,·–—:]\s*/, '');
+  // (och " och signalerade …" när en text delas vid " och ")
+  const cut = t => t.replace(/^\s*[,·–—:]\s*/, '').replace(/^(?:och|and) /, '');
   if (cut(sv) !== sv && cut(sv) && !(cut(sv) in EN)) entries.push([cut(sv), cut(en)]);
   // "Bestämmer sig: {0} ({1})" – början ("Bestämmer sig") passar också för sig när en text delas vid kolonet
   const pre = sv.match(/^([^{:]{3,}): \{\w+\}/), preEn = en.match(/^([^{:]{3,}): \{\w+\}/);

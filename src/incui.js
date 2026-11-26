@@ -226,7 +226,7 @@ export function incUi() {
         const hero = S.people.find(p => p.id === Hs.hero && !p.dead);
         const status = Hs.ph === 'in' ? `En skåpbil från ${esc(VAN_NAME)} vid lastkajen – fem män i overall är på väg in.`
           : Hs.ph === 'flee' ? `<b>Valvet är öppet!</b> Gänget flyr med ${GOLD} guldtackor.`
-          : `Gänget har driftcentralen och hissarna. Borren i valvet: <span class="lv">${Math.round(Hs.drill * 100)}</span> %${S.t < Hs.drillOff ? ' – <b>tyst</b>, någon har slagit av strömmen till den!' : ''}`;
+          : `Gänget har driftcentralen och hissarna. Borren i valvet: <span class="lv">${Math.round(Hs.drill * 100)}</span> %${S.t < Hs.drillOff ? ' – <b>tyst</b>, någon har slagit av strömmen till den!' : '.'}`;
         const pol = !Hs.police ? 'Polisen är på väg.' : `Polisen spärrar gatan – insatsstyrkan går in via ${Hs.plan === 'garage' ? 'garaget' : 'taket'} ${cd(Hs.stormAt - S.t)}.`;
         const b = (a, txt, on, hint, dis = false) => `<button class="btn sm${on ? ' on' : ''}" data-act="heist:${a}" ${dis ? 'disabled' : ''} data-hint="${hint}">${txt}</button>`;
         const off = !Hs.police;

@@ -27,6 +27,8 @@ startGame(parseRepro(location.search));
 
 let last = performance.now(), hudT = 0;
 function frame(now) {
+  // (nästa bildruta beställs först: ett fel i ritningen eller panelen ska inte frysa hela spelet – det syns i konsolen)
+  requestAnimationFrame(frame);
   // (första bildrutans tidsstämpel kan ligga före last – en negativ dt ger negativ S.anim och rökpuffar i storlek 0)
   const dt = Math.max(0, Math.min(0.25, (now - last) / 1000)); last = now;
   profFrame(); // ?prof=1: tid per del, ritas i bilden (prof.js)
@@ -46,7 +48,6 @@ function frame(now) {
   hudT -= dt;
   if (hudT <= 0) { hudT = 0.15; updatePanel(); rememberPrefs(); }
   lap('panelen');
-  requestAnimationFrame(frame);
 }
 document.fonts && document.fonts.ready.then(resize);
 requestAnimationFrame(frame);

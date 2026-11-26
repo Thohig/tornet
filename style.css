@@ -78,9 +78,10 @@ body{background:var(--desk);font-family:var(--ui);font-size:12px;color:var(--ink
 .btn.flag:not(.on) svg{opacity:.75}
 .btn.flag.on{padding:4px 1px 2px 3px;background:var(--face);outline:2px solid var(--navy);outline-offset:-2px}
 .btn.flag.on svg,.btn.flag:hover svg{opacity:1}
-.pl-ctl{display:flex;gap:2px;align-items:center;flex-wrap:wrap}
-.pl-ctl .btn.ico{font-size:12px;font-weight:700}
-.pl-cam{display:inline-flex;gap:2px}
+.pl-ctl{display:flex;gap:2px;align-items:center}
+/* (alltid en rad: på kvällen kommer ⏩ till, och i en smal panel krymper knapparna i stället för att ? hamnar på en egen rad) */
+.pl-ctl .btn.ico{font-size:12px;font-weight:700;min-width:0;flex:0 1 26px;padding-left:2px;padding-right:2px}
+.pl-cam{display:inline-flex;gap:2px;min-width:0}
 .tl{position:relative;height:18px;background:var(--dos);box-shadow:var(--sunken);margin-top:4px;overflow:hidden}
 .tl-b{position:absolute;top:2px;bottom:2px;border-right:1px solid #000}
 .tl-b.night{background:#1a1f4a}

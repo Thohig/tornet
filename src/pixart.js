@@ -173,6 +173,7 @@ function scaleUp(src, k) {
 /** rita text; align 'left' | 'center' | 'right'; y = textens överkant (accentraden) */
 export function text(g, str, x, y, color = INK, align = 'left', scale = 1, outline = null) {
   const s = textSprite(str, color, scale, outline);
+  if (!s.width) return 0; // (en tom text – drawImage kastar ett fel för en canvas med bredden 0)
   const dx = align === 'center' ? Math.round(s.width / 2) : align === 'right' ? s.width : 0;
   g.drawImage(s, Math.round(x - dx), Math.round(y));
   return s.width;

@@ -2,6 +2,8 @@
 import { LABELS } from './config.js';
 
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+/** första bokstaven versal ("ett kassaskåp" → "Ett kassaskåp") */
+export const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
 export const K = d => (d > 0 ? 'u' : 'd');
 export const ARR = d => (d > 0 ? '▲' : d < 0 ? '▼' : '•');
 /** våningens etikett (E, 1, 2 … eller P1, T) */

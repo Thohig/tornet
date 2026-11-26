@@ -6,7 +6,7 @@ import { incUi } from './incui.js';
 import { alarm, chiefOnDuty } from './chief.js';
 import { CREW_BY, atPost, crewPerson, postFloor } from './crew.js';
 import { S, hour } from './state.js';
-import { fl } from './util.js';
+import { cap, fl } from './util.js';
 import { vpick, vrand } from './rng.js';
 import { VIEW, camMax, camTarget, detachCam, keepX, seeH } from './view.js';
 import { personHead } from './render.js';
@@ -193,7 +193,7 @@ function shots() {
   const HB = S.hoist;
   if (HB && S.move && (HB.phase === 'lower' || HB.phase === 'hook')) {
     const it = HB.item !== null ? S.move.items[HB.item] : S.move.items.find(i => i.st === 'hatch');
-    add('hoist', 78, 'hoist', 0, `🏗️ ${it ? it.name.replace(/^(en|ett) /, '').replace('(!)', '') : 'Flyttlasset'} i hissbalken`);
+    add('hoist', 78, 'hoist', 0, `🏗️ ${it ? cap(it.name.replace('(!)', '').trim()) : 'Flyttlasset'} i hissbalken`);
   }
   for (const e of S.elevators) if (e.mode === 'lift' && HB && HB.liftItem !== null) add('liftload', 40, 'car', e.id, `🚚 Flyttlass i ${e.name}`);
   // ---------- folk ----------

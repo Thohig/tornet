@@ -17,7 +17,7 @@ import { chiefOnDuty } from './chief.js';
 import { $, ikon, carHtml, dayNumbers, drawPortrait, incidentPanel, logHtml, personHtml, rosterHtml, statsHtml } from './hud.js';
 import { peopleBehindDoor } from './render.js';
 import { soundOn } from './sound.js';
-import { getLang, trDom } from './lang.js';
+import { getLang, tr, trDom } from './lang.js';
 import { musicOn } from './music.js';
 import { lastDay, summaryHtml } from './summary.js';
 import { guideName } from './visning.js';
@@ -278,7 +278,8 @@ function paint(k, cls, html) {
   if (e.className !== cls) e.className = cls;
   const shape = html.replace(LV, '<span class="lv"></span>');
   if (shape !== last[k]) { last[k] = shape; e.innerHTML = html; trDom(e); return true; }
-  const vals = [...html.matchAll(LV)].map(m => m[1]);
+  // (nedräkningarna är ord – "om en halv minut" – och översätts som resten av panelen)
+  const vals = [...html.matchAll(LV)].map(m => tr(m[1]));
   e.querySelectorAll('.lv').forEach((x, i) => { if (x.textContent !== vals[i]) x.textContent = vals[i]; });
   return false;
 }

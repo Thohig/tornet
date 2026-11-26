@@ -600,7 +600,12 @@ export function drawLeakPx() {
 /** skylt i entrén och på mellanplanet: övre däcket nås via rulltrappan */
 export function deckSign(f) {
   if (MEZZ < 0 || (f !== LOBBY && f !== MEZZ)) return;
-  const x = X(INNER_X1) - 66, y = Y(floorY(f + 1) + 4) + 5; // (över huvudhöjd: folk på väg till rulltrappan skymmer den annars)
-  pill(x, y, 62, 9, PAL.sign); reserve(x, y, 62, 9);
-  text(g, f === LOBBY ? 'ÖVRE DÄCK: VÅN 1' : 'EXPRESS ÖVRE DÄCK', x + 31, y + 1, '#ffffff', 'center');
+  const label = f === LOBBY ? 'ÖVRE DÄCK: VÅN 1' : 'EXPRESS ÖVRE DÄCK', w = textW(label) + 6;
+  const x = X(INNER_X1) - 4 - w;
+  // (över huvudhöjd: folk på väg till rulltrappan skymmer den annars – men under företagsskylten om den är så
+  // lång att de skulle krocka, som "GLADA TANDEN DENTAL" på engelska)
+  const nameEnd = X(DOOR_X) + 13 + textW(plain(FL[f].name)) + 7;
+  const y = Y(floorY(f + 1) + 4) + (nameEnd + 3 > x ? 16 : 5);
+  pill(x, y, w, 9, PAL.sign); reserve(x, y, w, 9);
+  text(g, label, x + w / 2, y + 1, '#ffffff', 'center');
 }

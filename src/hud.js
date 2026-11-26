@@ -254,7 +254,7 @@ export function incidentHtml() {
     const lock = `Varuhissen ${V ? esc(V.name) : ''} går i <b>oberoende drift</b> ${M.smart ? 'bara medan en stor möbel är på väg ner' : 'så länge bärarna jobbar'}${V && V.indep ? ' (<b>låst nu</b>)' : ''}.`;
     const chip = (r, t) => `<button class="btn xs${M.route === r ? ' on' : ''}" data-act="moveRoute:${r}">${t}</button>`;
     const routes = M.state !== 'done' ? chip('auto', '🤖 Låt styrningen planera') + chip('varu', '🛗 Allt i varuhissen') + (M.hoist ? chip('balk', '🏗️ Tungt utanpå') : '') : '';
-    const blank = M.state === 'planned' ? `<button class="btn xs${M.blankets ? ' on' : ''}" data-act="moveBlankets:${M.blankets ? 0 : 1}">🧣 Skyddsfiltar: ${M.blankets ? 'ja' : 'nej'}</button>` : '';
+    const blank = M.state === 'planned' ? `<button class="btn xs${M.blankets ? ' on' : ''}" data-act="moveBlankets:${M.blankets ? 0 : 1}">${M.blankets ? '🧣 Skyddsfiltar: ja' : '🧣 Skyddsfiltar: nej'}</button>` : '';
     const windy = M.state === 'on' && hoistHalt() === 'blåst' && M.items.some(it => it.st === 'hatch');
     const wind = windy ? `<button class="btn xs${(M.windChoice ?? (M.smart ? 'varu' : 'wait')) === 'wait' ? ' on' : ''}" data-act="moveWind:wait">⏳ Vänta ut blåsten</button><button class="btn xs${(M.windChoice ?? (M.smart ? 'varu' : 'wait')) === 'varu' ? ' on' : ''}" data-act="moveWind:varu">🛗 Ta varuhissen</button>` : '';
     const body = M.state === 'planned'
@@ -415,13 +415,14 @@ export function personHtml(p) {
       const e = p.car, r = plannedRoute(e), idx = r.indexOf(p.dest);
       now = `I hiss ${e.name} vid våning ${fl(Math.round(e.pos))} · åkt ${Math.round(S.t - p.rideStart)}s`;
       if (!S.power && e.mode === 'normal') { now = `INSTÄNGD i hiss ${e.name} i ${Math.round(p.trapT || 0)}s`; logic = 'Väntar på ström eller nödsänkning'; }
-      else logic = `Rutt: ${r.map(f => (f === p.dest ? `<u>${fl(f)}</u>` : fl(f))).join(' → ')} · ${idx <= 0 ? 'nästa stopp är målet' : idx + ' stopp före målet'}`;
+      else logic = `Rutt: ${r.map(f => (f === p.dest ? `<u>${fl(f)}</u>` : fl(f))).join(' → ')} · ${idx <= 0 ? 'nästa stopp är målet' : idx === 1 ? 'målet efter ett stopp' : `målet efter ${idx} stopp`}`;
       break;
     }
     case 'exiting': now = `Kliver av på ${fl(p.floor)}`; logic = p.spot ? `På väg: ${esc(p.spot.desc.toLowerCase())}` : 'På väg ut genom entrén'; break;
     case 'stairs': now = `Går mot trapphuset på ${fl(p.floor)}`; logic = `Ska gå ${Math.abs(p.dest - p.floor)} våningar till ${fl(p.dest)}`; break;
     case 'instairs': now = `I trapphuset på väg till ${fl(p.dest)}`; logic = `Framme om ~${Math.max(0, Math.ceil(p.timer))}s`; break;
-    case 'office': now = p.sleeping && p.spot.bed ? `Sover i sängen (${fl(p.floor)}) 💤` : `${p.spot.desc} (${FL[p.floor].short})`; logic = `Nästa beslut om ~${Math.max(0, Math.round(p.timer / activityRate(hour())))}s`; break;
+    // (flyttgubbarna vid lastkajen är "inne" utan en plats – som i describe.js)
+    case 'office': now = p.sleeping && p.spot?.bed ? `Sover i sängen (${fl(p.floor)}) 💤` : p.spot ? `${p.spot.desc} (${FL[p.floor].short})` : FL[p.floor].short; logic = `Nästa beslut om ~${Math.max(0, Math.round(p.timer / activityRate(hour())))}s`; break;
     case 'away': now = 'Är inte i huset just nu'; logic = `Kommer tillbaka: ${phaseName(p.returnAt).toLowerCase()}`; break;
     case 'incar': now = `Kör in i garaget på ${fl(p.floor)}`; logic = 'Parkerar och går sedan till hissarna'; break;
     case 'assembly': now = 'Väntar på återsamlingsplatsen'; logic = 'Går in igen när branden är släckt'; break;
