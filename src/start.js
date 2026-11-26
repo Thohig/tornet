@@ -21,7 +21,7 @@ import { getLang, setLang, tr } from './lang.js';
 import { extraActions, followCarOnly, followFloor, followPerson } from './input.js';
 import { repaintAll } from './panels.js';
 import { startAuto } from './director.js';
-import { VIEW } from './view.js';
+import { VIEW, screenMode } from './view.js';
 import { sv } from './sv.js';
 
 const KEY = { boot: 'tornet.boot', seen: 'tornet.intro', offer: 'tornet.visning', prefs: 'tornet.val', lang: 'tornet.lang' };
@@ -78,7 +78,8 @@ export function startGame(repro) {
     console.info(`Tornet: frö ${repro.seed}, spolade ${n} steg på ${Math.round(performance.now() - t0)} ms → S.t = ${S.t.toFixed(4)}`);
   }
   if (moment) { go(); return; } // (ett återskapat ögonblick: ingen uppstart eller välkomstruta)
-  const first = !store.get(KEY.seen);
+  // (på mobilen varje gång: välkomstrutan varnar att Tornet gör sig bäst på en dator)
+  const first = !store.get(KEY.seen) || screenMode().mob;
   boot(() => {
     if (first) { store.set(KEY.seen, 1); showIntro('start', go); } else go();
   });
@@ -86,10 +87,12 @@ export function startGame(repro) {
 function go() {
   S.started = true;
   if (moment) { S.paused = true; VIEW.autoWant = false; followMoment(moment.follow); return; } // (ingen logg, ingen regissör: ögonblicket som det var)
-  if (prefs().dir) startAuto();
+  // (mobilen: ingen panel att ta över kameran med – regissören klipper alltid)
+  const mob = screenMode().mob;
+  if (prefs().dir || mob) startAuto();
   log('Dag 1 börjar – dörrarna öppnas!', 'sys');
   // första gången: Berit erbjuder en rundvisning (i panelen – hon börjar när hon har kommit till disken)
-  if (!store.get(KEY.offer)) { store.set(KEY.offer, 1); offerVisning(); }
+  if (!mob && !store.get(KEY.offer)) { store.set(KEY.offer, 1); offerVisning(); }
 }
 
 /** kameran på det som adressen pekar ut: en hiss (namn), en person (namn eller id) eller en våning (etikett) @param {string|null} what */

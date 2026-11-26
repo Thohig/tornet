@@ -506,16 +506,17 @@ export function showIntro(mode = S.started ? 'help' : 'start', then = /** @type 
   if (mode === 'help') S.paused = true;
   showOverlay(`<div class="card intro"><h1>TORNET${help ? ' · HJÄLP' : ''}</h1>
     <p>Välkommen till <b>Tornet</b> – åtta hissar styrda av <b>Hiss-O-Matic 3000</b>, ${FL.length} våningar och en massa folk med bråttom. <b>Huset sköter sig självt:</b> driftchefen tar besluten och berättar varför, och regissören 🎬 klipper bilden till det som händer. Luta dig tillbaka och titta.</p>
-    ${mob || touch ? '<p class="intro-warn">💻 Tornet gör sig bäst på en dator med stor skärm och mus – på mobilen och surfplattan blir bilden liten och allt får inte plats.</p>' : ''}
-    ${help ? `<div class="intro-tour"><button class="btn" id="tour-go"${S.visning ? ' disabled' : ''}>🛎️ BE ${guideName().toUpperCase()} VISA RUNT</button><span>Ny i huset? ${esc(guideName())} visar dig runt och berättar vad du ser.</span></div>` : ''}
+    ${mob ? '<p class="intro-warn">💻 Tornet gör sig bäst på en dator. På mobilen kan du titta på huset – kontrollpanelen, där du framkallar incidenter, byter styrlogik och tar över driftchefens beslut, finns bara på en dator.</p>' : touch ? '<p class="intro-warn">💻 Tornet gör sig bäst på en dator med stor skärm och mus – på mobilen och surfplattan blir bilden liten och allt får inte plats.</p>' : ''}
+    ${help && !mob ? `<div class="intro-tour"><button class="btn" id="tour-go"${S.visning ? ' disabled' : ''}>🛎️ BE ${guideName().toUpperCase()} VISA RUNT</button><span>Ny i huset? ${esc(guideName())} visar dig runt och berättar vad du ser.</span></div>` : ''}
     <ul class="intro-short">
-      ${mob ? `<li><b>Tryck</b> på en person, en hiss eller en våning för att följa den – allt om den finns under fliken 👤.</li>
-      <li><b>Listen</b> nertill: ❚❚ paus, fart, 🔍 hela bredden (eller dubbeltryck i bilden) och flikarna 📻 nu, ⚡ framkalla, 🎛️ styrning och ☰ mer. Raden ovanför visar vad som händer – när något händer öppnas 🚨 av sig själv.</li>`
+      ${mob ? `<li>Regissören väljer vad du ser och raden nertill berättar vad som händer. Tryck på en person, en hiss eller en våning så följer kameran den.</li>
+      <li>Listen nertill: ❚❚ paus, fart och ⏩ spola fram natten (på kvällen), ? den här rutan och språket.</li>
+      <li>Dra i bilden med ett finger för att se resten av huset; två fingrar zoomar.</li>`
       : `<li><b>${touch ? 'Tryck' : 'Klicka'}</b> på en person, en hiss eller en våning för att följa den – allt om den syns i kontrollpanelen till vänster.</li>
       <li><b>Kontrollpanelen</b> anpassar sig efter vad som händer: när det är lugnt kan du framkalla incidenter och byta styrlogik, när något händer visar den bara det.</li>`}
-      <li>Hissen eller våningen du följer har egna knappar: framkalla ett hissfel, en brand eller släpp in besökare just där.</li>
-      <li>Knapparna är <b>ikoner</b> – ${touch ? 'håll fingret på en' : 'vila musen på en'} så står det vad den gör.</li>
-      ${touch ? '<li><b>Dra</b> i bilden med ett finger för att se resten av huset; två fingrar zoomar.</li>' : `<li class="intro-keys"><kbd>Mellanslag</kbd> paus · <kbd>−</kbd>/<kbd>+</kbd> hastighet · <kbd>N</kbd> spola fram natten · <kbd>H</kbd> biografläge · <kbd>S</kbd> styrlogik · <kbd>T</kbd> namnbrickor · <kbd>F</kbd> koppla loss/på kameran · <kbd>A</kbd> regissör (kameran väljer själv) · <kbd>Esc</kbd> sluta följa/tillbaka</li>`}
+      ${mob ? '' : `<li>Hissen eller våningen du följer har egna knappar: framkalla ett hissfel, en brand eller släpp in besökare just där.</li>
+      <li>Knapparna är <b>ikoner</b> – ${touch ? 'håll fingret på en' : 'vila musen på en'} så står det vad den gör.</li>`}
+      ${mob ? '' : touch ? '<li><b>Dra</b> i bilden med ett finger för att se resten av huset; två fingrar zoomar.</li>' : `<li class="intro-keys"><kbd>Mellanslag</kbd> paus · <kbd>−</kbd>/<kbd>+</kbd> hastighet · <kbd>N</kbd> spola fram natten · <kbd>H</kbd> biografläge · <kbd>S</kbd> styrlogik · <kbd>T</kbd> namnbrickor · <kbd>F</kbd> koppla loss/på kameran · <kbd>A</kbd> regissör (kameran väljer själv) · <kbd>Esc</kbd> sluta följa/tillbaka</li>`}
     </ul>
     <button class="btn" id="go">${help ? 'TILLBAKA' : 'KÖR!'}</button>
     <details class="intro-more"><summary>Mer om huset</summary>

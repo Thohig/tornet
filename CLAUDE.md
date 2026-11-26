@@ -109,7 +109,7 @@ Allt följer paletten **Kontor 95**: byggnadsfärger i `PAL` (`pixpal.js`), hiss
 
 Det finns ingen topplist, statusrad, låda eller högerklicksmeny: hela gränssnittet utom bilden är **kontrollpanelen** `#side` till vänster (fast bredd; aldrig flytande över bilden – den får inte täcka hallarna). Enda undantaget är den halvgenomskinliga textskylten `#lower` längst ner i bilden, som kameran räknar med (`VIEW.padB`, `seeH()`). Knapparna är ikoner (`ikon()` i hud.js) med namn och förklaring i verktygstipset; val mellan lägen och incidentkortens huvudknappar behåller texten. Panelen består av block (`ORDER`) som får läget `full`, `row` eller `link` efter situationen (`layout`). Incidentrutan har **incidenter** som spelaren kan åtgärda (rutan blinkar) och **informationsrutor** som bara berättar och kan stängas (`notice()` i state.js).
 
-**Mobilläget** (`body.mob`, `screenMode()` i view.js: smal skärm eller en pekskärm på tvären): sidan scrollar aldrig, bilden fyller allt utom panelen, och panelen ritas av `renderMob` i panels.js som en list med flikar och ett ark ovanför. Arket ligger aldrig över bilden – bilden krymper.
+**Mobilläget** (`body.mob`, `screenMode()` i view.js: smal skärm eller en pekskärm på tvären): på telefonen tittar man – styr gör man på datorn. Det finns ingen kontrollpanel, bara bilden och en list nertill (`renderMob` i panels.js: det som händer, paus, fart, hjälp och språk; på tvären en smal kolumn till höger). Sidan scrollar aldrig och listen ligger aldrig över bilden. Välkomstrutan visas vid varje start och varnar att spelet gör sig bäst på en dator, och regissören klipper alltid.
 
 ## Regler som inte får brytas
 

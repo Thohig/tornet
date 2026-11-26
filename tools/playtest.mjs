@@ -46,7 +46,8 @@ const PLACES = /Guldbanken|Glada Tanden|Rymdkakan|Kvarnström|Modemkungen|Vovve|
 const SWEDISH = /[åäö]|\b(och|är|på|nu|med|till|inte|för|som|har|kommer|går|om|ja|nej|av|ett|det|den|vid|hos|ingen|alla|sig|hon|han|hen|var|blir|ska|stopp|våning|hiss)\b/;
 const swedish = line => SWEDISH.test(line.replace(PLACES, '').replace(NAMEISH, ''));
 
-// Skärmarna: datorn, en mobil på höjden och samma mobil på tvären (pekskärm → body.mob, view.js)
+// Skärmarna: datorn, en mobil på höjden och samma mobil på tvären (pekskärm → body.mob, view.js). Mobilen visar bara
+// bilden och en list, så två ögonblick räcker där: rusningen (höjden och tvären) och en incident (höjden).
 const VIEWS = {
   dator: { viewport: { width: 1366, height: 860 } },
   mobil: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
@@ -56,14 +57,14 @@ const VIEWS = {
 // kaosdygn (inc=kaos). Klockslaget för incidenterna läses ur dygnets tidtabell (S.incPlan) – samma frö ger samma.
 const MOMENTS = [
   { name: 'frö21-rusning', q: 'seed=21&h=8.3&follow=X1', views: ['dator', 'mobil', 'tvären'] },
-  { name: 'frö21-lunch', q: 'seed=21&h=12.4&follow=6', views: ['dator', 'mobil'] },
-  { name: 'frö21-kväll', q: 'seed=21&h=17.6&follow=E', views: ['dator', 'tvären'] },
-  { name: 'frö21-taket', q: 'seed=21&h=19.5&follow=T', views: ['dator', 'mobil'] },
+  { name: 'frö21-lunch', q: 'seed=21&h=12.4&follow=6', views: ['dator'] },
+  { name: 'frö21-kväll', q: 'seed=21&h=17.6&follow=E', views: ['dator'] },
+  { name: 'frö21-taket', q: 'seed=21&h=19.5&follow=T', views: ['dator'] },
   { name: 'frö5-natt', q: 'seed=5&h=23.2', views: ['dator'] },
-  { name: 'frö5-perrong', q: 'seed=5&h=7.9&follow=TB', views: ['dator', 'mobil'] },
+  { name: 'frö5-perrong', q: 'seed=5&h=7.9&follow=TB', views: ['dator'] },
   { name: 'frö7-incident1', seed: 7, inc: 0, views: ['dator', 'mobil'] },
   { name: 'frö7-incident2', seed: 7, inc: 1, views: ['dator'] },
-  { name: 'frö33-incident1', seed: 33, inc: 0, views: ['dator', 'tvären'] },
+  { name: 'frö33-incident1', seed: 33, inc: 0, views: ['dator'] },
 ];
 
 /** Texten i bilden i senaste bildrutan (TEXTLOG i pixart.js): det som ritas över annan text, och alla texter

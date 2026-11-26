@@ -1,5 +1,10 @@
 # Ändringar
 
+## 2026-11-26 – på mobilen tittar man: ingen kontrollpanel, och en varning vid varje start
+- **Mobilvyn är bara bilden och en list** (`renderMob` i panels.js). Listen har raden med det som händer, paus, fart, ⏩ till morgonen, hjälpen och språket. Flikarna (händelser, nu, framkalla, styrning, följer, mer) och arket ovanför listen är borta, liksom helbredden (🔍, dubbeltryck i bilden, `VIEW.wide`). Rundvisningen erbjuds inte på mobilen, och regissören klipper alltid. Det man vill styra gör man på datorn.
+- **Välkomstrutan varnar** att Tornet gör sig bäst på en dator: på mobilen vid varje start (inte bara första gången) och i hjälpen (?), och på en surfplatta med bred skärm i rutan första gången.
+- Provspelningen fotograferar mobilen i två ögonblick i stället för åtta.
+
 ## 2026-11-26 – fyra nya incidenter: Hiss-O-Matic kraschar, tåget i tunneln, panik i hissen och firmafesten
 - **🖥️ Hiss-O-Matic 3000 kraschar** (crash.js): styrsystemet går ner och ingen får en hiss tilldelad. Varje korg pendlar i sitt schakt och stannar på varje våning den passerar (`crashRun`, `sweepDir`, `sweepStop` i elevators.js), och folk kliver på den första som öppnar åt rätt håll. En full korg kör förbi, eftersom vågen sitter i korgen. Supporten svarar i telefonen (”Har ni testat att starta om?”). Valen är **nödläge** tills supporten har hittat felet, eller **omstart**: alla hissar står still i 22 s, och omstarten lyckas inte alltid (blå skärm). Driftchefen startar om i rusningen och kör nödläge när det är lugnt. Korgarna visar NÖDLÄGE.
 - **🚇 Tåget står i tunneln** (tunnel.js): signalfel. Inga tåg kommer på en lång stund (train.js väntar), perrongen fylls och avgångsskylten visar SIGNALFEL. Valen är att **vänta**, då den som tröttnar går upp till gatan själv, eller **ersättningsbussar**, då alla som ska med tåget går upp genom huset till entrén (`toStreet` i train.js, som sista tåget också använder). När tåget kommer kliver alla av som har samlats längs linjen.
