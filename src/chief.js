@@ -165,8 +165,8 @@ function stormTick() {
   } else if (St.mode === 'sway' && w < CALM_AT && u > 0.5 && S.t - C.stormT > 6) {
     C.stormT = S.t; setStormMode('none');
     decide('storm', 'Normal drift igen', sv`vinden har mojnat till ${windMs()} m/s`, { inc: 'storm', say: 'Det mojnar – full fart igen.' });
-  } else if (!C.dec.storm) {
-    decide('storm', 'Full fart så länge', sv`${windMs()} m/s – svajläge först när det blåser över ${Math.round(SWAY_AT * 32)} m/s`, { inc: 'storm', say: 'Vi kör på tills det blåser upp.' });
+  } else if (!C.dec.storm) { // (beslutet tas när stormen börjar: vindstyrkan just då säger inget – kortet visar den)
+    decide('storm', 'Full fart så länge', sv`svajläge först när det blåser över ${Math.round(SWAY_AT * 32)} m/s`, { inc: 'storm', say: 'Vi kör på tills det blåser upp.' });
   }
 }
 

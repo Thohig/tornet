@@ -26,10 +26,10 @@ import { beginFrame, CY, lo } from './pixcore.js';
 import { drawCallPx, drawFxPx, drawGagsPx, drawHallPeople, drawHoverPx, drawSelectionPx, resetCallAt } from './pixfolk.js';
 import { countOcc, deckSign, drawChiefPx, drawEscalatorPx, drawHall, drawLeakPx, floorOverlays, resetChiefAt } from './pixhall.js';
 import { drawGroundPx, drawLanternsPx, drawShell, drawSkyAll, drawSlabsPx, drawStreetPx, drawTerracePx, terminal } from './pixbuilding.js';
-import { drawCarPx, drawPanoPx, drawRopesPx } from './pixcars.js';
+import { drawCarPx, drawPanoPx, drawRopesPx, reserveCarSigns } from './pixcars.js';
 import { drawProf, lap } from './prof.js';
 import {
-  drawBannersPx, drawBrigadePx, drawPolicePx, drawCleanerPx, drawHeliPx, drawHoistPx, drawLightningPx, drawMedicPx,
+  drawBannersPx, drawBrigadePx, reserveLobbySigns, drawPolicePx, drawCleanerPx, drawHeliPx, drawHoistPx, drawLightningPx, drawMedicPx,
   drawMovePilesPx, drawOutagePx, drawRoofPx, drawSmokePx, drawSnowPx, drawWeatherPx,
 } from './pixroof.js';
 
@@ -54,12 +54,14 @@ export function renderPixel(dt) {
   drawTerracePx(hr);
   for (const e of S.elevators) drawRopesPx(e);
   drawLanternsPx();
+  reserveCarSigns();
   for (const e of S.elevators) drawCarPx(e);
   drawLeakPx();
   lap('schakt/korgar');
   drawMovePilesPx();
   drawStreetPx(dt, hr);
   lap('gatan');
+  reserveLobbySigns();
   drawHallPeople();
   lap('folk');
   drawPanoPx();

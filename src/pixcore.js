@@ -3,7 +3,7 @@
 // (g, lo, X0 och CY byts bara här: av layer() och beginFrame() – de andra modulerna läser dem.)
 import { PAL } from './pixpal.js';
 import { ellipseSprite, fromCells, light, plain, PX, sprite, text, TEXTLOG, textW } from './pixart.js';
-import { H } from './config.js';
+import { H, W } from './config.js';
 import { clamp } from './util.js';
 import { cv, nightness, VIEW } from './view.js';
 import { S } from './state.js';
@@ -113,6 +113,18 @@ export function beginFrame() {
   taken = [];
   if (TEXTLOG.on) { TEXTLOG.ctx = G; TEXTLOG.list = []; } // (provspelningen: textrutorna i bildrutan)
   return { s, w, h };
+}
+/** Det som syns i sidled, i låga pixlar [vänster, höger]: på mobilen i närbild är bilden bredare än skärmen och
+ *  flyttad VIEW.panX css-pixlar (view.js) – text som hålls inom hela bilden kan hamna utanför skärmen. */
+export function visibleX() {
+  const k = lo.width / Math.max(1, (W - VIEW.x0) * VIEW.scale); // låga pixlar per css-pixel
+  const vx0 = VIEW.panX * k;
+  return [vx0, VIEW.panW > 0 ? Math.min(lo.width, vx0 + VIEW.panW * k) : lo.width];
+}
+/** vänsterkanten för en ruta med bredden w kring cx, inom det som syns */
+export function keepIn(cx, w) {
+  const [a, b] = visibleX();
+  return Math.round(Math.max(a + 1, Math.min(cx - w / 2, b - w - 1)));
 }
 /** närmaste lediga y för rutan (bokas), eller null om allt är upptaget */
 export function place(x, y, w, h, steps = [0, -11, 11, -22]) {

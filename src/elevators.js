@@ -359,10 +359,14 @@ export function exitOne(e, p, pf, why) {
   if (liftsAvailable() && allowed(pf) && allowed(p.goal)) { setTrip(p, p.goal, p.why); pev(p, sv`${why} – ställer mig i kön igen`); }
   else toStairs(p, sv`${why} – tar trapporna`);
 }
+/** hissteknikern på väg till ett jobb (går före kön och tränger sig in) @param {Person} p */
+const onCall = p => p.role === 'hisstekniker' && p.job != null;
 /** @param {Elevator} e */
 export function load(e, f) {
   // (dubbeldäck: folk på våningen ovanför kliver på övre däcket samtidigt)
-  const waiting = S.people.filter(p => p.state === 'wait' && (p.floor === f || (e.deck2 && p.floor === f + 1 && e.upper.has(p.floor)))).sort((a, b) => a.waitStart - b.waitStart);
+  // först till kvarn – utom hissteknikern på väg till ett jobb, som får gå före kön (folket släpper fram hen)
+  const waiting = S.people.filter(p => p.state === 'wait' && (p.floor === f || (e.deck2 && p.floor === f + 1 && e.upper.has(p.floor))))
+    .sort((a, b) => +onCall(b) - +onCall(a) || a.waitStart - b.waitStart);
   // varje person kommenterar ett visst hisstopp högst en gång (per hiss – annars spammas loggen
   // när två hissar står öppna samtidigt på samma våning)
   /** @param {Person} p */
@@ -389,7 +393,7 @@ export function load(e, f) {
     if (p.crowdSkip === stop) continue;
     const n = (e.passengers.length + e.reserved) * CAP / e.cap;
     const room = p.space + (S.strategy === 'peak' && S.peakMode ? 2 : 0);
-    if (!keyed(p) && n >= room && S.t - p.waitStart < 20 && !slotsFull(e)) {
+    if (!keyed(p) && !onCall(p) && n >= room && S.t - p.waitStart < 20 && !slotsFull(e)) {
       p.crowdSkip = stop; S.stats.crowdSkips++; e.skipTrip = e.trips;
       pev(p, sv`Hiss ${e.name} ser trång ut (${e.passengers.length + e.reserved} personer) – väntar hellre på nästa`);
       if (!buttons) { p.assigned = null; p.avoid = e.id; rebuildPicks(); }

@@ -248,7 +248,7 @@
   },
   "eco-501": {
     "resor": 944,
-    "väntSumma": 10002.667,
+    "väntSumma": 10002.533,
     "längstaVäntan": 76.8,
     "arga": 9,
     "incidenter": 0,
@@ -259,11 +259,11 @@
     "utrymda": 0,
     "hissfel": 2,
     "servade": 6,
-    "energi": 50.7045,
+    "energi": 50.7041,
     "loggrader": 300,
     "personer": 199,
     "kvar": 14,
-    "hissar": "L1@3.0000:147stopp:308.00vån L2@3.0000:108stopp:213.00vån X1@8.9330:94stopp:485.93vån X2@9.0000:58stopp:276.00vån H1@9.0000:139stopp:290.00vån H2@17.0000:116stopp:214.00vån V@3.0000:88stopp:373.00vån P@9.0000:55stopp:354.00vån"
+    "hissar": "L1@3.0000:147stopp:308.00vån L2@3.0000:108stopp:213.00vån X1@8.9498:94stopp:485.95vån X2@9.0000:58stopp:276.00vån H1@9.0000:139stopp:290.00vån H2@17.0000:116stopp:214.00vån V@3.0000:88stopp:373.00vån P@9.0000:55stopp:354.00vån"
   },
   "buttons-601": {
     "resor": 953,

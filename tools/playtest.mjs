@@ -81,6 +81,7 @@ const CANVAS_JS = async () => {
   const FRONT = [
     [/pixcars\.js/, /^lantern /], // korgen åker framför våningsdisplayen ovanför schaktdörren
     [/^drawCarPx /, /^cabinPx /], // korgens egna skyltar (zzz, FULLT!) över vågen på korgens överkant
+    [/^drawFireTruckPx /, /^dockTruck /], // brandbilen ställer sig framför bilen vid lastkajen
     // det som ska synas över allt annat: ljudeffekterna, incidentbanderollerna överst och det spelaren följer
     [/^(drawFxPx|drawBannersPx|trackNote|drawSelectionPx) /, /./],
   ];
@@ -126,8 +127,6 @@ const KNOWN = new Set([
   'bubble över cabinPx', // repliker från folk i korgen över vågen på korgens överkant (korgarna bokar ingen plats)
   'bubble över thought', 'thought över bubble', 'thought över thought', // repliker och tankebubblor i korgen och hallen bokar olika
   'drawCarPx över bubble', // korgens skylt (LINBYTE) över en replik från någon i korgen
-  'bubble över drawBrigadePx', 'drawBrigadePx över thought', 'drawPolicePx över bubble', // blåljusens skyltar bokar ingen plats
-  'drawGagsPx över trackNote', // repliken från rummen ritas efter spårlappen
   'bubble över lantern', // en replik över våningsdisplayen ovanför schaktdörren
   'drawOutagePx över drawCarPx', // de instängdas HJÄLP! över korgens skylt (STÄNGD – STORM)
 ]);

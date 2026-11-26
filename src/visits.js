@@ -291,7 +291,7 @@ export function moverTimer(p) {
   const it = M.items.find(x => x.st === 'home');
   if (!it) return 0.5;
   it.st = 'packing'; p.item = it.id;
-  if (big(it)) pev(p, it.key === 'piano' ? 'Spänner fast pianot på kärran – försiktigt!' : sv`Skruvar isär ${it.name.replace(/^(en|ett) /, '')}`);
+  if (big(it)) pev(p, it.key === 'piano' ? 'Spänner fast pianot på kärran – försiktigt!' : sv`Skruvar isär ${it.name}`);
   let t = rand(PACK_T[it.size][0], PACK_T[it.size][1]);
   // Smart: kartongerna får vänta en stund när buden står i kö vid varuhissen
   if (M.smart && M.route === 'auto' && it.size === 'S' && freightQueue() >= 2) {

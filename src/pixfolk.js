@@ -13,7 +13,7 @@ import { noteDetail, stateInfo } from './describe.js';
 import { CREW_BY } from './crew.js';
 import { vpick, vrand } from './rng.js';
 import { VIEW, tinyText } from './view.js';
-import { ants, ARROW, box, g, INK, label, line, lo, pill, place, R, X, Y } from './pixcore.js';
+import { ants, ARROW, box, g, INK, keepIn, label, line, lo, pill, place, R, reserve, X, Y } from './pixcore.js';
 import { blinkOf, hoseSpray } from './pixcars.js';
 import { sv } from './sv.js';
 /** @typedef {import('./people.js').Person} Person */
@@ -100,19 +100,25 @@ function looseDog(p, fx, fy, dir, walking, frame) {
   g.drawImage(d.c, fx - Math.round(d.c.width / 2), fy - d.c.height + 1);
   if (Math.sin(S.anim * 1.7 + p.id) > 0.9) bark(fx, fy - d.c.height);
 }
-export function bark(cx, y) { text(g, 'VOV!', cx, y - 6, '#ffffff', 'center', 1, INK); }
+/** skallet ritas bara där det finns plats (det kommer snart igen) */
+export function bark(cx, y) {
+  const w = textW('VOV!') + 2;
+  if (place(Math.round(cx - w / 2), y - 7, w, 7, [0, -8]) !== null) text(g, 'VOV!', cx, y - 6, '#ffffff', 'center', 1, INK);
+}
 /** @param {Person} p */
 export const talking = p => !!(p.say && S.t < p.say.until);
 /** pratbubbla med namn och replik, med en liten pil ner mot personen @param {Person} p */
 export function speech(p, cx, y) { bubble(`${p.name}: "${p.say.text}"`, cx, y); }
+/** en replik som måste synas letar plats allt högre upp (med ett streck ner till personen) innan den ger upp */
+const UP = [0, -11, -22, -33, -44, -55, -66, -77, -88];
 export function bubble(str, cx, y0, fill = '#ffffff', optional = false) {
   const s = plain(str);
-  // (bubblan hålls inom bilden – pilen pekar ändå på personen)
-  const w = Math.min(textW(s) + 6, 260), x = clamp(Math.round(cx - w / 2), 1, Math.max(1, lo.width - w - 1));
+  // (bubblan hålls inom det som syns, även på mobilen – pilen pekar ändå på personen)
+  const w = Math.min(textW(s) + 6, 260), x = keepIn(cx, w);
   // repliker är viktiga: de flyttas uppåt om platsen är tagen, men ritas alltid – utom de som också syns
-  // någon annanstans (optional: driftchefen vid bordet, vars replik rullar i driftcentralens textremsa)
-  const py = place(x, y0, w, 9, [0, -11, -22]);
-  if (py === null && optional) return;
+  // någon annanstans (optional: driftchefen och samtalet till hissjouren, som står i Driftradion)
+  const py = place(x, y0, w, 9, optional ? [0, -11, -22] : UP);
+  if (py === null && (bubble2(s, cx, y0, fill) || optional)) return; // (för bred: på två rader får den oftast plats)
   const y = py ?? y0;
   if (y < y0) R(cx, y + 9, 1, y0 - y, INK);
   pill(x, y, w, 9, fill);
@@ -120,6 +126,27 @@ export function bubble(str, cx, y0, fill = '#ffffff', optional = false) {
   text(g, s, x + 3, y + 1, INK);
   g.restore();
   R(cx - 1, y0 + 9, 3, 1, INK); R(cx, y0 + 10, 1, 1, INK);
+}
+/** Repliken på två rader, när den inte fick plats på en (en lång replik är lika bred som hallen och krockar
+ *  med skyltarna på alla höjder). true = den fick plats och ritades. */
+function bubble2(s, cx, y0, fill) {
+  const words = s.split(' ');
+  if (words.length < 2) return false;
+  // brytningen där den längsta raden blir kortast
+  let cut = 1, bw = Infinity;
+  for (let i = 1; i < words.length; i++) {
+    const m = Math.max(textW(words.slice(0, i).join(' ')), textW(words.slice(i).join(' ')));
+    if (m < bw) { bw = m; cut = i; }
+  }
+  const h = 15, w = Math.min(bw + 6, 260), x = keepIn(cx, w);
+  const y = place(x, y0 - 6, w, h, UP);
+  if (y === null) return false;
+  if (y + h < y0 + 9) R(cx, y + h, 1, y0 + 9 - y - h, INK);
+  pill(x, y, w, h, fill);
+  text(g, words.slice(0, cut).join(' '), x + 3, y + 1, INK);
+  text(g, words.slice(cut).join(' '), x + 3, y + 8, INK);
+  R(cx - 1, y0 + 9, 3, 1, INK); R(cx, y0 + 10, 1, 1, INK);
+  return true;
 }
 /** tankebubblan: mål och tilldelad hiss (n = hur många som tänker samma sak) @param {Person} p */
 function thought(p, x, y, n = 1) {
@@ -177,7 +204,7 @@ export function drawCallPx() {
   const reply = S.t - C.t0 >= CALL_REPLY;
   const str = reply ? 'Hissjouren: "Uppfattat – vi skickar en kollega direkt!"'
     : C.trapped ? sv`${p.name}: "Jouren? Folk sitter fast i ${C.trapped} – skicka en till!"` : sv`${p.name}: "Jouren? ${C.n} hissar trasiga i kö – skicka en till!"`;
-  bubble(str, at.x, at.y - 18, reply ? '#fff6a8' : '#ffffff');
+  bubble(str, at.x, at.y - 18, reply ? '#fff6a8' : '#ffffff', true); // (samtalet står i Driftradion)
 }
 
 // ---------- Spårning, muspekare, pratbubblor ----------
@@ -204,7 +231,7 @@ function trackNote(p, x, yb, side) {
   const w1 = textW(name), w2 = textW(sl) + 5, w3 = textW(detail);
   const w = Math.max(w1 + w2 + 4, w3) + 8, h = 18;
   const bx = side ? x + 4 : clamp(x - Math.round(w / 2), 2, lo.width - w - 2), by = yb - h;
-  pill(bx, by, w, h, PAL.note);
+  pill(bx, by, w, h, PAL.note); reserve(bx, by, w, h); // (det som ritas efter, som repliker från rummen, flyttar sig)
   if (side) { R(bx - 3, by + 7, 4, 1, INK); R(bx - 2, by + 6, 1, 3, INK); R(bx - 1, by + 5, 1, 5, INK); R(bx, by + 6, 1, 3, PAL.note); }
   else { R(x - 2, by + h, 5, 1, INK); R(x - 1, by + h + 1, 3, 1, INK); R(x, by + h + 2, 1, 1, INK); R(x - 1, by + h - 1, 3, 1, PAL.note); R(x, by + h, 1, 1, PAL.note); }
   text(g, name, bx + 4, by + 1, INK);

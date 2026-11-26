@@ -182,7 +182,10 @@ function finish(P, e) {
   P.ph = 'done'; P.t1 = S.t;
   e.fault.trapped = false; // (nu kan teknikern laga hydrauliken)
   for (const p of S.people) if (p.rescue && p.state === 'office') p.timer = Math.min(p.timer, 1);
-  const how = P.setup === 'rope' ? sv`räddningstjänsten firade ner ${P.n === 1 ? 'hen' : 'dem en i taget'} med rep från taket` : sv`${P.n === 1 ? 'hen' : 'de'} klättrade ner för stegbilens stege`;
+  // (hela fraser i båda grenarna: ett pronomen som eget värde blir kvar på svenska i översättningen)
+  const how = P.setup === 'rope'
+    ? (P.n === 1 ? 'räddningstjänsten firade ner hen med rep från taket' : 'räddningstjänsten firade ner dem en i taget med rep från taket')
+    : (P.n === 1 ? 'hen klättrade ner för stegbilens stege' : 'de klättrade ner för stegbilens stege');
   log(sv`✅ Alla ute ur ${e.name} – ${P.out} räddade på ${Math.round(S.t - P.t0)} s`, 'alert', e.color);
   incidentOver('pano', sv`✅ Alla är ute ur ${e.name}`,
     sv`${P.n} satt fast på fasaden i ${Math.round(S.t - P.t0)} s – ${how}. Hissteknikern byter hydraulventilen innan ${e.name} går igen.`, { car: e.id });

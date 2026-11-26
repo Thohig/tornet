@@ -3,7 +3,7 @@
 import { S } from './state.js';
 import { CAR_H, CAR_W, DOOR_X, EL, floorY, FULL_LOAD, GROUND_Y, SHAFT_W, shaftCX, shaftX } from './config.js';
 import { RAISE_T, riderPos, RIG_T, ROPE_DX } from './pano.js';
-import { dark, led, light, PX, text, textW } from './pixart.js';
+import { dark, led, light, plain, PX, text, textW } from './pixart.js';
 import { clamp, fl } from './util.js';
 import { cargoSprite, PERSON_H, PERSON_W, personSprite } from './pixpeople.js';
 import { PAL } from './pixpal.js';
@@ -13,7 +13,7 @@ import { nextOut, techOf, WARM_AT } from './service.js';
 import { VIEW } from './view.js';
 import { carSlot, carSlotX } from './render.js';
 import { cabinKg } from './dispatch.js';
-import { ants, box, CY, g, INK, label, line, lo, PUFF, R, X, Y } from './pixcore.js';
+import { ants, box, CY, g, INK, label, line, lo, PUFF, R, reserve, X, Y } from './pixcore.js';
 import { winFig } from './pixhall.js';
 import { shaftBot, shaftTop } from './pixbuilding.js';
 import { bark, DOGS, hotOf, phoneOn, speech, talking } from './pixfolk.js';
@@ -72,6 +72,15 @@ function carGeom(e) {
   if (yt > lo.height + 40 || yb < -40) return null;
   return { x, cw, chh, ybOf, top, yb, yt };
 }
+/** Dubbeldäckarnas skyltar (ÖVRE/NEDRE DÄCK) bokar sin plats innan korgarna och folket ritas: repliker och
+ *  tankebubblor flyttar sig i stället för att hamna över (eller under) skylten. */
+export function reserveCarSigns() {
+  for (const e of S.elevators) {
+    const G = e.deck2 ? carGeom(e) : null;
+    if (!G) continue;
+    for (let k = 0; k < G.top; k++) reserve(G.x + 2, G.ybOf(k) - G.chh + 1, textW(plain(k ? 'ÖVRE DÄCK' : 'NEDRE DÄCK')) + 2, 7);
+  }
+}
 /** motvikt och bärlinor: ritas före våningsdisplayerna (som sitter framför schakten) och korgarna @param {Elevator} e */
 export function drawRopesPx(e) {
   const G = carGeom(e);
@@ -119,23 +128,35 @@ export function drawRopesPx(e) {
     }
   }
 }
+/** Korgens två skyltplatser (ovanför och mitt på): den första som ber om en plats får den i bildrutan.
+ *  show = false: platsen hålls men skylten är släckt (blinkar). */
+const slot = {
+  cx: 0, yt: 0, chh: 0, topUsed: false, midUsed: false,
+  /** @param {number} cx @param {number} yt @param {number} chh */
+  reset(cx, yt, chh) { this.cx = cx; this.yt = yt; this.chh = chh; this.topUsed = this.midUsed = false; },
+  /** @param {string} s @param {string} fill @param {string} [color] */
+  top(s, fill, color = INK, show = true) { if (this.topUsed) return; this.topUsed = true; if (show) label(s, this.cx, this.yt - 11, fill, color); },
+  /** @param {string} s @param {string} fill @param {string} [color] */
+  mid(s, fill, color = INK, show = true, dy = 0) { if (this.midUsed) return; this.midUsed = true; if (show) label(s, this.cx, this.yt + this.chh / 2 - 4 + dy, fill, color); },
+};
 /** Ett hissfel syns på sitt sätt: rök ur motorn, ERR på styrkortet, gnistor från bromsen, nivåpilar –
  *  och vid ett fel mellan två våningar sitter folk fast med nödljuset tänt och knackar @param {Elevator} e */
 function faultPx(e, x, cw, chh, yt, yb) {
   const F = e.fault, kind = F ? F.kind : '';
   if (F && F.trapped) {
     R(x + 2, yt + 2, cw - 4, chh - 4, 'rgba(255,214,120,.14)'); R(x + Math.round(cw / 2) - 2, yt + 1, 5, 1, '#ffe9a8');
-    if (Math.sin(S.anim * 4 + e.id) > 0) label('INSTÄNGDA!', x + cw / 2, yt - 11, '#ffffff', '#ff2d55');
-    else if (Math.sin(S.anim * 2.3 + e.id) > 0.4) label('KNACK KNACK', x + cw / 2, yt + chh / 2, '#ffffff', INK);
-    else label('FEL!', x + cw / 2, yt - 11, '#ff2d55', '#ffffff');
-  } else if (Math.sin(S.anim * 6) > -0.4) label('FEL!', x + cw / 2, yt - 11, '#ff2d55', '#ffffff');
+    const knock = Math.sin(S.anim * 4 + e.id) <= 0 && Math.sin(S.anim * 2.3 + e.id) > 0.4;
+    if (Math.sin(S.anim * 4 + e.id) > 0) slot.top('INSTÄNGDA!', '#ffffff', '#ff2d55');
+    else slot.top('FEL!', '#ff2d55', '#ffffff', !knock);
+    if (knock) slot.mid('KNACK KNACK', '#ffffff', INK, true, 4);
+  } else slot.top('FEL!', '#ff2d55', '#ffffff', Math.sin(S.anim * 6) > -0.4);
   if (kind === 'motor') for (let i = 0; i < 3; i++) {
     const k = (S.anim * 0.7 + i / 3) % 1;
     g.globalAlpha = (1 - k) * 0.6;
     g.drawImage(PUFF(2 + Math.round(k * 3)), x + cw / 2 - 4 + i * 3, yt - 8 - Math.round(k * 14));
     g.globalAlpha = 1;
   }
-  if (kind === 'board' && Math.sin(S.anim * 8) > 0) label('ERR 0x1F', x + cw / 2, yt + chh / 2 - 4, '#7cf06b', INK);
+  if (kind === 'board') slot.mid('ERR 0x1F', '#7cf06b', INK, Math.sin(S.anim * 8) > 0);
   if (kind === 'brake' && Math.sin(S.anim * 9) > 0.2) for (const sx of [x - 2, x + cw + 1]) for (let n = 0; n < 3; n++) {
     R(sx + Math.round(vrand(-1, 1)), yb - Math.round(vrand(2, chh - 2)), 1, 1, vpick(['#ffd23f', '#ffffff', '#ff9f1c']));
   }
@@ -209,37 +230,40 @@ export function drawCarPx(e) {
   for (let k = 0; k <= top; k++) cabinPx(e, k, x, ybOf(k), body, k === top);
   drawCableRescue(e, G);
   if (VIEW.follow === e.id) ants(x - 3, yt - 3, cw + 6, yb - yt + 6, '#7dff9a');
-  if (e.overloadFlash > 0) { if (Math.sin(S.anim * 18) > -0.2) label('ÖVERLAST!', x + cw / 2, yt - 11, '#ff2d55', '#ffffff'); }
-  else if (e.fullFlash > 0) label('FULLT!', x + cw / 2, yt - 11, '#ffffff', '#ff2d55');
-  if (e.off) label('UR DRIFT', x + cw / 2, yt + chh / 2 - 4, '#ffe14d');
+  // Skyltarna: en ovanför korgen och en mitt på den. Den viktigaste tar platsen (ordningen nedan) – en
+  // blinkande skylt håller sin plats även när den är släckt, så att två skyltar inte turas om.
+  slot.reset(x + cw / 2, yt, chh);
+  if (e.overloadFlash > 0) slot.top('ÖVERLAST!', '#ff2d55', '#ffffff', Math.sin(S.anim * 18) > -0.2);
+  else if (e.fullFlash > 0) slot.top('FULLT!', '#ffffff', '#ff2d55');
+  if (e.mode === 'snapped') slot.mid('LINBROTT!', '#ff2d55', '#ffffff', Math.sin(S.anim * 7) > -0.3);
+  if (e.mode === 'broken' && e.fault && e.fault.cable) slot.mid('LINBYTE', '#ffd23f');
+  else if (e.mode === 'broken') { faultPx(e, x, cw, chh, yt, yb); }
+  if (e.off) slot.mid('UR DRIFT', '#ffe14d');
   if (e.sleep) for (let i = 0; i < 3; i++) {
     const k = (S.anim * 0.5 + i / 3) % 1;
     g.globalAlpha = 1 - k; text(g, 'Z', x + cw / 2 + 3 + Math.round(k * 7), yt - 3 - Math.round(k * 13), '#bfeaff', 'left', i === 2 ? 2 : 1, INK); g.globalAlpha = 1;
   }
-  if (e.zoneLock) label('SPÄRRAD', x + cw / 2, yt - 11, '#ff2d55', '#ffffff');
-  if (e.mode === 'locked') label('AVSTÄNGD', x + cw / 2, yt - 11, '#ff2d55', '#ffffff');
-  if (e.mode === 'recall') label(sv`→ TILL ${fl(e.home)}`, x + cw / 2, yt - 11, '#ff8c42');
-  if (e.mode === 'rescue') label('NÖDSÄNK', x + cw / 2, yt - 11, '#7dff9a');
-  if (e.mode === 'normal' && S.power && e.restartAt && S.t < e.restartAt) label('OMSTART', x + cw / 2, yt - 11, '#7dff9a');
-  if (e.mode === 'lift' || e.liftWant) label(e.mode === 'lift' ? 'FLYTTLASS' : '→ FLYTTLASS', x + cw / 2, yt - 11, '#ff8c42');
-  if (e.mode === 'snapped') { if (Math.sin(S.anim * 7) > -0.3) label('LINBROTT!', x + cw / 2, yt + chh / 2 - 4, '#ff2d55', '#ffffff'); }
-  if (e.mode === 'broken' && e.fault && e.fault.cable) label('LINBYTE', x + cw / 2, yt + chh / 2 - 4, '#ffd23f');
-  else if (e.mode === 'broken') { faultPx(e, x, cw, chh, yt, yb); }
+  if (e.zoneLock) slot.top('SPÄRRAD', '#ff2d55', '#ffffff');
+  if (e.mode === 'locked') slot.top('AVSTÄNGD', '#ff2d55', '#ffffff');
+  if (e.mode === 'recall') slot.top(sv`→ TILL ${fl(e.home)}`, '#ff8c42');
+  if (e.mode === 'rescue') slot.top('NÖDSÄNK', '#7dff9a');
+  if (e.mode === 'lift' || e.liftWant) slot.top(e.mode === 'lift' ? 'FLYTTLASS' : '→ FLYTTLASS', '#ff8c42');
+  if (e.mode === 'service') slot.top(e.serviceAsap ? 'NIVÅJUSTERING' : 'SERVICE', '#ffd23f');
+  if (e.hold && e.mode === 'normal') slot.top('→ SERVICE', '#ffd23f');
+  if (e.mode === 'normal' && !e.hold) {
+    if (e.hot) slot.top('ÖVERHETTAD!', '#ff5d52', '#ffffff', Math.sin(S.anim * 5) > -0.3);
+    else if (e.windLock) slot.top('STÄNGD – STORM', '#5b8fb9', '#ffffff');
+    else if (e.ffCar) slot.top('BRANDHISS', '#ffffff', '#c81e3a');
+    else if (e.indep) slot.top('FLYTT · NYCKEL', '#d4a017');
+    else if (e.medicHold) slot.top('AMBULANS · VÄNTAR', '#2ec4b6');
+  }
   // förvarning: det gnisslar och hackar i korgen
   if (S.warn && S.warn.type === 'fault' && S.warn.car === e.id && e.mode === 'normal') {
-    if (Math.sin(S.anim * 6) > 0) label('GNISSEL…', x + cw / 2, yt - 11, '#ffe9a8', INK);
+    slot.top('GNISSEL…', '#ffe9a8', INK, Math.sin(S.anim * 6) > 0);
     if (Math.sin(S.anim * 13) > 0.6) for (let n = 0; n < 2; n++) R(x - 1 + (n ? cw + 1 : 0), yt + Math.round(vrand(4, chh - 4)), 1, 1, '#ffd23f');
   }
-  if (e.mode === 'service') label(e.serviceAsap ? 'NIVÅJUSTERING' : 'SERVICE', x + cw / 2, yt - 11, '#ffd23f');
-  if (e.hold && e.mode === 'normal') label('→ SERVICE', x + cw / 2, yt - 11, '#ffd23f');
-  if (e.mode === 'normal' && !e.hold) {
-    if (e.hot) { if (Math.sin(S.anim * 5) > -0.3) label('ÖVERHETTAD!', x + cw / 2, yt - 11, '#ff5d52', '#ffffff'); }
-    else if (e.windLock) label('STÄNGD – STORM', x + cw / 2, yt - 11, '#5b8fb9', '#ffffff');
-    else if (e.ffCar) label('BRANDHISS', x + cw / 2, yt - 11, '#ffffff', '#c81e3a');
-    else if (e.indep) label('FLYTT · NYCKEL', x + cw / 2, yt - 11, '#d4a017');
-    else if (e.medicHold) label('AMBULANS · VÄNTAR', x + cw / 2, yt - 11, '#2ec4b6');
-    else if (e.heat >= WARM_AT && e.state === 'moving') label('VARM', x + cw / 2, yt - 11, '#ff8c42');
-  }
+  if (e.mode === 'normal' && S.power && e.restartAt && S.t < e.restartAt) slot.top('OMSTART', '#7dff9a');
+  if (e.mode === 'normal' && !e.hold && e.heat >= WARM_AT && e.state === 'moving') slot.top('VARM', '#ff8c42');
   // en stamgäst i korgen som pratar
   const talker = e.passengers.find(talking);
   if (talker) speech(talker, x + cw / 2, yt - 23);

@@ -435,9 +435,9 @@ export function drawChiefPx() {
     at = hd && !hd.hidden ? { x: X(hd.x), y: Y(hd.y) + 11 } : chiefAt;
   }
   if (!at) return;
-  // (vid bordet rullar repliken redan i fönstrets textremsa: får bubblan ingen ledig plats ritas den inte,
-  // i stället för ovanpå våningsskylten och fönstrets rubrik)
-  bubble(`${who.name}: "${C.say.text}"`, at.x, at.y - 14, C.say.dec ? '#fff6a8' : '#ffffff', at === chiefAt);
+  // (repliken står i Driftradion – och vid bordet rullar den i fönstrets textremsa: får bubblan ingen ledig
+  // plats ritas den inte, i stället för ovanpå våningsskylten och rummens rubriker)
+  bubble(`${who.name}: "${C.say.text}"`, at.x, at.y - 14, C.say.dec ? '#fff6a8' : '#ffffff', true);
 }
 // ---------- Personalrummet: där driftcheferna fikar ----------
 // Ett fönster i hallens bakvägg, som kontrollrummet: soffa, bord med korsord, kaffebryggare och kylskåp.

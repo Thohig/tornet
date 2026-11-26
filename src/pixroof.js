@@ -12,7 +12,7 @@ import { plain, PX, text, textW } from './pixart.js';
 import { nightness, VIEW } from './view.js';
 import { WARM_AT } from './service.js';
 import { vrand } from './rng.js';
-import { box, CY, g, HELI, INK, label, line, lo, pill, PUFF, R, RELIGHT_S, wheelSprite, X, Y } from './pixcore.js';
+import { box, CY, g, HELI, INK, label, line, lo, pill, PUFF, R, RELIGHT_S, reserve, visibleX, wheelSprite, X, Y } from './pixcore.js';
 import { BASE_Y, SEAM_Y, shaftTop, stackedAbove, UX1 } from './pixbuilding.js';
 import { stairSign, winFig } from './pixhall.js';
 import { blinkOf } from './pixcars.js';
@@ -302,8 +302,7 @@ export function drawBannersPx() {
   if (S.storm) list.push([sv`🌬️ STORM${S.storm.mode === 'sway' ? ' – SVAJLÄGE' : ''}`, '#2a5db0']);
   // mitt i det som syns: på mobilen i närbild är bilden bredare än skärmen och flyttad panX css-pixlar i sidled
   // (view.js) – mitt i hela bilden hamnar skylten halvvägs utanför. Får den inte plats blir texten mindre.
-  const k = lo.width / Math.max(1, (W - VIEW.x0) * VIEW.scale); // låga pixlar per css-pixel
-  const vx0 = VIEW.panX * k, vw = VIEW.panW > 0 ? Math.min(lo.width - vx0, VIEW.panW * k) : lo.width;
+  const [vx0, vx1] = visibleX(), vw = vx1 - vx0;
   list.forEach(([t, c], i) => {
     const s = plain(t), on = Math.sin(S.anim * 6) > -0.3, y = Math.round(VIEW.camY / PX) - CY + 6 + i * 18;
     const sc = textW(s) * 2 + 16 <= vw - 4 ? 2 : 1, w = textW(s) * sc + 16, h = sc === 2 ? 16 : 11;
@@ -328,6 +327,22 @@ export function drawSnowPx(dt) {
     if (outside(f.x, f.y)) R(X(f.x), Y(f.y), 1, 1, 'rgba(255,255,255,.85)');
   }
 }
+/** Blåljusskyltarna i entrén: en rad var, i ordningen brandkåren, ambulansen, polisen (de kan vara där samtidigt). */
+function lobbySigns() {
+  const top = Y(floorY(LOBBY + 1) + 4), x1 = X(INNER_X1), A = S.medic, Hs = S.heist;
+  /** @type {{ k: string, s: string, cx: number, fill: string, color: string }[]} */
+  const out = [];
+  if (S.brigade || (S.fire && S.fire.brigade)) out.push({ k: 'brigade', s: 'BRANDKÅREN', cx: x1 - 58, fill: '#ffffff', color: '#c81e3a' });
+  if (A && A.state !== 'done' && A.state !== 'called') out.push({ k: 'medic', s: 'AMBULANS', cx: x1 - 50, fill: '#ffffff', color: '#2ec4b6' });
+  if (Hs && Hs.police && !(Hs.ph === 'done' && !Hs.caught)) out.push({ k: 'police', s: 'POLISEN', cx: x1 - 50, fill: '#ffffff', color: '#2a5db0' });
+  return out.map((o, i) => ({ ...o, y: top + 12 + i * 11 }));
+}
+/** skyltarna bokar sin plats innan folket i hallen ritas (namnbrickor och bubblor flyttar sig) */
+export function reserveLobbySigns() {
+  for (const o of lobbySigns()) { const w = textW(plain(o.s)) + 5; reserve(Math.round(o.cx - w / 2), o.y, w, 9); }
+}
+/** @param {string} k */
+function lobbySign(k) { const o = lobbySigns().find(q => q.k === k); if (o) label(o.s, o.cx, o.y, o.fill, o.color); }
 /** ambulansen: blått blinkljus i entrén medan personalen är i huset */
 export function drawMedicPx() {
   const A = S.medic;
@@ -338,7 +353,7 @@ export function drawMedicPx() {
   if (on) R(x0, top, X(INNER_X1) - x0, bot - top, 'rgba(60,120,255,.12)');
   const x1 = X(INNER_X1);
   box(x1 - 22, top + 3, 7, 5, on ? '#3f7cff' : '#1b2a6e');
-  label('AMBULANS', x1 - 50, top + 12, '#ffffff', '#2ec4b6');
+  lobbySign('medic');
 }
 /** Stormen: mörkare himmel (även som förvarning), regn och blixtar – och blixten som slår ut strömmen */
 export function drawWeatherPx() {
@@ -376,9 +391,8 @@ export function drawPolicePx() {
     const x0 = X(LAND_X0), x1 = X(INNER_X1);
     R(x0, top, x1 - x0, bot - top, on ? 'rgba(60,120,255,.12)' : 'rgba(60,120,255,.04)');
     box(x1 - 32, top + 3, 7, 5, on ? '#3f7cff' : '#1b2a6e'); box(x1 - 22, top + 3, 7, 5, on ? '#1b2a6e' : '#3f7cff');
-    // (brandkåren i entrén samtidigt: polisens skylt en rad under, drawBrigadePx)
-    const both = f === LOBBY && (S.brigade || (S.fire && S.fire.brigade));
-    label(f === LOBBY ? 'POLISEN' : 'INSATSSTYRKAN', x1 - (f === LOBBY ? 50 : 66), top + 12 + (both ? 11 : 0), '#ffffff', '#2a5db0');
+    if (f === LOBBY) lobbySign('police'); // (under brandkårens och ambulansens skyltar, lobbySigns)
+    else label('INSATSSTYRKAN', x1 - 66, top + 12, '#ffffff', '#2a5db0');
   }
 }
 /** Brandkåren: blåljus i entrén och folket på återsamlingsplatsen utanför entrédörren */
@@ -390,7 +404,7 @@ export function drawBrigadePx() {
     const on = Math.sin(S.anim * 11) > 0;
     R(x0, top, x1 - x0, bot - top, on ? 'rgba(255,45,85,.10)' : 'rgba(60,120,255,.10)');
     box(x1 - 32, top + 3, 7, 5, on ? '#ff2d55' : '#7a2033'); box(x1 - 22, top + 3, 7, 5, on ? '#1b2a6e' : '#3f7cff');
-    label('BRANDKÅREN', x1 - 58, top + 12, '#ffffff', '#c81e3a');
+    lobbySign('brigade');
   }
   const out = S.people.filter(p => p.state === 'assembly');
   if (!out.length) return;
