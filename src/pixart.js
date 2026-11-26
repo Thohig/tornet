@@ -170,16 +170,30 @@ function scaleUp(src, k) {
   const g = c.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(src, 0, 0, c.width, c.height);
   return c;
 }
+/** Textrutorna i den senaste bildrutan (bara när provspelningen slår på det, tools/playtest.mjs): var texten
+ * hamnade i bilden, så att text som ritas över annan text går att hitta. ctx = bildens ritning (pixcore.js
+ * sätter den i beginFrame), text i lagren räknas inte. */
+export const TEXTLOG = { on: false, ctx: /** @type {CanvasRenderingContext2D|null} */ (null),
+  list: /** @type {{ s: string, x: number, y: number, w: number, h: number, at: string }[]} */ ([]) };
 /** rita text; align 'left' | 'center' | 'right'; y = textens överkant (accentraden) */
 export function text(g, str, x, y, color = INK, align = 'left', scale = 1, outline = null) {
   const s = textSprite(str, color, scale, outline);
   if (!s.width) return 0; // (en tom text – drawImage kastar ett fel för en canvas med bredden 0)
   const dx = align === 'center' ? Math.round(s.width / 2) : align === 'right' ? s.width : 0;
   g.drawImage(s, Math.round(x - dx), Math.round(y));
+  if (TEXTLOG.ctx === g) {
+    // (var i koden texten ritades: raderna i stacken utanför pixart.js och pixcore.js – den första ger filen och
+    // raden, den första med ett namn ger funktionen, även när texten ritas i en anonym funktion)
+    const own = (new Error().stack || '').split('\n').filter(l => /\/src\/(pix(?!art|core)\w*|render)\.js/.test(l));
+    const fn = own.map(l => (l.match(/at ([\w$]+) \(/) || [])[1]).find(Boolean) || '';
+    TEXTLOG.list.push({ s: tr(str), x: Math.round(x - dx), y: Math.round(y), w: s.width, h: s.height,
+      at: `${fn} ${((own[0] || '').match(/\/src\/([\w.]+:\d+)/) || [])[1] || ''}`.trim() });
+  }
   return s.width;
 }
 /** emoji och tecken som saknas i typsnittet tas bort, dubbla mellanslag slås ihop */
-export const plain = str => [...str].filter(ch => glyph(ch)).join('').replace(/\s+/g, ' ').trim();
+// (texten översätts först: mallarna i lang-en.js räknar med tecknen som tas bort, som ~ och emoji)
+export const plain = str => [...tr(str)].filter(ch => glyph(ch)).join('').replace(/\s+/g, ' ').trim();
 
 // ---------- LED-siffror (4×7) för våningsdisplayer och hissnamn ----------
 // Större och tydligare än brödtexten (3×5): siffror, våningsbokstäverna P/E/T, hissarnas bokstäver och pilar.

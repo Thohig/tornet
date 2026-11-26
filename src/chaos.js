@@ -4,6 +4,14 @@
 // det som inte hinner bli av inom stegets väntetid hoppas över. Sedan tar huset hand om resten själv:
 // driftchefen fattar sina beslut som vanligt. Kedjan har en egen slumpström ('kaos'): brandvåningen,
 // pauserna mellan stegen.
+//
+// Översikt:
+// Murphys lag: kaosknappen (`act('chaos')`, en gång per dygn – `S.chaosDay`, `chaosReady()`). Startar en kedja
+// (`S.chaos`, stegen i `STEPS`) av allt som kan gå fel i en ordning där det går (kuppen kräver ström, ingen brand
+// och ledig lastkaj): värmebölja/ambulans/tågstörning/VIP → storm med blixt → het motor → hissfel/linbrott/fasaden →
+// turistbuss → brand → kupp → flytt. Varje steg har `ready`/`wait` och hoppas över om det inte kan börja i tid; när
+// det lugnat sig sammanfattar `incidentOver('chaos', …)`. Egen slumpström `kaos`. Knappen med plastlocket i
+// panels.js (`chaosBtn`)
 import { anyIncident, chaosIn, systems } from './systems.js';
 import { stream } from './rng.js';
 const { pick, rand } = stream('kaos');

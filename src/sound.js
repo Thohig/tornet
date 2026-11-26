@@ -3,12 +3,19 @@
 // ändrar aldrig simuleringen. Ljudet är avstängt från början; webbläsaren kräver ett klick innan något får låta.
 // Rytmen i huset: när musik spelar skjuts dörrarnas och plingens ljud fram till nästa sextondel i musikens takt
 // (onGrid i music.js), och plingets andra ton kommer två sextondelar senare – så spelar hela huset med.
+//
+// Översikt:
+// `sound.js` – ljudeffekterna, Web Audio; anropar musiken varje bildruta; rytmen i huset: när musik spelar skjuts
+// dörrarnas och plingets ljud fram till nästa sextondel i musikens takt – `onGrid` i music.js med rutnätet
+// `musicGrid()` från kassetten i hissen man följer, annars `scoreGrid()` från husmusikens starkaste stycke – och
+// plingets andra ton kommer två sextondelar senare
 import { CAR_H, FLOOR_H, VMAX, W, floorY, shaftCX } from './config.js';
 import { S } from './state.js';
 import { VIEW, camTarget } from './view.js';
 import { musicGrid, musicOn, onGrid, updateMusic } from './music.js';
 import { musicHush, scoreGrid, updateScore } from './score.js';
 import { vrand } from './rng.js';
+import { incUi } from './incui.js';
 
 const KEY = 'hiss.sound';
 const MAX_VOICES = 4;      // tak för samtidiga engångsljud (rusningen ska inte låta som en flipper)
@@ -195,19 +202,24 @@ function strain(kind) {
   else if (kind === 'fault') sweep(g, 2200, 3400, t, 0.7, 0.8);
   else for (let i = 0; i < 3; i++) sweep(g, 320, 170, t + i * 0.35, 0.3, 0.9); // knarr
 }
-let heardWarn = -1, heardFire = -1, heardBrigade = -1, heardStrike = -1, heardPolice = -1;
+// Vilket ljud varje incident gör står i registret (sound i incui.js) – här finns bara ljuden.
+/** @type {Record<import('./incui.js').IncSound, (W?: any) => void>} */
+const INC_FX = { thunder: () => thunder(false), strike: () => thunder(true), buzz: () => buzz(), strain: W => strain(W ? W.type : 'fault'),
+  alarm: () => alarm(), siren: () => siren() };
+let heardWarn = -1;
+/** senaste stämpeln per incident och ljud ('fire:0' …) */
+const heard = new Map();
 function incidentSounds() {
   const W = S.warn;
   if (W && W.t0 !== heardWarn) {
     heardWarn = W.t0;
-    if (W.type === 'storm') thunder(false);
-    else if (W.type === 'power') buzz();
-    else if (W.type === 'heat' || W.type === 'fault' || W.type === 'cable') strain(W.type);
+    const fx = incUi().find(u => u.key === W.type)?.sound?.warn;
+    if (fx) INC_FX[fx](W);
   }
-  if (S.fire && S.fire.t0 !== heardFire) { heardFire = S.fire.t0; alarm(); }
-  if (S.brigade && S.brigade.t0 !== heardBrigade) { heardBrigade = S.brigade.t0; siren(); }
-  if (S.heist && S.heist.police && S.heist.policeAt !== heardPolice) { heardPolice = S.heist.policeAt; siren(); } // (polisen, heist.js)
-  if (S.storm && S.storm.struck !== null && S.storm.struck !== heardStrike) { heardStrike = S.storm.struck; thunder(true); }
+  for (const u of incUi()) (u.sound?.on || []).forEach(([stamp, fx], i) => {
+    const v = stamp(), k = `${u.key}:${i}`;
+    if (v !== null && v !== undefined && v !== false && v !== heard.get(k)) { heard.set(k, v); INC_FX[fx](); }
+  });
 }
 
 /** Hissen vars musik hörs: den man följer, eller den som personen man följer åker i. */

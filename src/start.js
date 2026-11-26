@@ -3,6 +3,12 @@
 // Spelarens val i panelen (styrlogik, slumpen, driftchefen, felknappar, underhåll, regissören) minns till nästa gång.
 // Regissören är på från start om spelaren inte har stängt av den.
 // Bara gränssnitt: dygnet startas med newSim, och allt spelaren gör sedan går via act().
+//
+// Översikt:
+// `start.js` – starten: ingen startmeny – huset startar direkt med `newSim` och mjukt dygnsskifte; uppstarten i
+// DOS-svart och välkomstrutan första gången, sedan erbjuder Berit en rundvisning; spelarens val i panelen –
+// styrlogik, slumpen, driftchefen, felknappar, underhåll – minns i `localStorage` (`rememberPrefs`); `?seed=` ger
+// ett bestämt frö
 import { BUILDING, FL, LABELS, STRAT_NAMES } from './config.js';
 import { S, log } from './state.js';
 import { newSim } from './sim.js';

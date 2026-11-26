@@ -6,6 +6,17 @@
 // bestämmer (chief.js): klippa strömmen eller vänta, storma via garaget eller taket, stoppa tunnelbanan eller
 // inte. Klipps strömmen släpper valvets magnetlås – precis vad rånarna vill. Ingen skjuter och ingen dör.
 // Läget i S.heist; gänget är personer med rollen rånare. Egen slumpström: vilken flyktväg gänget väljer.
+//
+// Översikt:
+// Kuppen på 5:an (`S.heist`, incident i slumpen och `act('trigger', 'heist')`): skåpbilen från ”Fasad & Fönster AB”
+// vid lastkajen (framkallad när lastkajen är upptagen kör den runt kvarteret tills den är ledig – `orderHeist`,
+// `S.heistWait`, `heistBlock`), gänget (`p.robber`, rollen `rånare`, bara varuhissen) tar driftcentralen och kapar
+// hissarna (`e.hijack`, `outReason` 'hijack'), gisslan (`p.hostage`) samlas i Sky Café, de som kommer under tiden
+// vänds i dörren, den som blev över (`p.hero` – Berit på rundvisning, en boende, en tekniker …) smyger i trapporna
+// och slår av borren och signalerar från taket. Polisens insatsledare bestämmer (`heistChiefTick` i chief.js,
+// `act('heist', cut/wait/garage/tak/stop/go/storm)`): klipps strömmen släpper valvets magnetlås. Gänget flyr den väg
+// som inte är spärrad (skåpbilen, helikopter på taket, tunnelbanan – egen slumpström `kuppen`) eller grips. Ingen
+// skjuter, ingen dör
 import { stream } from './rng.js';
 const { pick } = stream('kuppen');
 import { CAFE, CONTROL, DOCK, DOOR_X, LOBBY, ROOF, STATION, TOP, floorWith, floorY } from './config.js';

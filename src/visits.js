@@ -7,6 +7,14 @@
 // hissen med prioritet. Smart styrning låter passagerarna som ändå ska åt det hållet åka klart; de enkla
 // lägena släpper av alla vid nästa stopp. Hissen som körde upp dem står kvar, låst med deras nyckel, på
 // patientens våning tills de kommer tillbaka med båren (medicHold).
+//
+// Översikt:
+// händelser som spelaren bara informeras om: flyttdag (ett hushåll flyttar med sitt bohag – `BOHAG` i config –
+// bärare och lastare, vägen för varje möbel i `viaHoist` – spelarens val på flyttkortet via `act` (`moveRoute`:
+// auto/varu/balk, `moveBlankets`, `moveWind`), annars Smarts plan efter kön och vinden; varuhissen i oberoende drift
+// `e.indep` medan bärarna jobbar, eller med Smart bara för de stora möblerna; händelser i `moveBoard`: vänds/fastnar
+// i dörren, repor utan filtar; tappade lass; lastkajen har plats för en bil) och ambulans (bår, förtur via
+// VIP-låset, `medicClear`)
 import { stream } from './rng.js';
 const { pick, rand, rng, shuffle } = stream('händelser');
 import { cap, fl } from './util.js';
@@ -174,6 +182,12 @@ function moveTick(dt) {
       if (!M.notes.dock) { M.notes.dock = true; log('🚚 Flyttbilen får vänta på gatan – leveransbilen står vid lastkajen', 'alert'); }
       return;
     }
+    // … och likadant när kuppens skåpbil står där (heist.js)
+    if (S.heist && S.heist.van !== 'gone') {
+      M.dockWait += dt;
+      if (!M.notes.van) { M.notes.van = true; log('🚚 Flyttbilen får vänta på gatan – en skåpbil står vid lastkajen', 'alert'); }
+      return;
+    }
     M.state = 'on'; M.t0 = S.t;
     M.crewAt = S.t + (M.blankets ? BLANKET_T : 0);
     spawnMover(M, M.crew, true);
@@ -243,7 +257,9 @@ function moveTick(dt) {
     M.state = 'done'; M.t1 = S.t;
     if (V) V.indep = false;
     S.stats.moves++;
-    dayEvent('move', `🚚 Flytten från ${fl(M.floor)} är klar`, `${M.who} flyttade: ${M.loads} lass på ${Math.round(S.t - M.t0)} s${M.broken ? `, ${M.broken} tappade` : ''}${!M.blankets && M.scratches ? `, ${M.scratches} repor utan filtar` : ''}${M.pivots ? `, ${M.pivots} ${M.pivots === 1 ? 'möbel' : 'möbler'} fick vändas i dörren` : ''}.`);
+    const broken = M.broken ? `, ${M.broken} tappade` : '', scratches = !M.blankets && M.scratches ? `, ${M.scratches} repor utan filtar` : '';
+    const pivots = M.pivots ? `, ${M.pivots} ${M.pivots === 1 ? 'möbel' : 'möbler'} fick vändas i dörren` : '';
+    dayEvent('move', `🚚 Flytten från ${fl(M.floor)} är klar`, `${M.who} flyttade: ${M.loads} lass på ${Math.round(S.t - M.t0)} s${broken}${scratches}${pivots}.`);
     log(`🚚 Flytten från ${fl(M.floor)} är klar – ${M.loads} lass på ${Math.round(S.t - M.t0)} s${M.pivots ? ` (${M.pivots} gånger fick en möbel vändas i hissdörren)` : ''} · ${V ? V.name : 'varuhissen'} går i vanlig trafik igen`, 'alert', V ? V.color : null);
   }
 }

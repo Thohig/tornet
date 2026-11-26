@@ -3,6 +3,13 @@
 // en vikt (3 = nyckeltal i sammanfattningen) och vilket håll som är bättre (för jämförelsen med dagen innan).
 // När dygnet tar slut sparas en ögonblicksbild (daySnap), så att sammanfattningen kan visas även när huset
 // har rullat vidare in i nästa dygn.
+//
+// Översikt:
+// `summary.js` – dygnets siffror i en gemensam lista `STATS` med grupp, vikt och bättre-håll – resultatvyn och
+// sammanfattningen läser båda ur den; `saveDay()` sparar en ögonblicksbild när dygnet tar slut och `summaryHtml()`
+// berättar om den: betyg, dygnets händelser ur `S.stats.events` (`dayEvent`/`incidentOver` i state.js), nyckeltal
+// med pilar mot dagen innan, stamgästerna, infällt chefens beslut och alla siffror; visas som vyn `yesterday` i
+// panelen eller som kort när dygnet börjar om
 import { esc } from './util.js';
 import { STRAT_NAMES } from './config.js';
 import { S } from './state.js';

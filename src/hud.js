@@ -1,5 +1,10 @@
 // HUD: texterna i kontrollpanelen (hissen eller personen man följer, incidentkorten, registret, loggen och
 // resultatet), välkomstrutan och dygnets sammanfattning. Vilka block som syns i panelen avgörs i panels.js.
+//
+// Översikt:
+// `hud.js` – html för panelens innehåll: hissen man följer `carHtml`, personen `personHtml`/`drawPortrait`,
+// incidentkorten `incidentPanel` med driftchefens rad `chiefLine`, register, logg och resultat; välkomstrutan
+// `showIntro` och dagens sammanfattning med driftchefens beslut
 import { ARR, esc, fl } from './util.js';
 import { CAP, EL, FL, LOBBY, DOCK, TOP, ROLE_NAMES, activityRate, FULL_LOAD, timeScale, dayLength } from './config.js';
 import { S, hour, log, phaseName } from './state.js';
@@ -225,13 +230,13 @@ const chiefOn = () => !!(S.chief && S.chief.on);
 export function incidentHtml() {
   const parts = [];
   // incidenterna med val (kortet i registret, incui.js): stormen, heta motorer, panoramahissen, kuppen, gondolen, hunden, läckan …
-  const h = { card, chiefLine, chiefOn, cd, num, ikon, motorC };
+  const h = { card, chiefLine, chiefOn, cd, num, ikon, motorC, line, acts, hint, choice, followCar };
   for (const u of incUi()) if (u.card && !u.late) u.card(h, parts);
   // ---------- händelser som spelaren bara informeras om ----------
   const V = S.elevators.find(e => e.freight);
-  const info = (key, cls, title, body, acts) => {
+  const info = (key, cls, title, body, btns) => {
     if (S.dismissed.has(key)) return;
-    parts.push(card(key, `info ${cls}`, title, `<div class="inc-s">${body}</div>${acts ? `<div class="inc-acts">${acts}</div>` : ''}`, false, true));
+    parts.push(card(key, `info ${cls}`, title, `${line(body)}${btns ? acts(btns) : ''}`, false, true));
   };
   // linbrott: spelaren kan inte göra något – hissjouren räddar de instängda och byter linorna
   for (const e of S.elevators) {
@@ -252,7 +257,7 @@ export function incidentHtml() {
     const routeTxt = { auto: M.smart ? 'Styrningen planerar: de stora möblerna går utanpå när det är kö till varuhissen, kartongerna väntar in när buden står där.' : 'Styrningen kör XL-möblerna med hissbalken och resten i varuhissen.',
       varu: 'Allt går i varuhissen – även det tyngsta.', balk: 'Alla stora möbler går utanpå med hissbalken; kartongerna i varuhissen.' }[M.route];
     const lock = `Varuhissen ${V ? esc(V.name) : ''} går i <b>oberoende drift</b> ${M.smart ? 'bara medan en stor möbel är på väg ner' : 'så länge bärarna jobbar'}${V && V.indep ? ' (<b>låst nu</b>)' : ''}.`;
-    const chip = (r, t) => `<button class="btn xs${M.route === r ? ' on' : ''}" data-act="moveRoute:${r}">${t}</button>`;
+    const chip = (r, t) => choice(`moveRoute:${r}`, t, { on: M.route === r, size: 'xs' });
     const routes = M.state !== 'done' ? chip('auto', '🤖 Låt styrningen planera') + chip('varu', '🛗 Allt i varuhissen') + (M.hoist ? chip('balk', '🏗️ Tungt utanpå') : '') : '';
     const blank = M.state === 'planned' ? `<button class="btn xs${M.blankets ? ' on' : ''}" data-act="moveBlankets:${M.blankets ? 0 : 1}">${M.blankets ? '🧣 Skyddsfiltar: ja' : '🧣 Skyddsfiltar: nej'}</button>` : '';
     const windy = M.state === 'on' && hoistHalt() === 'blåst' && M.items.some(it => it.st === 'hatch');
@@ -267,7 +272,8 @@ export function incidentHtml() {
           + (S.t < M.crewAt ? `Flyttgubbarna klär ${V ? esc(V.name) : 'varuhissen'} med skyddsfiltar. ` : '') + `${routeTxt} ${lock}`
           + (hoistStatus(M) ? ` <b>Hissbalken:</b> ${esc(hoistStatus(M))}` : '')
           + (windy ? ' <b>Blåsten stoppar hissbalken</b> – vänta ut den, eller bär ner det som står vid lastluckan i varuhissen?' : '')
-          + (M.pivots ? ` ${M.pivots === 1 ? 'En möbel' : `${num(M.pivots)} möbler`} har fått vändas i hissdörren${M.stuck ? `, ${num(M.stuck)} fastnade helt` : ''}.` : '')
+          + (M.pivots ? ` ${M.pivots === 1 ? 'En möbel har fått vändas i hissdörren.' : `${num(M.pivots)} möbler har fått vändas i hissdörren.`}` : '')
+          + (M.stuck ? ` ${M.stuck === 1 ? 'Det fastnade helt en gång.' : `Det fastnade helt ${num(M.stuck)} gånger.`}` : '')
           + (M.broken ? ` 💥 ${num(M.broken)} lass tappades.` : '') + (M.scratches ? ` ${num(M.scratches)} repor i varuhissen.` : '')
           + (M.notes.truck ? ' Leveransbilen får vänta på gatan – flyttbilen står vid lastkajen.' : '')
           + (S.power ? '' : ' Strömavbrott: flyttgubbarna väntar ut det med möblerna vid hissen – den som har tomma händer tar trapporna.')
@@ -310,6 +316,21 @@ export function incidentHtml() {
   for (const u of incUi()) if (u.card && u.late) u.card(h, parts);
   return parts;
 }
+// ---------- Kortens byggstenar (incui.js och korten här) ----------
+/** en rad text på kortet */
+const line = html => `<div class="inc-s">${html}</div>`;
+/** raden med knappar (tomma strängar hoppas över) @param {...string} btns */
+const acts = (...btns) => `<div class="inc-acts">${btns.join('')}</div>`;
+/** förklaringen under knapparna */
+const hint = html => `<div class="inc-hint">${html}</div>`;
+/**
+ * Ett val på kortet: data-act="act" når act(nyckel, val) (input.js). on = valt, off = grått, why = verktygstipset.
+ * @param {string} act @param {string} txt @param {{ on?: boolean, off?: boolean, why?: string, size?: string }} [o]
+ */
+const choice = (act, txt, o = {}) => `<button class="btn ${o.size || 'sm'}${o.on ? ' on' : ''}" data-act="${act}"${o.off ? ' disabled' : ''}`
+  + `${o.why ? ` data-hint="${o.why}"` : ''}>${txt}</button>`;
+/** kameran på hissen e @param {{ id: number }} e */
+const followCar = (e, name = 'Visa hissen') => ikon(`follow:${e.id}`, '📹', name, 'Kameran följer hissen');
 /** ett kort i incidentrutan: incidenter (alert) kan åtgärdas, informationsrutor (closable) bara stängas */
 function card(k, cls, head, body, alert = false, closable = false) { return { k, cls: cls + (alert && chiefOn() ? ' calm' : ''), head, body, alert, closable }; }
 // Incidentkorten i panelens händelseblock: incidenter är utfällda tills spelaren fäller ihop dem;

@@ -2,6 +2,12 @@
 // knappen i Framkalla (panels.js), kortet i incidentrutan (hud.js) och vad regissören klipper till (director.js).
 // Simuleringens sida står i registret i systems.js; en ny incident får en post där och en här.
 // Rör aldrig simuleringens tillstånd: knapparna går via data-act och act().
+//
+// Översikt:
+// `incui.js` – incidenterna i gränssnittet: `incUi()` = en post per incident eller händelse som kan framkallas –
+// knappen i *Framkalla* `trig` (`off` = grå, `why` = varför, i verktygstipset), kortet `card` (`late` = efter
+// informationsrutorna), förvarningens klipp `warn` och det sevärda `shots`; panels.js, hud.js och director.js går
+// igenom listan
 import { esc, fl } from './util.js';
 import { DOCK, EL, FIRE_HINT, LOBBY, ROOF, TOP, CONTROL, floorWith } from './config.js';
 import { S } from './state.js';
@@ -19,11 +25,16 @@ const panoCar = () => (PANO ? S.elevators[PANO.id] || null : null);
 /**
  * En incident i gränssnittet. Allt är frivilligt utom key (= nyckeln i registret systems.js och i act('trigger', key)).
  * - trig: knappen i Framkalla (ikon, namn, förklaring; off() = går inte nu) – i listans ordning
- * - card(h, parts): lägger kortet i incidentrutan (h = hjälpen i hud.js: card, chiefLine, cd, num, ikon …); late = efter informationsrutorna
+ * - card(h, parts): lägger kortet i incidentrutan (h = hjälpen i hud.js: card, chiefLine, cd, num, ikon och byggstenarna
+ *   line = en rad text, acts = raden med knappar, hint = förklaringen, choice = ett val, followCar = kameran på hissen); late = efter informationsrutorna
  * - warn(W, add, h): förvarningen – vart regissören klipper (add som i director.js)
  * - shots(add, h): det som är sevärt medan incidenten pågår (h = visible, name1)
+ * - sound: ljudet (sound.js, score.js) – warn = ljudeffekten när förvarningen kommer, on = [stämpel, ljudeffekt]: effekten
+ *   spelas när stämpeln (en tid, null = inget) ändras, piece = husmusikens stycke medan den pågår (null = som vanligt)
+ * @typedef {'thunder'|'strike'|'buzz'|'strain'|'alarm'|'siren'} IncSound
  * @typedef {{ key: string, late?: boolean, trig?: { icon: string, name: string, hint: string, off?: () => boolean, why?: () => string },
- *   card?: (h: any, parts: any[]) => void, warn?: (W: any, add: Function, h: any) => void, shots?: (add: Function, h: any) => void }} IncUi
+ *   card?: (h: any, parts: any[]) => void, warn?: (W: any, add: Function, h: any) => void, shots?: (add: Function, h: any) => void,
+ *   sound?: { warn?: IncSound, on?: [() => number|null|undefined|false, IncSound][], piece?: () => string|null } }} IncUi
  */
 
 const top = () => (ROOF >= 0 ? ROOF : TOP);
@@ -37,23 +48,24 @@ export function incUi() {
   {
     key: 'fire',
     late: true,
+    sound: { on: [[() => S.fire && S.fire.t0, 'alarm'], [() => S.brigade && S.brigade.t0, 'siren']] },
     warn: (W, add) => add('warn', 90, 'floor', W.floor, `👃 Det luktar bränt på ${fl(W.floor)}`, true),
     card: (h, parts) => {
-      const { card, chiefLine, cd, num, ikon } = h;
+      const { card, chiefLine, cd, num, ikon, line, acts, hint, choice } = h;
       if (S.fire) {
         const F = S.fire, zmax = Math.max(0, F.floor - 2);
         const status = !F.brigade ? `Brandkåren är på väg – framme ${cd(F.brigadeAt - S.t)}`
           : F.outAt === null ? `Brandmännen är på väg upp${S.brigade && S.brigade.car !== null ? ` i brandhissen ${esc(S.elevators[S.brigade.car].name)}` : ' i trapphuset'}`
           : `Brandkåren släcker – klart ${cd(F.outAt - S.t)}`;
         const outside = S.people.filter(p => p.state === 'assembly').length;
-        const b = (m, txt) => `<button class="btn sm${F.mode === m ? ' on' : ''}" data-act="fire:${m}">${txt}</button>`;
+        const b = (m, txt) => choice(`fire:${m}`, txt, { on: F.mode === m });
         parts.push(card('fire', 'fire', `🔥 Brand på våning ${fl(F.floor)}`, `
-          <div class="inc-s">${status}. Våning ${fl(F.floor - 1)}–${fl(TOP)} utryms.</div>
-          <div class="inc-s">Rökexponerade: <b>${num(F.smoked)}</b> · Utrymda: <b>${num(F.evac)}</b>${outside ? ` · På återsamlingsplatsen: <b>${num(outside)}</b>` : ''}</div>
+          ${line(`${status}. Våning ${fl(F.floor - 1)}–${fl(TOP)} utryms.`)}
+          ${line(`Rökexponerade: <b>${num(F.smoked)}</b> · Utrymda: <b>${num(F.evac)}</b>${outside ? ` · På återsamlingsplatsen: <b>${num(outside)}</b>` : ''}`)}
           ${chiefLine('fire', 'Larmet återkallade hissarna – vill du köra dem annorlunda?')}
-          <div class="inc-acts">${b('recall', '🚒 Brandåterkallning')}${b('zone', `🚧 Bara E–${fl(zmax)}`)}${b('none', 'Normal drift')}</div>
-          <div class="inc-hint">${FIRE_HINT[F.mode]}</div>
-          <div class="inc-acts">${ikon(`show:${F.floor}`, '📍', 'Visa våningen', 'Kameran går till våningen som brinner')}</div>`, true));
+          ${acts(b('recall', '🚒 Brandåterkallning'), b('zone', `🚧 Bara E–${fl(zmax)}`), b('none', 'Normal drift'))}
+          ${hint(FIRE_HINT[F.mode])}
+          ${acts(ikon(`show:${F.floor}`, '📍', 'Visa våningen', 'Kameran går till våningen som brinner'))}`, true));
       }
     },
     shots: (add, h) => {
@@ -73,43 +85,46 @@ export function incUi() {
   {
     key: 'power',
     late: true,
+    sound: { warn: 'buzz' },
     trig: { icon: '⚡', name: 'Strömavbrott', hint: 'Strömmen går i hela huset' },
     warn: (_W, add) => add('warn', 80, 'floor', LOBBY, '💡 Lamporna flimrar…', true),
     card: (h, parts) => {
-      const { card, chiefLine, chiefOn, cd, num } = h;
+      const { card, chiefLine, chiefOn, cd, num, line, acts, hint, choice } = h;
       if (!S.power && S.outage) {
         const O = S.outage;
         const trapped = S.elevators.filter(e => e.mode === 'normal').reduce((a, e) => a + e.passengers.length, 0);
-        const gen = O.gen ? `<button class="btn sm on" disabled>🔋 Reservkraft igång</button>`
-          : O.genAt !== null ? `<button class="btn sm" disabled>🔋 Startar ${cd(O.genAt - S.t)}</button>`
-            : `<button class="btn sm" data-act="pow:gen">🔋 Starta reservkraft</button>`;
+        const gen = O.gen ? choice('pow:gen', '🔋 Reservkraft igång', { on: true, off: true })
+          : O.genAt !== null ? choice('pow:gen', `🔋 Startar ${cd(O.genAt - S.t)}`, { off: true })
+            : choice('pow:gen', '🔋 Starta reservkraft');
+        const stuck = S.elevators.filter(e => e.mode === 'normal' && e.passengers.length && !(e.state === 'doors' && e.door >= 0.95));
         const busy = O.busy !== null ? `Nödsänker hiss ${EL[O.busy].name} just nu…` : O.gen ? 'Välj vilken hiss som ska nödsänkas nedan – eller slå på auto.' : '';
         parts.push(card('power', 'power', '⚡ Strömavbrott', `
-          <div class="inc-s">Strömmen tillbaka ${cd(O.backAt - S.t)} · Instängda nu: <b>${num(trapped)}</b> · Instängd-sek idag: <b>${num(S.stats.trappedSec)}</b></div>
+          ${line(`Strömmen tillbaka ${cd(O.backAt - S.t)} · Instängda nu: <b>${num(trapped)}</b> · Instängd-sek idag: <b>${num(S.stats.trappedSec)}</b>`)}
           ${chiefLine('power', 'Vad gör du?')}
-          <div class="inc-acts">${gen}<button class="btn sm${O.auto ? ' on' : ''}" data-act="pow:auto" ${O.gen ? '' : 'disabled'}>Auto-räddning: ${O.auto ? 'PÅ' : 'AV'}</button></div>
-          <div class="inc-acts">${S.elevators.filter(e => e.mode === 'normal' && e.passengers.length && !(e.state === 'doors' && e.door >= 0.95)).map(e =>
-            `<button class="btn xs hot2" data-act="pow:rescue:${e.id}" ${canRescue(e) ? '' : 'disabled'}>Nödsänk ${e.name} (${e.passengers.length} inne)</button>`).join('')}</div>
-          <div class="inc-hint">${busy || (chiefOn() ? 'Reservkraften räcker till EN hiss i taget – driftchefen nödsänker fullaste hissen först (ambulanspersonalen allra först).' : 'Utan åtgärd sitter folk fast tills strömmen kommer tillbaka. Reservkraften räcker till EN hiss i taget – välj ordning, t.ex. fullaste först.')}</div>`, true));
+          ${acts(gen, choice('pow:auto', `Auto-räddning: ${O.auto ? 'PÅ' : 'AV'}`, { on: O.auto, off: !O.gen }))}
+          ${acts(...stuck.map(e => choice(`pow:rescue:${e.id}`, `Nödsänk ${e.name} (${e.passengers.length} inne)`, { off: !canRescue(e), size: 'xs hot2' })))}
+          ${hint(busy || (chiefOn() ? 'Reservkraften räcker till EN hiss i taget – driftchefen nödsänker fullaste hissen först (ambulanspersonalen allra först).'
+            : 'Utan åtgärd sitter folk fast tills strömmen kommer tillbaka. Reservkraften räcker till EN hiss i taget – välj ordning, t.ex. fullaste först.'))}`, true));
       }
     },
   },
   {
     key: 'storm',
+    sound: { warn: 'thunder', on: [[() => S.storm && S.storm.struck, 'strike']] }, // (blixten slår ner: nära åska)
     trig: { icon: '🌬️', name: 'Storm', hint: 'Ett oväder: de höga schakten svajar' },
     warn: (_W, add) => add('warn', 80, 'floor', top(), '🌥️ Ovädret drar in', true),
     card: (h, parts) => {
-      const { card, chiefLine, cd, num, ikon } = h;
+      const { card, chiefLine, cd, num, line, acts, hint, choice, followCar } = h;
       // ---------- stormen (incident med val, som branden) ----------
       if (S.storm) {
         const St = S.storm, P = S.elevators.find(e => e.facade);
-        const b = (m, txt) => `<button class="btn sm${St.mode === m ? ' on' : ''}" data-act="storm:${m}">${txt}</button>`;
+        const b = (m, txt) => choice(`storm:${m}`, txt, { on: St.mode === m });
         parts.push(card('storm', 'storm', `🌬️ Storm – <span class="lv">${windMs()}</span> m/s`, `
-          <div class="inc-s">De höga schakten och panoramahissen på fasaden svajar. Bedarrar ${cd(St.t0 + St.len - S.t)}.${St.faults ? ` Vajerlarm: <b>${num(St.faults)}</b>` : ''}</div>
+          ${line(`De höga schakten och panoramahissen på fasaden svajar. Bedarrar ${cd(St.t0 + St.len - S.t)}.${St.faults ? ` Vajerlarm: <b>${num(St.faults)}</b>` : ''}`)}
           ${chiefLine('storm', 'Hur ska hissarna köras?')}
-          <div class="inc-acts">${b('sway', '🌬️ Svajläge')}${b('none', 'Kör som vanligt')}</div>
-          <div class="inc-hint">${STORM_HINT[St.mode]}</div>
-          ${P ? `<div class="inc-acts">${ikon(`follow:${P.id}`, '📹', 'Visa panoramahissen', 'Kameran följer hissen')}</div>` : ''}`, true));
+          ${acts(b('sway', '🌬️ Svajläge'), b('none', 'Kör som vanligt'))}
+          ${hint(STORM_HINT[St.mode])}
+          ${P ? acts(followCar(P, 'Visa panoramahissen')) : ''}`, true));
       }
     },
   },
@@ -119,28 +134,31 @@ export function incUi() {
   },
   {
     key: 'fault',
+    sound: { warn: 'strain' },
     trig: { icon: '🔧', name: 'Hissfel', hint: 'En slumpad hiss går sönder' },
     warn: (W, add) => add('warn', 86, 'car', W.car, `🔩 ${S.elevators[W.car].name} gnisslar`, true),
   },
   {
     key: 'heat',
+    sound: { warn: 'strain' },
     trig: { icon: '🌡️', name: 'Het motor', hint: 'En motor överhettas' },
     warn: (W, add) => add('warn', 82, 'floor', Math.min(top(), S.elevators[W.car].maxF), `🌡️ Motorn i ${S.elevators[W.car].name} brummar`, true),
     card: (h, parts) => {
-      const { card, chiefLine, ikon, motorC } = h;
+      const { card, chiefLine, motorC, line, acts, hint, choice, followCar } = h;
       // ---------- överhettade motorer (incident: extrafläkt) ----------
       for (const e of S.elevators) {
         if (!e.hot) continue;
         parts.push(card(`heat-${e.id}`, 'heat', `🌡️ Motorn i hiss ${esc(e.name)} är överhettad`, `
-          <div class="inc-s">Överhettningsskyddet har löst ut (<span class="lv">${motorC(e)}</span> °C): ${esc(e.name)} kör klart sina passagerare men tar inga nya förrän motorn har svalnat.</div>
+          ${line(`Överhettningsskyddet har löst ut (<span class="lv">${motorC(e)}</span> °C): ${esc(e.name)} kör klart sina passagerare men tar inga nya förrän motorn har svalnat.`)}
           ${chiefLine(`heat${e.id}`, 'Starta extrafläkten?')}
-          <div class="inc-acts"><button class="btn sm${e.fan ? ' on' : ''}" data-act="fan:${e.id}" ${e.fan ? 'disabled' : ''}>🌀 ${e.fan ? 'Extrafläkten går' : 'Starta extrafläkt'}</button>${ikon(`follow:${e.id}`, '📹', 'Visa hissen', 'Kameran följer hissen')}</div>
-          <div class="inc-hint">Fläkten kyler ungefär fyra gånger snabbare men drar ${FAN_KW} kW. Smart och Energisnål undviker varma motorer, Rusning tar risken längre, och Närmast, Kaos och Knappar bryr sig inte alls.</div>`, true));
+          ${acts(choice(`fan:${e.id}`, `🌀 ${e.fan ? 'Extrafläkten går' : 'Starta extrafläkt'}`, { on: e.fan, off: e.fan }), followCar(e))}
+          ${hint(`Fläkten kyler ungefär fyra gånger snabbare men drar ${FAN_KW} kW. Smart och Energisnål undviker varma motorer, Rusning tar risken längre, och Närmast, Kaos och Knappar bryr sig inte alls.`)}`, true));
       }
     },
   },
   {
     key: 'cable',
+    sound: { warn: 'strain' },
     trig: { icon: '🪢', name: 'Linbrott', hint: 'Linorna går av i en hiss' },
     warn: (W, add) => add('warn', 86, 'car', W.car, `🪢 Linorna i ${S.elevators[W.car].name} knarrar`, true),
   },
@@ -151,16 +169,16 @@ export function incUi() {
       why: () => { const P = panoCar(); return S.pano ? 'panoramahissen sitter redan fast' : P && P.panoNext ? 'den hackar redan – den fastnar nästa gång den kör med folk' : 'panoramahissen kör inte som vanligt just nu'; } },
     warn: (W, add) => add('warn', 86, 'car', W.car, `🔩 ${S.elevators[W.car].name} hackar på fasaden`, true),
     card: (h, parts) => {
-      const { card, chiefLine, cd, ikon } = h;
+      const { card, chiefLine, cd, line, acts, hint, choice, followCar } = h;
       // ---------- panoramahissen sitter fast på fasaden (incident med val: rep eller stegbil) ----------
       const Pn = S.pano, P = panoCar();
       // framkallad (eller förvarnad) men inte fast än: den fastnar nästa gång den kör med folk mellan två våningar
       if (!Pn && P && P.panoNext) parts.push(card('pano-wait', 'info pano', `🔩 ${esc(P.name)} hackar på fasaden`, `
-          <div class="inc-s">Det luktar hydraulolja. Nästa gång ${esc(P.name)} kör med folk utanpå huset låser sig hydrauliken${P.passengers.length ? ' – det har den folk i nu' : ' – just nu står den och väntar på resenärer'}.</div>
-          <div class="inc-acts">${ikon(`follow:${P.id}`, '📹', 'Visa hissen', 'Kameran följer hissen')}</div>`));
+          ${line(`Det luktar hydraulolja. Nästa gång ${esc(P.name)} kör med folk utanpå huset låser sig hydrauliken${P.passengers.length ? ' – det har den folk i nu' : ' – just nu står den och väntar på resenärer'}.`)}
+          ${acts(followCar(P))}`));
       if (Pn && Pn.ph !== 'done') {
         const e = S.elevators[Pn.car], reach = ladderReach(e), windy = ropeWindy();
-        const b = (h, txt, ok, hint) => `<button class="btn sm${Pn.how === h ? ' on' : ''}" data-act="pano:${h}" ${ok ? '' : 'disabled'} data-hint="${hint}">${txt}</button>`;
+        const b = (how, txt, ok, why) => choice(`pano:${how}`, txt, { on: Pn.how === how, off: !ok, why });
         // alla är ute (räddarna packar ihop innan det är klart, pano.js): inga val kvar
         const left = e.passengers.length + (Pn.rider ? 1 : 0), allOut = Pn.n > 0 && left === 0 && Pn.out >= Pn.n;
         const status = allOut ? `Alla ${Pn.n} är ute – räddarna packar ihop.`
@@ -171,11 +189,12 @@ export function incUi() {
           : Pn.rider ? `${esc((S.people.find(p => p.id === Pn.rider.id) || { name: 'Någon' }).name)} ${Pn.setup === 'rope' ? 'firas ner' : 'klättrar ner'} – ${Pn.out}/${Pn.n} ute.`
           : Pn.setup === 'rope' && windy ? `För blåsigt för repet (${windMs()} m/s) – räddarna väntar på taket. ${Pn.out}/${Pn.n} ute.` : `${Pn.out}/${Pn.n} ute.`;
         parts.push(card('pano', 'pano', `🧗 ${esc(e.name)} sitter fast på fasaden`, `
-          ${allOut ? `<div class="inc-s">Hydrauliken har låst sig och korgen hänger tom utanpå huset. ${status}</div>`
-          : `<div class="inc-s">Hydrauliken har låst sig och korgen hänger utanpå huset med <span class="lv">${left}</span> instängda. Den går inte att veva ner – de måste ut utanpå huset. ${status}</div>`}
+          ${allOut ? line(`Hydrauliken har låst sig och korgen hänger tom utanpå huset. ${status}`)
+          : line(`Hydrauliken har låst sig och korgen hänger utanpå huset med <span class="lv">${left}</span> instängda. Den går inte att veva ner – de måste ut utanpå huset. ${status}`)}
           ${chiefLine('pano', 'Hur ska de instängda ut?')}
-          <div class="inc-acts">${allOut ? '' : b('rope', '🧗 Rep från taket', true, `Räddarna firar ner en i taget ${Pn.toF === LOBBY ? 'till gatan' : 'till takterrassen'} – stannar i hård vind`) + b('ladder', '🚒 Stegbilen', reach, reach ? 'Stegen från gatan – fungerar i blåst' : `Stegen når bara ${LADDER_MAX} våningar upp`)}${ikon(`follow:${e.id}`, '📹', 'Visa hissen', 'Kameran följer hissen')}</div>
-          <div class="inc-hint">Repet går fortare när det är lugnt; stegbilen klarar blåsten men når inte högt. Teknikern kan inte laga hydrauliken förrän alla är ute.</div>`, true));
+          ${acts(allOut ? '' : b('rope', '🧗 Rep från taket', true, `Räddarna firar ner en i taget ${Pn.toF === LOBBY ? 'till gatan' : 'till takterrassen'} – stannar i hård vind`),
+            allOut ? '' : b('ladder', '🚒 Stegbilen', reach, reach ? 'Stegen från gatan – fungerar i blåst' : `Stegen når bara ${LADDER_MAX} våningar upp`), followCar(e))}
+          ${hint('Repet går fortare när det är lugnt; stegbilen klarar blåsten men når inte högt. Teknikern kan inte laga hydrauliken förrän alla är ute.')}`, true));
       }
     },
     shots: (add) => {
@@ -215,15 +234,17 @@ export function incUi() {
   },
   {
     key: 'heist',
+    // polisens siren när de kommer, och ragtime som i en stumfilmsjakt medan kuppen pågår
+    sound: { on: [[() => S.heist && S.heist.police ? S.heist.policeAt : null, 'siren']], piece: () => (S.heist && S.heist.ph !== 'done' ? 'rag' : null) },
     trig: { icon: '🚐', name: 'Kupp!', hint: 'Ett rånargäng tar över huset för att tömma valvet på 5:an. Är lastkajen upptagen väntar gänget tills den är ledig', off: () => !!(S.heist || S.heistWait !== null), why: () => (S.heist ? 'kuppen pågår redan' : 'gänget väntar redan på sin chans') },
     warn: (_W, add) => add('warn', 84, 'floor', DOCK, '🚐 En skåpbil vid lastkajen…', true),
     card: (h, parts) => {
-      const { card, chiefLine, cd, ikon } = h;
+      const { card, chiefLine, cd, ikon, line, acts, hint, choice } = h;
       // ---------- Kuppen på 5:an (incident med val: polisens insatsledare – eller du) ----------
       // framkallad men lastkajen är upptagen: skåpbilen kör runt kvarteret (heist.js, orderHeist)
       if (S.heistWait !== null && !S.heist) parts.push(card('heist-wait', 'info heist', '🚐 En skåpbil kör runt kvarteret', `
-          <div class="inc-s">Fem män i overall från ${esc(VAN_NAME)} väntar ${heistBlock()}. Sedan backar de in vid lastkajen.</div>
-          <div class="inc-acts">${ikon(`show:${DOCK}`, '📍', 'Visa lastkajen', 'Kameran går till lastkajen')}</div>`));
+          ${line(`Fem män i overall från ${esc(VAN_NAME)} väntar ${heistBlock()}. Sedan backar de in vid lastkajen.`)}
+          ${acts(ikon(`show:${DOCK}`, '📍', 'Visa lastkajen', 'Kameran går till lastkajen'))}`));
       const Hs = S.heist;
       if (Hs && Hs.ph !== 'done') {
         const gang = S.people.filter(p => p.robber && !p.dead).length, host = S.people.filter(p => p.hostage).length;
@@ -232,15 +253,20 @@ export function incUi() {
           : Hs.ph === 'flee' ? `<b>Valvet är öppet!</b> Gänget flyr med ${GOLD} guldtackor.`
           : `Gänget har driftcentralen och hissarna. Borren i valvet: <span class="lv">${Math.round(Hs.drill * 100)}</span> %${S.t < Hs.drillOff ? ' – <b>tyst</b>, någon har slagit av strömmen till den!' : '.'}`;
         const pol = !Hs.police ? 'Polisen är på väg.' : `Polisen spärrar gatan – insatsstyrkan går in via ${Hs.plan === 'garage' ? 'garaget' : 'taket'} ${cd(Hs.stormAt - S.t)}.`;
-        const b = (a, txt, on, hint, dis = false) => `<button class="btn sm${on ? ' on' : ''}" data-act="heist:${a}" ${dis ? 'disabled' : ''} data-hint="${hint}">${txt}</button>`;
+        const b = (a, txt, on, why, off = false) => choice(`heist:${a}`, txt, { on, off, why });
         const off = !Hs.police;
         parts.push(card('heist', 'heist', `🚐 Rån i Tornet – ${gang} rånare, ${host} gisslan`, `
-          <div class="inc-s">${status} ${pol}${hero ? ` <b>${esc(hero.name)}</b> blev över och smyger i trapporna.` : ''}</div>
+          ${line(`${status} ${pol}${hero ? ` <b>${esc(hero.name)}</b> blev över och smyger i trapporna.` : ''}`)}
           ${chiefLine('heist', 'Vad ska polisen göra?')}
-          <div class="inc-acts">${b('wait', '⏳ Vänta ut dem', Hs.power === 'wait', 'Strömmen stannar på – borren tar tid', off)}${b('cut', '🔌 Klipp strömmen', Hs.power === 'cut', 'Hissarna stannar – men valvets magnetlås släpper också!', off || Hs.power === 'cut')}</div>
-          <div class="inc-acts">${b('garage', '🚓 In via garaget', Hs.plan === 'garage', 'Insatsstyrkan går in vid lastkajen – skåpbilen kommer ingenstans', off)}${b('tak', '🚁 In via taket', Hs.plan === 'tak', 'Polishelikoptern på taket – ingen flykt den vägen', off)}${b('storm', '⚡ Gå in nu!', false, 'Insatsstyrkan går in direkt', off)}</div>
-          <div class="inc-acts">${b('stop', '🚇 Stoppa tåget', Hs.train === 'stop', 'Tunnelbanan stannar i tunneln – ingen flykt den vägen', off || Hs.train === 'stop')}${ikon(`show:${BANK}`, '💰', 'Visa valvet', 'Kameran visar banken')}${hero ? ikon(`person:${hero.id}`, '🤫', `Följ ${esc(hero.name)}`, 'Kameran följer den som blev över') : ''}</div>
-          <div class="inc-hint">Gänget flyr med skåpbilen, en helikopter på taket eller tunnelbanan – den väg som inte är spärrad. Ingen skjuter och ingen dör.</div>`, true));
+          ${acts(b('wait', '⏳ Vänta ut dem', Hs.power === 'wait', 'Strömmen stannar på – borren tar tid', off),
+            b('cut', '🔌 Klipp strömmen', Hs.power === 'cut', 'Hissarna stannar – men valvets magnetlås släpper också!', off || Hs.power === 'cut'))}
+          ${acts(b('garage', '🚓 In via garaget', Hs.plan === 'garage', 'Insatsstyrkan går in vid lastkajen – skåpbilen kommer ingenstans', off),
+            b('tak', '🚁 In via taket', Hs.plan === 'tak', 'Polishelikoptern på taket – ingen flykt den vägen', off),
+            b('storm', '⚡ Gå in nu!', false, 'Insatsstyrkan går in direkt', off))}
+          ${acts(b('stop', '🚇 Stoppa tåget', Hs.train === 'stop', 'Tunnelbanan stannar i tunneln – ingen flykt den vägen', off || Hs.train === 'stop'),
+            ikon(`show:${BANK}`, '💰', 'Visa valvet', 'Kameran visar banken'),
+            hero ? ikon(`person:${hero.id}`, '🤫', `Följ ${esc(hero.name)}`, 'Kameran följer den som blev över') : '')}
+          ${hint('Gänget flyr med skåpbilen, en helikopter på taket eller tunnelbanan – den väg som inte är spärrad. Ingen skjuter och ingen dör.')}`, true));
       }
     },
     shots: (add, h) => {
@@ -267,23 +293,25 @@ export function incUi() {
     trig: { icon: '🪟', name: 'Gondolen kärvar', hint: 'Fönsterputsarens gondol fastnar mitt på fasaden – bara när han är ute och putsar (ungefär 08–16)', off: () => !!S.gondola || !gondolaCandidate(), why: () => (S.gondola ? 'gondolen sitter redan fast' : S.fire ? 'det brinner i huset' : !S.power ? 'strömmen är borta' : 'fönsterputsaren är inte ute och putsar just nu') },
     warn: (_W, add) => add('warn', 82, 'cleaner', 0, '🔩 Det gnisslar i gondolens vinsch', true),
     card: (h, parts) => {
-      const { card, chiefLine, cd } = h;
+      const { card, chiefLine, cd, line, acts, hint, choice } = h;
       // ---------- fönsterputsaren sitter fast i gondolen (incident med val: veva, lastluckan eller rep) ----------
       const Gd = S.gondola;
       if (Gd && Gd.ph === 'stuck') {
         const hn = esc((S.people.find(p => p.role === 'fönsterputsare' && p.crewId && !p.dead) || { name: 'Fönsterputsaren' }).name);
         const jan = S.people.find(p => p.id === Gd.jan && !p.dead), windy = gondolaWindy();
-        const b = (h, txt, ok, hint) => `<button class="btn sm${Gd.how === h ? ' on' : ''}" data-act="gondola:${h}" ${ok ? '' : 'disabled'} data-hint="${hint}">${txt}</button>`;
+        const b = (how, txt, ok, why) => choice(`gondola:${how}`, txt, { on: Gd.how === how, off: !ok, why });
         const status = !Gd.how ? `${hn} väntar på besked – annars ringer han själv vaktmästaren ${cd(Gd.t0 + 16 - S.t)}.`
           : Gd.how === 'rope' ? (Gd.ropeY !== null ? `${hn} firas ner till takterrassen.` : !Gd.crew ? 'Räddningstjänsten är på väg.' : Gd.rigged ? (windy ? 'För blåsigt för repet – räddarna väntar.' : 'Repet är riggat.') : 'Räddarna riggar ett rep på taket.')
           : !jan ? 'Vaktmästaren är på väg.'
           : jan.floor !== jan.duty?.f || jan.state !== 'office' ? `${esc(jan.name)} är på väg ${Gd.how === 'hatch' ? `till lastluckan på ${fl(Gd.hatchF)}` : 'upp på taket'}.`
           : Gd.how === 'hatch' ? (windy ? `För blåsigt för att öppna luckan – ${esc(jan.name)} väntar.` : `${esc(jan.name)} öppnar lastluckan.`) : `${esc(jan.name)} vevar upp gondolen för hand.`;
         parts.push(card('gondola', 'gondola', `🪟 ${hn} sitter fast i gondolen`, `
-          <div class="inc-s">Vinschen har kärvat och gondolen hänger utanför våning ${fl(Gd.f)}. Stegbilen når inte så högt, och takskenan är upptagen så länge – hissbalken kan inte köra. ${status}</div>
+          ${line(`Vinschen har kärvat och gondolen hänger utanför våning ${fl(Gd.f)}. Stegbilen når inte så högt, och takskenan är upptagen så länge – hissbalken kan inte köra. ${status}`)}
           ${chiefLine('gondola', 'Hur ska han ner?')}
-          <div class="inc-acts">${b('crank', '🔧 Veva upp', true, 'Vaktmästaren vevar upp gondolen för hand från taket – säkert men långsamt, går i blåst')}${b('hatch', '🪟 Lastluckan', Gd.hatchF >= 0, Gd.hatchF >= 0 ? `Vaktmästaren öppnar lastluckan på ${fl(Gd.hatchF)} och Hasse kliver in – snabbt, men inte i blåst` : 'Gondolen hänger inte vid någon lastlucka')}${b('rope', '🧗 Räddningstjänsten', true, 'Räddarna firar ner honom med rep från taket till takterrassen – stannar i hård vind')}</div>
-          <div class="inc-hint">När Hasse är nere går han av passet för dagen, och gondolen vevas upp tom.</div>`, true));
+          ${acts(b('crank', '🔧 Veva upp', true, 'Vaktmästaren vevar upp gondolen för hand från taket – säkert men långsamt, går i blåst'),
+            b('hatch', '🪟 Lastluckan', Gd.hatchF >= 0, Gd.hatchF >= 0 ? `Vaktmästaren öppnar lastluckan på ${fl(Gd.hatchF)} och Hasse kliver in – snabbt, men inte i blåst` : 'Gondolen hänger inte vid någon lastlucka'),
+            b('rope', '🧗 Räddningstjänsten', true, 'Räddarna firar ner honom med rep från taket till takterrassen – stannar i hård vind'))}
+          ${hint('När Hasse är nere går han av passet för dagen, och gondolen vevas upp tom.')}`, true));
       }
     },
     shots: (add) => {
@@ -301,19 +329,21 @@ export function incUi() {
     trig: { icon: '🐕', name: 'Hunden rymmer', hint: 'En pudel sliter sig ur kopplet (eller smiter ut ur kenneln på Vovve Spa) och springer runt i huset', off: () => !!S.dog || !dogPossible(), why: () => (S.dog ? 'en hund är redan lös' : S.fire ? 'det brinner i huset' : 'strömmen är borta') },
     warn: (_W, add) => add('warn', 78, 'floor', floorWith('spa'), '🐕 Det skäller på Vovve Spa', true),
     card: (h, parts) => {
-      const { card, chiefLine, ikon } = h;
+      const { card, chiefLine, ikon, line, acts, hint, choice } = h;
       // ---------- den lösa hunden (incident med val: låt den åka eller spärra hissarna där den är) ----------
       const Dg = S.dog;
       if (Dg && Dg.ph === 'loose') {
         const dog = S.people.find(p => p.id === Dg.dog && !p.dead);
         const chasers = S.people.filter(p => !p.dead && (p.chase || (p.duty && p.duty.kind === 'dog')));
         const where = dog && (dog.state === 'ride' || dog.state === 'boarding') ? `åker ${dog.car ? esc(dog.car.name) : 'hiss'} mot ${fl(dog.dest)}` : `är på ${fl(Dg.f)}${dog && dog.state === 'office' && dog.task ? ` – ${esc(dog.task)}` : ''}`;
-        const b = (w, txt, on, hint) => `<button class="btn sm${on ? ' on' : ''}" data-act="dog:${w}" data-hint="${hint}">${txt}</button>`;
+        const b = (w, txt, on, why) => choice(`dog:${w}`, txt, { on, why });
         parts.push(card('dog', 'dog', `🐕 ${esc(Dg.name)} är lös i huset`, `
-          <div class="inc-s">Pudeln ${where}. ${chasers.map(p => esc(p.name)).join(' och ') || 'Ingen'} jagar henne.${Dg.tired ? ' Hon är trött och har lagt sig.' : ''} Våningar: ${Dg.floors.length} · hissresor: ${Dg.rides}.</div>
+          ${line(`Pudeln ${where}. ${chasers.map(p => esc(p.name)).join(' och ') || 'Ingen'} jagar henne.${Dg.tired ? ' Hon är trött och har lagt sig.' : ''} Våningar: ${Dg.floors.length} · hissresor: ${Dg.rides}.`)}
           ${chiefLine('dog', 'Ska hissarna spärras där hunden är?')}
-          <div class="inc-acts">${b('free', '🐕 Låt henne åka', !Dg.lock, 'Hissarna går som vanligt – jakten kan ta en stund')}${b('lock', `🚫 Spärra hissarna på ${fl(Dg.f)}`, Dg.lock, 'Ingen ny kliver på där hunden är – den kommer ingenstans, men den som väntar där får ta trappan')}${dog ? ikon(`person:${dog.id}`, '📹', `Följ ${esc(Dg.name)}`, 'Kameran följer hunden') : ''}</div>
-          <div class="inc-hint">Hunden fångas när någon som jagar henne hinner fram medan hon står still. Till slut blir hon trött och lägger sig.</div>`, true));
+          ${acts(b('free', '🐕 Låt henne åka', !Dg.lock, 'Hissarna går som vanligt – jakten kan ta en stund'),
+            b('lock', `🚫 Spärra hissarna på ${fl(Dg.f)}`, Dg.lock, 'Ingen ny kliver på där hunden är – den kommer ingenstans, men den som väntar där får ta trappan'),
+            dog ? ikon(`person:${dog.id}`, '📹', `Följ ${esc(Dg.name)}`, 'Kameran följer hunden') : '')}
+          ${hint('Hunden fångas när någon som jagar henne hinner fram medan hon står still. Till slut blir hon trött och lägger sig.')}`, true));
       }
     },
     shots: (add) => {
@@ -330,7 +360,7 @@ export function incUi() {
     trig: { icon: '🚿', name: 'Vattenläcka', hint: 'Ett vattenrör spricker på en slumpad våning – vattnet rinner nedåt och in i hisschakten', off: () => !!S.leak || !leakPossible(), why: () => 'en läcka pågår redan' },
     warn: (_W, add) => add('warn', 76, 'floor', DOCK, '💧 Det knackar i rören', true),
     card: (h, parts) => {
-      const { card, chiefLine, cd, ikon } = h;
+      const { card, chiefLine, cd, ikon, line, acts, hint, choice } = h;
       // ---------- vattenläckan (incident med val: de blöta hissarna står still eller kör vidare) ----------
       const Lk = S.leak;
       if (Lk && Lk.ph === 'leak') {
@@ -340,12 +370,15 @@ export function incUi() {
           : !jan ? 'Vaktmästaren är på väg.'
           : jan.floor === DOCK && jan.state === 'office' ? `${esc(jan.name)} vrider om huvudkranen i pannrummet.`
           : `${esc(jan.name)} springer ner till pannrummet på ${fl(DOCK)} för att stänga huvudkranen. Vattnet når nästa våning ${cd(Lk.nextAt - S.t)}.`;
-        const b = (m, txt, hint) => `<button class="btn sm${Lk.mode === m ? ' on' : ''}" data-act="leak:${m}" ${Lk.shut ? 'disabled' : ''} data-hint="${hint}">${txt}</button>`;
+        const b = (m, txt, why) => choice(`leak:${m}`, txt, { on: Lk.mode === m, off: Lk.shut, why });
+        const showLeak = ikon(`show:${Lk.src}`, '📹', 'Visa läckan', 'Kameran visar våningen där röret sprack');
         parts.push(card('leak', 'leak', `🚿 Vattenläcka på ${fl(Lk.src)}`, `
-          <div class="inc-s">Ett rör har spruckit${Lk.green ? ' i labbet – vattnet är grönt' : ''}. Blött: <b>${Lk.wet.map(fl).join(', ')}</b>. Hissar i blöta schakt: ${cars}.${Lk.shorts.length ? ` Kortslutna: <b>${Lk.shorts.map(id => esc(S.elevators[id].name)).join(', ')}</b>.` : ''} ${status}</div>
-          ${Lk.shut ? `<div class="inc-hint">Hissarna kör som vanligt igen.</div><div class="inc-acts">${ikon(`show:${Lk.src}`, '📹', 'Visa läckan', 'Kameran visar våningen där röret sprack')}</div>` : `${chiefLine('leak', 'Ska hissarna i de blöta schakten köra?')}
-          <div class="inc-acts">${b('stop', '🛑 Stoppa de blöta hissarna', 'De tas ur drift tills kranen är stängd – säkert, men köerna växer och fler tar trappan')}${b('run', '▶ Kör vidare', 'Bättre flöde – men vattnet kan kortsluta styrningen och ge ett riktigt hissfel')}${ikon(`show:${Lk.src}`, '📹', 'Visa läckan', 'Kameran visar våningen där röret sprack')}${ikon(`show:${DOCK}`, '🔧', 'Visa pannrummet', 'Kameran visar pannrummet där huvudkranen sitter')}</div>
-          <div class="inc-hint">Vattnet rinner en våning nedåt var ${SPREAD_S}:e sekund tills huvudkranen är stängd. Det är halt på de blöta golven.</div>`}`, !Lk.shut));
+          ${line(`Ett rör har spruckit${Lk.green ? ' i labbet – vattnet är grönt' : ''}. Blött: <b>${Lk.wet.map(fl).join(', ')}</b>. Hissar i blöta schakt: ${cars}.${Lk.shorts.length ? ` Kortslutna: <b>${Lk.shorts.map(id => esc(S.elevators[id].name)).join(', ')}</b>.` : ''} ${status}`)}
+          ${Lk.shut ? hint('Hissarna kör som vanligt igen.') + acts(showLeak) : `${chiefLine('leak', 'Ska hissarna i de blöta schakten köra?')}
+          ${acts(b('stop', '🛑 Stoppa de blöta hissarna', 'De tas ur drift tills kranen är stängd – säkert, men köerna växer och fler tar trappan'),
+            b('run', '▶ Kör vidare', 'Bättre flöde – men vattnet kan kortsluta styrningen och ge ett riktigt hissfel'),
+            showLeak, ikon(`show:${DOCK}`, '🔧', 'Visa pannrummet', 'Kameran visar pannrummet där huvudkranen sitter'))}
+          ${hint(`Vattnet rinner en våning nedåt var ${SPREAD_S}:e sekund tills huvudkranen är stängd. Det är halt på de blöta golven.`)}`}`, !Lk.shut));
       }
     },
     shots: (add) => {

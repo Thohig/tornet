@@ -1,6 +1,11 @@
 // Klick, tangentbord och alla knappar i kontrollpanelen (data-act).
 // Vänsterklick i bilden följer det man klickar på: en person, en hiss, en korridor (nästa person därinne)
 // eller en våning. Det finns ingen högerklicksmeny – det som går att göra med det man följer står i panelen.
+//
+// Översikt:
+// `input.js` – klick, tangenter och alla knappar: `doAction` för `data-act`, nya gränssnittsåtgärder läggs i
+// `extraActions`; vänsterklick i bilden följer person, hiss, korridor (nästa person därinne) eller våning – det
+// finns ingen högerklicksmeny
 import { act, ACTIONS } from './actions.js';
 import { clamp } from './util.js';
 import { BX0, CAR_H, CAR_W, DOOR_X, FLOOR_H, GROUND_Y, H, INNER_X1, LOBBY, ROOF_Y, STRAT_NAMES, TOP, WAIT_X1, floorY, shaftX, surf } from './config.js';

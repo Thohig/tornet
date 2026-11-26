@@ -1,5 +1,10 @@
 // Spelarens åtgärder. Allt spelaren gör som påverkar simuleringen går via act(), så att gränssnittet aldrig
 // ändrar simuleringens tillstånd direkt. Rör aldrig DOM – gränssnittet anropar act().
+//
+// Översikt:
+// spelarens åtgärder via `act()` (tabellen `ACTIONS`), `changeStrategy`, `triggers()` (registrets incidenter och
+// händelserna i `EXTRA_TRIGGERS` – allt som kan framkallas: `act('trigger', typ, mål)` där mål är våning för brand
+// och hiss-id för fel/värme/linbrott)
 import { STRAT_NAMES } from './config.js';
 import { S, log } from './state.js';
 import { pev, spawnVisitor } from './people.js';

@@ -110,7 +110,12 @@ export function drawRoofPx() {
     if (e.heat >= WARM_AT * 0.85) {
       const k = Math.min(1, (e.heat - WARM_AT * 0.85) / 0.4);
       R(X(cx) - 9, Y(cy) + 7, 18, 2, `rgba(255,${Math.round(140 - k * 100)},40,${0.4 + k * 0.5})`);
-      for (let i = 0; i < 3; i++) { const t = (S.anim * 0.8 + i / 3) % 1; g.globalAlpha = (1 - t) * (0.4 + k * 0.6); g.drawImage(PUFF(2 + Math.round(t * 2)), X(cx) - 4 + i * 3, Y(cy) - 12 - Math.round(t * 12)); g.globalAlpha = 1; }
+      for (let i = 0; i < 3; i++) {
+        const t = (S.anim * 0.8 + i / 3) % 1;
+        g.globalAlpha = (1 - t) * (0.4 + k * 0.6);
+        g.drawImage(PUFF(2 + Math.round(t * 2)), X(cx) - 4 + i * 3, Y(cy) - 12 - Math.round(t * 12));
+        g.globalAlpha = 1;
+      }
     }
     // överhettad: luften dallrar över maskinen
     if (e.hot) for (let i = 0; i < 6; i++) { const t = (S.anim * 1.2 + i / 6) % 1; R(X(cx) - 6 + i * 2 + Math.round(Math.sin(S.anim * 6 + i) * 1.5), Y(cy) - 10 - Math.round(t * 10), 1, 2, 'rgba(255,220,160,.45)'); }
@@ -138,8 +143,9 @@ export function drawRoofPx() {
   }
   // skylten på taket
   const sx0 = SHAFT_X0 - 16, sx1 = UX1 + 16; // skylten får skjuta ut lite över det smala tornet
-  for (const px of [sx0 + 60, sx1 - 60]) R(X(px) - 1, Y(96), 3, Y(ROOF_Y - 50) - Y(96), INK);
-  const bx = X(sx0), by = Y(24), bw = X(sx1) - bx, bh = 36;
+  // (skylten slutar ovanför maskinrummet: 16 + 36 låga pixlar = 88 < ROOF_Y - 50)
+  for (const px of [sx0 + 60, sx1 - 60]) R(X(px) - 1, Y(88), 3, Y(ROOF_Y - 50) - Y(88), INK);
+  const bx = X(sx0), by = Y(16), bw = X(sx1) - bx, bh = 36;
   box(bx, by, bw, bh, PAL.sign); R(bx + 1, by + 1, bw - 2, 1, PAL.signHi); R(bx + 1, by + bh - 2, bw - 2, 1, PAL.signLo);
   const nb = Math.floor((bw - 12) / 10);
   for (let i = 0; i < nb; i++) {
@@ -147,9 +153,10 @@ export function drawRoofPx() {
     for (const yy of [by + 3, by + bh - 5]) R(bx + 6 + i * 10, yy, 2, 2, on ? PAL.bulbOn : PAL.bulbOff);
   }
   const ts = Math.max(1, Math.min(4, Math.floor((bw - 10) / textW('SKYSKRAPAN'))));
-  text(g, 'SKYSKRAPAN', bx + bw / 2, by + Math.round((bh - 5 * ts) / 2), '#ffffff', 'center', ts, INK);
+  // (textens överkant är accentraden och konturen – två rader ovanför bokstäverna)
+  text(g, 'SKYSKRAPAN', bx + bw / 2, by + Math.round((bh - 5 * ts) / 2) - 2 * ts, '#ffffff', 'center', ts, INK);
   const ax = X(UX1 - 24);
-  R(ax, Y(24), 2, Y(ROOF_Y - 50) - Y(24), INK); R(ax - 7, Y(60), 16, 2, INK); R(ax - 5, Y(80), 12, 2, INK);
+  R(ax, Y(16), 2, Y(ROOF_Y - 50) - Y(16), INK); R(ax - 7, Y(60), 16, 2, INK); R(ax - 5, Y(80), 12, 2, INK);
   // vimpel i masten: står rakt ut i stormen
   const w = windAt(), fl0 = Y(40), flen = 5 + Math.round(w * 16);
   for (let i = 0; i < flen; i++) {
@@ -368,7 +375,9 @@ export function drawPolicePx() {
     const x0 = X(LAND_X0), x1 = X(INNER_X1);
     R(x0, top, x1 - x0, bot - top, on ? 'rgba(60,120,255,.12)' : 'rgba(60,120,255,.04)');
     box(x1 - 32, top + 3, 7, 5, on ? '#3f7cff' : '#1b2a6e'); box(x1 - 22, top + 3, 7, 5, on ? '#1b2a6e' : '#3f7cff');
-    label(f === LOBBY ? 'POLISEN' : 'INSATSSTYRKAN', x1 - (f === LOBBY ? 50 : 66), top + 12, '#ffffff', '#2a5db0');
+    // (brandkåren i entrén samtidigt: polisens skylt en rad under, drawBrigadePx)
+    const both = f === LOBBY && (S.brigade || (S.fire && S.fire.brigade));
+    label(f === LOBBY ? 'POLISEN' : 'INSATSSTYRKAN', x1 - (f === LOBBY ? 50 : 66), top + 12 + (both ? 11 : 0), '#ffffff', '#2a5db0');
   }
 }
 /** Brandkåren: blåljus i entrén och folket på återsamlingsplatsen utanför entrédörren */

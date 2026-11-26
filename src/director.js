@@ -1,6 +1,15 @@
 // Regissören: automatisk kamera som letar upp det mest sevärda i huset och klipper dit.
 // Rent gränssnitt: läser S, ändrar aldrig simuleringen (slumpen är vrand). Kameran rör sig via S.camTarget
 // precis som när man följer en hiss. Allt manuellt (scrolla, följa, klicka på någon) stänger av regissören.
+//
+// Översikt:
+// `director.js` – regissören: automatisk kamera `VIEW.auto` – på från start, valet `VIEW.autoWant` minns i start.js;
+// tar kameran igen när spelaren slutar följa, efter `AUTO_IDLE` när hen har scrollat fritt eller tittar på en våning
+// (`VIEW.freeAt`) och direkt när något nytt brådskande bryter ut – som poängsätter det sevärda – incidenter
+// (förvarningar och blixten är `urgent` och klipper in direkt), brandmännen, återsamlingsplatsen, tåget, repliker,
+// teknikerns telefonsamtal, köer, fönsterputsaren och hissbalken (`cleanerAt`/`S.hoist` i hoist.js) – och klipper
+// dit; allt manuellt med kameran pausar den; `slowmo(dt)` saktar in uppspelningen i dramatiska ögonblick – fritt
+// fall, blixten, branden bryter ut – och ändrar aldrig simuleringen
 import { BREAK, BX1, CONTROL, CREW, DOCK, FLOOR_H, GROUND_Y, LOBBY, ROOF, STATION, TOP, floorY, shaftCX } from './config.js';
 import { incUi } from './incui.js';
 import { alarm, chiefOnDuty } from './chief.js';

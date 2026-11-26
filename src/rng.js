@@ -1,4 +1,11 @@
 // Seedad slump för simuleringen + visuell slump för grafiken.
+//
+// Översikt:
+// seedad slump i namngivna strömmar: `const { rng, rand, pick } = stream('väder')` en gång per modul, ett namn per
+// delsystem (ankomsterna har en ström per sort – även `bud` och tågets `tåg`; `gestalt` = vem en anställd eller
+// besökare är, `inkallade` = vem alla andra är (tekniker, brandmän, flyttgubbar … som kommer när något händer),
+// `folk` = vad folk gör, `påstigning` = perrongen, `tidtabell` = dygnets incidenter …); `setSeed` seedar om alla ur
+// dygnets frö och namnet + visuell slump (`vrand/vpick`)
 
 // ---------- Slump ----------
 // Simuleringen drar ur namngivna slumpströmmar, en per delsystem (ankomster, väder, incidenter …).

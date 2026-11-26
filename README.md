@@ -82,15 +82,18 @@ Node behövs bara för tester och typkontroll.
 ```bash
 npm test            # hela testsviten i Node, parallellt (--jobs=N)
 npm run typecheck   # tsc på JSDoc-typerna
-npm run check       # båda
+npm run check       # typkontroll, långa kodrader och hela sviten
 npm run quick       # snabbläget: färre slumpade dygn, ungefär halva tiden
 npm run golden      # skriv om facit efter avsiktliga beteendeändringar
 npm run bench       # simuleringens fart
 npm run league      # styrlogikerna mot varandra: väntetid, kWh, trappa …
-npm run playtest    # provspelning i Chromium: kaosdygn på engelska, letar fel och svensk text som blivit kvar
+npm run playtest    # provspelning i Chromium (= npm run check:ui): kaosdygn och fasta ögonblick, se nedan
+npm run lines       # kodrader som är för långa (texten räknas inte)
+npm run new-incident -- duva "Duvan i hallen" "Pigeon in the hall" 🐦   # skelettet till en ny incident
+npm run hooks       # git-kroken: npm run quick före varje commit
 ```
 
-Samma testsvit körs i webbläsaren på `/tests.html`. Panelen och pixelgrafiken testas inte i Node – det gör `npm run playtest` i en riktig webbläsare. Det behöver Playwright, som inte är ett beroende i projektet: `npm i --no-save playwright && npx playwright install chromium`. Kör det efter ändringar i gränssnittet eller texterna (`--seeds=21,5`, `--lang=en`, `--keep` sparar skärmdumpar i `tools/playtest-out/`). På GitHub kör `npm run check` vid push till `main` och vid pull request (inte när bara `.md`-filer ändrats). Kör `npm run quick` lokalt före varje commit och hela `npm run check` innan något hamnar på `main`.
+Samma testsvit körs i webbläsaren på `/tests.html`. Panelen och pixelgrafiken testas inte i Node – det gör `npm run playtest` i en riktig webbläsare. Den spelar kaosdygn och letar efter fel, svenska som blivit kvar i det engelska gränssnittet och text som ritas över annan text i bilden. Den tar också skärmdumpar av fasta ögonblick på datorn och mobilen och jämför dem med förra facit: öppna `tools/playtest-out/ögon/index.html` för att se vad som ändrats, och kör `npm run playtest -- --del=ögon --godta` när ändringen är avsiktlig. Det behöver Playwright, som inte är ett beroende i projektet: `npm i --no-save playwright && npx playwright install chromium`. Kör det efter ändringar i gränssnittet eller texterna (`--seeds=21,5`, `--lang=en`, `--keep` sparar skärmdumpar i `tools/playtest-out/`). På GitHub kör `npm run check` vid push till `main` och vid pull request (inte när bara `.md`-filer ändrats). Kör `npm run quick` lokalt före varje commit och hela `npm run check` innan något hamnar på `main`. `npm run hooks` kopplar in en git-krok som gör det åt dig, och som kör provspelningen när gränssnittet ändrats (`git commit --no-verify` hoppar över).
 
 **Upplägg.** Simuleringen i `src/` rör aldrig DOM eller canvas och kör headless i Node med fast tidssteg och seedad slump i namngivna strömmar. Samma frö ger alltid exakt samma dygn. Grafiken läser bara simuleringens tillstånd, och allt spelaren gör går via `act()`. Huset beskrivs som data i `BUILDING` i `config.js`, och resten räknas ut därifrån. Husets delsystem och incidenter står i två register: `src/systems.js` (simuleringen – hur de tickar, startar, förvarnar, vad driftchefen gör och vad folket och hissarna behöver veta) och `src/incui.js` (gränssnittet – knappen i *Framkalla*, incidentkortet och regissörens klipp). En ny incident är en egen modul och en post i vart och ett av registren. Mer om arkitekturen och reglerna finns i [CLAUDE.md](CLAUDE.md).
 

@@ -6,6 +6,21 @@
 // hon om rutten dit (aldrig in i brandzonen) och fortsätter sedan där hon var. Läget ligger i S.visning; guiden, gästen
 // och Kicki är personer i huset. Drar inga slumptal – allt bestäms av huset och spelaren. Repliken i S.visning.line
 // läses upp och visas av gränssnittet (intro.js).
+//
+// Översikt:
+// rundvisningen (`S.visning`, ingen incident – den beställs: `act('visning', 'start'|'now'|'next'|'end')`, `now` =
+// `v.now`; Berits erbjudande första gången, knappen i hjälpen och hos guiden eller i entrén): guiden (`v.host`) är
+// den med `guide` i `CREW` som sitter i receptionen – Berit på dagen, kvällsvärden Yvonne kväll och natt
+// (`guideNow`, `nextGuide`, `guideName`). Hon ringer bemanningen och vikarien Kicki (`v.sub`) tar receptionen – även
+// larmen – medan hon visar en gäst (`p.guest`, `p.touring`) runt i dygnet som pågår. Med `now` börjar den direkt
+// (guiden avbryter rasten); finns ingen guide i huset tar väktaren eller driftchefen den (`standIn`, beslutet via
+// `chiefNote`). Rutten `STOPS` är platser (entrén, driftcentralen, perrongen, Sky Café, takterrassen, entrén) vars
+// texter läser av huset just nu; har ett stopp stängt (`closedStop`) ringer guiden den som har nycklarna –
+// vaktmästaren, väktaren eller en inringd jourvaktmästare (`v.unlock`, `p.keys`, `keyNext` i roleNext) – som låser
+// upp (gallret ritas inte, `unlockedFloor`) och låser efter gruppen (`relock`). Händer något lägger guiden om rutten
+// dit (`happening`: brand, storm, strömavbrott, hissfel, fasaden, flytten – aldrig in i brandzonen) och fortsätter
+// sedan. Repliken i `v.line`/`v.lineN` läses upp av intro.js. Drar inga slumptal (jourvaktmästaren är en inkallad,
+// `spawnStaff`)
 import { CAFE, CONTROL, CREW, DOCK, DOOR_X, FL, FLOOR_HOURS, LOBBY, ROOF, STATION, BUILDING, floorOpen } from './config.js';
 import { S, dayEvent, hour, log, notice } from './state.js';
 import { blankPerson, pev, releaseSpot, setTrip, spawnStaff } from './people.js';
@@ -478,7 +493,12 @@ export function visningTick(dt) {
   if (v.ph === 'go') {
     v.goT += dt;
     // (stoppet finns inte just nu, eller det brinner där: nästa stopp – ingen går in i brandzonen)
-    if (f < 0 || inFireZone(f)) { if (d) { v.detour = null; toStop(v, 'Dit går vi inte nu. Nå, var var vi?'); return; } if (v.si >= STOPS.length - 1) { finish(v, v.ended || 'klar'); return; } v.si = nextStop(v.si + 1); toStop(v, STOPS[v.si].way()); return; }
+    if (f < 0 || inFireZone(f)) {
+      if (d) { v.detour = null; toStop(v, 'Dit går vi inte nu. Nå, var var vi?'); return; }
+      if (v.si >= STOPS.length - 1) { finish(v, v.ended || 'klar'); return; }
+      v.si = nextStop(v.si + 1); toStop(v, STOPS[v.si].way());
+      return;
+    }
     // den som blev stående (utrymning, en ny väg) får målet igen när hen är ledig
     for (const p of group(v)) if (p.state === 'office' && !there(p, f) && !p.evac && !inFireZone(f)) {
       releaseSpot(p); setTrip(p, f, d ? `Rundvisning: ${d.title}` : `Rundvisning: ${STOPS[v.si].title}`, false);

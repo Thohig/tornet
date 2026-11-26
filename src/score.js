@@ -5,12 +5,19 @@
 // signal som musiken svarar på. Noterna står i scoreData.js.
 // Hörs när ingen hissmusik spelar (music.js – följer du en hiss är det kassetten i korgen som låter).
 // Rent gränssnitt: läser S, ändrar aldrig simuleringen; slump bara med vrand.
+//
+// Översikt:
+// `score.js` – husmusiken när ingen hissmusik spelar: dygnets stycken som tonar över i varandra – ragtime i
+// rusningen, vals, lunchjazz, lounge, speldosa – tubatemat medan hissbalken jobbar, Berit som nynnar i
+// rundvisningen, och korta inslag: förvarning, fanfar när en incident är över, brandkårens dum-dum-dum som tystar
+// musiken, guidens visselmelodi, tunnelbanans signal som musiken svarar på; noterna i `scoreData.js`, testas i Node
 import { FLOOR_H, STATION, floorY } from './config.js';
 import { S, hour } from './state.js';
 import { vrand } from './rng.js';
 import { VIEW, seeH } from './view.js';
 import { personHead } from './render.js';
 import { trafficMode } from './dispatch.js';
+import { incUi } from './incui.js';
 import { hz } from './music.js';
 import { CUES, PIECES, layout, partOf } from './scoreData.js';
 
@@ -149,8 +156,8 @@ function cue(name, t) {
 // ---------- Vad som ska höras ----------
 /** Vilket stycke som spelar just nu. */
 function current(intro) {
-  // kuppen: ragtime som i en stumfilmsjakt (heist.js)
-  if (S.heist && S.heist.ph !== 'done') return 'rag';
+  // en incident med eget stycke (sound.piece i incui.js – kuppens ragtime)
+  for (const u of incUi()) { const p = u.sound?.piece?.(); if (p) return p; }
   if (intro) return 'hum';
   const H = S.hoist;
   if (S.move && H && H.phase !== 'idle' && !H.halted) return 'tuba';

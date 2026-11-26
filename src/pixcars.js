@@ -128,9 +128,16 @@ function faultPx(e, x, cw, chh, yt, yb) {
     else if (Math.sin(S.anim * 2.3 + e.id) > 0.4) label('KNACK KNACK', x + cw / 2, yt + chh / 2, '#ffffff', INK);
     else label('FEL!', x + cw / 2, yt - 11, '#ff2d55', '#ffffff');
   } else if (Math.sin(S.anim * 6) > -0.4) label('FEL!', x + cw / 2, yt - 11, '#ff2d55', '#ffffff');
-  if (kind === 'motor') for (let i = 0; i < 3; i++) { const k = (S.anim * 0.7 + i / 3) % 1; g.globalAlpha = (1 - k) * 0.6; g.drawImage(PUFF(2 + Math.round(k * 3)), x + cw / 2 - 4 + i * 3, yt - 8 - Math.round(k * 14)); g.globalAlpha = 1; }
+  if (kind === 'motor') for (let i = 0; i < 3; i++) {
+    const k = (S.anim * 0.7 + i / 3) % 1;
+    g.globalAlpha = (1 - k) * 0.6;
+    g.drawImage(PUFF(2 + Math.round(k * 3)), x + cw / 2 - 4 + i * 3, yt - 8 - Math.round(k * 14));
+    g.globalAlpha = 1;
+  }
   if (kind === 'board' && Math.sin(S.anim * 8) > 0) label('ERR 0x1F', x + cw / 2, yt + chh / 2 - 4, '#7cf06b', INK);
-  if (kind === 'brake' && Math.sin(S.anim * 9) > 0.2) for (const sx of [x - 2, x + cw + 1]) for (let n = 0; n < 3; n++) R(sx + Math.round(vrand(-1, 1)), yb - Math.round(vrand(2, chh - 2)), 1, 1, vpick(['#ffd23f', '#ffffff', '#ff9f1c']));
+  if (kind === 'brake' && Math.sin(S.anim * 9) > 0.2) for (const sx of [x - 2, x + cw + 1]) for (let n = 0; n < 3; n++) {
+    R(sx + Math.round(vrand(-1, 1)), yb - Math.round(vrand(2, chh - 2)), 1, 1, vpick(['#ffd23f', '#ffffff', '#ff9f1c']));
+  }
   if (kind === 'level') { const up = Math.sin(S.anim * 3) > 0; text(g, up ? '▲' : '▼', x + cw + 3, yt + chh / 2 - 3, '#ffe14d', 'left', 1, INK); }
 }
 /** Linbrott: hur långt ner i schaktet linorna når (0–1 av vägen till korgen), null = hela linor @param {Elevator} e */

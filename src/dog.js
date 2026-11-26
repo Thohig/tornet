@@ -6,6 +6,16 @@
 // Driftchefen kan spärra hissarna på hundens våning (lock): då kommer den ingenstans – men den som väntar på
 // hiss där får ta trappan (canTake i dispatch.js).
 // (Simulering: läget ligger i S.dog. Egen slumpström.)
+//
+// Översikt:
+// hunden som rymmer (`S.dog`, incident och `act('trigger', 'dog')`): en pudel sliter sig ur kopplet hos en ägare i
+// hallen – annars smiter den ut ur kenneln på Vovve Spa och hundfrisören (rollen `hundfrisör`) jagar. Hunden är en
+// person (`p.dog`, rollen `hund`, ritas som pudel i pixfolk.js och pixcars.js) som springer fortare, åker en hiss
+// till en våning den når direkt (`dogNext`) och stannar en stund (`dogTimer`); ägaren/frisören (`p.chase`,
+// `chaseNext`) och vaktmästaren (uppdraget `dog`, flyttas med `moveDuty`) jagar den. Fångad när någon som jagar står
+// på samma våning medan den står still (`CATCH_T`); trött efter `DOG_TIRED_S`. Driftchefen (`dogChiefTick`) eller
+// spelaren (`act('dog', 'lock'|'free')`) kan spärra hissarna på hundens våning (`dogLockFloor`, i `canTake` i
+// dispatch.js – bara de som jagar kommer därifrån). Egen slumpström `hunden`
 import { stream } from './rng.js';
 const { pick, rand, rng } = stream('hunden');
 import { cap, fl } from './util.js';

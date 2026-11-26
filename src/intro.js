@@ -3,6 +3,12 @@
 // act('visning', 'start') och den går i det dygn som pågår. Här visas och läses repliken i S.visning.line upp med
 // webbläsarens talsyntes (Web Speech API, en svensk röst – på en Mac samma röster som `say`). Finns ingen svensk
 // röst, eller är ljudet av, blir det bara text. Bara gränssnitt: ändrar aldrig simuleringen utom via act().
+//
+// Översikt:
+// `intro.js` – rundvisningen i gränssnittet: guidens berättelse i blocket `tour` överst i panelen via `setTour`,
+// kameran som följer guiden och rösten – Web Speech API med en kvinnlig röst på spelarens språk (Alva/Klara på
+// svenska, helst brittisk engelska; mansröster väljs bara om inget annat finns), musiken sänks medan hon pratar
+// (`beritTalking`); själva rundvisningen är simulering i `visning.js`
 import { S } from './state.js';
 import { act } from './actions.js';
 import { STOPS, guideName, nextGuide, touring } from './visning.js';
@@ -142,7 +148,12 @@ const FEMALE = {
   en: ['serena', 'kate', 'stephanie', 'martha', 'libby', 'sonia', 'maisie', 'hazel', 'susan', 'flo', 'shelley', 'sandy',
     'female', 'samantha', 'karen', 'moira', 'tessa', 'allison', 'ava', 'zira', 'aria', 'jenny', 'tara'],
 };
-const NOT_BERIT = /\b(male|man|daniel|oliver|arthur|george|thomas|ryan|eddy|reed|rocko|grandpa|grandma|alex|fred|ralph|albert|aaron|rishi|aman|david|mark|guy|bengt|mattias|oskar|bells|boing|bubbles|cellos|wobble|jester|junior|organ|superstar|trinoids|whisper|zarvox|bahh|bad news|good news)\b/i;
+const NOT_BERIT = new RegExp(`\\b(${[
+  'male', 'man', 'daniel', 'oliver', 'arthur', 'george', 'thomas', 'ryan', 'eddy', 'reed', 'rocko', 'grandpa', 'grandma',
+  'alex', 'fred', 'ralph', 'albert', 'aaron', 'rishi', 'aman', 'david', 'mark', 'guy', 'bengt', 'mattias', 'oskar',
+  'bells', 'boing', 'bubbles', 'cellos', 'wobble', 'jester', 'junior', 'organ', 'superstar', 'trinoids', 'whisper',
+  'zarvox', 'bahh', 'bad news', 'good news',
+].join('|')})\\b`, 'i');
 /** Guidens röst på spelarens språk: en kvinnlig röst på svenska eller (helst brittisk) engelska; null = ingen finns */
 function beritVoice() {
   if (!SYN) return null;

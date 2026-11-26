@@ -11,6 +11,13 @@
 //   pixcars.js     hisskorgarna, linorna och panoramahissen på fasaden
 //   pixfolk.js     folket i hallarna, pratbubblor, telefonsamtalet, spårning och ljudeffekter
 //   pixroof.js     taket, gondolen och hissbalken, flyttlassen, rök, väder och blåljus
+//
+// Översikt:
+// `pixel.js` – hela bilden i pixelgrafik: `renderPixel` sätter ihop den; delarna ritas i `pixcore.js` – ritytan,
+// lagren, platsbokningen och ritverktygen –, `pixbuilding.js` – himlen, gatan, fasaden, schakten, rampen, terrassen,
+// lastkajen –, `pixhall.js` – hallarna, kontrollrummet, personalrummet, perrongen –, `pixcars.js` – korgarna,
+// linorna, panoramahissen –, `pixfolk.js` – folket i hallarna, bubblor, telefonsamtalet, spårning, ljudeffekter –
+// och `pixroof.js` – taket, gondolen och hissbalken, flyttlassen, rök, väder, blåljus
 import { hour, S } from './state.js';
 import { FLOORS, floorY } from './config.js';
 import { ctx, VIEW } from './view.js';
@@ -21,7 +28,10 @@ import { countOcc, deckSign, drawChiefPx, drawEscalatorPx, drawHall, drawLeakPx,
 import { drawGroundPx, drawLanternsPx, drawShell, drawSkyAll, drawSlabsPx, drawStreetPx, drawTerracePx, terminal } from './pixbuilding.js';
 import { drawCarPx, drawPanoPx, drawRopesPx } from './pixcars.js';
 import { drawProf, lap } from './prof.js';
-import { drawBannersPx, drawBrigadePx, drawPolicePx, drawCleanerPx, drawHeliPx, drawHoistPx, drawLightningPx, drawMedicPx, drawMovePilesPx, drawOutagePx, drawRoofPx, drawSmokePx, drawSnowPx, drawWeatherPx } from './pixroof.js';
+import {
+  drawBannersPx, drawBrigadePx, drawPolicePx, drawCleanerPx, drawHeliPx, drawHoistPx, drawLightningPx, drawMedicPx,
+  drawMovePilesPx, drawOutagePx, drawRoofPx, drawSmokePx, drawSnowPx, drawWeatherPx,
+} from './pixroof.js';
 
 // ---------- Hela bilden ----------
 export function renderPixel(dt) {

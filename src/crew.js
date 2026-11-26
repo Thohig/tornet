@@ -3,6 +3,23 @@
 // ställen (personalrummet, Sky Café, takträdgården, kiosken, godisautomaten, perrongen). Raster tas bara när det är
 // lugnt; den som är "urgent" (kontrollrummet) skyndar tillbaka när larmet går, och den som ska täcka för någon
 // (cover) går inte förrän den andra sitter på sin post. Allt här är simulering och drar inga slumptal.
+//
+// Översikt:
+// husets personal (data i `CREW` i config): driftcheferna Gun-Britt/Rune, bildproducenterna Ludde/Siv,
+// receptionisten Berit, kvällsvärden Yvonne (19–07, sitter kvar tills Berit är i huset), dagvaktmästaren Bosse
+// (07–16, post vid pannrummets dörr i hallen på P1 – `BOILER_X`/`BOILER_STAND`, ritas i `boilerDoor` i pixhall.js;
+// småjobb på våningarna är raster med `where: 'job'`, våningen väljs i `jobFloor` utan slumptal), fönsterputsaren
+// Hasse, lastaren Mona (kommer med flyttdagen) och vikarien Kicki (kommer när guiden i receptionen visar runt,
+// `sub`; går när rundvisningen är slut eller nästa skift i receptionen har kommit). `guide` = ger rundvisningar
+// (Berit, Yvonne). Var och en är en person (`p.crewId`) med en post (en plats i `SPOTS` med `post`), ett skift
+// (`from`/`until`/`arrive`) och raster på rastmål (`where`: personalrummet `BREAK`, Sky Café, takträdgården,
+// kiosken, godisautomaten, perrongen). Raster bara när det är lugnt; `urgent` = tillbaka vid larm (`alarm()`),
+// `cover` = går inte förrän den andra sitter på sin post. `crewNext` = rollogiken, `crewSpot` = platsvalet,
+// `atPost`/`crewPerson`. Vaktmästarens uppdrag vid olyckorna: `callJanitor(kind, f, why, desc)` ger husets
+// vaktmästare (Bosse, kvällsvaktmästaren – rollen i people.js, som börjar rundan vid pannan – annars en inringd
+// jourvaktmästare `p.jour`) uppdraget `p.duty`; hen går dit (`dutyNext`, i trappan om ingen hiss går), syns i hallen
+// (`dutySpot`) och stannar tills delsystemet säger `dutyDone`; `onDuty(p, kind)` = framme, `moveDuty` flyttar
+// uppdraget (hunden). Drar inga slumptal (`blankPerson`)
 import { BOILER_STAND, BREAK, CAFE, CONTROL, CREW, DOCK, LOBBY, OFFICE_FLOORS, ROOF, SPOTS, START_H, STATION, TERRACE_F, floorOpen } from './config.js';
 import { S, hour, log, occOf } from './state.js';
 import { blankPerson, gotoSpot, pev, pn, releaseSpot, setTrip, spawnStaff } from './people.js';

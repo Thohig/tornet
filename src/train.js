@@ -1,6 +1,11 @@
 // Tunnelbanan under huset: tåg enligt tidtabell som lämnar av folk i klump och tar med dem som ska hem.
 // Tåget kör in från vänster längs perrongens bakvägg, stannar, öppnar dörrarna och kör vidare åt höger.
 // Allt ligger i simuleringen (S.train) – grafiken i pixhall.js läser bara läget.
+//
+// Översikt:
+// tunnelbanan under huset: tidtabell (`headway`, `FIRST_H`/`LAST_H`), tåget i `S.train`, folk som kliver av i klump
+// (en andel `TRAIN_SHARE` av morgonens anställda) och på, sista tåget (`S.trainDone`: alla med `exitFloor` stationen
+// går ut genom entrén)
 import { stream } from './rng.js';
 const { rand, randi, rng } = stream('tåg');
 // påstigningen har en egen ström: vilka som står på perrongen beror på styrlogiken, och får inte flytta hur många

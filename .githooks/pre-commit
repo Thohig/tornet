@@ -1,0 +1,26 @@
+#!/bin/sh
+# Före varje commit: npm run quick, och npm run check:ui (provspelningen i Chromium) när gränssnittet, grafiken
+# eller texterna ändras. Kopplas in med npm run hooks (git config core.hooksPath .githooks).
+# Hoppa över en gång: git commit --no-verify. Bara gränssnittet: SKIP_UI=1 git commit …
+for b in /opt/homebrew/bin/brew /usr/local/bin/brew; do [ -x "$b" ] && eval "$("$b" shellenv)" && break; done
+
+files=$(git diff --cached --name-only --diff-filter=ACMR)
+# bara dokumentation: inget att köra
+echo "$files" | grep -qv '\.md$' || exit 0
+
+npm run quick --silent >/tmp/tornet-quick.$$ 2>&1
+if [ $? -ne 0 ]; then
+  grep -E '✗|fel|error' /tmp/tornet-quick.$$ | head -40; rm -f /tmp/tornet-quick.$$
+  echo "✗ npm run quick fallerade – ingen commit (git commit --no-verify hoppar över kontrollen)"
+  exit 1
+fi
+tail -1 /tmp/tornet-quick.$$; rm -f /tmp/tornet-quick.$$
+
+UI='^(src/(hud|panels|input|incui|render|view|director|intro|start|summary|describe|lang|lang-en|main|pix[a-z]*)\.js|style\.css|index\.html|tools/playtest\.mjs)$'
+if [ -z "$SKIP_UI" ] && echo "$files" | grep -qE "$UI"; then
+  if node -e "require.resolve('playwright')" 2>/dev/null; then
+    npm run check:ui --silent || { echo "✗ npm run check:ui fallerade – ingen commit"; exit 1; }
+  else
+    echo "(gränssnittet är ändrat men Playwright saknas: npm i --no-save playwright && npx playwright install chromium)"
+  fi
+fi

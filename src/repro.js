@@ -3,6 +3,11 @@
 // Simuleringen är deterministisk (rng.js), så fröet och inställningarna från newSim (S.origin) räcker – så länge
 // inget annat än stegen har ändrat dygnet (spelaråtgärder, framkallade incidenter). Ingen DOM: används både
 // av testerna (tests/suite.js skriver länken när en invariant bryts) och av spelet (start.js läser den).
+//
+// Översikt:
+// ögonblicket i adressen: `reproQuery` (fröet, newSim-inställningarna ur `S.origin`, `t`, `follow`), `parseRepro`,
+// `fastForward` (fasta steg till `t` eller klockslaget `h`). Spelet (start.js) startar dygnet ur adressen, spolar
+// fram och pausar; testerna skriver länken när en regel bryts
 import { S, hour } from './state.js';
 import { DT, step } from './sim.js';
 import { TEMPOS } from './config.js';

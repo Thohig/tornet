@@ -1,4 +1,10 @@
 // Destinationsstyrning: kostnadsfunktion, tilldelning, omfördelning, parkering.
+//
+// Översikt:
+// destinationsstyrning: kostnadsfunktion, tilldelning, omfördelning, parkering (även lärande: `learnBlend`,
+// `learnedFloor`), brandzon, Rusning (`trafficMode`, `peakHold`; känner till tidtabellen: väntar in tågklumpen vid
+// perrongen, möter tåget, väntar inte i entrén när tåget kommer) och Energisnål (`ecoCost`); dubbeldäck via
+// `posOf`/`deckOf`/`allowedPos`
 import { stream } from './rng.js';
 const { pick, rand, rng } = stream('styrning');
 import { ARR, K, fl } from './util.js';
@@ -251,7 +257,9 @@ export function requestRide(p) {
     log(`🙈 ${pn(p)} slog in fel våning på ${fl(p.floor)} och börjar om`, 'button', null, p.id);
     return;
   }
-  const open = S.elevators.find(e => operational(e) && canTake(e, p) && (prio(p) || !e.vipLock) && e.id !== p.avoid && e.state === 'doors' && e.floor === posOf(e, p.floor) && e.doorPhase !== 'closing' && (e.dir === p.dir || e.dir === 0) && !isFull(e));
+  const open = S.elevators.find(e => operational(e) && canTake(e, p) && (prio(p) || !e.vipLock) && e.id !== p.avoid
+    && e.state === 'doors' && e.floor === posOf(e, p.floor) && e.doorPhase !== 'closing'
+    && (e.dir === p.dir || e.dir === 0) && !isFull(e));
   if (open && allowedFor(p, p.dest) && allowedDest(open, p)) {
     p.assigned = open.id;
     pev(p, `Hiss ${open.name} står redan öppen här och ska åt rätt håll – får den direkt`);

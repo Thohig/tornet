@@ -7,6 +7,15 @@
 // samma beslut. Chefen gör samma anrop som spelarens åtgärder men går inte via act() – act() är spelaren.
 // Cheferna är också personer i huset (crew.js): de sitter vid kontrollbordet, fikar i personalrummet och
 // byter skift – men besluten fattas var de än är (walkie-talkien), så huset sköter sig lika bra för det.
+//
+// Översikt:
+// driftchefen: husets självständiga beslutsfattare (svajläge, brandzon, reservkraft/auto-räddning, extrafläkt,
+// beställd service, Smart ⇄ Rusning i rusningen, flyttens vägval i blåst). Varje beslut sparas med skäl i `S.chief`
+// (`dec` = gällande beslut per nyckel, `log` = dagens beslut med `outcome` när incidenten är över, `say` = repliken
+// i kontrollrummet). Spelarens val via `act()` registreras med `playerChose` och gäller tills incidenten är över
+// (`S.chief.manual`); `chiefBack` lämnar tillbaka beslutet. `S.chief.on` = på/rast (av: chefen går till
+// personalrummet), `S.chief.strat` = får byta styrlogik (av i ligan). Dagskiftet: `chiefOnDuty()`; cheferna som
+// personer finns i crew.js (`CHIEFS`, `chiefPerson`) – besluten fattas var de än är
 import { fl } from './util.js';
 import { CREW, LOBBY } from './config.js';
 import { S, clockStr, hour, log } from './state.js';

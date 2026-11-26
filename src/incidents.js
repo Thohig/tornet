@@ -1,4 +1,19 @@
 // Incidenter: brand och strömavbrott.
+//
+// Översikt:
+// slumpen `S.incLevel` (`INC_LEVELS`: av/lugn/normal/kaos, `setIncLevel` slumpar om resten av dygnet; tidtabellen
+// har en egen slumpström, så nivån flyttar inget annat), dygnets tidtabell (`planIncidents` → `S.incPlan`: 1–3
+// incidenter spridda över dagen med tyngd i rusningarna, ibland ett strömavbrott på natten; ibland Kuppen på 5:an,
+// högst en per dygn – `S.heistDay`, heist.js) med förvarning (`S.warn`, `WARN_S`) före varje; brand (larmet
+// återkallar hissarna automatiskt; brandkåren `S.brigade`: brandmän `p.ff` åker varuhissen som brandhiss `e.ffCar`
+// och springer sista biten, branden släcks när de är framme; de som jobbar, bor eller är på besök utryms genom
+// entrén (`evacFloor`) – även de som kom med tåg eller bil – och väntar på återsamlingsplatsen, läget `assembly`,
+// och går in igen dit de var (`p.evacFrom`, `fireReturn`); den som inte hann ut när det släcktes vänder
+// (`p.evacBack`); ingen går trappan in i brandzonen – den som ska dit väntar också utanför (`fireDivert` i
+// people.js); husets personal går ner till entrén och stannar i huset), strömavbrott (de instängda pratar, hissarna
+// startar om en i taget `e.restartAt`, startströmmen kan överhetta en motor) + spelarens åtgärder. När en incident
+// är över: `incidentOver()` (state.js) ger en sammanfattningsruta och folk pratar om den i hissen en stund
+// (`incidentTalk` i cast.js)
 import { stream } from './rng.js';
 const { pick, rand, rng } = stream('incidenter');
 // dygnets tidtabell har en egen ström: slumpens nivå (av/lugn/normal/kaos) ändrar inte hur incidenterna själva förlöper

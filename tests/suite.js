@@ -2941,6 +2941,26 @@ test('Kuppen när lastkajen är upptagen: gänget kör runt kvarteret och backar
   return `skåpbilen backade in kl ${hour().toFixed(1)}`;
 });
 
+test('Flyttdag under kuppen: flyttbilen väntar på gatan tills skåpbilen har kört från lastkajen', () => {
+  sim(5, { roll: 'mjuk', chief: true, incLevel: 'av' });
+  while (hour() < 12 || S.truck) step(DT);
+  assert(act('trigger', 'heist') === true, 'kuppen gick inte att framkalla');
+  let g = 0;
+  while (!(S.heist && S.heist.van === 'park') && ++g < 120 / DT) step(DT);
+  assert(S.heist && S.heist.van === 'park', 'skåpbilen backade aldrig in');
+  act('trigger', 'move');
+  let waited = 0;
+  while (S.move && S.move.state === 'planned' && ++g < 9000 / DT) {
+    step(DT);
+    const on = S.move && /** @type {string} */ (S.move.state) === 'on'; // (step() kan ha ändrat läget)
+    assert(!(on && S.heist && S.heist.van !== 'gone'), 'flyttbilen backade in medan skåpbilen stod vid lastkajen');
+    if (S.heist) waited += DT;
+  }
+  assert(S.move && S.move.state === 'on', 'flytten kom aldrig igång');
+  assert(S.move.dockWait > 0, 'flyttbilen väntade aldrig');
+  return `flyttbilen väntade ${Math.round(S.move.dockWait)} s · kom igång kl ${hour().toFixed(1)}`;
+});
+
 test('Kuppen under rundvisningen: Berit och gästen blir över, smyger i trapporna och rundvisningen fortsätter efteråt', () => {
   sim(12, { roll: 'mjuk', chief: true });
   while (hour() < 14.4) step(DT);

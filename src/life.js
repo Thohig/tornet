@@ -107,6 +107,7 @@ function truckTick(dt) {
       if (!S.move.notes.truck) { S.move.notes.truck = true; log('🚚 Leveransbilen får vänta på gatan – flyttbilen står vid lastkajen, buden kommer senare', 'alert'); }
       return;
     }
+    if (S.heist && S.heist.van !== 'gone') return; // (kuppens skåpbil står vid kajen – heist.js)
     S.truck = { x: -260, state: 'in', sent: 0 }; log('🚚 Leveransbilen backar in vid lastkajen på P1', 'sys'); return;
   }
   if (!T) return;

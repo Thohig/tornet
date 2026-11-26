@@ -5,6 +5,13 @@
 // ('lift') kör ner dem till entrén. Ingen hänger under en last: så länge balken är ute står gondolen parkerad.
 // Balken stannar i hård vind, vid brand och vid strömavbrott.
 // (Simulering: läget ligger i S.cleaner och S.hoist, grafiken i pixroof.js läser bara.)
+//
+// Översikt:
+// takskenan på tornets tak: fönsterputsarens gondol (`S.cleaner`, schemat i `cleanerPlan`) och hissbalken
+// (`S.hoist`) som delar den – XL-möbler (piano, kassaskåp) hissas ut genom lastluckan (`hatch` i `BUILDING`) ner
+// till takterrassen och åker panoramahissen i lastläge (`e.mode === 'lift'`, lastdörr `terrace` i `BUILDING`) till
+// entrén; gondolen kör bara med putsaren ombord (`S.cleaner.crew`; han vill av → `S.cleaner.recall`, gondolen hissas
+// upp först), parkerar medan balken är ute, balken stannar i blåst/brand/strömavbrott
 import { cap, fl } from './util.js';
 import { BX1, DOOR_T, EL, HATCH_FLOORS, LOBBY, SEAM_F, TOP, TOWER_X1, floorY } from './config.js';
 import { S, hour, log } from './state.js';

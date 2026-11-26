@@ -4,7 +4,10 @@
 import { clouds, nightness, skyAt, skyline, stars } from './view.js';
 import { hour, S } from './state.js';
 import { blend, dark, ellipseSprite, led, light, PX, rgbOf, text, textW } from './pixart.js';
-import { BX0, BX1, CAR_H, carPos, DOCK, DOOR_X, EL, FLOORS, floorY, GARAGE_FLOORS, GROUND_Y, H, LAND_X0, LOBBY, ROOF_Y, SEAM_F, SHAFT_W, SHAFT_X0, shaftCX, shaftX, STATION, surf, TOP, TOWER_X1, W } from './config.js';
+import {
+  BX0, BX1, CAR_H, carPos, DOCK, DOOR_X, EL, FLOORS, floorY, GARAGE_FLOORS, GROUND_Y, H, LAND_X0, LOBBY, ROOF_Y, SEAM_F,
+  SHAFT_W, SHAFT_X0, shaftCX, shaftX, STATION, surf, TOP, TOWER_X1, W,
+} from './config.js';
 import { clamp, fl } from './util.js';
 import { PAL } from './pixpal.js';
 import { vpick, vrand } from './rng.js';
@@ -317,8 +320,10 @@ function drawDockTrucksPx() {
   const M = S.move;
   if (M && M.state === 'on') draw(Math.min(1, (S.t - M.t0) / DOCK_DRIVE_S), 'flytt', true);
   else if (M && M.state === 'done' && S.t - M.t1 < DOCK_DRIVE_S) draw(1 - (S.t - M.t1) / DOCK_DRIVE_S, 'flytt', false);
-  // väntar på gatan (lastkajen är upptagen): utanför garageöppningen
-  if (M && M.state === 'planned' && M.dockWait > 0) dockTruck(rx1 + 10, yE, 'flytt', false);
+  // väntar på gatan (lastkajen är upptagen): utanför garageöppningen. Gatan har bara plats för en bil – är
+  // turistbussen där, eller kör en annan bil in eller ut, kör flyttbilen ett varv runt kvarteret (syns inte)
+  const street = S.tour || (T && T.state !== 'parked') || (Hs && Hs.van !== 'park' && Hs.van !== 'gone');
+  if (M && M.state === 'planned' && M.dockWait > 0 && !street) dockTruck(rx1 + 10, yE, 'flytt', false);
 }
 function drawShellStatic(nn) {
   // huset: rumsdelen (under hallarna) och schakttornet i två block; kontur runt

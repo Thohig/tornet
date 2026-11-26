@@ -7,6 +7,17 @@
 // Ordningen är simuleringens: posterna tickar, nollställs och rullar i listans ordning, och tidtabellen
 // väger incidenterna i listans ordning (dragningen ur slumpen beror på den). Lägg nya poster sist om det
 // inte finns skäl till annat – att flytta en post ändrar dygnen (facit larmar).
+//
+// Översikt:
+// registret över delsystemen och incidenterna: `systems()` = en post per delsystem i tickordning (`System`): hur det
+// tickar, nollställs och rullar (`tick`, `reset`, `roll`); incidenten – `on` (pågår), `trigger`, tidtabellens
+// `weight`/`pick`, förvarningen `warnS`/`warn`/`hit`, driftchefens `chief` (`tick`/`done`/`cleared`), kaosknappens
+// `chaos` (steg, namn, `run`) och rundvisningens `detour`; folket och hissarna – `roles` (rollens nästa mål,
+// `sysRole`), `next` (delsystemet bestämmer vart någon går), `spot` (var hen står), `arrive` (timern när hen är
+// framme), `blocks` (får inte kliva på här) och `out` (varför hissen inte tar nya: kapad, blött schakt). `sim.js`,
+// `incidents.js`, `chief.js`, `chaos.js`, `visning.js`, `people.js` och `dispatch.js` frågar registret i stället för
+// att känna till incidenterna (snabbtabellerna i `index()`). Listans ordning är simuleringens – en ny post läggs
+// sist (att flytta en ändrar dygnen). Brand och strömavbrott är kärnans egna och läses direkt (`S.fire`, `S.outage`)
 import { S, hour } from './state.js';
 import { fl } from './util.js';
 import { floorOpen, floorWith, LOBBY, OFFICE_FLOORS } from './config.js';

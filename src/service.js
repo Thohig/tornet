@@ -5,6 +5,22 @@
 // teknikern igenom de mest slitna hissarna på natten. Slitaget följer med till nästa dygn.
 // Energin räknas fysikaliskt: korgen balanseras av en motvikt (korgen + 45 % av märklasten), så
 // motorn drar ström när den lyfter obalansen och återmatar el när obalansen drar den.
+//
+// Översikt:
+// drift: slitage, hissfel (feltyper i `FAULT_KIND` med egen lagningstid och grafik; ibland stannar korgen mellan två
+// våningar med folk i, `trapBreak`), hisstekniker (`techs()`, `techOf(e)`; med `EXTRA_QUEUE` trasiga hissar i kö
+// ringer teknikern hissjouren – `S.techCall`, syns som telefonsamtal i grafiken – och en extra tekniker `p.extra`
+// kommer, tar bara fel och åker hem när kön är tom), nattservice (`S.maint`), beställd service (`orderService`),
+// energi (effekt efter last mot motvikt, återmatning), motorvärme (`heat`, överhettningsskydd, extrafläkt), nivåfel
+// (`level`, snubbel) och linbrott (`snapCable`: fritt fall → fångapparaten → utrymning genom takluckan till
+// `e.snap.exitF` → linbyte i speltimmar). Instängda (linbrott eller korgen mellan två våningar) går före teknikerns
+// andra jobb: teknikern lämnar det hen håller på med och arbetet sparas (`fault.done`); sitter det folk fast medan
+// teknikern är upptagen ringer hen direkt in en kollega. En tekniker som själv sitter fast i en hiss (`trappedIn`)
+// går av passet (`p.offDuty`) och hissjouren skickar en kollega; en tekniker som står på fel våning med ett jobb går
+// dit (`workTick`). Vid brandlarm vevar teknikern ner en korg med instängda för hand (`fireCrank`, `fault.crank`)
+// innan hen utryms; ingen tekniker går in i brandzonen, och under en brand kommer hissjouren bara till instängda
+// utanför den. Arbetsledaren från hissjouren (Stig, rollen `arbetsledare`, `S.foreman`) kommer vid linbrott och vid
+// andra inringningen samma dag
 import { stream } from './rng.js';
 const { pick, rand, rng } = stream('drift');
 import { fl } from './util.js';

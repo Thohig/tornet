@@ -7,6 +7,18 @@
 // {0}, {1} … (och {n}, {who} … i repliker) är värden – namn, våningar, siffror eller andra texter, som i sin tur
 // översätts. En text utan egen mall ("A · B – C") delas vid avskiljarna och sätts ihop av de bitar som har mallar.
 // Saknas en mall visas svenskan. Matchningen bryr sig inte om emoji, stora/små bokstäver eller extra mellanslag.
+//
+// Översikt:
+// `lang.js` – språket: svenska som standard, engelska ett klick bort: flaggorna längst upp till höger i panelen
+// (`flagBtn` i panels.js) eller ⚙️ – sparas i `localStorage`, `?lang=sv`/`?lang=en` går före. Simuleringen skriver
+// svenska och vet aldrig vilket språk som visas; gränssnittet översätter allt i det ögonblick det visas – `trDom`
+// efter varje `innerHTML` i panelen, textskylten, verktygstipset och overlayen, `tr` i pixelgrafikens text
+// (`textW`/`textSprite` i pixart.js) och i rundvisningen och Berits röst. Därför byter även gamla loggrader språk
+// direkt. Översättningarna i `lang-en.js`: svensk mall → engelsk mall med värden `{0}`, `{n}` … som i sin tur
+// översätts; en text utan egen mall delas vid avskiljarna (` · `, ` – `, `: `, meningar …) och sätts ihop av de
+// bitar som har mallar (den indelning som lämnar minst svenska vinner); emoji och versaler (skyltar) klaras av. Ny
+// svensk text i koden = en post i `lang-en.js` (`npm run lang` listar det som saknas); lagren i pixcore.js har
+// språket i nyckeln
 import EN from './lang-en.js';
 
 /** @type {'en'|'sv'} */

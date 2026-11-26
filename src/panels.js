@@ -7,6 +7,51 @@
 // Får något inte plats krymper de minst viktiga blocken. Länkarna längst ner öppnar vyer i panelen
 // (register, logg, inställningar, resultat). Biografläget (H) döljer panelen och visar en textskylt i bilden.
 // Bara gränssnitt: läser tillståndet och går via doAction/act() för allt som ändrar något.
+//
+// Översikt:
+// `panels.js` – kontrollpanelen `#side`, se nedan; driftradion ur `S.feed`, dygnets stapel med banden i verklig tid
+// efter tempot (`dayFrac`) och dagens incidenter; textskylten `#lower` längst ner i bilden med vad regissören visar
+// (`crewNow()` – regissören är en person, `CREW` i director.js) och driftchefens beslut (`S.chief.say` med `dec`),
+// biografläget (H, `body.cinema`: panelen döljs och skylten blir större); verktygstipset `.tip` som visar
+// `data-hint` vid hovring eller långt tryck med fingret (input.js trycker då inte på knappen)
+//
+// Kontrollpanelen:
+// Det finns ingen topplist, statusrad, låda eller högerklicksmeny: hela gränssnittet utom bilden är
+// **kontrollpanelen** `#side` till vänster (fast bredd, så att bilden inte skalas om; aldrig flytande över bilden –
+// den får inte täcka hallarna). Enda undantaget är den halvgenomskinliga textskylten `#lower` längst ner i bilden:
+// kameran räknar med den (`VIEW.padB`, `seeH()` i view.js – det man följer hålls ovanför skylten, och bilden kan
+// scrollas `padB` längre ner). Knapparna är ikoner (`ikon()` i hud.js) med namn och förklaring i verktygstipset; val
+// mellan lägen (styrlogik, slumpen, incidentkortens val) och incidentkortens huvudknappar behåller texten. Panelen
+// består av block (`ORDER` i panels.js: uppspelning med paus/fart (och ⏩ på kvällen och natten: `toggleSkip` i
+// input.js spelar upp i `SKIP_SPEED`× till morgonen och stannar när något händer – bara uppspelningen, simuleringen
+// tar samma steg), kamerans verktyg (regissör, biograf, namnbrickor, ljud), ? hjälp och dygnets stapel – händelser –
+// det du följer – driftradion – framkalla – styrning – dagen – vy – länkar) som vart och ett får läget `full`, `row`
+// eller `link` efter situationen (`layout`): lugnt = allt utfällt; en incident eller förvarning = korten överst,
+// driftradion på en rad, framkalla och styrning som länkar längst ner; följer du en person, hiss eller våning får
+// den ett eget block med det som går att göra just där (framkalla fel i hissen, brand/besökare/buss på våningen).
+// Får något inte plats krymper blocken i `SQUEEZE`-ordning; läget räknas om när situationen ändras (`UI.key`).
+// Länkarna öppnar vyer i panelen (register, logg, inställningar, resultat); Esc stänger vyn eller slutar följa.
+// Incidentkorten är utfällda tills spelaren fäller ihop dem (`foldInc`), informationsrutor fälls ihop av sig själva
+// efter en stund – och direkt medan en incident som går att åtgärda pågår. Incidentrutan har två sorters kort:
+// **incidenter** som spelaren kan åtgärda (brand, ström, storm, överhettad motor – rutan blinkar) och
+// **informationsrutor** som bara berättar och kan stängas (flyttdag, ambulans och `S.notices` via `notice()` i
+// state.js: kall dag, snubbel, extra tekniker). Varje kort har knappar som visar händelsen (`show:våning` följer
+// våningen, `follow:hiss`). Stängda rutor ligger i `S.dismissed` (bara gränssnittet).
+//
+// Mobilläget:
+// **Mobilläget** (`body.mob`, satt i `resize()` i view.js via `screenMode()`: smal skärm ≤ 800 px, eller en pekskärm
+// på tvären – då även `body.land`): sidan scrollar aldrig, bilden fyller allt utom panelen (css-flex, en
+// `ResizeObserver` på `#stage` räknar om bilden när panelen ändrar höjd). Panelen ritas då av `renderMob` i
+// panels.js i stället för blocken: `m-tour` (Berits fråga som en liten bubbla, `offer-mob` i intro.js) – `m-sheet`
+// (arket med den öppna fliken `UI.tab`) – `m-tick` (raden: textskyltens innehåll, annars driftradion eller det du
+// följer; textskylten i bilden döljs och `padB` = 0) – `m-bar` (paus, fart `spdnext`, zoom `wide`, flikarna i
+// `TABS`: händelser, nu, framkalla, styrning, följer, mer). Arket ligger aldrig över bilden – bilden krymper. En
+// incident eller förvarning öppnar fliken `events` av sig själv (när situationen ändras, `UI.mkey`), och
+// rundvisningen öppnar fliken med det guiden pratar om (`TAB_OF`). `VIEW.wide` (🔍 eller dubbeltryck i bilden,
+// `toggleWide`, minns i `localStorage`) visar hela bredden i stället för närbilden som scrollar i sidled; texten
+// blir då för liten (`tinyText()` i view.js), så bubblorna, namnbrickorna, småpratet och ljudeffekterna ritas inte
+// (utom bubblan för den man följer). På tvären ligger listen som en smal kolumn till höger, arket till vänster om
+// den, och textskylten är kvar i bilden. Biografläget döljer panelen som vanligt.
 import { esc, fl } from './util.js';
 import { CONTROL, CREW, END_H, FL, LOBBY, ROOF, START_H, STRAT_HINT, STRAT_NAMES, TEMPOS, TOP, tempoName } from './config.js';
 import { S, hour, phaseName } from './state.js';
@@ -202,7 +247,11 @@ function trigHtml() {
   // (en grå knapp säger varför i verktygstipset)
   const why = (hint, w) => (w ? `${hint}<br><i>Går inte just nu: ${w}</i>` : hint);
   return `<div class="row ico-grid"><span class="trig-fire">${ikon(`trig:fire:${UI.fireFloor}`, '🔥', 'Brand', why('Det börjar brinna – på vald våning eller en slumpad', S.fire && 'det brinner redan'), false, S.fire ? ' disabled' : '')}${fire}</span>`
-    + incUi().filter(u => u.trig).map(u => { const off = !!(u.trig.off && u.trig.off()); return ikon(`trig:${u.key}`, u.trig.icon, u.trig.name, why(u.trig.hint, off && (u.trig.why ? u.trig.why() : 'den pågår redan')), false, off ? ' disabled' : ''); }).join('') // (registret, incui.js)
+    + incUi().filter(u => u.trig).map(u => { // (registret, incui.js)
+      const off = !!(u.trig.off && u.trig.off());
+      const hint = why(u.trig.hint, off && (u.trig.why ? u.trig.why() : 'den pågår redan'));
+      return ikon(`trig:${u.key}`, u.trig.icon, u.trig.name, hint, false, off ? ' disabled' : '');
+    }).join('')
     + ikon('bus', '🚌', 'Turistbuss!', why('Stadsturen: en guide och fjorton turister ska se takterrassen och Sky Café. Kommer bara när de har öppet (ungefär 07:30–16)', S.fire ? 'det brinner i huset' : S.tour && 'bussen är redan här'), false, S.fire || S.tour ? ' disabled' : '')
     + `</div><div class="row">${chaosBtn()}</div><div class="dim small">Följ en hiss eller våning för att framkalla något just där.</div>`;
 }

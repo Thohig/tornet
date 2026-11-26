@@ -5,7 +5,10 @@ import { ARR, fl } from './util.js';
 import { ACC, CAP, DOOR_T, DWELL, EL, LOBBY, VMAX, shaftCX, CAR_H, floorY } from './config.js';
 import { S, log } from './state.js';
 import { arriveOnFloor, liftsAvailable, pev, pn, setTrip, toStairs, queueSpot } from './people.js';
-import { safeFloor, aheadOf, allowed, allowedDest, allowedPos, assignedTo, isFull, maybePark, rebuildPicks, stopFloors, loadKg, personKg, slotsFull, benched, keyed, posOf, outReason, outText, etaOutcome } from './dispatch.js';
+import {
+  safeFloor, aheadOf, allowed, allowedDest, allowedPos, assignedTo, isFull, maybePark, rebuildPicks, stopFloors, loadKg,
+  personKg, slotsFull, benched, keyed, posOf, outReason, outText, etaOutcome,
+} from './dispatch.js';
 import { answerCalls, buttonsMode, clearCall } from './buttons.js';
 import { panoDue, panoStick } from './pano.js';
 import { maybeBreak, heatOnStop, heatMul, levelStart, maybeStumble, snapStep, snapDue, snapCable, trapDue, trapBreak } from './service.js';

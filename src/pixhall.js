@@ -1,7 +1,31 @@
 // Pixelgrafik: hallen på varje våning (korridoren, glimten av rummet, entrén med karuselldörr och
 // reception), driftcentralen med driftchefen, personalrummet, perrongen och skyltarna i hallen.
+//
+// Driftcentralen och personalrummet:
+// Driftcentralen (kontrollrummet) ritas i hallen på våningen med taggen `control` (`CONTROL` i config, P1): en skärm
+// per hiss, larmljus, kontrollbordet med driftchefen och bildproducentens skärm; repliken (`S.chief.say`) rullar i
+// fönstrets textremsa och syns som pratbubbla (`drawChiefPx`, där chefen är). Regissören klipper dit när chefen
+// fattar ett beslut. Personalrummet ritas likadant på våningen med taggen `break` (`BREAK`, P2). Personalen syns på
+// sin plats efter `spot.win` (`inWindow`/`winPos` i render.js): i fönstren (`control`, `break`), bakom
+// receptionsdisken, i gondolen, på takterrassen eller stående i hallen (`hall`).
+//
+// Hallarna:
+// Bilden börjar vid `LAND_X0` och varje våning ritas som en hall framför schakten med en korridor (`DOOR_X`) in mot
+// rummen (längst in syns en glimt av rummet, `GLIMPSE`; i entrén en karuselldörr, reception och rulltrappan till
+// mellanplanet). Hallens bredd är bara grafik – `TRAIN_X0` är fast eftersom simuleringen använder det. Schakten har
+// stängda landningsdörrar vid varje hållplats, och våningsdisplayerna lyser bara där något händer. Folk i rummen
+// ritas inte; `landPos` räknar ut var de syns i hallen (kön pressas ihop mot korridoren, gång in/ut syns bara
+// sista/första biten) – ren grafik, simuleringens `p.x` ändras aldrig. Text i hallen bokar plats (`reserve`/`place`
+// i pixcore.js): skyltar först, sedan pratbubblor, tankebubblor (de som väntar på samma hiss till samma våning delar
+// en bubbla) och repliker – det som inte får plats flyttas eller ritas inte. Ljudeffekter i `S.fx` med samma text på
+// samma våning slås ihop till en ("×n"). Allt ritas på ett rutnät i låg upplösning (1 pixel = `PX` = 2
+// världsenheter) som skalas upp utan utjämning; skärmkoordinater räknas om med `VIEW.x0` (se `toWorld`,
+// `placeCarPop`).
 import { S } from './state.js';
-import { BOILER_X, BREAK, CONTROL, DOCK, DOOR_X, EL, SHAFT_W, shaftX, FL, FLOOR_HOURS, floorOpen, FLOORS, floorY, INNER_X1, LAND_X0, LOBBY, MEZZ, SPOTS, STATION, TRAIN_LEN, TRAIN_X0, TRAIN_X1 } from './config.js';
+import {
+  BOILER_X, BREAK, CONTROL, DOCK, DOOR_X, EL, SHAFT_W, shaftX, FL, FLOOR_HOURS, floorOpen, FLOORS, floorY, INNER_X1,
+  LAND_X0, LOBBY, MEZZ, SPOTS, STATION, TRAIN_LEN, TRAIN_X0, TRAIN_X1,
+} from './config.js';
 import { blend, dark, light, plain, PX, sprite, text, textW } from './pixart.js';
 import { PAL } from './pixpal.js';
 import { nightness } from './view.js';
@@ -255,7 +279,11 @@ export function drawHall(f, h) {
   if (sel || S.hoverDoor === f) ants(cx - 6, cy - 6, cw + 12, ch + 6, sel ? '#ffe14d' : '#ffffff');
   // antal inne på våningen
   // antal inne: en liten skylt bredvid korridoren, som ett dörrnummer
-  if (OCC_IN[f]) { const s = String(OCC_IN[f]), w = Math.max(9, textW(s) + 5); pill(cx + cw + 4, bot - 13, w, 9, '#ffffff'); text(g, s, cx + cw + 4 + w / 2, bot - 12, INK, 'center'); reserve(cx + cw + 4, bot - 13, w, 9); }
+  if (OCC_IN[f]) {
+    const s = String(OCC_IN[f]), w = Math.max(9, textW(s) + 5);
+    pill(cx + cw + 4, bot - 13, w, 9, '#ffffff'); text(g, s, cx + cw + 4 + w / 2, bot - 12, INK, 'center');
+    reserve(cx + cw + 4, bot - 13, w, 9);
+  }
   // våningsnummer och företagsskylt
   const st = starSprite(acc); g.drawImage(st, X(DOOR_X) - 10, top + 1);
   text(g, fl(f), X(DOOR_X) + 1, top + 7, '#ffffff', 'center', 1, INK);
@@ -568,7 +596,11 @@ function wetHall(f, x0, x1, top, bot) {
   const L = S.leak, src = !!L && f === L.src, shut = !!L && L.shut;
   // pölarna på golvet (glänser lite)
   R(x0, bot - 3, x1 - x0, 2, waterC(0.35));
-  for (let i = 0; i < 6; i++) { const px = x0 + 8 + ((i * 53 + f * 17) % Math.max(1, x1 - x0 - 30)); R(px, bot - 4, 14 + (i % 3) * 6, 2, waterC(0.5)); if (Math.sin(S.anim * 2 + i + f) > 0.7) R(px + 3, bot - 4, 2, 1, '#ffffff'); }
+  for (let i = 0; i < 6; i++) {
+    const px = x0 + 8 + ((i * 53 + f * 17) % Math.max(1, x1 - x0 - 30));
+    R(px, bot - 4, 14 + (i % 3) * 6, 2, waterC(0.5));
+    if (Math.sin(S.anim * 2 + i + f) > 0.7) R(px + 3, bot - 4, 2, 1, '#ffffff');
+  }
   // dropp från taket (forsar där röret sprack, tills kranen är stängd)
   if (!shut) for (let i = 0; i < (src ? 7 : 4); i++) {
     const dx = x0 + 20 + ((i * 41 + f * 29) % Math.max(1, x1 - x0 - 40)), k = (S.anim * (src ? 1.6 : 0.9) + i * 0.37) % 1;

@@ -2,6 +2,15 @@
 // gruppen runt en fast rutt (takterrassen, Sky Café, tillbaka till bussen) och räknar in alla vid varje stopp innan
 // gruppen går vidare. Bussen har en avgångstid: blir gruppen sen tutar den, och till slut går den utan dem som inte hann.
 // Läget ligger i S.tour; turisterna är vanliga besökare med p.tour (guiden har dessutom p.guide).
+//
+// Översikt:
+// Stadsturen: turistbussen som spelaren skickar (`act('bus')`, en i taget i `S.tour`). Bussen stannar vid
+// hållplatsen på gatan och en guide (`p.guide`, med flagga) leder 14 turister (`p.tour`) runt en fast rutt –
+// takterrassen (där gruppen står synligt, `tourSpot`) och Sky Café om de har öppet – och tillbaka till bussen. Varje
+// stopp börjar först när alla är inräknade; eftersläntrare som inte kommit på `WAIT_S` lämnas (`lost`). Bussen har
+// en avgångstid (`departH`): blir gruppen sen skyndar guiden på, bussen tutar och går efter `GRACE_S` utan dem som
+// inte hann (`missed`). Turisterna tar aldrig trappan själva; i rummen bestämmer de inget (`tourNext`) – guiden
+// flyttar gruppen. Egen slumpström `turistbuss`
 import { stream } from './rng.js';
 const { rand, pick, rng } = stream('turistbuss');
 import { fl } from './util.js';

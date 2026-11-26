@@ -7,6 +7,15 @@
 // Driftchefen väljer (chief.js), spelaren kan ta över (act('panoRescue', …)), och har ingen valt när räddarna är
 // på plats väljer räddningsledaren själv. När alla är ute lagar hissteknikern hydrauliken.
 // (Simulering: läget ligger i S.pano – grafiken i pixcars.js läser bara.)
+//
+// Översikt:
+// panoramahissen fastnar utanför huset (incident `pano`, framkallas med `act('trigger', 'pano')`): hydrauliken låser
+// sig mellan två våningar på fasaden (`panoStick`, felet `fault.pano` – går inte att veva, teknikern väntar tills
+// alla är ute). Räddningstjänsten (rollen `räddare`, `p.rescue`) firar ner en i taget med rep från taket till gatan
+// eller takterrassen (stannar i blåst, `ropeWindy`) eller tar dem nerför stegbilens stege (fungerar i blåst, når
+// `LADDER_MAX` våningar). Läget i `S.pano` (`ph` stuck/rig/lower/done, `how`, `rider` = den som är på väg ner i
+// läget `rope`, `riderPos`). Driftchefen väljer (`pano` i chief.js), spelaren via `act('panoRescue',
+// 'rope'|'ladder')`, annars räddningsledaren efter `PANO_DEFAULT_S`
 import { stream } from './rng.js';
 const { rand, rng } = stream('panorama');
 import { CAR_H, CAR_W, EL, FLOOR_H, GROUND_Y, INNER_X1, LOBBY, ROOF, SEAM_F, TERRACE_F, floorY, shaftCX } from './config.js';

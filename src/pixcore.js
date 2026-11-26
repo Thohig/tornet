@@ -2,7 +2,7 @@
 // text (reserve/place), ritverktygen och figurer som byggs en gång. Alla pix*.js ritar härigenom.
 // (g, lo, X0 och CY byts bara här: av layer() och beginFrame() – de andra modulerna läser dem.)
 import { PAL } from './pixpal.js';
-import { ellipseSprite, fromCells, light, plain, PX, sprite, text, textW } from './pixart.js';
+import { ellipseSprite, fromCells, light, plain, PX, sprite, text, TEXTLOG, textW } from './pixart.js';
 import { H } from './config.js';
 import { clamp } from './util.js';
 import { cv, nightness, VIEW } from './view.js';
@@ -111,6 +111,7 @@ export function beginFrame() {
   X0 = VIEW.x0; CY = Math.floor(VIEW.camY / PX);
   g.setTransform(1, 0, 0, 1, 0, 0); g.imageSmoothingEnabled = false; g.globalAlpha = 1;
   taken = [];
+  if (TEXTLOG.on) { TEXTLOG.ctx = G; TEXTLOG.list = []; } // (provspelningen: textrutorna i bildrutan)
   return { s, w, h };
 }
 /** närmaste lediga y för rutan (bokas), eller null om allt är upptaget */
@@ -127,14 +128,30 @@ export function starSprite(c) {
   return once('star' + c, () => {
     const r1 = 9.5, r0 = 5, n = 19, cells = [];
     const pts = []; for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? r0 : r1; pts.push([9 + Math.cos(a) * r, 9.5 + Math.sin(a) * r]); }
-    const inside = (x, y) => { let ins = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const [xi, yi] = pts[i], [xj, yj] = pts[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) ins = !ins; } return ins; };
+    const inside = (x, y) => {
+      let ins = false;
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        const [xi, yi] = pts[i], [xj, yj] = pts[j];
+        if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) ins = !ins;
+      }
+      return ins;
+    };
     for (let y = 0; y < n; y++) { const row = []; for (let x = 0; x < n; x++) row.push(inside(x + 0.5, y + 0.5) ? (y < 6 ? light(c, 0.25) : c) : null); cells.push(row); }
     return fromCells(cells, n, n, 1, INK);
   });
 }
 export const SUN = () => once('sun', () => {
   const cells = [], n = 15, c = 7;
-  for (let y = 0; y < n; y++) { const row = []; for (let x = 0; x < n; x++) { const d = Math.hypot(x - c, y - c); row.push(d <= 7.2 ? (y === 6 && (x >= 3 && x <= 6 || x >= 8 && x <= 11) ? INK : y === 7 && (x === 7) ? INK : y === 10 && x >= 5 && x <= 9 ? INK : y === 9 && (x === 4 || x === 10) ? INK : d > 5.6 ? '#ffb627' : '#ffe14d') : null); } cells.push(row); }
+  for (let y = 0; y < n; y++) {
+    const row = [];
+    for (let x = 0; x < n; x++) {
+      const d = Math.hypot(x - c, y - c);
+      const face = y === 6 && (x >= 3 && x <= 6 || x >= 8 && x <= 11) || y === 7 && x === 7
+        || y === 10 && x >= 5 && x <= 9 || y === 9 && (x === 4 || x === 10);
+      row.push(d <= 7.2 ? (face ? INK : d > 5.6 ? '#ffb627' : '#ffe14d') : null);
+    }
+    cells.push(row);
+  }
   return fromCells(cells, n, n, 1, INK);
 });
 export const MOON = () => once('moon', () => {
@@ -146,7 +163,14 @@ export function cloudSprite(s) {
   return once('cloud' + s.toFixed(2), () => {
     const parts = [[0, 0, 18], [18, -8, 20], [36, 0, 16], [16, 6, 16]].map(([x, y, r]) => [(x + 20) * s / PX, (y + 30) * s / PX, r * s / PX]);
     const w = Math.ceil(76 * s / PX), h = Math.ceil(56 * s / PX), cells = [];
-    for (let y = 0; y < h; y++) { const row = []; for (let x = 0; x < w; x++) { const inside = parts.some(([cx, cy, r]) => Math.hypot(x + 0.5 - cx, y + 0.5 - cy) <= r); row.push(inside ? (y > h * 0.62 ? '#dfe7f5' : '#ffffff') : null); } cells.push(row); }
+    for (let y = 0; y < h; y++) {
+      const row = [];
+      for (let x = 0; x < w; x++) {
+        const inside = parts.some(([cx, cy, r]) => Math.hypot(x + 0.5 - cx, y + 0.5 - cy) <= r);
+        row.push(inside ? (y > h * 0.62 ? '#dfe7f5' : '#ffffff') : null);
+      }
+      cells.push(row);
+    }
     return fromCells(cells, w, h, 1, INK);
   });
 }

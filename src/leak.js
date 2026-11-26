@@ -7,6 +7,16 @@
 //   run  – de kör vidare tills kranen är stängd: bättre flöde, men vattnet kan kortsluta styrningen – ett riktigt hissfel
 // Folk som går över de blöta golven halkar ibland (som snubblet vid nivåfel).
 // (Simulering: läget ligger i S.leak, grafiken i pixhall.js läser bara. Egen slumpström.)
+//
+// Översikt:
+// vattenläckan (`S.leak`, incident och `act('trigger', 'leak', våning)` – `LEAK_FLOORS`): ett rör spricker, vattnet
+// rinner en våning nedåt var `SPREAD_S` och in i de schakt som går förbi (`wetShaft`, inte panoramahissen), tills
+// vaktmästaren (uppdraget `leak`) har vridit om huvudkranen i pannrummet på P1 (`VALVE_T`); golven torkar (`DRY_S`)
+// och hissteknikern går igenom de blöta schakten (beställd service). Driftchefen (`leakChiefTick`) eller spelaren
+// (`act('leak', 'stop'|'run')`): `stop` = de blöta hissarna står still (`e.wetLock`, `outReason` 'wet'), `run` = de
+// kör vidare men kan kortslutas (`SHORT_K` per blöt våning i hissens eget schakt, `wetIn` → hissfel). Folk halkar på
+// blöta golv. Läcker det i labbet är vattnet grönt. Grafiken i pixhall.js (`wetHall`, `drawLeakPx`). Egen slumpström
+// `vattenläcka`
 import { stream } from './rng.js';
 const { pick, rng } = stream('vattenläcka');
 import { fl } from './util.js';

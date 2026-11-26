@@ -3,6 +3,10 @@
 // trögt och tar ibland emot (elevators.js). Stormen är en incident med val, som branden: höga schakt
 // och panoramahissen på fasaden svajar. I SVAJLÄGE kör de höga hissarna långsammare och panoramahissen
 // parkerar i entrén; i normal drift kör allt som vanligt – och linorna kan slå i schaktet (hissfel).
+//
+// Översikt:
+// dygnets temperatur (kyla → skorstenseffekt: dörrarna i entrén tar emot; värme → motorerna kyls sämre) och stormen
+// (incident med val: svajläge/normal drift, `windAt`, `exposure`; ibland slår blixten ut strömmen, `strikeAt`)
 import { stream } from './rng.js';
 const { rand, rng } = stream('väder');
 import { clamp, fl } from './util.js';

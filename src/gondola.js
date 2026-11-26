@@ -8,6 +8,16 @@
 // Så länge gondolen sitter fast är takskenan upptagen: hissbalken kan inte köra (flyttdagen väntar). När Hasse
 // är nere går han av passet för dagen (p.offDuty, crew.js) och gondolen vevas upp tom.
 // (Simulering: läget ligger i S.gondola, grafiken i pixroof.js läser bara. Egen slumpström.)
+//
+// Översikt:
+// fönsterputsaren fastnar (`S.gondola`, incident i slumpen och `act('trigger', 'gondola')`, bara när Hasse är ute
+// och putsar – `gondolaCandidate`): vinschen kärvar och gondolen hänger kvar (`hoistTick` flyttar den inte,
+// takskenan är upptagen så hissbalken står). Driftchefen väljer (`gondolaChiefTick` i chief.js), spelaren via
+// `act('gondola', 'crank'|'hatch'|'rope')`, annars ringer Hasse själv vaktmästaren efter `GONDOLA_DEFAULT_S`:
+// `crank` = vaktmästaren vevar upp den för hand från taket, `hatch` = vaktmästaren öppnar lastluckan på 12–14
+// bredvid gondolen (inte i blåst), `rope` = räddningstjänsten (`p.gondola`, rollen `räddare`, `gondolaCrewNext`)
+// firar ner honom till takterrassen (`ropeY`, stannar i blåst). Hasse går sedan av passet (`p.offDuty` →
+// personalrummet) och gondolen vevas upp tom. Egen slumpström `gondolen`
 import { stream } from './rng.js';
 const { rand } = stream('gondolen');
 import { fl } from './util.js';
