@@ -73,7 +73,7 @@ Styrlogiken kan bytas medan huset kör:
 
 Allt annat finns i kontrollpanelen till vänster. Varje ikon förklaras när du håller muspekaren över den. Går något fel i spelet fryser det inte: felet visas i en röd ruta nere till vänster (klicka för att stänga) – skicka gärna texten om du ser den.
 
-**Tornet gör sig bäst på en dator.** På mobilen tittar man: bilden fyller skärmen, regissören väljer vad som visas och det finns ingen kontrollpanel. Nertill finns en rad med det som händer och en list med ❚❚ paus, fart (tryck för nästa), ⏩ spola fram natten (på kvällen och natten), ? hjälp och språket. Tryck på en person, en hiss eller en våning så följer kameran den, och dra i bilden för att se resten av huset. Välkomstrutan varnar vid varje start att framkalla, styrning och driftchefens beslut bara finns på datorn. På tvären ligger listen som en smal kolumn till höger.
+**Tornet gör sig bäst på en dator.** På mobilen tittar man: bilden fyller skärmen, regissören väljer vad som visas om du inte tar kameran själv, och det finns ingen kontrollpanel. Nertill finns en rad med det som händer och en list med ❚❚ paus, 🎬 regissören (intryckt: regissören klipper åt dig, uppsläppt: fri kamera), ⏩ spola fram natten (på kvällen och natten), ? hjälp och språket. Spelet går alltid i 1×. Tryck på en person, en hiss eller en våning så följer kameran den, och dra i bilden för att se resten av huset. Välkomstrutan varnar vid varje start att framkalla, styrning och driftchefens beslut bara finns på datorn. På tvären ligger listen som en smal kolumn till höger.
 
 ## Utveckling
 

@@ -1,5 +1,9 @@
 # Ändringar
 
+## 2026-11-26 – mobilen: regissörsknappen i stället för farten
+- **🎬 i mobilens list** växlar mellan regissören (intryckt, ● LIVE) och fri kamera, där man drar i bilden och trycker på det man vill följa. Valet sparas som på datorn, och regissören är inte längre tvingad på vid varje start på mobilen.
+- **Fartknappen (¼×–2×) är borta på mobilen**, så spelet går alltid i 1× där. ⏩ till morgonen finns kvar på kvällen och natten.
+
 ## 2026-11-26 – på mobilen tittar man: ingen kontrollpanel, och en varning vid varje start
 - **Mobilvyn är bara bilden och en list** (`renderMob` i panels.js). Listen har raden med det som händer, paus, fart, ⏩ till morgonen, hjälpen och språket. Flikarna (händelser, nu, framkalla, styrning, följer, mer) och arket ovanför listen är borta, liksom helbredden (🔍, dubbeltryck i bilden, `VIEW.wide`). Rundvisningen erbjuds inte på mobilen, och regissören klipper alltid. Det man vill styra gör man på datorn.
 - **Välkomstrutan varnar** att Tornet gör sig bäst på en dator: på mobilen vid varje start (inte bara första gången) och i hjälpen (?), och på en surfplatta med bred skärm i rutan första gången.

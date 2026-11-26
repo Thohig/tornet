@@ -87,9 +87,8 @@ export function startGame(repro) {
 function go() {
   S.started = true;
   if (moment) { S.paused = true; VIEW.autoWant = false; followMoment(moment.follow); return; } // (ingen logg, ingen regissör: ögonblicket som det var)
-  // (mobilen: ingen panel att ta över kameran med – regissören klipper alltid)
   const mob = screenMode().mob;
-  if (prefs().dir || mob) startAuto();
+  if (prefs().dir) startAuto();
   log('Dag 1 börjar – dörrarna öppnas!', 'sys');
   // första gången: Berit erbjuder en rundvisning (i panelen – hon börjar när hon har kommit till disken)
   if (!mob && !store.get(KEY.offer)) { store.set(KEY.offer, 1); offerVisning(); }

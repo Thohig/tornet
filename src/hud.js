@@ -510,7 +510,7 @@ export function showIntro(mode = S.started ? 'help' : 'start', then = /** @type 
     ${help && !mob ? `<div class="intro-tour"><button class="btn" id="tour-go"${S.visning ? ' disabled' : ''}>🛎️ BE ${guideName().toUpperCase()} VISA RUNT</button><span>Ny i huset? ${esc(guideName())} visar dig runt och berättar vad du ser.</span></div>` : ''}
     <ul class="intro-short">
       ${mob ? `<li>Regissören väljer vad du ser och raden nertill berättar vad som händer. Tryck på en person, en hiss eller en våning så följer kameran den.</li>
-      <li>Listen nertill: ❚❚ paus, fart och ⏩ spola fram natten (på kvällen), ? den här rutan och språket.</li>
+      <li>Listen nertill: ❚❚ paus, 🎬 regissören klipper åt dig – tryck för fri kamera, ⏩ spola fram natten (på kvällen), ? den här rutan och språket.</li>
       <li>Dra i bilden med ett finger för att se resten av huset; två fingrar zoomar.</li>`
       : `<li><b>${touch ? 'Tryck' : 'Klicka'}</b> på en person, en hiss eller en våning för att följa den – allt om den syns i kontrollpanelen till vänster.</li>
       <li><b>Kontrollpanelen</b> anpassar sig efter vad som händer: när det är lugnt kan du framkalla incidenter och byta styrlogik, när något händer visar den bara det.</li>`}

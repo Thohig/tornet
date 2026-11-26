@@ -43,7 +43,7 @@
 // på tvären – då även `body.land`): på telefonen tittar man, styr gör man på datorn. Det finns ingen kontrollpanel,
 // bara bilden och listen `renderMob` (nertill, på tvären en smal kolumn till höger): `m-tick` (textskyltens innehåll –
 // vad regissören visar och driftchefens beslut, annars driftradion eller det du följer; textskylten i bilden döljs
-// och `padB` = 0) och `m-bar` (paus, fart `spdnext`, ⏩, hjälpen och språket). Listen ligger aldrig över bilden –
+// och `padB` = 0) och `m-bar` (paus, regissören 🎬 eller fri kamera, ⏩, hjälpen och språket; ingen fart – alltid 1×). Listen ligger aldrig över bilden –
 // bilden krymper (css-flex, en `ResizeObserver` på `#stage` räknar om bilden). Välkomstrutan varnar vid varje start.
 import { esc, fl } from './util.js';
 import { CONTROL, CREW, END_H, FL, LOBBY, ROOF, START_H, STRAT_HINT, STRAT_NAMES, TEMPOS, TOP, tempoName } from './config.js';
@@ -59,7 +59,7 @@ import { getLang, tr, trDom } from './lang.js';
 import { musicOn } from './music.js';
 import { lastDay, summaryHtml } from './summary.js';
 import { guideName } from './visning.js';
-import { SKIP_SPEED, SPEEDS, canSkip, extraActions, setSpeed, skipping, toggleSkip, uiHooks } from './input.js';
+import { SKIP_SPEED, SPEEDS, canSkip, extraActions, skipping, toggleSkip, uiHooks } from './input.js';
 import { act } from './actions.js';
 import { chaosReady } from './chaos.js';
 import { LEAK_FLOORS } from './leak.js';
@@ -399,14 +399,12 @@ function repaint() { updatePanel(); }
 uiHooks.repaint = repaint;
 
 // ---------- Mobilen: bara bilden och en list (på telefonen tittar man – styr gör man på datorn) ----------
-// Nertill (på tvären: till höger) ligger listen: uppspelningen, hjälpen och språket. Ovanför den en rad med det
+// Nertill (på tvären: till höger) ligger listen: paus, regissören, ⏩ till morgonen, hjälpen och språket. Ovanför den en rad med det
 // som händer (textskyltens innehåll: vad regissören visar och driftchefens beslut, annars radion eller det du följer).
-extraActions.spdnext = () => (skipping() ? toggleSkip() : setSpeed(SPEEDS[(SPEEDS.indexOf(S.speed) + 1) % SPEEDS.length]));
 extraActions.skip = () => toggleSkip();
 /** ⏩ till morgonen: knappen syns bara på kvällen och natten (och medan det spolas) */
 const skipBtn = () => (skipping() ? ikon('skip', '⏩', 'Sluta spola', sv`Spolar natten i ${SKIP_SPEED}× – tryck för att sluta (N)`, true)
   : canSkip() ? ikon('skip', '⏩', 'Till morgonen', sv`Spola fram natten i ${SKIP_SPEED}× – stannar på morgonen eller när något händer (N)`) : '');
-const SPD_TXT = { 0.25: '¼×', 0.5: '½×', 1: '1×', 2: '2×' };
 /** raden ovanför listen: det som händer (samma innehåll som textskylten i bilden) */
 function tickHtml(F, inc) {
   const c = S.started && !S.summaryShown ? crewNow() : null, C = S.chief;
@@ -419,11 +417,13 @@ function tickHtml(F, inc) {
 }
 /** förvarningens text (utan knappen) */
 function warnText() { const m = warnHtml().match(/^<button[^>]*>([^<]*)/); return m ? m[1] : ''; }
-/** listen: paus, fart, till morgonen, hjälpen och språket */
+/** listen: paus, regissören, till morgonen, hjälpen och språket */
 function barHtml() {
+  const c = crewNow(), who = c ? esc(c.who.name) : 'Regissören';
   return ikon('pause', S.paused ? '▶' : '❚❚', S.paused ? 'Spela' : 'Paus', 'Pausa eller spela', S.paused)
-    + ikon('spdnext', skipping() ? '⏩' : SPD_TXT[S.speed] || '1×', 'Fart', 'Tryck för nästa fart: ¼×, ½×, 1×, 2×')
-    + (!skipping() && canSkip() ? ikon('skip', '⏩', 'Till morgonen', sv`Spola fram natten i ${SKIP_SPEED}× – stannar på morgonen eller när något händer`) : '')
+    + ikon('auto', '🎬', 'Regissören', VIEW.autoWant ? sv`${who} klipper bilden åt dig – tryck för fri kamera` : 'Fri kamera: dra i bilden och tryck på det du vill följa – tryck så klipper regissören åt dig', VIEW.autoWant)
+    + (skipping() ? ikon('skip', '⏩', 'Sluta spola', sv`Spolar natten i ${SKIP_SPEED}× – tryck för att sluta`, true)
+      : canSkip() ? ikon('skip', '⏩', 'Till morgonen', sv`Spola fram natten i ${SKIP_SPEED}× – stannar på morgonen eller när något händer`) : '')
     + `<span class="m-sep"></span>` + ikon('help', '?', 'Hjälp', 'Vad du tittar på – och varför Tornet gör sig bäst på en dator')
     + `<span class="sp"></span>` + flagsHtml();
 }
