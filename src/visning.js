@@ -336,7 +336,8 @@ function startable(h, now = false) {
 const alarmHeist = () => !!S.heist && S.heist.ph !== 'done';
 /** gästen kliver in i entrén */
 function spawnGuest() {
-  const g = blankPerson('vis', LOBBY, -40, { name: 'Gästen', look: { skin: '#ffdbb8', shirt: '#ffffff', pants: '#2b2d6e', hair: 0, hairC: '#5a3412', tie: true, tieC: '#2a5db0', stripe: false, acc: 3 },
+  const g = blankPerson('vis', LOBBY, -40, { name: 'Gästen',
+    look: { skin: '#ffdbb8', shirt: '#ffffff', pants: '#2b2d6e', hair: 0, hairC: '#5a3412', tie: true, tieC: '#2a5db0', stripe: false, acc: 3 },
     walkPhase: 1, speedMul: 1, depth: -2, patience: 30, kg: 75, fit: 0, space: 9, polite: true });
   g.guest = true; g.touring = true; g.title = 'Gäst på rundvisning (du)';
   S.people.push(g);
@@ -403,7 +404,8 @@ function finish(v, how) {
   }
   if (b) { b.touring = false; b.timer = Math.min(b.timer, 1); }
   const what = v.log.length ? sv` och fick se ${v.log.map(s => s.toLowerCase()).join(', ')}` : '';
-  if (v.seenStops.length) dayEvent('visning', '🛎️ Rundvisningen', sv`${b ? b.name : guideName()} visade runt: ${v.seenStops.length} stopp${what}.${v.sub ? sv` ${kickiName()} skötte disken under tiden.` : ''}`);
+  const sub = v.sub ? sv` ${kickiName()} skötte disken under tiden.` : '';
+  if (v.seenStops.length) dayEvent('visning', '🛎️ Rundvisningen', sv`${b ? b.name : guideName()} visade runt: ${v.seenStops.length} stopp${what}.${sub}`);
   log(sv`🛎️ Rundvisningen är ${how === 'klar' ? 'slut' : how}`, 'sys');
 }
 
@@ -466,7 +468,10 @@ export function visningTick(dt) {
   if (!b) { finish(v, 'avbruten'); return; }
   if (!g || g.state === 'away' || (g.leaving && !g.evac && g.state !== 'assembly')) { finish(v, 'avbruten'); return; }
   // Kicki tar hand om larmen i entrén (en replik när larmet går)
-  if (k && alarm() && !v.kickiSaid && k.floor === LOBBY) { v.kickiSaid = true; speak(k, S.fire ? 'Lugnt, lugnt – den här vägen ut!' : sv`Oj, larm! Jag har koll här – ${b ? b.name : guideName()}, fortsätt du!`); }
+  if (k && alarm() && !v.kickiSaid && k.floor === LOBBY) {
+    v.kickiSaid = true;
+    speak(k, S.fire ? 'Lugnt, lugnt – den här vägen ut!' : sv`Oj, larm! Jag har koll här – ${b ? b.name : guideName()}, fortsätt du!`);
+  }
   if (!alarm()) v.kickiSaid = false;
   // kuppen: guiden och gästen gömmer sig och smyger (heist.js flyttar dem) – rundvisningen fortsätter efteråt
   if (alarmHeist()) { v.paused = true; return; }

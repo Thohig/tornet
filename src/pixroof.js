@@ -2,7 +2,7 @@
 // flyttlassen, rök och brand, strömavbrottet, väder och blixt, ambulansen och brandkåren.
 import { cleanerAt, HOIST_OK, PARK_Y, TERRACE_Y } from './hoist.js';
 import { hour, S } from './state.js';
-import { BX1, CAR_H, CAR_W, DOCK, DOOR_X, EL, FL, FLOOR_H, FLOORS, floorY, GROUND_Y, H, HATCH_FLOORS, INNER_X1, LAND_X0, LOBBY, ROOF_Y, SHAFT_X0, shaftCX, shaftX, surf, TOP, W } from './config.js';
+import { BX1, DOCK, DOOR_X, EL, FL, FLOOR_H, FLOORS, floorY, GROUND_Y, H, HATCH_FLOORS, INNER_X1, LAND_X0, LOBBY, ROOF_Y, SHAFT_X0, shaftCX, surf, TOP, W } from './config.js';
 import { windAt } from './weather.js';
 import { cargoSprite, PERSON_H, PERSON_W, personSprite } from './pixpeople.js';
 import { inWindow } from './render.js';
@@ -15,7 +15,7 @@ import { vrand } from './rng.js';
 import { box, CY, g, HELI, INK, label, line, lo, pill, PUFF, R, RELIGHT_S, reserve, visibleX, wheelSprite, X, Y } from './pixcore.js';
 import { BASE_Y, SEAM_Y, shaftTop, stackedAbove, UX1 } from './pixbuilding.js';
 import { stairSign, winFig } from './pixhall.js';
-import { blinkOf } from './pixcars.js';
+import { blinkOf, drawTrappedPx } from './pixcars.js';
 import { sv } from './sv.js';
 /** @typedef {import('./elevators.js').Elevator} Elevator */
 
@@ -277,18 +277,7 @@ export function drawOutagePx() {
     R(X(INNER_X1) - 13, top + 4, 3, 3, on ? '#ff5d52' : '#5a1e2a');
     stairSign(f, true);
   }
-  for (const e of S.elevators) {
-    if (!e.passengers.length || e.mode !== 'normal') continue;
-    const x = X(shaftX(e.id) + 4), yt = Y(floorY(e.pos) - 4 - CAR_H), cw = CAR_W / PX, chh = CAR_H / PX;
-    // nödbelysningen i taket och en ficklampa (mobilskärmen) som sveper i korgen
-    R(x + 2, yt + 2, cw - 4, chh - 4, 'rgba(255,214,120,.16)');
-    R(x + Math.round(cw / 2) - 2, yt + 1, 5, 1, '#ffe9a8');
-    const sx = x + 6 + Math.round((Math.sin(S.anim * 1.3 + e.id) + 1) / 2 * (cw - 14)), sy = yt + 9;
-    for (let i = 0; i < 9; i++) R(sx - Math.floor(i / 3), sy + i, 1 + Math.floor(i / 1.5), 1, 'rgba(255,246,168,.35)');
-    if (Math.sin(S.anim * 4 + e.id) > 0) label('HJÄLP!', x + cw / 2, yt - 11, '#ffffff', '#ff2d55');
-    // någon knackar på dörren
-    else if (Math.sin(S.anim * 2.3 + e.id * 1.7) > 0.6) label('KNACK KNACK', x + cw / 2, yt + chh / 2, '#ffffff', INK);
-  }
+  drawTrappedPx();
   if (O && O.gen) {
     const gx = X(UX1 - 40), gy = Y(ROOF_Y - 70);
     box(gx - 15, gy, 30, 11, PAL.green); text(g, 'RESERV', gx, gy + 2, '#ffffff', 'center');

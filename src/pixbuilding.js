@@ -561,6 +561,7 @@ function lantern(e, f) {
     R(x + w / 2 - 1, y + 5, 3, 1, PAL.dim);
     return;
   }
+  reserve(x, y, w, 11); // (en tänd display: repliker och tankebubblor lägger sig inte över siffrorna)
   const col = here ? '#7dff9a' : PAL.led;
   led(g, fl(Math.round(e.pos) + up), x + 14, y + 2, col, 'center');
   if (e.dir && (e.state === 'moving' || here)) led(g, e.dir > 0 ? '▲' : '▼', x + 2, y + 2, col);

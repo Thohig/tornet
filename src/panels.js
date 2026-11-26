@@ -151,7 +151,9 @@ function scanMarks() {
   rise('heli', !!S.heli, '🚁', 'VIP-helikopter', `show:${top}`);
   for (const e of S.elevators) {
     if (e.mode === 'snapped') add(`snap${e.id}:${e.snap.t0}`, '🪢', `Linbrott i ${e.name}`, `follow:${e.id}`);
-    if (e.mode === 'broken' && e.fault && !e.fault.cable) add(`fault${e.id}:${e.fault.t0}`, '🔧', e.fault.trapped ? sv`${e.name} stannade mellan två våningar` : sv`${e.name} gick sönder`, `follow:${e.id}`);
+    if (e.mode === 'broken' && e.fault && !e.fault.cable) {
+      add(`fault${e.id}:${e.fault.t0}`, '🔧', e.fault.trapped ? sv`${e.name} stannade mellan två våningar` : sv`${e.name} gick sönder`, `follow:${e.id}`);
+    }
     rise(`hot${e.id}`, !!e.hot, '🌡️', sv`${e.name} överhettad`, `follow:${e.id}`);
   }
 }
@@ -186,7 +188,10 @@ function followed() {
 function playHtml() {
   const h = hour(), night = nightness(h) > 0.5;
   const wx = `${S.weather.cold > 0 ? '❄️ ' : S.weather.temp >= 20 ? '🌤️ ' : ''}${S.weather.temp} °C${S.storm ? ' · 🌬️ storm' : ''}`;
-  const speeds = SPEEDS.map(v => { const t = { 0.25: '¼×', 0.5: '½×', 1: '1×', 2: '2×' }[v]; return ikon(`spd:${v}`, t, `Fart ${t}`, 'Snabbare och långsammare med + och −', S.speed === v); }).join('');
+  const speeds = SPEEDS.map(v => {
+    const t = { 0.25: '¼×', 0.5: '½×', 1: '1×', 2: '2×' }[v];
+    return ikon(`spd:${v}`, t, `Fart ${t}`, 'Snabbare och långsammare med + och −', S.speed === v);
+  }).join('');
   return `<div class="pl-top"><span class="pl-logo" data-hint="Hissarna styrs av Hiss-O-Matic 3000">TORNET</span><span class="pl-sun">${night ? '🌙' : '☀️'}</span>`
     + `<span class="pl-ph"><b>${phaseName(h)}</b> · ${wx}<br><span class="dim">Dag ${S.day} · ${S.people.length} i huset · frö ${S.seed}</span></span>${flagsHtml()}</div>`
     + `<div class="pl-ctl">${ikon('pause', S.paused ? '▶' : '❚❚', S.paused ? 'Spela' : 'Paus', 'Mellanslag', S.paused)}${speeds}${skipBtn()}<span class="sp"></span><span class="pl-cam">${camTools()}</span>`
@@ -222,7 +227,8 @@ function radioHtml(mode) {
   const F = S.feed.slice(mode === 'row' ? -1 : -RADIO_N);
   const quiet = !F.length || S.t - F[F.length - 1].t > RADIO_QUIET_S;
   const radio = quiet ? '<div class="r dim">📻 Lugnt på radion.</div>'
-    : F.map((f, i) => `<div class="r${i === F.length - 1 ? ' new' : ''}${f.kind === 'chief' ? ' chief' : ''}${S.t - f.t > 60 ? ' old' : ''}"><span class="lt">${f.time}</span>${f.color ? `<span class="ld" style="background:${f.color}"></span>` : ''}<span>${esc(f.text)}</span></div>`).join('');
+    : F.map((f, i) => `<div class="r${i === F.length - 1 ? ' new' : ''}${f.kind === 'chief' ? ' chief' : ''}${S.t - f.t > 60 ? ' old' : ''}">`
+      + `<span class="lt">${f.time}</span>${f.color ? `<span class="ld" style="background:${f.color}"></span>` : ''}<span>${esc(f.text)}</span></div>`).join('');
   return `<div class="radio${mode === 'row' ? ' one' : ''}" data-act="view:log" data-hint="<b>Driftradion:</b> det senaste som hänt. Klicka för hela loggen.">${radio}</div>`;
 }
 function followHtml(F) {
@@ -241,7 +247,8 @@ function followHtml(F) {
   }
   const p = F.p, cam = VIEW.camSel;
   return { head: `${cam ? '📹 Följer' : '🔎 Spårar'} ${esc(p.name)}`,
-    body: personHtml(p) + `<div class="row">${cam ? '' : ikon(`person:${p.id}`, '📹', 'Följ med kameran', 'Kameran håller personen i bild (F)')}${p.crewId && CREW.some(c => c.id === p.crewId && c.guide) ? tourBtn() : ''}</div>` };
+    body: personHtml(p) + `<div class="row">${cam ? '' : ikon(`person:${p.id}`, '📹', 'Följ med kameran', 'Kameran håller personen i bild (F)')}`
+      + `${p.crewId && CREW.some(c => c.id === p.crewId && c.guide) ? tourBtn() : ''}</div>` };
 }
 function trigHtml() {
   const fire = `<select name="fireFloor" data-hint="<b>Brandvåning</b><br>Våningen som börjar brinna"><option value="">slumpad</option>${FIRE_FLOORS.map(f => `<option value="${f}"${String(f) === UI.fireFloor ? ' selected' : ''}>${fl(f)} · ${esc(FL[f].short)}</option>`).join('')}</select>`;
@@ -486,7 +493,8 @@ function renderMob(F, inc) {
     else if (UI.tab === 'more') body = moreHtml();
     const hd = `<div class="m-sh"><b>${title}</b><span class="sp"></span>${UI.tab === 'follow' ? `<button class="btn xs" data-act="unfollow" data-hint="Sluta följa">Sluta följa</button>` : ''}<button class="blk-x" data-act="tab:close" data-hint="Stäng – bara bilden">✕</button></div>`;
     const focus = UI.tour && UI.tour.focus.some(k => TAB_OF[k] === UI.tab) ? ' tour-hi' : '';
-    if (paint('m-sheet', `blk m-sheet t-${UI.tab}${focus}`, hd + `<div class="m-body">${body}</div>`) && UI.tab === 'follow' && F && F.kind === 'person') el('m-sheet').querySelector('.pic')?.appendChild(portrait);
+    const fresh = paint('m-sheet', `blk m-sheet t-${UI.tab}${focus}`, hd + `<div class="m-body">${body}</div>`);
+    if (fresh && UI.tab === 'follow' && F && F.kind === 'person') el('m-sheet').querySelector('.pic')?.appendChild(portrait);
     shown.push(el('m-sheet'));
   }
   if (!land) { paint('m-tick', 'blk m-tickb', tickHtml(F, inc)); shown.push(el('m-tick')); }

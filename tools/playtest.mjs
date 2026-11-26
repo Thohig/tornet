@@ -123,13 +123,7 @@ const noteTexts = (texts, where) => {
   for (const t of texts) for (const line of t.split('\n')) if (LANG === 'en' && swedish(line)) left.set(line.trim(), where);
 };
 // Kända krockar som inte är åtgärdade (TODO.md): skrivs ut men ger ingen felkod. Stryk det som rättas.
-const KNOWN = new Set([
-  'bubble över cabinPx', // repliker från folk i korgen över vågen på korgens överkant (korgarna bokar ingen plats)
-  'bubble över thought', 'thought över bubble', 'thought över thought', // repliker och tankebubblor i korgen och hallen bokar olika
-  'drawCarPx över bubble', // korgens skylt (LINBYTE) över en replik från någon i korgen
-  'bubble över lantern', // en replik över våningsdisplayen ovanför schaktdörren
-  'drawOutagePx över drawCarPx', // de instängdas HJÄLP! över korgens skylt (STÄNGD – STORM)
-]);
+const KNOWN = new Set([]);
 // grupperade efter vilka två ritfunktioner som krockar: hur många gånger, och första exemplet
 const noteOverlaps = (hits, where) => {
   for (const h of hits) {

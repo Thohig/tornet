@@ -23,7 +23,7 @@ Det finns ingen startmeny – det finns ett enda Tornet, och det går hela tiden
 
 Allt som går att ställa in görs i kontrollpanelen medan huset går: styrlogik, slumpen (hur ofta incidenter kommer), driftchefen, felknappar och underhåll. Valen minns till nästa gång. Dygnet rullar alltid vidare kl 06.
 
-Spelet visas på **svenska** som standard; med flaggorna längst upp till höger i panelen (eller under Inställningar ⚙️) byter du till **engelska** (och tillbaka) mitt i ett dygn – allt i panelen och bilden, även det som redan hänt, byter språk direkt. Koden och simuleringen är skrivna på svenska; översättningen sker när texten visas (`src/lang.js`, `src/lang-en.js`). Texter med värden skrivs sv`…` (`src/sv.js`) och vet då sin mall, så att översättningen inte behöver gissa var värdena börjar och slutar.
+Spelet visas på **svenska** som standard; med flaggorna längst upp till höger i panelen (eller under Inställningar ⚙️) byter du till **engelska** (och tillbaka) mitt i ett dygn – allt i panelen och bilden, även det som redan hänt, byter språk direkt. Koden och simuleringen är skrivna på svenska; översättningen sker när texten visas (`src/lang.js`, `src/lang-en.js`). Texter med värden skrivs sv`…` (`src/sv.js`) och vet då sin mall, så att översättningen inte behöver gissa var värdena börjar och slutar. Panelens meningar med värden i fetstil eller nedräkningar skrivs sh`…` och översätts som hela meningar.
 
 Adressparametrar:
 

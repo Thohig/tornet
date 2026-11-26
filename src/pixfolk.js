@@ -73,7 +73,8 @@ export function drawHallPeople() {
     const gr = groups.get(k);
     if (gr) gr.push({ p, lp }); else groups.set(k, [{ p, lp }]);
   }
-  for (const gr of groups.values()) {
+  // (den som spåras först: hens bubbla ska alltid synas, och de andra flyttar sig för den)
+  for (const gr of [...groups.values()].sort((a, b) => Number(b.some(q => q.p === S.sel)) - Number(a.some(q => q.p === S.sel)))) {
     const lead = gr.find(q => q.p === S.sel) || gr.reduce((a, b) => (b.lp.x > a.lp.x ? b : a));
     thought(lead.p, X(lead.lp.x) + 3, Y(surf(lead.p.floor) + lead.p.depth * 0.6) - 30, gr.length);
   }
@@ -156,7 +157,7 @@ function thought(p, x, y, n = 1) {
   const txt = plain((S.tags ? p.name + ' ' : '') + (buttons ? (p.fixAt ? '?! ' : ARR(p.dir) + ' ') : '') + '→' + fl(p.dest));
   const tw = textW(txt), chip = e ? textW(e.name) + 4 : 0, many = n > 1 ? `x${n}` : '', mw = many ? textW(many) + 3 : 0;
   const w = tw + 6 + (e ? chip + 2 : 0) + mw, h = 9, bx = x - Math.round(w / 2), y0 = y - h;
-  const by = place(bx, y0, w, h, [0, -10, -20]) ?? (p === S.sel ? y0 : null);
+  const by = place(bx, y0, w, h, p === S.sel ? UP : [0, -10, -20]) ?? (p === S.sel ? y0 : null);
   if (by === null) return; // ingen plats: personen syns ändå i kön, och spåras man syns bubblan alltid
   R(x - 1, y + 2, 2, 2, INK); R(x + 1, y, 2, 2, INK); R(x + 1, y, 1, 1, '#ffffff');
   if (by < y0) for (let yy = by + h + 1; yy < y; yy += 3) R(x + 1, yy, 1, 1, INK);

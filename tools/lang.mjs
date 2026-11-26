@@ -1,7 +1,7 @@
 // Språket: listar texterna i src/*.js som saknar en engelsk mall i lang-en.js (npm run lang).
 // Texterna tas ur källkoden: strängar och mallsträngar (${…} → {0}, {1} …), delade vid html-taggar, med
 // data-hint/title som egna texter. Lägg till det som saknas i lang-en.js (svensk mall → engelsk mall).
-// sv`…` (sv.js) kontrolleras exakt: mallen måste stå i lang-en.js precis så som den står i koden. --check = bara
+// sv`…` (sv.js) och sh`…` (lang.js) kontrolleras exakt: mallen måste stå i lang-en.js precis så som den står i koden. --check = bara
 // den kontrollen, med felkod om någon mall saknas (npm run quick och check kör den).
 import * as acorn from 'acorn';
 import * as walk from 'acorn-walk';
@@ -12,7 +12,9 @@ const SKIP = new Set(['scoreData.js', 'prof.js', 'rng.js', 'lang.js', 'lang-en.j
 const out = new Map(); // mall → filer
 const struct = new Set();
 const suffix = [];
-/** sv`…`: mallen → var den står (fil:rad) */
+/** taggarna vars mall slås upp exakt: sv`…` (sv.js) och html-mallen sh`…` (lang.js) */
+const EXACT = new Set(['sv', 'sh']);
+/** sv`…` och sh`…`: mallen → var den står (fil:rad) */
 const svKeys = new Map();
 const CHECK = process.argv.includes('--check'); // svenska ändelser som eget värde: `hiss${n > 1 ? 'ar' : ''}` (se CLAUDE.md – skriv hela orden)
 function addHtml(s, file) {
@@ -50,13 +52,13 @@ for (const f of fs.readdirSync(SRC).filter(f => f.endsWith('.js') && !SKIP.has(f
       if (parent && parent.type === 'Property' && parent.key === n) return;
       if (parent && parent.type === 'MemberExpression' && parent.property === n) return;
       addHtml(n.value, f);
-    } else if (n.type === 'TaggedTemplateExpression' && n.tag.type === 'Identifier' && n.tag.name === 'sv') {
+    } else if (n.type === 'TaggedTemplateExpression' && n.tag.type === 'Identifier' && EXACT.has(n.tag.name)) {
       const q = n.quasi;
       let key = '';
       q.quasis.forEach((x, i) => { key += x.value.cooked; if (i < q.expressions.length) key += `{${i}}`; });
       if (!svKeys.has(key)) svKeys.set(key, `${f}:${code.slice(0, n.start).split('\n').length}`);
     } else if (n.type === 'TemplateLiteral') {
-      if (parent && parent.type === 'TaggedTemplateExpression' && !(parent.tag.type === 'Identifier' && parent.tag.name === 'sv')) return;
+      if (parent && parent.type === 'TaggedTemplateExpression' && !(parent.tag.type === 'Identifier' && parent.tag.name === 'sv')) return; // (sh`…` översätts bara som hel mall)
       // ett ord som slutar med ${villkor ? 'ar' : ''}: ändelsen blir ett värde som lang-en.js inte kan översätta
       n.expressions.forEach((x, i) => {
         const short = y => y.type === 'Literal' && typeof y.value === 'string' && /^[a-zåäö]{0,3}$/.test(y.value);

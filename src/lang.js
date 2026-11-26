@@ -7,6 +7,7 @@
 // {0}, {1} … (och {n}, {who} … i repliker) är värden – namn, våningar, siffror eller andra texter, som i sin tur
 // översätts. En text utan egen mall ("A · B – C") delas vid avskiljarna och sätts ihop av de bitar som har mallar.
 // En text som sv`…` gjorde (sv.js) har sin mall med sig och slår upp den direkt, utan att gissa.
+// Html i panelen med värden i taggar byggs med sh`…` (nederst): hela meningen översätts innan den blir html.
 // Saknas en mall visas svenskan. Matchningen bryr sig inte om emoji, stora/små bokstäver eller extra mellanslag.
 //
 // Översikt:
@@ -50,18 +51,6 @@ for (const [sv, en] of Object.entries(EN)) {
   // "Bestämmer sig: {0} ({1})" – början ("Bestämmer sig") passar också för sig när en text delas vid kolonet
   const pre = sv.match(/^([^{:]{3,}): \{\w+\}/), preEn = en.match(/^([^{:]{3,}): \{\w+\}/);
   if (pre && preEn && !(pre[1] in EN)) entries.push([pre[1], preEn[1]]);
-  // en text i panelen delas där ett värde står i en egen tagg (nedräkningen i <span class="lv">): början fram till
-  // ett värde och slutet efter det passar också för sig – om värdena står i samma ordning i engelskan
-  const svP = sv.split(/(\{\w+\})/), enP = en.split(/(\{\w+\})/);
-  const order = a => a.filter((_, i) => i % 2).join();
-  if (svP.length > 1 && order(svP) === order(enP)) for (let i = 1; i < svP.length; i += 2) {
-    const head = svP.slice(0, i).join(''), tail = svP.slice(i + 1).join('');
-    const eHead = enP.slice(0, i).join(''), eTail = enP.slice(i + 1).join('');
-    if ((head.match(/\p{L}/gu) || []).length >= 6 && !(head in EN)) entries.push([head, eHead]);
-    if ((tail.match(/\p{L}/gu) || []).length >= 6 && !(tail in EN)) entries.push([tail, eTail]);
-    // (och biten mellan två värden: "{0} kvar i lägenheten, {1} nere …" när värdena står i <b>)
-    if (i + 2 < svP.length) { const mid = svP[i + 1], eMid = enP[i + 1]; if ((mid.match(/\p{L}/gu) || []).length >= 6 && !(mid in EN)) entries.push([mid, eMid]); }
-  }
   // meningarna för sig (Berits pratbubbla visar bara den första) – när översättningen har lika många meningar
   const svS = sv.split(/(?<=[.!?]) (?=\p{Lu})/u), enS = en.split(/(?<=[.!?]) (?=\p{Lu})/u);
   if (svS.length > 1 && svS.length === enS.length) svS.forEach((x, i) => { if (!(x in EN) && /\p{L}{3}/u.test(x)) entries.push([x, enS[i]]); });
@@ -233,3 +222,25 @@ export function trDom(root) {
     if (t !== v) nd.nodeValue = t;
   }
 }
+
+// ---------- Html i panelen ----------
+// Panelens text översätts textnod för textnod (trDom), så en mening med ett värde i en tagg ("Utrymda: <b>3</b>")
+// blir flera bitar som inte passar mallen. sh`…` bygger i stället html ur hela meningens mall: på engelska
+// slås mallen upp i lang-en.js (som sv`…`, exakt) och varje värde översätts innanför sina taggar. Värdena får
+// ha taggar (num(), cd() och bold() i hud.js, en annan sh`…`); mallen själv skrivs utan taggar. Saknas mallen
+// blir det samma html som utan sh, och trDom översätter den som förut. npm run lang -- --check vaktar mallarna.
+/** ett värde i sh: texten innanför taggarna översätts (<b><span class="lv">om en stund</span></b>); html med flera delar står kvar */
+const WRAPPED = /^((?:<[^>]+>)*)([^<]*)((?:<\/[^>]+>)*)$/;
+const trVal = v => { const m = v.match(WRAPPED); return m ? m[1] + tr(m[2]) + m[3] : v; };
+/**
+ * html med värden i taggar, översatt som en hel mening. @param {TemplateStringsArray} strings @param {...unknown} vals
+ * @returns {string}
+ */
+export function sh(strings, ...vals) {
+  const vs = vals.map(String);
+  let s = strings[0], key = strings[0];
+  for (let i = 0; i < vs.length; i++) { s += vs[i] + strings[i + 1]; key += `{${i}}${strings[i + 1]}`; }
+  const en = lang === 'en' ? EN[key] : '';
+  return en ? en.replace(/\{(\d+)\}/g, (all, i) => (vs[+i] === undefined ? all : trVal(vs[+i]))) : s;
+}
+
