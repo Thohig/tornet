@@ -1,5 +1,12 @@
 # Ändringar
 
+## 2026-11-27 – provspelning av djupet: rulltrappan, övningen och brodörren
+- **Rulltrappan genom berget ritades inte hela vägen.** Där den gick bakom pendelns namnskylt hoppade ritningen över hela kolumner (röret är 13 bildpunkter högt), så nästan halva biten i pendelns hall saknades. Nu står foten till höger om skylten (`DEEP_ESC` i people.js), och bara de bildpunkter som faktiskt ligger bakom skylten lämnas bort, vilket bara händer på engelska där skylten är längre.
+- **En skyddsrumsövning som avbryts av en riktig brand skickade alla tillbaka upp mot branden.** Nu stannar de där de är, och brandlarmet bestämmer (`finish` i shelter.js). Testet *Skyddsrumsövningen avbryts av en riktig brand* vaktar det.
+- **Den som var på väg till brodörren gick ut på bron fast den hade stängts under tiden**, till exempel för lunch på Kronans Krog när stormen stängde bron (en äldre bugg som djupet avslöjade när dygnen flyttade sig). Nu vänder man i dörren: grannen tar kulverten eller entrén hem, och den som skulle äta i Kronan äter i Sky Café (`enterBridge` i skywalk.js).
+- Pendelhissen heter ”PT ⇄ TB · pendelhiss genom berget” i hisspanelen i stället för ”pendel zon”, och knappstyrningen kallar gruppen pendelhissen.
+- Testet *Mjukt dygnsskifte* kontrollerar att gårdagens hissfel blir lagat, inte att hissen är hel kl 10 (den kan ha fått ett nytt fel av dygnets slump). Facit och provspelningens bilder är omskrivna.
+
 ## 2026-11-27 – Tornet på djupet: pendeltåget, skyddsrummet, pumparna och kulverten
 - **Två nya våningar i berget under tunnelbanan** (`BUILDING` i config): **SR**, skyddsrummet, och längst ner **PT**, pendeltågets perrong i ett bergrum. Våningsindex 0 är nu PT och tunnelbanan har index 2; koden läser `STATION`, `PENDEL` och `SHELTER`. Kameran skalar efter bredden och scrollar i höjdled, så huset krymper inte. Under tunnelbanan ritas grått berg, pendelns tunnel och hallarnas bergväggar i sprutbetong.
 - **Pendelhissen PH** (egen grupp `pendel`, schaktet under garagerampen) går PT ⇄ SR ⇄ TB med en stor korg. **X1 går ända ner till pendeln**: nedre däcket PT ⇄ TB ⇄ E ⇄ 6, övre däcket SR ⇄ P2 ⇄ 1 ⇄ 7. Varuhissen går också ner.

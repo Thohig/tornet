@@ -226,8 +226,9 @@ function rideDeep(p) {
   S.stats.deepEscalator++;
   pev(p, p.dest === STATION ? 'Tar den långa rulltrappan upp genom berget till tunnelbanan' : 'Tar den långa rulltrappan ner genom berget till pendeln');
 }
-/** var den långa rulltrappans fot (pendeln) och topp (tunnelbanan) står i hallen (världens x) */
-export const DEEP_ESC = { foot: 400, top: 540 };
+/** var den långa rulltrappans fot (pendeln) och topp (tunnelbanan) står i hallen (världens x): foten till höger om
+ *  pendelns namnskylt, så att rulltrappan inte går bakom den, och toppen vid tunnelbanans perrong */
+export const DEEP_ESC = { foot: 452, top: 540 };
 /** där man kliver på rulltrappan på våning f */
 export const deepEscX = f => (f === PENDEL ? DEEP_ESC.foot : DEEP_ESC.top);
 /** Byte mellan entrén och mellanplanet (på väg till eller från expressens övre däck) görs i rulltrappan @param {Person} p */

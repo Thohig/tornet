@@ -18,7 +18,7 @@ export const buttonsMode = () => S.strategy === 'buttons';
 /** Hur ofta folk trycker fel: av / lite / mycket (gäller alla styrlogiker – i de andra slår man in fel våning) */
 export const MISTAKE_LEVELS = { av: 0, lite: 1, mycket: 3 };
 export const mistakeRate = base => base * (MISTAKE_LEVELS[S.mistakes] ?? 1);
-export const GROUP_NAMES = { låg: 'låga zonen', hög: 'höga zonen', express: 'expressen', tbana: 'stationsexpressen', varu: 'varuhissen', panorama: 'panoramahissen' };
+export const GROUP_NAMES = { låg: 'låga zonen', hög: 'höga zonen', express: 'expressen', tbana: 'stationsexpressen', varu: 'varuhissen', panorama: 'panoramahissen', pendel: 'pendelhissen' };
 
 /**
  * @typedef {{ k: string, g: string, f: number, d: number, t: number, car: number|null }} HallCall

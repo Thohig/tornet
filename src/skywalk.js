@@ -136,22 +136,35 @@ export function bridgeOut(p) {
   if (!p.kronan && !evac && !robber) return false;
   if (!canGoOut() && !robber) {
     if (evac) return false;
-    if (kulvertOpen()) {
-      p.exitFloor = SHELTER;
-      setTrip(p, SHELTER, sv`Bron är stängd (${closedWhy()}) – tar kulverten under jord till ${KRONAN}`, true);
-      return true;
-    }
-    p.exitFloor = LOBBY;
-    setTrip(p, LOBBY, sv`Bron är stängd (${closedWhy()}) – går ut genom entrén och runt kvarteret`, true);
+    aroundBridge(p);
     return true;
   }
   p.toBridge = true; p.state = 'exiting';
   p.spot = doorSpot(evac ? 'Utrymmer över bron till Kronan' : sv`Går över bron till ${KRONAN}`); p.tx = SKYWALK_DOOR;
   return true;
 }
-/** p står vid dörren och går ut på bron (exitDone i people.js) @param {Person} p */
+/** en granne som ska hem till Kronan när bron är stängd: genom kulverten, eller ut genom entrén och runt kvarteret @param {Person} p */
+function aroundBridge(p) {
+  if (kulvertOpen()) {
+    p.exitFloor = SHELTER;
+    setTrip(p, SHELTER, sv`Bron är stängd (${closedWhy()}) – tar kulverten under jord till ${KRONAN}`, true);
+    return;
+  }
+  p.exitFloor = LOBBY;
+  setTrip(p, LOBBY, sv`Bron är stängd (${closedWhy()}) – går ut genom entrén och runt kvarteret`, true);
+}
+/** p står vid dörren och går ut på bron (exitDone i people.js). Stängdes bron medan hen gick dit vänder hen i dörren:
+ *  grannen tar en annan väg hem, och den som skulle äta på Kronans Krog äter i Sky Café i stället @param {Person} p */
 export function enterBridge(p) {
   p.toBridge = false; releaseSpot(p);
+  const robber = p.robber && S.heist && S.heist.route === 'bro';
+  if (!canGoOut() && !robber && !p.evac) {
+    p.spot = null;
+    if (p.kronan) { aroundBridge(p); return; }
+    p.kronanLunch = false;
+    setTrip(p, CAFE >= 0 ? CAFE : p.home ?? LOBBY, sv`Bron stängdes (${closedWhy()}) – äter i ${FL[CAFE].name} i stället`, false);
+    return;
+  }
   p.state = 'bridge'; p.bridgeT = 0; p.bridgeDir = 1; p.spot = null; p.x = SKYWALK_DOOR;
   SW().n++; S.stats.bridge++;
   pev(p, p.evac ? 'Ut på bron – utrymmer till Kronan' : sv`Går ut på bron mot ${KRONAN}`);

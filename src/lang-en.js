@@ -3457,6 +3457,9 @@ export default {
   "Över bron 🌉": "Across the skywalk 🌉",
   // Djupet: pendeltåget, skyddsrummet, Hesa Fredrik, pumparna och kulverten (train.js, shelter.js, pumpar.js, skywalk.js)
   "Pumparna stannar": "The pumps stop",
+  "Bron stängdes ({0}) – äter i {1} i stället": "The bridge closed ({0}) – eating at {1} instead",
+  "{0} ⇄ {1} · pendelhiss genom berget": "{0} ⇄ {1} · rail lift through the rock",
+  "pendelhissen": "the rail lift",
   "Tornplan Pendeltåg": "Tornplan Commuter Rail",
   "pendeln": "the commuter rail",
   "Skyddsrummet": "The shelter",

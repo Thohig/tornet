@@ -2658,9 +2658,11 @@ test('Mjukt dygnsskifte: huset rullar vidare kl 06 – fel, brand och folk följ
   assert(S.people.some(p => ids.has(p.id)), 'folket i huset försvann vid dygnsskiftet');
   assert(S.stats.served === 0 && S.yesterday && S.yesterday.day === 1, 'dagens statistik ska börja om och gårdagens sparas');
   assert(S.notices.some(n => n.kind === 'day'), 'ingen informationsruta om det nya dygnet');
-  runTo(2, 10, w);
+  // (felet från i går ska lagas – att hissen får ett nytt fel senare på förmiddagen är dygnets slump)
+  let fixed = false;
+  while (S.day < 2 || hour() < 10) { const b = w.before(); step(DT); w.check(b); if (!e.fault) fixed = true; }
   assert(!S.fire, 'branden släcktes aldrig');
-  assert(!e.fault, `${e.name} lagades aldrig efter skiftet`);
+  assert(fixed, `${e.name} lagades aldrig efter skiftet`);
   for (const c of CREW.filter(x => x.until === null)) assert(!crewPerson(c.id), `${c.name} (nattskiftet) gick aldrig hem`);
   for (const c of CREW.filter(x => x.arrive === null)) { const p = crewPerson(c.id); assert(p && (atPost(p) || p.onBreak), `${c.name} (dagskiftet) kom aldrig till sin post`); }
   assert(!S.people.some(p => ['väktare', 'nattdj', 'nattekniker'].includes(p.role)), 'nattpersonalen är kvar på förmiddagen');
@@ -3487,6 +3489,20 @@ test('Skyddsrumsövningen: huset går ner våning för våning, räknas och går
     out.push(`${order}: ${peak} av ${X.total} nere`);
   }
   return out.join(' · ');
+});
+test('Skyddsrumsövningen avbryts av en riktig brand: ingen skickas tillbaka upp mot branden', () => {
+  sim(7, { incLevel: 'av' });
+  runUntil(10.5);
+  assert(act('trigger', 'ovning') === true && act('ovning', 'top'), 'övningen gick inte att starta');
+  runWhile(() => S.ovning.inside < 5, 120);
+  const down = S.people.filter(p => p.drill && p.floor === SHELTER && p.state === 'office').map(p => p.id);
+  assert(down.length >= 5, `bara ${down.length} hann ner`);
+  startFire(FIRE_FLOORS[FIRE_FLOORS.length - 1]);
+  step(DT);
+  assert(!S.ovning, 'övningen fortsatte under branden');
+  const up = S.people.filter(p => down.includes(p.id) && p.goal !== undefined && p.goal > SHELTER && p.why === 'Övningen är slut – tillbaka upp');
+  assert(!up.length, `${up.length} skickades tillbaka upp mot branden`);
+  return `${down.length} stannade i skyddsrummet när det började brinna`;
 });
 test('Hesa Fredrik: provlarmet går första måndagen i kvartalet kl 15, och driftchefen håller skyddsrumsövning efteråt', () => {
   assert(dayInfo('2026-03-02').hesa && dayInfo('2026-06-01').hesa && dayInfo('2026-12-07').hesa, 'provlarmsdagarna känns inte igen');

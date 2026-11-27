@@ -427,16 +427,21 @@ export function drawDeepEscalatorPx() {
   const xb = X(DEEP_ESC.foot), yb = Y(floorY(PENDEL) - 4) - 3, xt = X(DEEP_ESC.top), yt = Y(floorY(STATION) - 4) - 3;
   if (yt > lo.height + 10 || yb < -10) return;
   const stopped = !!S.pumpar && S.pumpar.level >= 0.6, L = xt - xb, ph = stopped ? 0 : Math.floor(S.anim * 10) % 4;
-  // (röret går bakom pendelns namnskylt högst upp i hallen: där ritas det inte)
-  const sign0 = Y(floorY(PENDEL + 1) + 4) + 4, sign1 = sign0 + 14;
+  // (rulltrappan går bakom pendelns namnskylt högst upp i hallen: bildpunkterna under skylten ritas inte)
+  const nx = X(DOOR_X) + 13, s0 = Y(floorY(PENDEL + 1) + 4) + 5, s1 = s0 + 12, s2 = nx + textW(plain(FL[PENDEL].name)) + 9;
+  /** en lodrät bit av kolumnen x från y0 (h bildpunkter), utom det som ligger bakom skylten */
+  const col = (x, y0, h, c) => {
+    if (x < nx - 2 || x > s2 || y0 + h <= s0 || y0 >= s1) { R(x, y0, 1, h, c); return; }
+    if (y0 < s0) R(x, y0, 1, s0 - y0, c);
+    if (y0 + h > s1) R(x, s1, 1, y0 + h - s1, c);
+  };
   for (let i = -6; i <= L + 6; i++) {
     const k = clamp(i / L, 0, 1), x = xb + i, y = Math.round(yb + (yt - yb) * k);
-    if (y - 14 < sign1 && y + 3 > sign0) continue;
     // (röret genom berget: bara mellan golven – vid perrongerna öppnar det sig)
-    if (k > 0.06 && k < 0.94) { R(x, y - 13, 1, 13, 'rgba(40,44,52,.55)'); R(x, y - 14, 1, 1, INK); R(x, y - 9, 1, 1, S.power ? '#ffe9a8' : '#5a5a5a'); }
-    else R(x, y - 10, 1, 1, INK); // (ledstången)
-    R(x, y, 1, 1, '#8a909a'); R(x, y + 1, 1, 2, '#5b6b80'); R(x, y + 3, 1, 1, INK);
-    if (i >= 0 && i <= L && (i + ph) % 4 === 0) R(x, y - 1, 1, 1, '#d4d0c8');
+    if (k > 0.06 && k < 0.94) { col(x, y - 13, 13, 'rgba(40,44,52,.55)'); col(x, y - 14, 1, INK); col(x, y - 9, 1, S.power ? '#ffe9a8' : '#5a5a5a'); }
+    else col(x, y - 10, 1, INK); // (ledstången)
+    col(x, y, 1, '#8a909a'); col(x, y + 1, 2, '#5b6b80'); col(x, y + 3, 1, INK);
+    if (i >= 0 && i <= L && (i + ph) % 4 === 0) col(x, y - 1, 1, '#d4d0c8');
   }
   // de som åker, efter hur långt de har kommit
   for (const p of S.people) {

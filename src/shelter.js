@@ -114,15 +114,17 @@ function callFloor(X, f) {
   X.total += n; X.lastCall = S.t;
   if (n) log(sv`🛡️ ${FL[f].name} (${fl(f)}) går ner till skyddsrummet – ${n} personer`, 'sys');
 }
-/** övningen är slut: alla går tillbaka dit de var @param {Ovning} X */
+/** övningen är slut: alla går tillbaka dit de var – utom när det brinner på riktigt: då stannar de där de är, och
+ *  brandlarmet bestämmer (ingen ska skickas upp mot branden) @param {Ovning} X */
 function finish(X, why = '') {
   let back = 0;
   for (const p of drillers()) {
     p.drill = false;
     const from = p.drillFrom ?? SKY;
     p.drillFrom = undefined;
-    // (den som sitter i skyddsrummet eller står i kö går tillbaka; den som är i hissen eller trappan går tillbaka när hen är framme)
-    if (p.state === 'office' || p.state === 'wait' || p.state === 'toQueue') {
+    // (den som sitter i skyddsrummet eller står i kö går tillbaka; den som är i hissen eller trappan är fri när hen
+    // är framme och fortsätter sin dag därifrån)
+    if (!S.fire && (p.state === 'office' || p.state === 'wait' || p.state === 'toQueue')) {
       releaseSpot(p);
       setTrip(p, from, 'Övningen är slut – tillbaka upp', false);
       back++;

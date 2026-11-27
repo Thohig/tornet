@@ -92,7 +92,7 @@ export const THEME_INFO = {
   // tunnelbanan i drawDeepEscalatorPx (pixhall.js)
   pendel: { name: 'Tornplan Pendeltåg', short: 'pendeln', acc: '#5b6f8c', spots: [
     { x: 352, k: 'stand', face: -1, win: 'hall', desc: 'Läser pendelns tidtabell' },
-    { x: 452, k: 'stand', face: 1, win: 'hall', desc: 'Tittar in i tunneln efter pendeln' },
+    { x: 404, k: 'stand', face: 1, win: 'hall', desc: 'Tittar in i tunneln efter pendeln' },
   ] },
   // skyddsrummet i berget mellan tunnelbanan och pendeln (shelter.js): ståldörren, pumprummet (pumps.js) och
   // ett förråd. Hit går man bara på skyddsrumsövningen och när pumparna ska ses till.

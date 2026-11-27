@@ -31,7 +31,6 @@ Det mesta under jord är byggt. Uppåt finns en hög zon kvar: 5–8 våningar t
 
 - **Lunch på Kronans Krog genom kulverten** när bron är stängd, och Kronans folk genom kulverten när deras hissar har kraschat.
 - **Vattenläckan rinner hela vägen ner** till pumprummet, och pumparna får mer att göra (en länk till i Murphys lag).
-- **Hissarna möter pendeltåget**, som de redan möter tunnelbanan i Rusning (`trainNear`/`meetTrain` i dispatch.js).
 - **Skyddsrummet som tillflykt i stormen** för dem som väntar på perrongerna när tågen står still.
 - **Skyddsrumsövningen:** ett eget hissläge under övningen, och trappan som val (alla går ner i trappan och hissarna hålls fria).
 

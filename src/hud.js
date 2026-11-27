@@ -57,6 +57,7 @@ export function zoneText(d) {
   if (d.express) return sv`${fl(d.minF)} ⇄ ${fl(d.maxF)} · express`;
   if (d.facade) return sv`${d.serves.map(fl).join(' · ')} · panorama i glas`;
   if (d.freight) return sv`${fl(d.minF)}–${fl(d.maxF)} · varuhiss ${d.ratedKg} kg`;
+  if (d.group === 'pendel') return sv`${fl(d.minF)} ⇄ ${fl(d.maxF)} · pendelhiss genom berget`;
   return sv`${fl(d.minF)}–${fl(d.maxF)} · ${d.group} zon`;
 }
 /** @param {Elevator} e */
