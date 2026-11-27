@@ -23,6 +23,7 @@ import { chaosReset, chaosTick } from './chaos.js';
 import { systems } from './systems.js';
 import { crewArrivals, crewRoll, crewStart, spawnCrew } from './crew.js';
 import { crashed } from './crash.js';
+import { dateParts, dayInfo } from './calendar.js';
 /** @typedef {import('./elevators.js').Elevator} Elevator */
 
 // ---------- Planerad rutt (för HUD) ----------
@@ -59,7 +60,8 @@ const ARRIVAL_MUL = 1.6;
 // 0.3 ger ungefär samma väntetider över dygnet som det korta dygnet (p50 ≈ 9 s, p95 ≈ 38 s) med knappt
 // dubbelt så många anställda – mätt med sex frön, Smart.
 export const EMP_K = 0.3;
-export function arrivalRate(h) { return ARRIVAL_MUL * baseRate(h) * pace(h) ** EMP_K; }
+// (på helgen kommer bara en del av de anställda, S.cal.empMul – även med tåget, som räknar med den här)
+export function arrivalRate(h) { return ARRIVAL_MUL * baseRate(h) * pace(h) ** EMP_K * S.cal.empMul; }
 function baseRate(h) {
   if (h < 6.5) return 0.02; if (h < 7) return 0.08; if (h < 7.3) return 0.21;
   if (h < 9.3) return 0.56; if (h < 10.2) return 0.18; if (h < 15) return 0.03;
@@ -91,12 +93,12 @@ export function spawnTick(dt) {
   if (lunch) v += 0.07;
   // besökarna räknas per speltimme (pace): ett längre dygn ger inte fler besökare, bara glesare
   const pc = pace(h);
-  v *= ARRIVAL_MUL * pc;
+  v *= ARRIVAL_MUL * pc * S.cal.visMul; // (färre besökare på helgen)
   if (VIS.rng() < v * dt) spawnVisitor(LOBBY, -30, lunch && VIS.rng() < 0.7 ? CAFE : null);
   // hundägarna till hundsalongen
   if (SPA >= 0 && floorOpen(SPA, h) && floorOpen(SPA, h + 1.2) && DOG.rng() < 0.02 * pc * dt) spawnDogOwner();
   // turister åker panoramahissen upp till takterrassen
-  if (ROOF >= 0 && h >= 9.5 && h < 19 && TOUR.rng() < 0.02 * pc * dt) spawnVisitor(LOBBY, -30, ROOF, 'Utsikt från takterrassen');
+  if (ROOF >= 0 && h >= 9.5 && h < 19 && TOUR.rng() < 0.02 * pc * S.cal.tourMul * dt) spawnVisitor(LOBBY, -30, ROOF, 'Utsikt från takterrassen');
   if (h >= 17 && h < 20.5 && GYM.rng() < 0.03 * pc * dt) spawnVisitor(LOBBY, -30, floorWith('aerobic'), 'Kvällspass på Svettis');
 }
 // Nattläge (Smart, Rusning, Energisnål): överflödiga hissar somnar i entrén för att spara energi och vaknar vid kö.
@@ -224,6 +226,7 @@ export function advance(realDt, speed) {
 export const daySeed = () => (Math.imul(S.seed >>> 0, 1000003) + S.day) >>> 0;
 export function resetDay() {
   setSeed(daySeed());
+  S.cal = dayInfo(S.date);
   // hissfel och linbyten som inte hann bli klara följer med (som slitaget) – men inte folket i dem
   const kept = S.day > 1 && S.elevators.length === EL.length ? S.elevators.map(keptFault) : null;
   // lärande parkering: gårdagens anrop vägs in i minnet (följer med till nästa dygn, som slitaget)
@@ -258,6 +261,7 @@ export function rollDay() {
   S.yesterday = { day: S.day, stats: S.stats };
   S.day++;
   setSeed(daySeed());
+  S.cal = dayInfo(S.date); // (spelet byter datum före skiftet om det har blivit en ny dag, main.js)
   learnBlend(); S.learnToday = emptyLearn();
   S.clock = 0; S.sched = makeSchedule(); S.summaryShown = false;
   S.stats = newStats();
@@ -273,13 +277,18 @@ export function rollDay() {
   chiefRoll();
   crewRoll();
   const y = S.yesterday.stats, avg = y.waitN ? y.waitSum / y.waitN : 0;
-  notice('day', sv`🌅 Dag ${S.day} börjar`, y.incidents === 1 ? sv`I går: ${y.served} resor, snittväntan ${avg.toFixed(1)} s, en incident. Huset rullar vidare – det som pågick fortsätter.`
+  notice('day', dayTitle(), y.incidents === 1 ? sv`I går: ${y.served} resor, snittväntan ${avg.toFixed(1)} s, en incident. Huset rullar vidare – det som pågick fortsätter.`
     : sv`I går: ${y.served} resor, snittväntan ${avg.toFixed(1)} s, ${y.incidents} incidenter. Huset rullar vidare – det som pågick fortsätter.`,
     { act: 'yesterday', actLabel: 'Gårdagen' });
   log(sv`🌅 Dag ${S.day} börjar – huset rullar vidare`, 'sys');
 }
+/** dygnsskiftets rubrik: veckodagen och datumet när det finns (”🌅 Fredag 27 november – dag 3 börjar”) */
+export function dayTitle() {
+  const d = dateParts(S.cal);
+  return d ? sv`🌅 ${d.wd} ${d.day} ${d.month} – dag ${S.day} börjar` : sv`🌅 Dag ${S.day} börjar`;
+}
 export function newSim(seed, opts = {}) {
-  S.seed = seed >>> 0; S.day = opts.day || 1; S.log = []; S.fx = []; S.elevators = [];
+  S.seed = seed >>> 0; S.day = opts.day || 1; S.date = opts.date ?? null; S.log = []; S.fx = []; S.elevators = [];
   S.learnMem = null; S.learnToday = null; S.notices = []; S.dismissed = new Set();
   S.heistDay = 0; // (en ny simulering: ingen kupp har varit – annars följer en tidigare simulerings kupp med i samma process)
   if (opts.strategy) S.strategy = opts.strategy;
@@ -297,6 +306,6 @@ export function newSim(seed, opts = {}) {
   S.yesterday = null;
   S.tempo = setTempo(opts.tempo ?? S.tempo);
   S.origin = { seed: S.seed, strategy: S.strategy, incLevel: S.incLevel, chief: S.chief.on, chiefStrat: S.chief.strat,
-    mistakes: S.mistakes, maint: S.maint, roll: S.roll, tempo: S.tempo };
+    mistakes: S.mistakes, maint: S.maint, roll: S.roll, tempo: S.tempo, date: S.date };
   resetDay();
 }

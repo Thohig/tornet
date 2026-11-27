@@ -66,6 +66,7 @@ import { LEAK_FLOORS } from './leak.js';
 import { busFrom } from './tour.js';
 import { incUi } from './incui.js';
 import { sv } from './sv.js';
+import { ymd } from './calendar.js';
 
 const side = $('side'), portrait = $('portrait');
 
@@ -100,7 +101,10 @@ extraActions.lf = b => { S.logFilter = b; S.logDirty = true; };
 side.addEventListener('change', ev => {
   const t = /** @type {HTMLSelectElement} */ (ev.target);
   if (t.name === 'fireFloor') { UI.fireFloor = t.value; repaint(); }
+  if (t.name === 'date' && t.value) { act('date', t.value); repaint(); }
 });
+// tillbaka till datorns datum (Framkalla)
+extraActions.today = () => { if (act('date', ymd(new Date()))) repaint(); };
 
 // ---------- Dygnets stapel: banden i den takt dygnet spelas, markören för nu och dagens incidenter ----------
 /** del av dygnet (0–1) i verklig tid vid klockslaget h, med dygnets tempo */
@@ -254,7 +258,14 @@ function trigHtml() {
       return ikon(`trig:${u.key}`, u.trig.icon, u.trig.name, hint, false, off ? ' disabled' : '');
     }).join('')
     + busBtn()
-    + `</div><div class="row">${chaosBtn()}</div><div class="dim small">Följ en hiss eller våning för att framkalla något just där.</div>`;
+    + `</div><div class="row">${chaosBtn()}</div>${dateRow()}<div class="dim small">Följ en hiss eller våning för att framkalla något just där.</div>`;
+}
+/** Tornets datum (calendar.js): ett annat datum ger en annan årstid, veckodag och sol; ”I dag” = datorns datum */
+function dateRow() {
+  const today = ymd(new Date());
+  return `<div class="row trig-date">📅 <input type="date" name="date" value="${esc(S.date ?? '')}" min="1990-01-01" max="2099-12-31"`
+    + ` data-hint="<b>Datum</b><br>Tornet har samma datum som datorn. Välj ett annat för en annan årstid, veckodag och sol – det gäller tills datorns datum byts">`
+    + `${btn('today', 'I dag', false, 'Tillbaka till datorns datum', S.date === today ? ' disabled' : '')}</div>`;
 }
 /** första kvarten bussen kan komma (busFrom, tour.js), räknad en gång per kvart */
 let busAt = { q: NaN, h: /** @type {number|null} */ (null) };

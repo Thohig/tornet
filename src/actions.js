@@ -14,7 +14,8 @@ import { heistChoice } from './heist.js';
 import { systems } from './systems.js';
 import { rebuildPicks } from './dispatch.js';
 import { setFireMode, setIncLevel, startGenerator, startRescue, toggleAutoRescue, toggleOff, trigger } from './incidents.js';
-import { setStormMode, setWeather, strikeNow } from './weather.js';
+import { dateWeather, setStormMode, setWeather, strikeNow } from './weather.js';
+import { dateParts, dayInfo, parseDate } from './calendar.js';
 import { moveNow, setMoveBlankets, setMoveRoute, setMoveWind } from './visits.js';
 import { orderService, startFan } from './service.js';
 import { delayTrain } from './train.js';
@@ -103,9 +104,22 @@ export const ACTIONS = {
   panic: m => { if (!setPanicMode(m, 'player')) return false; playerChose('panic', m === 'crank' ? 'Teknikern vevar ner korgen' : 'Vi pratar med dem i nödtelefonen', { inc: 'panic' }); return true; },
   // firmafesten: ballongerna i varuhissen (varu) eller i vilken hiss som helst (alla)
   party: m => { if (!setPartyMode(m, 'player')) return false; playerChose('party', m === 'varu' ? 'Ballongerna tar varuhissen' : 'Gästerna åker vilken hiss som helst', { inc: 'party' }); return true; },
+  // ett annat datum (Framkalla, eller dagens när spelaren har spelat över midnatt): årstiden, veckodagen och ljuset
+  // gäller direkt; temperaturen ligger lika långt från månadens medel som förut (inget nytt slumptal)
+  date: d => setDate(d),
   panoRescue: how => { if (!S.pano || !setPanoHow(how, 'player')) return; playerChose('pano', panoText(how), { inc: 'pano', car: S.pano.car }); },
   moveWind: c => { if (!S.move) return; setMoveWind(c); playerChose('move', c === 'varu' ? 'Lasset vid luckan i varuhissen' : 'Lasset vid luckan väntar'); },
 };
+
+/** @param {string} d '2026-12-13' */
+function setDate(d) {
+  if (!parseDate(d) || d === S.date) return false;
+  S.date = d; S.cal = dayInfo(d);
+  dateWeather();
+  const p = dateParts(S.cal);
+  if (p) log(sv`📅 ${p.wd} ${p.day} ${p.month} i Tornet – ${S.weather.temp} °C ute`, 'sys');
+  return true;
+}
 
 /** Utför en spelaråtgärd. */
 export function act(name, ...args) {

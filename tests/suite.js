@@ -46,7 +46,8 @@ import { onPlatform, tunnelPossible } from '../src/tunnel.js';
 import { panicPossible } from '../src/panic.js';
 import { balloons, partyPossible } from '../src/party.js';
 import { BOILER_STAND, DOCK } from '../src/config.js';
-import { reproQuery, fastForward } from '../src/repro.js';
+import { reproQuery, fastForward, parseRepro } from '../src/repro.js';
+import { NEUTRAL, dayInfo, sunWarp } from '../src/calendar.js';
 /** @typedef {import('../src/elevators.js').Elevator} Elevator */
 /** @typedef {import('../src/people.js').Person} Person */
 
@@ -1968,6 +1969,8 @@ export const PLAYER_ACTIONS = {
   visning: r => act('visning', ['start', 'now', 'next', 'end'][Math.floor(r() * 4)]),
   heistTrig: () => act('trigger', 'heist'),
   chaos: () => act('chaos'),
+  // ett annat datum: midsommar, lucia (söndag), sommartidens första dag, en vanlig fredag
+  date: r => act('date', ['2026-06-20', '2026-12-13', '2026-03-29', '2026-11-27'][Math.floor(r() * 4)]),
   // vaktmästarens olyckor: gondolen, hunden, vattenläckan – och valen på korten
   accident: r => act('trigger', ['gondola', 'dog', 'leak', 'crash', 'tunnel', 'panic', 'party', 'rulltrappa'][Math.floor(r() * 8)]),
   gondola: r => act('gondola', ['crank', 'hatch', 'rope'][Math.floor(r() * 3)]),
@@ -3325,4 +3328,56 @@ test('Husmusiken: alla stycken går att lägga ut och dygnet har musik i varje d
   for (let h = 6; h < 30; h += 0.25) { const p = partOf(h, trafficMode(h)); assert(PIECES[p], `kl ${h}: ${p}`); parts.add(p); }
   for (const p of ['rag', 'waltz', 'jazz', 'lounge', 'box']) assert(parts.has(p), `${p} spelas aldrig`);
   return out.join(' · ');
+});
+
+// ---------- Kalendern ----------
+test('Kalendern: veckodag, sol och sommartid i Stockholm', () => {
+  const near = (a, b, d, what) => assert(Math.abs(a - b) <= d, `${what}: ${a.toFixed(2)}, väntade ${b} ± ${d}`);
+  const mid = dayInfo('2026-06-19'), lucia = dayInfo('2026-12-13'), fri = dayInfo('2026-11-27');
+  assert(mid.wd === 4 && !mid.weekend, 'midsommarafton 2026 är en fredag');
+  assert(lucia.wd === 6 && lucia.weekend, 'lucia 2026 är en söndag');
+  assert(fri.wd === 4 && fri.month === 11 && fri.day === 27, '27 november 2026 är en fredag');
+  // (almanackan: midsommar upp 03.31, ner 22.08; lucia upp 08.39, ner 14.48)
+  near(mid.sunrise, 3.5, 0.25, 'soluppgången vid midsommar'); near(mid.sunset, 22.13, 0.25, 'solnedgången vid midsommar');
+  near(lucia.sunrise, 8.65, 0.25, 'soluppgången på lucia'); near(lucia.sunset, 14.8, 0.25, 'solnedgången på lucia');
+  near(mid.nightMax, 0.55, 0.05, 'den ljusa sommarnatten');
+  assert(lucia.nightMax === 1, 'en decembernatt är helt mörk');
+  // sommartiden börjar sista söndagen i mars (29 mars 2026): solen går upp en timme senare på klockan
+  near(dayInfo('2026-03-29').sunrise - dayInfo('2026-03-28').sunrise, 1 - 0.06, 0.06, 'sommartidens byte');
+  near(dayInfo('2026-10-25').sunset - dayInfo('2026-10-24').sunset, -1 - 0.05, 0.06, 'vintertidens byte');
+  // utan datum, eller med ett som inte finns: den neutrala dagen, och himlen som förr
+  for (const d of [null, '2026-02-30', 'i morgon']) assert(dayInfo(d) === NEUTRAL, `${d} ska vara neutral`);
+  for (let h = 0; h < 24; h += 0.5) assert(sunWarp(h, NEUTRAL) === h, 'neutral dag: samma timme');
+  near(sunWarp(lucia.sunset, lucia), 19.2, 1e-9, 'solnedgången blir himlens skymning');
+  near(sunWarp(mid.sunrise, mid), 7, 1e-9, 'soluppgången blir himlens gryning');
+  return `midsommar ${mid.sunrise.toFixed(2)}–${mid.sunset.toFixed(2)}, lucia ${lucia.sunrise.toFixed(2)}–${lucia.sunset.toFixed(2)}`;
+});
+test('Kalendern: samma frö och datum ger samma dygn, helgen har färre anställda och årstiden sin temperatur', () => {
+  /** @param {string|null} date */
+  const morning = date => {
+    sim(31, date ? { date } : {});
+    const emp = new Set();
+    while (hour() < 10.5) { step(DT); for (const p of S.people) if (p.kind === 'emp') emp.add(p.id); }
+    return { emp: emp.size, temp: S.weather.temp, served: S.stats.served, t: S.t };
+  };
+  const a = morning('2026-11-27'), b = morning('2026-11-27'), sat = morning('2026-11-28');
+  assert(JSON.stringify(a) === JSON.stringify(b), 'samma frö och datum ska ge samma morgon');
+  assert(sat.emp < a.emp * 0.5, `lördag ${sat.emp} anställda mot fredag ${a.emp}`);
+  // vintern är kall och sommaren varm (månadens medel ± 7 °C)
+  for (let seed = 1; seed <= 8; seed++) {
+    sim(seed, { date: '2026-01-15' }); assert(S.weather.temp >= -8 && S.weather.temp <= 6, `januari ${S.weather.temp} °C`);
+    sim(seed, { date: '2026-07-15' }); assert(S.weather.temp >= 12 && S.weather.temp <= 26, `juli ${S.weather.temp} °C`);
+  }
+  // ett annat datum mitt på dagen: samma avvikelse från månadens medel, och adressen tar med datumet
+  sim(5, { date: '2026-01-15' });
+  const dev = S.weather.temp - -1;
+  assert(act('date', '2026-07-15') && S.weather.temp === 19 + dev && S.cal.month === 7, 'temperaturen följer det nya datumet');
+  assert(!act('date', '2026-13-01') && S.date === '2026-07-15', 'ett datum som inte finns gör ingenting');
+  const r = parseRepro(reproQuery({ origin: { ...S.origin, date: '2026-12-13' }, t: 5 }));
+  assert(r && r.opts.date === '2026-12-13', 'adressen tar med datumet');
+  assert(!parseRepro('?seed=1&date=2026-02-31')?.opts.date, 'ett datum som inte finns i adressen hoppas över');
+  // utan datum: date=0 i länken, så att spelet kör samma neutrala dag och inte tar dagens datum
+  const r0 = parseRepro(reproQuery({ origin: { ...S.origin, date: null }, t: 5 }));
+  assert(r0 && 'date' in r0.opts && r0.opts.date === null, 'länken till ett dygn utan datum ska ha date=0');
+  return `fredag ${a.emp} anställda, lördag ${sat.emp}`;
 });

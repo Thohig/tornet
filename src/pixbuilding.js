@@ -16,6 +16,7 @@ import { PERSON_H, PERSON_W, personSprite } from './pixpeople.js';
 import { BUS_LEN, BUS_STOP_X } from './tour.js';
 import { buttonsMode, hallLit } from './buttons.js';
 import { assignedTo, keyed } from './dispatch.js';
+import { sunWarp } from './calendar.js';
 import { box, cloudSprite, CY, g, INK, layer, line, lo, MOON, nightStep, once, pill, R, reserve, SUN, X, X0, Y } from './pixcore.js';
 /** @typedef {import('./elevators.js').Elevator} Elevator */
 
@@ -55,8 +56,9 @@ export function drawSkyAll(h) {
     R(X(s.x), Y(s.y), 1, 1, tw ? `rgba(255,255,220,${n})` : `rgba(255,255,220,${n * 0.5})`);
     if (s.r > 1.6 && tw) { R(X(s.x) - 1, Y(s.y), 3, 1, `rgba(255,255,220,${n * 0.6})`); R(X(s.x), Y(s.y) - 1, 1, 3, `rgba(255,255,220,${n * 0.6})`); }
   }
-  const tt = clamp((h - 6.5) / 13, 0, 1);
-  if (n < 0.8) {
+  // solens bana följer dagens sol (calendar.js); en ljus sommarnatt är ändå natt, då syns månen
+  const tt = clamp((sunWarp(h, S.cal) - 6.5) / 13, 0, 1);
+  if (n / S.cal.nightMax < 0.8) {
     const sx = W - 40 - tt * (W - 80), sy = 100 - Math.sin(tt * Math.PI) * 60;
     const k = Math.floor(S.anim * 2) % 2;
     for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4 + k * Math.PI / 8; R(X(sx) + Math.round(Math.cos(a) * 11), Y(sy) + Math.round(Math.sin(a) * 11), 2, 2, '#ffb627'); }

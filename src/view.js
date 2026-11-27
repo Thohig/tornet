@@ -3,6 +3,7 @@ import { vrand } from './rng.js';
 import { clamp, mix } from './util.js';
 import { FLOOR_H, H, LAND_X0, W, floorY, shaftCX } from './config.js';
 import { S } from './state.js';
+import { sunWarp } from './calendar.js';
 import { personHead } from './render.js';
 import { PX } from './pixart.js';
 
@@ -204,18 +205,21 @@ export const SKY = [
   [11, '#3fa6ff', '#bfeaff'], [16.5, '#4f8fe6', '#ffd394'], [18.6, '#4a2f86', '#ff7d6b'],
   [19.8, '#191340', '#4a2f7a'], [24, '#120d2e', '#2a1d55'],
 ];
+/** ljus sommarnatt: skymningsblått med en glöd vid horisonten i norr */
+const WHITE_NIGHT = ['#33407e', '#c9847e'];
 export function skyAt(h) {
-  h = ((h % 24) + 24) % 24; // dygnet räknas 6–30
+  const w = sunWarp(h, S.cal); // (dygnet räknas 6–30; himlen följer dagens sol, calendar.js)
+  let sky = /** @type {[string, string]} */ (['#120d2e', '#2a1d55']);
   for (let i = 0; i < SKY.length - 1; i++) {
     const [h0, a0, b0] = SKY[i], [h1, a1, b1] = SKY[i + 1];
-    if (h >= h0 && h <= h1) { const t = (h - h0) / (h1 - h0); return [mix(a0, a1, t), mix(b0, b1, t)]; }
+    if (w >= h0 && w <= h1) { const t = (w - h0) / (h1 - h0); sky = [mix(a0, a1, t), mix(b0, b1, t)]; break; }
   }
-  return ['#120d2e', '#2a1d55'];
+  const k = S.cal.nightMax < 1 ? (1 - S.cal.nightMax) * (nightness(h) / S.cal.nightMax) : 0;
+  return k > 0 ? [mix(sky[0], WHITE_NIGHT[0], Math.min(1, k * 1.6)), mix(sky[1], WHITE_NIGHT[1], Math.min(1, k * 1.6))] : sky;
 }
+/** hur mörkt det är ute (0–1) efter dagens sol; en ljus sommarnatt blir aldrig helt mörk (S.cal.nightMax) */
 export function nightness(h) {
-  h = ((h % 24) + 24) % 24;
-  if (h < 6.6) return 1;
-  if (h < 7.6) return 7.6 - h;
-  if (h > 19) return Math.min(1, (h - 19) / 0.8);
-  return 0;
+  h = sunWarp(h, S.cal);
+  const n = h < 6.6 ? 1 : h < 7.6 ? 7.6 - h : h > 19 ? Math.min(1, (h - 19) / 0.8) : 0;
+  return n * S.cal.nightMax;
 }

@@ -7,7 +7,7 @@ import { saveDay } from './summary.js';
 import { updateSound } from './sound.js';
 import { slowmo, updateDirector } from './director.js';
 import { updatePanel } from './panels.js';
-import { rememberPrefs, startGame } from './start.js';
+import { followToday, rememberPrefs, startGame } from './start.js';
 import { beritTalking, introOn, introTick } from './intro.js';
 import { lap, profFrame } from './prof.js';
 import { parseRepro } from './repro.js';
@@ -20,7 +20,7 @@ import { tr } from './lang.js';
 hooks.incident = floor => {
   if (floor !== null) peekFloor(floor);
 };
-hooks.dayEnd = saveDay;
+hooks.dayEnd = () => { saveDay(); followToday(); }; // (spelat över midnatt: Tornet får dagens datum före dygnsskiftet)
 resize();
 VIEW.camY = camMax(); // börja nere vid entrén
 startGame(parseRepro(location.search));

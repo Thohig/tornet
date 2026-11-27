@@ -1,5 +1,6 @@
 // Speltillståndet S, statistik, logg och krokar mot gränssnittet.
 import { START_H } from './config.js';
+import { NEUTRAL } from './calendar.js';
 
 // ---------- Tillstånd ----------
 /** En rad i loggen (S.log, nyast först) @typedef {{ time: string, text: string, kind: string, color: string|null, pid: number|null }} LogLine */
@@ -13,6 +14,8 @@ const INIT = {
   started: false, paused: false, speed: 1, strategy: 'smart', tags: false,
   t: 0, clock: 0, day: 1, anim: 0, tempo: 'lang', // tempo: dygnets längd (TEMPOS i config)
   seed: 0, acc: 0, // dygnets frö (newSim) och tid som inte hunnit bli ett steg (advance)
+  // dygnets datum ('2026-11-27', null = neutral dag) och kalendern som räknas ur det (calendar.js)
+  date: /** @type {string|null} */ (null), cal: /** @type {import('./calendar.js').Cal} */ (NEUTRAL),
   // hur simuleringen startades (newSim): det som behövs för att starta om exakt samma dygn (repro.js)
   origin: /** @type {import('./repro.js').Origin|null} */ (null),
   people: /** @type {import('./people.js').Person[]} */ ([]), elevators: /** @type {import('./elevators.js').Elevator[]} */ ([]),
@@ -41,7 +44,7 @@ const INIT = {
   // extra tekniker: samtalet till hissjouren (syns i grafiken) och när kollegan kommer
   techCall: /** @type {{ by: number, t0: number, until: number, n: number, cars: number[], trapped?: string|null }|null} */ (null), extraAt: /** @type {number|null} */ (null), peakMode: /** @type {string|null} */ (null),
   // väder (temperatur, stormen som incident), flyttdag, ambulans och informationsrutor (se notice)
-  weather: /** @type {{ temp: number, cold: number }} */ ({ temp: 15, cold: 0 }), storm: /** @type {import('./weather.js').Storm|null} */ (null),
+  weather: /** @type {{ temp: number, cold: number, dev: number }} */ ({ temp: 15, cold: 0, dev: 0 }), storm: /** @type {import('./weather.js').Storm|null} */ (null),
   move: /** @type {import('./visits.js').Move|null} */ (null), medic: /** @type {import('./visits.js').Medic|null} */ (null),
   // Stadsturen: turistbussen och den guidade gruppen (tour.js)
   tour: /** @type {import('./tour.js').Tour|null} */ (null),

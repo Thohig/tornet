@@ -8,7 +8,7 @@
 // `start.js` – starten: ingen startmeny – huset startar direkt med `newSim` och mjukt dygnsskifte; uppstarten i
 // DOS-svart och välkomstrutan första gången, sedan erbjuder Berit en rundvisning; spelarens val i panelen –
 // styrlogik, slumpen, driftchefen, felknappar, underhåll – minns i `localStorage` (`rememberPrefs`); `?seed=` ger
-// ett bestämt frö
+// ett bestämt frö; dagens datum (`ymd`) blir Tornets datum, och `followToday` byter det vid dygnsskiftet efter midnatt
 import { BUILDING, FL, LABELS, STRAT_NAMES } from './config.js';
 import { S, log } from './state.js';
 import { newSim } from './sim.js';
@@ -23,6 +23,8 @@ import { repaintAll } from './panels.js';
 import { startAuto } from './director.js';
 import { VIEW, screenMode } from './view.js';
 import { sv } from './sv.js';
+import { act } from './actions.js';
+import { dateParts, ymd } from './calendar.js';
 
 const KEY = { boot: 'tornet.boot', seen: 'tornet.intro', offer: 'tornet.visning', prefs: 'tornet.val', lang: 'tornet.lang' };
 const store = {
@@ -69,7 +71,9 @@ export function startGame(repro) {
   useLang(q === 'sv' || q === 'en' ? q : saved === 'en' ? 'en' : 'sv');
   const o = prefs(), r = repro ? { ...repro.opts } : {};
   if (r.strategy && !(r.strategy in STRAT_NAMES)) delete r.strategy;
-  newSim(repro ? repro.seed : Math.floor(Math.random() * 1e6), { roll: 'mjuk', strategy: o.strategy, incLevel: o.incLevel, chief: o.chief,
+  // Tornet har datorns datum (calendar.js) – om inte adressen säger date=
+  realDay = ymd(new Date());
+  newSim(repro ? repro.seed : Math.floor(Math.random() * 1e6), { roll: 'mjuk', date: realDay, strategy: o.strategy, incLevel: o.incLevel, chief: o.chief,
     ...(o.mistakes ? { mistakes: o.mistakes } : {}), ...(o.maint ? { maint: o.maint } : {}), ...r });
   if (repro && isMoment(repro)) {
     moment = repro;
@@ -89,9 +93,24 @@ function go() {
   if (moment) { S.paused = true; VIEW.autoWant = false; followMoment(moment.follow); return; } // (ingen logg, ingen regissör: ögonblicket som det var)
   const mob = screenMode().mob;
   if (prefs().dir) startAuto();
-  log('Dag 1 börjar – dörrarna öppnas!', 'sys');
+  const d = dateParts(S.cal);
+  log(d ? sv`${d.wd} ${d.day} ${d.month} – dag 1 börjar, dörrarna öppnas!` : 'Dag 1 börjar – dörrarna öppnas!', 'sys');
   // första gången: Berit erbjuder en rundvisning (i panelen – hon börjar när hon har kommit till disken)
   if (!mob && !store.get(KEY.offer)) { store.set(KEY.offer, 1); offerVisning(); }
+}
+
+/** datorns datum när Tornet senast tog det (vid starten eller ett dygnsskifte) */
+let realDay = '';
+/**
+ * Dygnsskiftet (main.js, före rollDay): har datorns datum bytts sedan sist – spelaren har spelat över midnatt – får
+ * Tornet det nya datumet. Ett datum som spelaren valt i Framkalla gäller tills datorns datum byts. Ett återskapat
+ * ögonblick behåller sitt datum.
+ */
+export function followToday() {
+  const now = ymd(new Date());
+  if (moment || now === realDay) return;
+  realDay = now;
+  act('date', now);
 }
 
 /** kameran på det som adressen pekar ut: en hiss (namn), en person (namn eller id) eller en våning (etikett) @param {string|null} what */

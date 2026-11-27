@@ -24,12 +24,23 @@ export const STORM_HINT = {
 };
 /** Dygnets väder (anropas av resetDay). Kalla dagar visas som en informationsruta. */
 export function weatherReset() {
-  const temp = Math.round(rand(-18, 24));
-  S.weather = { temp, cold: clamp((2 - temp) / 18, 0, 1) };
+  // med datum: månadens medeltemperatur ± 7 °C (calendar.js); utan: vilken temperatur som helst, som förr
+  const mean = S.cal.tempMean, temp = mean === null ? Math.round(rand(-18, 24)) : Math.round(mean + rand(-7, 7));
+  setTemp(temp);
   S.storm = null;
   if (S.weather.cold > 0) notice('cold', sv`❄️ Kall dag: ${temp} °C`,
     'Skorstenseffekten: varm luft stiger i schakten och suger in kall luft genom entrén. Hissdörrarna på E stänger trögt och tar ibland emot.',
     { floor: LOBBY });
+}
+/** dygnets temperatur; dev = hur långt från månadens medel (eller mitten av det gamla spannet) den ligger @param {number} temp */
+function setTemp(temp) {
+  S.weather = { temp, cold: clamp((2 - temp) / 18, 0, 1), dev: temp - (S.cal.tempMean ?? TEMP0) };
+}
+/** mitten av temperaturspannet utan datum */
+const TEMP0 = 3;
+/** Ett nytt datum (spelaren, act('date')): samma avvikelse från månadens medel, utan nytt slumptal */
+export function dateWeather() {
+  setTemp(Math.round((S.cal.tempMean ?? TEMP0) + S.weather.dev));
 }
 /** hur utsatt hissen är för vinden: panoramahissen på fasaden mest, sedan de höga schakten @param {Elevator} e */
 export const exposure = e => (e.facade ? 1 : e.maxF >= SKY ? 0.65 : 0);
@@ -69,7 +80,7 @@ export function strikeNow() {
 export function setWeather(kind) {
   const temp = kind === 'cold' ? Math.round(rand(-22, -14)) : Math.round(rand(29, 34));
   if (S.weather.temp === temp) return false;
-  S.weather = { temp, cold: clamp((2 - temp) / 18, 0, 1) };
+  setTemp(temp);
   if (kind === 'cold') notice('cold', sv`❄️ Kall dag: ${temp} °C`,
     'Skorstenseffekten: varm luft stiger i schakten och suger in kall luft genom entrén. Hissdörrarna på E stänger trögt och tar ibland emot.', { floor: LOBBY });
   else notice('heatwave', sv`☀️ Värmebölja: ${temp} °C`,

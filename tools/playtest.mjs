@@ -7,6 +7,7 @@
 //          Letar efter fel i sidan (pageerror, console.error – även felrutan #err från main.js), svenska som
 //          blivit kvar i det engelska gränssnittet (panelen, textskylten, verktygstipsen) och text i bilden som
 //          ritas över annan text (TEXTLOG i pixart.js).
+//   (allt körs med date=0, den neutrala dagen i calendar.js – annars tar spelet dagens datum och bilderna ändras med det)
 //   ögon – skärmdumpar av fasta ögonblick (?seed=…&h=…&follow=…, repro.js) på datorn, mobilen och mobilen på
 //          tvären, med samma kontroller av felen och texten. Varje bild jämförs pixel för pixel med facit i
 //          tools/playtest-out/ögon/bas/; skillnaderna ritas i …/diff/ och samlas i …/ögon/index.html, så att
@@ -158,7 +159,7 @@ async function chaosDays() {
   for (const seed of SEEDS) {
     const page = await browser.newPage(VIEWS.dator);
     watch(page, `frö ${seed}`);
-    await page.goto(`http://localhost:${PORT}/?seed=${seed}&lang=${LANG}`);
+    await page.goto(`http://localhost:${PORT}/?seed=${seed}&date=0&lang=${LANG}`);
     try { await page.waitForSelector('#go', { timeout: 15000 }); await page.click('#go'); } catch { /* (välkomstrutan visades inte) */ }
     await page.evaluate(async () => {
       const st = await import('/src/state.js'), sim = await import('/src/sim.js'), a = await import('/src/actions.js');
@@ -201,7 +202,7 @@ async function eyes() {
     if (m.inc != null) {
       // klockslaget för incidenten ur dygnets tidtabell (en kvart in i den: förvarningen är över, det händer)
       const p = await browser.newPage();
-      await p.goto(`http://localhost:${PORT}/?seed=${m.seed}&inc=kaos&h=6.05&lang=${LANG}`);
+      await p.goto(`http://localhost:${PORT}/?seed=${m.seed}&inc=kaos&h=6.05&date=0&lang=${LANG}`);
       await p.evaluate(STARTED_JS);
       const at = await p.evaluate(async i => (await import('/src/state.js')).S.incPlan[i]?.at, m.inc);
       await p.close();
@@ -220,7 +221,7 @@ async function eyes() {
       });
       await page.clock.install({ time: new Date('2026-01-01T12:00:00') });
       await page.clock.pauseAt(new Date('2026-01-01T12:00:01'));
-      await page.goto(`http://localhost:${PORT}/?${q}&lang=${LANG}`);
+      await page.goto(`http://localhost:${PORT}/?${q}&date=0&lang=${LANG}`);
       await page.evaluate(async () => { await document.fonts.ready; (await import('/src/pixart.js')).TEXTLOG.on = true; });
       await page.evaluate(STARTED_JS);
       await page.clock.runFor(1500); // (kameran hinner fram till det den följer, panelen ritas)
@@ -289,7 +290,7 @@ function report(rows) {
   const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
   rows.sort((a, b) => (b.pct || 0) - (a.pct || 0));
   const row = r => `<section><h2>${esc(r.name)} <small>${r.pct == null ? 'nytt facit' : r.pct ? `${r.pct.toFixed(2)} % ändrat` : 'oförändrad'}</small>
-  <a href="http://localhost:8123/?${esc(r.q)}">?${esc(r.q)}</a></h2>
+  <a href="http://localhost:8123/?${esc(r.q)}&date=0">?${esc(r.q)}&date=0</a></h2>
   ${r.hits.length ? `<p class="bad">Text över text: ${r.hits.map(h => esc(h.text)).join(' · ')}</p>` : ''}
   <div class="row"><figure><img src="bas/${r.name}.png"><figcaption>facit</figcaption></figure>
   <figure><img src="ny/${r.name}.png"><figcaption>nu</figcaption></figure>
