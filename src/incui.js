@@ -9,7 +9,7 @@
 // informationsrutorna), förvarningens klipp `warn` och det sevärda `shots`; panels.js, hud.js och director.js går
 // igenom listan
 import { esc, fl } from './util.js';
-import { DOCK, EL, FIRE_HINT, LOBBY, ROOF, TOP, CONTROL, STATION, FL, floorWith } from './config.js';
+import { DOCK, EL, FIRE_HINT, LOBBY, ROOF, TOP, CONTROL, STATION, FL, floorWith, shaftCX } from './config.js';
 import { S } from './state.js';
 import { canRescue } from './incidents.js';
 import { STORM_HINT, windMs } from './weather.js';
@@ -20,6 +20,7 @@ import { dogPossible } from './dog.js';
 import { leakPossible, SPREAD_S } from './leak.js';
 import { BANK, GOLD, VAN_NAME, heistBlock } from './heist.js';
 import { sv } from './sv.js';
+import { dockTruckX } from './pixbuilding.js';
 import { sh } from './lang.js';
 import { BOOT_S, crashPossible } from './crash.js';
 import { onPlatform, tunnelPossible } from './tunnel.js';
@@ -148,7 +149,7 @@ export function incUi() {
     key: 'heat',
     sound: { warn: 'strain' },
     trig: { icon: '🌡️', name: 'Het motor', hint: 'En motor överhettas' },
-    warn: (W, add) => add('warn', 82, 'floor', Math.min(top(), S.elevators[W.car].maxF), sv`🌡️ Motorn i ${S.elevators[W.car].name} brummar`, true),
+    warn: (W, add) => add('warn', 82, 'floor', Math.min(top(), S.elevators[W.car].maxF), sv`🌡️ Motorn i ${S.elevators[W.car].name} brummar`, true, shaftCX(W.car)),
     card: (h, parts) => {
       const { card, chiefLine, motorC, line, acts, hint, choice, followCar } = h;
       // ---------- överhettade motorer (incident: extrafläkt) ----------
@@ -243,7 +244,7 @@ export function incUi() {
     // polisens siren när de kommer, och ragtime som i en stumfilmsjakt medan kuppen pågår
     sound: { on: [[() => S.heist && S.heist.police ? S.heist.policeAt : null, 'siren']], piece: () => (S.heist && S.heist.ph !== 'done' ? 'rag' : null) },
     trig: { icon: '🚐', name: 'Kupp!', hint: 'Ett rånargäng tar över huset för att tömma valvet på 5:an. Är lastkajen upptagen väntar gänget tills den är ledig', off: () => !!(S.heist || S.heistWait !== null), why: () => (S.heist ? 'kuppen pågår redan' : 'gänget väntar redan på sin chans') },
-    warn: (_W, add) => add('warn', 84, 'floor', DOCK, '🚐 En skåpbil vid lastkajen…', true),
+    warn: (W, add) => add('warn', 84, 'floor', DOCK, '🚐 En skåpbil vid lastkajen…', true, dockTruckX((S.t - W.t0) / 4)),
     card: (h, parts) => {
       const { card, chiefLine, cd, num, bold, ikon, line, acts, hint, choice } = h;
       // ---------- Kuppen på 5:an (incident med val: polisens insatsledare – eller du) ----------
@@ -281,7 +282,7 @@ export function incUi() {
       const Hs = S.heist;
       if (Hs) {
         const hero = S.people.find(p => p.id === Hs.hero && !p.dead);
-        if (Hs.ph === 'in') add('heist', 99, 'floor', DOCK, '🚐 Fem män i overall vid lastkajen', S.t - Hs.t0 < 1);
+        if (Hs.ph === 'in') add('heist', 99, 'floor', DOCK, '🚐 Fem män i overall vid lastkajen', S.t - Hs.t0 < 1, dockTruckX((Hs.vanX + 260) / 330));
         else if (Hs.ph === 'hold' && S.t - Hs.holdT < 6) add('heist', 100, 'floor', CONTROL, '🚐 RÅN! Gänget tar driftcentralen', S.t - Hs.holdT < 1);
         else if (Hs.ph === 'flee') add('heist', 100, 'floor', Hs.fleeF, '💰 Gänget flyr med guldet', S.t - Hs.fleeT < 1);
         else if (Hs.ph === 'done' && Hs.caught) add('heist', 70, 'floor', LOBBY, '🚓 Gänget leds ut i handfängsel');
@@ -289,7 +290,7 @@ export function incUi() {
           if (hero && hero.state !== 'office' && visible(hero)) add('hero', 94, 'person', hero.id, sv`🤫 ${name1(hero)} smyger i trapporna`);
           else if (hero && Hs.heroStep === 4) add('hero', 92, 'person', hero.id, sv`🔦 ${name1(hero)} signalerar till polisen`);
           add('vault', 80, 'floor', BANK, S.t < Hs.drillOff ? '🔌 Borren har tystnat!' : sv`💰 Borren i valvet: ${Math.round(Hs.drill * 100)} %`);
-          if (Hs.police && Hs.stormAt - S.t < 8) add('storm', 98, 'floor', Hs.plan === 'garage' ? DOCK : ROOF >= 0 ? ROOF : TOP, '🚓 Insatsstyrkan går in!', true);
+          if (Hs.police && Hs.stormAt - S.t < 8) add('storm', 98, 'floor', Hs.plan === 'garage' ? DOCK : ROOF >= 0 ? ROOF : TOP, '🚓 Insatsstyrkan går in!', true, Hs.plan === 'garage' ? dockTruckX(1) : null);
         }
       }
     },

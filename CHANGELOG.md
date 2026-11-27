@@ -1,7 +1,8 @@
 # Ändringar
 
-## 2026-11-27 – regissören scrollar i sidled till fasaden
+## 2026-11-27 – regissören scrollar i sidled dit det händer
 - **Fönsterputsaren och hissbalken** hänger utanför tornets fasad, till höger i bilden. Regissören gav dem ingen plats i sidled (`shotX` i director.js), så på mobilen stod bilden kvar vid hallen och man såg bara ”🧽 Fönsterputsaren” på raden. Nu glider bilden dit.
+- **Ett klipp kan säga var i sidled det händer** (`x` på tagningen, `add(…, urgent, x)` i director.js och incui.js). Ett klipp till en våning visar annars hallen längst till vänster. Med `x` glider bilden till leveransbilen och kuppens skåpbil vid lastkajen (`dockTruckX` i pixbuilding.js, samma väg som bilen ritas), till insatsstyrkan som går in via garaget och till maskinrummet ovanför schaktet när en motor brummar. Övriga klipp är genomgångna: brand, kö, fest, läcka, driftcentralen, valvet, tåget, helikoptern, blixten och återsamlingsplatsen händer i hallen eller syns därifrån, och hissar, personer, bussen och brandbilen hade redan sin plats.
 
 ## 2026-11-26 – mobilen: regissörsknappen i stället för farten
 - **🎬 i mobilens list** växlar mellan regissören (intryckt, ● LIVE) och fri kamera, där man drar i bilden och trycker på det man vill följa. Valet sparas som på datorn, och regissören är inte längre tvingad på vid varje start på mobilen.

@@ -20,6 +20,7 @@ import { vpick, vrand } from './rng.js';
 import { VIEW, camMax, camTarget, detachCam, keepX, seeH } from './view.js';
 import { personHead } from './render.js';
 import { cleanerAt } from './hoist.js';
+import { dockTruckX } from './pixbuilding.js';
 import { BUS_NAME } from './tour.js';
 import { sv } from './sv.js';
 /** @typedef {import('./people.js').Person} Person */
@@ -32,7 +33,8 @@ const BORED = 1.5;   // poängavdrag per sekund som något redan har visats (hel
 const FORGET = 120;  // sekunder tills det tråkiga är glömt (avtar exponentiellt)
 const GONE_HOLD = 3; // så länge en våningstagning står kvar efter att händelsen är över
 
-/** @typedef {{ key: string, score: number, kind: 'car'|'person'|'floor'|'cleaner'|'hoist'|'street', id: number, why: string, urgent?: boolean }} Shot */
+/** x = var i sidled det händer (världens x) när det inte är i hallen, för en våning (lastkajen, maskinrummet); null = hallen
+ * @typedef {{ key: string, score: number, kind: 'car'|'person'|'floor'|'cleaner'|'hoist'|'street', id: number, why: string, urgent?: boolean, x?: number|null }} Shot */
 
 // ---------- Slowmotion ----------
 // I de dramatiska ögonblicken går tiden långsammare en kort stund (bara uppspelningen: samma dygn, samma steg).
@@ -92,8 +94,9 @@ const visible = p => { const h = personHead(p); return h && !h.hidden; };
 function shots() {
   /** @type {Shot[]} */
   const out = [];
-  // urgent: något som just bryter ut (förvarning, blixt) får klippa in direkt, utan att vänta ut MIN_HOLD
-  const add = (key, score, kind, id, why, urgent = false) => out.push({ key, score, kind, id, why, urgent });
+  // urgent: något som just bryter ut (förvarning, blixt) får klippa in direkt, utan att vänta ut MIN_HOLD;
+  // x: var i sidled det händer, när det inte är i hallen (en smal skärm scrollar dit – shotX)
+  const add = (key, score, kind, id, why, urgent = false, x = null) => out.push({ key, score, kind, id, why, urgent, x });
   // ---------- incidenter och händelser ----------
   // förvarningar: kameran hinner dit innan det händer (registret, incui.js)
   const W = S.warn, hd = { visible, name1 };
@@ -191,7 +194,7 @@ function shots() {
     if (n >= 4 && Math.abs(e.v || 0) > 0.5) add(`full${e.id}`, 14 + n * 1.5, 'car', e.id, sv`🛗 ${e.name} med ${n} pers`);
   }
   if (S.train && STATION >= 0) add('train', 48, 'floor', STATION, '🚇 Tåget kommer');
-  if (S.truck && DOCK >= 0) add('truck', 28, 'floor', DOCK, '🚚 Leveransbilen');
+  if (S.truck && DOCK >= 0) add('truck', 28, 'floor', DOCK, '🚚 Leveransbilen', false, dockTruckX((S.truck.x + 260) / 330));
   // fönsterputsaren utanför tornet: ett lugnt avbrott då och då (bara medan putsaren skrapar, och inte när det brinner)
   const G = cleanerAt();
   // poängen växer ju längre sedan putsaren visades, så att den dyker upp ett par gånger per dag
@@ -250,6 +253,7 @@ function shotY(s) {
 
 /** tagningens x i världen (för sidledsscroll på smal skärm), null = låt den stå */
 function shotX(s) {
+  if (s.x != null) return s.x; // (lastkajen, maskinrummet …: inte i hallen)
   if (s.kind === 'floor') return VIEW.x0;
   if (s.kind === 'street') return BX1 + 80; // (gatan till höger om huset: hållplatsen)
   // putsarens gondol och hissbalken hänger utanför tornets fasad (pixroof.js ritar dem vid TOWER_X1[TOP])
@@ -336,7 +340,7 @@ export function updateDirector() {
   // som ringer kliver ur hissen – samma tagning, så kameran följer med i stället för att stå kvar
   const now = all.find(c => c.key === s.key && c.kind === s.kind && c.id === s.id) || all.find(c => c.key === s.key);
   if (now) {
-    s.why = now.why;
+    s.why = now.why; s.x = now.x;
     if (now.kind !== s.kind || now.id !== s.id) { s.kind = now.kind; s.id = now.id; }
   }
   const sy = shotY(s);

@@ -297,6 +297,12 @@ function dockTruck(x, yb, kind, open) {
   if (open) { R(x - 1, yb - hgt - 3, 2, hgt, INK); R(x - 3, yb - hgt - 2, 2, hgt - 2, dark(body, 0.25)); }
   return w;
 }
+/** bilens mitt i världen (för regissören i sidled): u = 0 på gatan, 1 parkerad vid kajen – samma väg som `at` nedan */
+export function dockTruckX(u) {
+  if (!RAMP_COLS.length) return null;
+  const x0 = BX1 + 8, x1 = RAMP_COLS[0].x + 4; // (rx1 + 6 och rx0 + 3 låga pixlar i rampGeom)
+  return x0 + (x1 - x0) * clamp(u, 0, 1) + 32;
+}
 function drawDockTrucksPx() {
   if (!RAMP_COLS.length || DOCK < 0) return;
   const { rx0, rx1, top, bot, yE, y1 } = rampGeom();
