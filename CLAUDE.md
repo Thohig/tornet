@@ -1,6 +1,6 @@
 # Tornet
 
-Simulering av skyskrapan Tornet med 8 hissar (styrsystemet heter Hiss-O-Matic 3000) i 16-bitars pixelgrafik och 90-talsstil (paletten "Kontor 95"). Fokus är en **rolig och detaljerad simulering att titta på**, inte spelmekanik. Dockhusprincipen: huset sköter sig självt – driftchefen (`chief.js`) tar alla beslut och berättar varför – och spelaren kan ta över ett beslut eller framkalla vad som helst. All text i koden (kommentarer, loggar, simuleringens texter) skrivs på **svenska**; spelet visar dem på **svenska** som standard och kan byta till engelska sömlöst (`lang.js`, se nedan).
+Simulering av skyskrapan Tornet med 8 hissar (styrsystemet heter Hiss-O-Matic 3000) i 16-bitars pixelgrafik och 90-talsstil (paletten "Kontor 95"). Fokus är en **rolig och detaljerad simulering att titta på**, inte spelmekanik. Dockhusprincipen: huset sköter sig självt – driftchefen (`chief.js`) tar alla beslut och berättar varför – och spelaren kan ta över ett beslut eller framkalla vad som helst. All text i koden (kommentarer, loggar, simuleringens texter) skrivs på **svenska**; spelet visar dem på **svenska** som standard och kan byta till engelska sömlöst (`lang.js`, se nedan). **Tala alltid svenska med användaren** – svar, sammanfattningar och frågor – även när en fråga eller ett kommando skrivs på engelska.
 
 ## Köra
 
