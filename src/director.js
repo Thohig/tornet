@@ -10,7 +10,7 @@
 // teknikerns telefonsamtal, köer, fönsterputsaren och hissbalken (`cleanerAt`/`S.hoist` i hoist.js) – och klipper
 // dit; allt manuellt med kameran pausar den; `slowmo(dt)` saktar in uppspelningen i dramatiska ögonblick – fritt
 // fall, blixten, branden bryter ut – och ändrar aldrig simuleringen
-import { BREAK, BX1, CONTROL, CREW, DOCK, FLOOR_H, GROUND_Y, LOBBY, ROOF, STATION, TOP, floorY, shaftCX } from './config.js';
+import { BREAK, BX1, CONTROL, CREW, DOCK, FLOOR_H, GROUND_Y, LOBBY, ROOF, STATION, TOP, TOWER_X1, floorY, shaftCX } from './config.js';
 import { incUi } from './incui.js';
 import { alarm, chiefOnDuty } from './chief.js';
 import { CREW_BY, atPost, crewPerson, postFloor } from './crew.js';
@@ -252,6 +252,8 @@ function shotY(s) {
 function shotX(s) {
   if (s.kind === 'floor') return VIEW.x0;
   if (s.kind === 'street') return BX1 + 80; // (gatan till höger om huset: hållplatsen)
+  // putsarens gondol och hissbalken hänger utanför tornets fasad (pixroof.js ritar dem vid TOWER_X1[TOP])
+  if (s.kind === 'cleaner' || s.kind === 'hoist') return TOWER_X1[TOP] + 30;
   if (s.kind === 'car') return S.elevators[s.id] ? shaftCX(s.id) : null;
   if (s.kind !== 'person') return null;
   const p = S.people.find(q => q.id === s.id);

@@ -1,5 +1,8 @@
 # Ändringar
 
+## 2026-11-27 – regissören scrollar i sidled till fasaden
+- **Fönsterputsaren och hissbalken** hänger utanför tornets fasad, till höger i bilden. Regissören gav dem ingen plats i sidled (`shotX` i director.js), så på mobilen stod bilden kvar vid hallen och man såg bara ”🧽 Fönsterputsaren” på raden. Nu glider bilden dit.
+
 ## 2026-11-26 – mobilen: regissörsknappen i stället för farten
 - **🎬 i mobilens list** växlar mellan regissören (intryckt, ● LIVE) och fri kamera, där man drar i bilden och trycker på det man vill följa. Valet sparas som på datorn, och regissören är inte längre tvingad på vid varje start på mobilen.
 - **Fartknappen (¼×–2×) är borta på mobilen**, så spelet går alltid i 1× där. ⏩ till morgonen finns kvar på kvällen och natten.
