@@ -1,7 +1,7 @@
 // Grafikens ingång och logiken för VAR folk syns i bilden (hallen framför hissarna).
 // Själva ritandet sker i pixel.js (och delarna i pix*.js). Allt här är bara grafik: simuleringens p.x ändras aldrig.
 import { clamp } from './util.js';
-import { BX1, CAR_W, DOOR_X, TOP, TOWER_X1, W, WAIT_X1, floorY, shaftX, surf } from './config.js';
+import { BX1, CAR_W, DOOR_X, SKYWALK_F, TOP, TOWER_X1, W, WAIT_X1, bridgeX, floorY, shaftX, surf } from './config.js';
 import { TERRACE_Y } from './hoist.js';
 import { riderPos } from './pano.js';
 import { S } from './state.js';
@@ -42,6 +42,8 @@ export function personHead(p) {
   if (inWindow(p)) { const w = winPos(p); return { x: w.x, y: w.y - 22 }; }
   // firas ner längs fasaden (eller klättrar nerför stegbilens stege) – pano.js
   if (p.state === 'rope') { const r = riderPos(p); if (r) return { x: r.x, y: r.y - 22 }; }
+  // på bron till Kronan (skywalk.js, ritas i pixskywalk.js)
+  if (p.state === 'bridge') return { x: bridgeX(p.bridgeT ?? 0), y: surf(SKYWALK_F) - 70 };
   if (p.state === 'ride') {
     const e = p.car, k = e.deck2 ? p.deck || 0 : 0;
     const i = e.passengers.filter(q => !e.deck2 || (q.deck || 0) === k).indexOf(p);
@@ -95,8 +97,10 @@ export function landPos(p) {
   if (!r || r.state !== p.state || r.floor !== p.floor && r.state !== 'ride') {
     // nytt läge: kom personen från något som syntes (hissen, kön) eller inifrån rummen?
     // (den som just klev av tunnelbanan syns från första steget, vid tågets dörr)
-    const prev = (!r && p.fromTrain) || (r && (r.state === 'ride' || (r.vis || r.win) && r.floor === p.floor));
-    const vx0 = !prev ? DOOR_X : !r || r.state === 'ride' ? p.x : r.vx;
+    // (den som just kom över bron från Kronan syns från dörren till bron, skywalk.js)
+    const fromBridge = p.fromBridgeT !== undefined && S.t - p.fromBridgeT < 0.5 && p.floor === SKYWALK_F;
+    const prev = fromBridge || (!r && p.fromTrain) || (r && (r.state === 'ride' || (r.vis || r.win) && r.floor === p.floor));
+    const vx0 = !prev ? DOOR_X : fromBridge || !r || r.state === 'ride' ? p.x : r.vx;
     r = { state: p.state, floor: p.floor, vis: false, vx: vx0, x0: p.x, vx0, fromDoor: !prev };
     SEEN.set(p, r);
   }

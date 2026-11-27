@@ -158,6 +158,10 @@ export const BUILDING = {
     // Glasröret fortsätter ner genom trottoaren till tunnelbanan (TB): från perrongen åker man direkt upp till taket.
     { name: 'P', color: '#93379e', group: 'panorama', start: 'E', serves: ['TB', 'E', '6', 'T'], facade: true, terrace: '8' },
   ],
+  // Skywalken: en inglasad gångbro från sky lobbyn till granntornet Kronan (skywalk.js). floor = våningen där bron
+  // går ut, len = brons längd (världsenheter, utanför panoramahissen), hours = när Kronan har öppet [öppnar, stänger].
+  // Kronan simuleras inte: bron är en dörr dit folk går och därifrån grannarna kommer.
+  skywalk: { floor: '6', to: 'Kronan', len: 260, hours: [6.5, 22] },
 };
 
 // ---------- Härlett från byggnaden ----------
@@ -241,6 +245,10 @@ export const EL = BUILDING.elevators.map((e, i) => {
 });
 /** korgens läge (nedre däckets våning) när den tar folk på våning f: en våning lägre för övre däcket */
 export const carPos = (id, f) => (EL[id].upper.includes(f) ? f - 1 : f);
+/** skywalken till Kronan (BUILDING.skywalk) eller null; SKYWALK_F = våningen där bron går ut, eller -1 */
+/** @type {{ floor: string, to: string, len: number, hours: number[] }|null} */
+export const SKYWALK = BUILDING.skywalk || null;
+export const SKYWALK_F = SKYWALK ? idx(SKYWALK.floor) : -1;
 /** mellanplanet: övre däckets våning ovanför entrén (rulltrappa dit från entrén), eller -1 */
 export const MEZZ = EL.some(d => d.upper.includes(LOBBY + 1) && d.stops.includes(LOBBY)) ? LOBBY + 1 : -1;
 
@@ -269,7 +277,14 @@ export const TOWER_X1 = Array.from({ length: FLOORS }, (_, f) => {
 });
 /** första våningen ovanför sky lobbyn där tornet är smalt (där takterrassen ligger) */
 export const SEAM_F = (() => { let f = SKY + 1; while (f < FLOORS && TOWER_X1[f] >= BX1) f++; return f; })();
-export const W = BX1 + (HAS_FACADE ? SHAFT_W + 52 : 60), H = GROUND_Y + LOBBY * FLOOR_H + 60;
+/** tornets bredd i bilden (det kameran gör plats för: bron och Kronan ligger utanför och nås genom att glida i sidled) */
+export const TOWER_W = BX1 + (HAS_FACADE ? SHAFT_W + 52 : 60);
+/** skywalken i bilden: bron går ut från fasaden (BRIDGE_X0), bakom panoramahissens glasrör, till Kronans fasad (KRONAN_X).
+ *  Kronan syns bara som en remsa (KRONAN_W) i bildens högerkant. (Bara grafik – simuleringen räknar brons läge 0–1.) */
+export const BRIDGE_X0 = SKYWALK ? BX1 + 7 : 0, KRONAN_X = SKYWALK ? TOWER_W + SKYWALK.len : 0, KRONAN_W = 120;
+export const W = SKYWALK ? KRONAN_X + KRONAN_W : TOWER_W, H = GROUND_Y + LOBBY * FLOOR_H + 60;
+/** var på bron (världens x) den som har kommit t (0 = Tornets fasad, 1 = Kronans) är */
+export const bridgeX = t => BRIDGE_X0 + t * (KRONAN_X - BRIDGE_X0);
 export const INNER_X1 = SHAFT_X0 - 5;
 export const WAIT_X1 = SHAFT_X0 - 34;
 export const STAIR_X = BX0 + 6;

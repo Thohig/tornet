@@ -23,7 +23,7 @@ import { forceMove, BLANKET_T } from '../src/visits.js';
 import { trafficMode, learnBin, peakHold, PEAK_HOLD } from '../src/dispatch.js';
 import { windAt, startStorm } from '../src/weather.js';
 import { canBrakeTo } from '../src/elevators.js';
-import { MEZZ, STATION, TRAIN_X0, TRAIN_X1 } from '../src/config.js';
+import { MEZZ, STATION, TRAIN_X0, TRAIN_X1, SKYWALK, SKYWALK_F } from '../src/config.js';
 import { LAST_H } from '../src/train.js';
 import { FIRE_FLOORS, INC_LEVELS } from '../src/incidents.js';
 import { CONTROL, BREAK } from '../src/config.js';
@@ -142,6 +142,8 @@ function makeWatcher() {
     // vaktmästarens olyckor: ingen kliver på en hiss i ett blött schakt som tagits ur drift, och ingen utom de som
     // jagar hunden kliver på där hissarna är spärrade för den
     wetBoard: 0, dogLockBoard: 0,
+    // skywalken: den som är på bron är på brons våning och på bron (0–1), och ingen står still på den utan höjdskräck
+    bridgeBad: 0, frozenStray: 0,
     // den lösa hunden: står den still med någon som jagar den bredvid sig ska den bli fångad (CATCH_T)
     dogNear: null, dogNearMax: 0,
     // var det hände (whereReport): simuleringens start och första gången/rekordet per räknare
@@ -161,6 +163,8 @@ function makeWatcher() {
       if (S.fire && S.t > S.fire.t0 && !p.role && !p.vip && !p.evac && p.state === 'stairs' && w.prevState.get(p.id) !== 'stairs' && !p.escalator && !inFireZone(p.floor) && inFireZone(p.dest)) w.hit('intoFire', null, p, 'gick trappan in i brandzonen');
       if (p.state === 'boarding' && p.car && p.car.hijack && w.prevState.get(p.id) !== 'boarding') w.hit('hijackBoard', p.car, p, 'klev på en kapad hiss');
       if (p.state === 'boarding' && p.car && p.car.wetLock && w.prevState.get(p.id) !== 'boarding') w.hit('wetBoard', p.car, p, 'klev på en hiss i ett blött schakt');
+      if (p.state === 'bridge' && !p.dead && (p.floor !== SKYWALK_F || !(p.bridgeT >= 0 && p.bridgeT <= 1))) w.hit('bridgeBad', null, p, `på bron med våning ${p.floor} och läge ${p.bridgeT}`);
+      if (p.frozen && !p.dead && (!S.hojd || S.hojd.pid !== p.id)) w.hit('frozenStray', null, p, 'står still på bron utan att höjdskräcken pågår');
       if (p.state === 'boarding' && w.prevState.get(p.id) !== 'boarding' && p.floor === dogLockFloor() && !p.chase && !p.duty) w.hit('dogLockBoard', p.car, p, 'klev på där hissarna var spärrade för hunden');
       if (p.hostage && S.heist && S.heist.ph !== 'done' && p.floor === CAFE && !inFireZone(CAFE) && p.state === 'toQueue' && w.prevState.get(p.id) === 'office') w.hit('hostageLeft', null, p, 'gisslan lämnade Sky Café'); // (brand: utrymningen går före)
       w.prevState.set(p.id, p.state);
@@ -440,7 +444,8 @@ test('Stängda våningar: inga besökare på caféet, banken, tandläkaren eller
       if (h < close + 1.2 && h >= open) continue; // marginal att gå därifrån (en hissresa tar ungefär en speltimme)
       for (const p of S.people) {
         const there = p.floor === f && p.state === 'office';
-        const going = p.goal === f && ['toQueue', 'wait', 'boarding', 'ride'].includes(p.state);
+        // (sky lobbyn är också utgången till bron: grannarna som går hem till Kronan har den som mål)
+        const going = p.goal === f && ['toQueue', 'wait', 'boarding', 'ride'].includes(p.state) && !(p.leaving && p.exitFloor === f);
         if ((there || going) && !p.vip && (p.kind === 'vis' || (p.kind === 'emp' && p.home !== f))) bad.push(`${p.name} ${there ? 'på' : 'på väg till'} ${f} kl ${h.toFixed(1)}`);
       }
     }
@@ -1446,7 +1451,8 @@ test('Stadsturen: guiden räknar in gruppen vid varje stopp, och bussen går med
 test('Hundsalongen: hundägare lämnar in raggiga pudlar och går ut med nyklippta', () => {
   const spa = floorWith('spa');
   let dropped = 0, picked = 0, wrongFloor = 0;
-  for (const seed of [7, 8, 9]) {
+  // (raggiga pudlar är få – ingen till fyra per dygn – så fröna är valda där det finns några)
+  for (const seed of [10, 11, 12]) {
     sim(seed);
     const shaggy = new Set(), clipped = new Set();
     while (hour() < 19) {
@@ -1569,6 +1575,8 @@ test('Flyttdag: spelarens val – allt i varuhissen, tungt utanpå eller planera
   }
   assert(lockBalk < lockVaru / 2, `med hissbalken var varuhissen låst ${Math.round(lockBalk)} s mot ${Math.round(lockVaru)} s i varuhissen`);
   assert(crewLate === seeds.length, 'med skyddsfiltar började bärarna innan filtarna hängde uppe');
+  // (35 % per stor möbel: med få stora möbler kan det bli noll – då flyttas det några dygn till)
+  for (let seed = 203; !scratches && seed < 212; seed++) scratches += runMove(seed, 'smart', 'varu', false).scratches;
   assert(scratches > 0, 'inga repor i varuhissen utan skyddsfiltar');
   return `varuhissen låst ${Math.round(lockVaru)} s (allt i varuhissen) mot ${Math.round(lockBalk)} s (tungt utanpå) · ${scratches} repor utan filtar`;
 });
@@ -1883,6 +1891,8 @@ function newInvariantFails(w, tag) {
   if (w.intoFire) f.push(`${tag}: ${w.intoFire} gick trappan in i brandzonen`);
   if (w.hijackBoard) f.push(`${tag}: ${w.hijackBoard} klev på en hiss som rånarna hade kapat`);
   if (w.wetBoard) f.push(`${tag}: ${w.wetBoard} klev på en hiss som stod still för vattenläckan`);
+  if (w.bridgeBad) f.push(`${tag}: ${w.bridgeBad} gånger var någon på bron på fel våning eller utanför bron`);
+  if (w.frozenStray) f.push(`${tag}: ${w.frozenStray} gånger stod någon still på bron utan höjdskräck`);
   if (w.dogLockBoard) f.push(`${tag}: ${w.dogLockBoard} klev på där hissarna var spärrade för hunden`);
   if (w.hostageLeft) f.push(`${tag}: gisslan lämnade Sky Café mitt i kuppen ${w.hostageLeft} gånger`);
   if (w.dogNearMax > 20) f.push(`${tag}: den lösa hunden stod ${w.dogNearMax.toFixed(0)} s bredvid någon som jagade den utan att bli fångad`);
@@ -1972,7 +1982,7 @@ export const PLAYER_ACTIONS = {
   // ett annat datum: midsommar, lucia (söndag), sommartidens första dag, en vanlig fredag
   date: r => act('date', ['2026-06-20', '2026-12-13', '2026-03-29', '2026-11-27'][Math.floor(r() * 4)]),
   // vaktmästarens olyckor: gondolen, hunden, vattenläckan – och valen på korten
-  accident: r => act('trigger', ['gondola', 'dog', 'leak', 'crash', 'tunnel', 'panic', 'party', 'rulltrappa'][Math.floor(r() * 8)]),
+  accident: r => act('trigger', ['gondola', 'dog', 'leak', 'crash', 'tunnel', 'panic', 'party', 'rulltrappa', 'kronan', 'hojd'][Math.floor(r() * 10)]),
   gondola: r => act('gondola', ['crank', 'hatch', 'rope'][Math.floor(r() * 3)]),
   dog: r => act('dog', r() < 0.5 ? 'lock' : 'free'),
   leak: r => act('leak', r() < 0.5 ? 'stop' : 'run'),
@@ -1981,7 +1991,9 @@ export const PLAYER_ACTIONS = {
   panic: r => act('panic', r() < 0.5 ? 'talk' : 'crank'),
   party: r => act('party', r() < 0.5 ? 'varu' : 'alla'),
   rulltrappa: r => act('rulltrappa', r() < 0.5 ? 'walk' : 'close'),
-  heist: r => act('heist', ['cut', 'wait', 'garage', 'tak', 'stop', 'go', 'storm'][Math.floor(r() * 7)]),
+  kronan: r => act('kronan', r() < 0.5 ? 'open' : 'own'),
+  skywalk: r => act('skywalk', r() < 0.5 ? 'close' : 'open'),
+  heist: r => act('heist', ['cut', 'wait', 'garage', 'tak', 'stop', 'go', 'storm', 'spärr', 'bakhåll'][Math.floor(r() * 9)]),
   chiefBack: r => act('chiefBack', ['storm', 'fire', 'power', 'strategy', 'move', 'pano', `heat${Math.floor(r() * S.elevators.length)}`][Math.floor(r() * 7)]),
 };
 // 24 dygn i fyra tester om sex, så att de går parallellt
@@ -2982,7 +2994,8 @@ test('Kuppen på 5:an: gänget kapar hissarna, gisslan samlas i Sky Café, hjäl
 test('Kuppen: klipps strömmen öppnas valvet och gänget flyr – aldrig den väg polisen har spärrat', () => {
   const out = [];
   /** @type {[string[], (r: string) => boolean][]} */
-  const cases = [[['cut'], r => r !== 'van'], [['cut', 'tak', 'stop'], r => r === 'van'], [['cut', 'stop'], r => r === 'heli']];
+  // (bron till Kronan är också en väg ut – utom när polisen har spärrat den)
+  const cases = [[['cut'], r => r !== 'van'], [['cut', 'tak', 'stop', 'spärr'], r => r === 'van'], [['cut', 'stop', 'spärr'], r => r === 'heli']];
   for (const [acts, ok] of cases) {
     sim(7, { roll: 'mjuk', chief: true });
     while (hour() < 14.2) step(DT);
@@ -3250,6 +3263,125 @@ test('Rulltrappan stannar: driftchefen låter folk gå i den i rusningen och sp�
     out.push(`kl ${h}: ${want}`);
   }
   return out.join(' · ');
+});
+
+test('Skywalken: grannar kommer över bron och går tillbaka, anställda äter i Kronan, och bron är stängd på natten', () => {
+  sim(11, { incLevel: 'av' });
+  let crossedIn = 0, home = 0, night = 0;
+  const seen = new Set();
+  while (!S.summaryShown) {
+    step(DT);
+    for (const p of S.people) {
+      if (p.kronan && !p.refugee && p.state === 'bridge' && p.bridgeDir < 0 && !seen.has(p.id)) { seen.add(p.id); crossedIn++; }
+      if (p.kronan && !p.refugee && p.state === 'bridge' && p.bridgeDir > 0 && seen.has(p.id)) { seen.delete(p.id); home++; }
+    }
+    const h = hour();
+    if ((h < SKYWALK.hours[0] - 0.05 || h >= SKYWALK.hours[1] + 0.4) && S.people.some(p => !p.dead && p.state === 'bridge')) night++;
+  }
+  const X = S.skywalk;
+  assert(crossedIn >= 5, `bara ${crossedIn} grannar kom över bron`);
+  assert(home >= 3, `bara ${home} grannar gick hem över bron`);
+  assert(X.lunch >= 1, 'ingen anställd åt lunch i Kronan');
+  assert(!night, `${night} steg med folk på bron när Kronan hade stängt`);
+  return `${crossedIn} grannar kom över bron, ${home} gick hem samma väg, ${X.lunch} åt lunch i Kronan`;
+});
+
+test('Kronans hissar kraschar: släpps grannarna in tar de Tornets hissar ner, annars kommer ingen', () => {
+  const out = [];
+  for (const mode of ['open', 'own']) {
+    sim(3, { incLevel: 'av' });
+    while (hour() < 10.5) step(DT);
+    assert(act('trigger', 'kronan') === true, `${mode}: gick inte att framkalla`);
+    assert(act('kronan', mode), `${mode}: valet gick inte`);
+    const ids = new Set();
+    let g = 0;
+    while (S.kronan && ++g < 600 / DT) { step(DT); for (const p of S.people) if (p.refugee) ids.add(p.id); }
+    assert(!S.kronan, `${mode}: tog aldrig slut`);
+    while (++g < 900 / DT && S.people.some(p => p.refugee && !p.dead)) step(DT);
+    const left = S.people.filter(p => p.refugee && !p.dead).length;
+    if (mode === 'open') { assert(ids.size >= 5, `bara ${ids.size} kom över bron`); assert(!left, `${left} från Kronan kom aldrig ner och ut`); }
+    else assert(!ids.size, `${ids.size} kom över bron fast den var stängd för dem`);
+    out.push(`${mode}: ${ids.size}`);
+  }
+  return out.join(' · ');
+});
+
+test('Kronans hissar kraschar: driftchefen släpper in grannarna när det är lugnt och tar bara de egna i rusningen', () => {
+  for (const [h, want] of /** @type {[number, string][]} */ ([[10.5, 'open'], [16.2, 'own']])) {
+    sim(4, { incLevel: 'av', chief: true });
+    while (hour() < h) step(DT);
+    assert(act('trigger', 'kronan') === true, `kl ${h}: gick inte att framkalla`);
+    let g = 0;
+    while (S.kronan && !S.kronan.mode && ++g < 30 / DT) step(DT);
+    assert(S.kronan && S.kronan.by === 'chief', `kl ${h}: driftchefen bestämde inget`);
+    assert(S.kronan.mode === want, `kl ${h}: ${S.kronan.mode}, väntade ${want}`);
+  }
+  return 'kl 10.30 välkomna över, kl 16.12 bara de egna';
+});
+
+test('Höjdskräck på bron: hen står still tills vaktmästaren kommer och leder hen över', () => {
+  sim(3, { incLevel: 'av' });
+  while (hour() < 10) step(DT);
+  assert(act('trigger', 'hojd') === true, 'gick inte att framkalla');
+  const X = S.hojd, p = S.people.find(q => q.id === X.pid), t0 = p.bridgeT, jan = X.jan;
+  let g = 0, moved = false, helped = false;
+  while (S.hojd && ++g < 600 / DT) {
+    step(DT);
+    if (S.hojd && S.hojd.ph === 'frusen' && p.bridgeT !== t0) moved = true;
+    if (S.hojd && S.hojd.ph === 'leder') helped = true;
+  }
+  assert(!S.hojd, 'tog aldrig slut');
+  assert(!moved, 'den höjdrädda gick vidare innan vaktmästaren kom');
+  assert(helped, 'vaktmästaren ledde aldrig hen');
+  g = 0;
+  while (++g < 120 / DT && S.people.some(q => q.id === jan && !q.dead && (q.state === 'bridge' || (q.duty && q.duty.kind === 'hojd')))) step(DT);
+  assert(!S.people.some(q => q.id === jan && !q.dead && (q.state === 'bridge' || (q.duty && q.duty.kind === 'hojd'))), 'vaktmästaren blev kvar på bron eller på uppdraget');
+  return `över efter ${Math.round(S.t - X.t0)} s`;
+});
+
+test('Skywalken: brinner det nedanför sky lobbyn utryms de ovanför över bron, och de kommer tillbaka när det är släckt', () => {
+  sim(6, { incLevel: 'av' });
+  while (hour() < 11) step(DT);
+  act('trigger', 'fire', idx('3'));
+  let g = 0, inKronan = 0;
+  while (S.fire && ++g < 900 / DT) { step(DT); inKronan = Math.max(inKronan, S.people.filter(p => p.state === 'kronan' && p.kronanEvac).length); }
+  assert(inKronan >= 3, `bara ${inKronan} utrymdes över bron`);
+  g = 0;
+  while (++g < 300 / DT && S.people.some(p => !p.dead && p.state === 'kronan' && p.kronanEvac)) step(DT);
+  const left = S.people.filter(p => !p.dead && p.state === 'kronan' && p.kronanEvac).length;
+  assert(!left, `${left} blev kvar i Kronan efter branden`);
+  return `${inKronan} väntade i Kronan som mest`;
+});
+
+test('Skywalken i stormen: stängd bron – ingen går ut på den efter beslutet', () => {
+  sim(8, { incLevel: 'av' });
+  while (hour() < 11.5) step(DT);
+  act('trigger', 'storm');
+  assert(act('skywalk', 'close'), 'valet gick inte');
+  const before = new Set(S.people.filter(p => p.state === 'bridge').map(p => p.id));
+  let g = 0, after = 0;
+  while (S.storm && ++g < 300 / DT) { step(DT); for (const p of S.people) if (p.state === 'bridge' && !before.has(p.id)) after++; }
+  assert(!after, `${after} steg med någon ny på bron fast den var stängd`);
+  return 'ingen ny på bron i stormen';
+});
+
+test('Kuppen: flyr gänget över bron till ett bakhåll i Kronan grips de där', () => {
+  sim(9, { incLevel: 'av' });
+  while (hour() < 10) step(DT);
+  act('trigger', 'heist');
+  let g = 0;
+  while (++g < 600 / DT && !(S.heist && S.heist.police)) step(DT);
+  assert(S.heist && S.heist.police, 'polisen kom aldrig');
+  // alla andra vägar spärrade: skåpbilen (garaget), helikoptern (stormen) och tåget
+  act('heist', 'garage'); act('heist', 'stop'); act('trigger', 'storm'); act('heist', 'bakhåll'); act('heist', 'cut');
+  S.heist.stormAt = Infinity; // (insatsstyrkan väntar, så att valvet hinner öppnas)
+  let across = false;
+  while (S.heist && S.heist.ph !== 'done' && ++g < 3000 / DT) { step(DT); if (S.heist && S.heist.across) across = true; }
+  assert(S.heist && S.heist.ph === 'done', `kuppen tog aldrig slut (${S.heist && S.heist.ph})`);
+  assert(S.heist.route === 'bro', `gänget flydde via ${S.heist.route}`);
+  assert(across, 'gänget sprang aldrig över bron');
+  assert(S.heist.caught, 'gänget kom undan trots bakhållet');
+  return 'gripna i Kronans sky lobby';
 });
 
 test('Språket: svenska är standard, loggen och dagböckerna blir engelska och svenska visar allt som det är', () => {

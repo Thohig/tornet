@@ -35,7 +35,7 @@ import { startStorm, stormTick, weatherReset } from './weather.js';
 import { PANO, panoCandidate, rescueNext, triggerPano } from './pano.js';
 import { cableCandidate, foremanNext, techNext, triggerCable, triggerFault, triggerHeat } from './service.js';
 import { busyCars, cableRisk, ffNext, FIRE_FLOORS, incidentStarted, incPick, startFire, startOutage } from './incidents.js';
-import { crashChiefTick, tunnelChiefTick, panicChiefTick, partyChiefTick, rulltrappaChiefTick, dogChiefTick, gondolaChiefTick, leakChiefTick, panoChiefTick } from './chief.js';
+import { kronanChiefTick, skywalkChiefTick, crashChiefTick, tunnelChiefTick, panicChiefTick, partyChiefTick, rulltrappaChiefTick, dogChiefTick, gondolaChiefTick, leakChiefTick, panoChiefTick } from './chief.js';
 import { arrivalRate } from './sim.js';
 import { sv } from './sv.js';
 import { crashPossible, crashReset, crashTick, startCrash } from './crash.js';
@@ -43,6 +43,9 @@ import { tunnelPossible, tunnelReset, tunnelTick, startTunnel } from './tunnel.j
 import { panicPossible, panicReset, panicTick, startPanic } from './panic.js';
 import { partyArrive, partyNext, partyPossible, partyReset, partyTick, startParty } from './party.js';
 import { rulltrappaPossible, rulltrappaReset, rulltrappaTick, startRulltrappa } from './rulltrappa.js';
+import { KRONAN, skywalkNext, skywalkReset, skywalkRoll, skywalkSpot, skywalkTick } from './skywalk.js';
+import { kronanPossible, kronanReset, kronanTick, startKronan } from './kronan.js';
+import { hojdReset, hojdTick, hojdWeight, startHojd } from './hojd.js';
 /** @typedef {import('./elevators.js').Elevator} Elevator */
 /** @typedef {import('./incidents.js').IncPick} IncPick */
 /** @typedef {import('./people.js').Person} Person */
@@ -189,6 +192,20 @@ export function systems() {
       warnS: 8, warn: () => '🪜 Det gnisslar och skrapar i rulltrappan i entrén…', hit: () => startRulltrappa(),
       chief: { tick: rulltrappaChiefTick, done: () => !S.rulltrappa },
       chaos: { step: 'guests', name: '🪜 rulltrappan stannar', run: () => startRulltrappa() } },
+    // skywalken till Kronan (skywalk.js): grannarna över bron, lunchen i Kronan, stängt i stormen; people.js frågar om vägen ut
+    { key: 'skywalk', tick: skywalkTick, reset: skywalkReset, roll: skywalkRoll, next: skywalkNext, spot: skywalkSpot,
+      chief: { tick: skywalkChiefTick, done: () => !S.storm } },
+    // Kronans hissar kraschar (kronan.js): Kronans folk vill ta Tornets hissar ner – släpp in dem över bron eller ta bara de egna
+    { key: 'kronan', tick: kronanTick, reset: kronanReset, on: () => !!S.kronan, trigger: () => startKronan(),
+      weight: () => kronanPossible() && 0.25,
+      warnS: 8, warn: () => sv`📻 Det knastrar i radion från ${KRONAN} – Göran låter stressad…`, hit: () => startKronan(),
+      chief: { tick: kronanChiefTick, done: () => !S.kronan },
+      chaos: { step: 'guests', name: sv`🏢 ${KRONAN}s hissar kraschar`, run: () => startKronan() } },
+    // höjdskräck på bron (hojd.js): någon stannar mitt på glasbron, vaktmästaren leder hen över
+    { key: 'hojd', tick: hojdTick, reset: hojdReset, on: () => !!S.hojd, trigger: () => startHojd(),
+      weight: hojdWeight,
+      warnS: 6, warn: () => '😨 Någon på bron till Kronan går allt långsammare och håller i räcket…', hit: () => startHojd(),
+      chaos: { step: 'guests', name: '😨 höjdskräck på bron', run: () => startHojd() } },
     // vädret: stormen blåser (stormen som incident är posten storm ovan); en storm som pågår följer med över dygnsskiftet
     { key: 'weather', tick: stormTick, reset: weatherReset, roll: () => { const st = S.storm; weatherReset(); S.storm = st; } },
   ];

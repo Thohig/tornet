@@ -36,6 +36,8 @@ const G = stream('gestalt'), G2 = stream('inkallade');
  *   deck?: number, fromUpper?: boolean, escalator?: boolean, escT?: number, hurry?: boolean, moving?: boolean,
  *   stairsByChoice?: boolean, viaStairs?: boolean, nearX?: number,
  *   toTrain?: boolean, fromTrain?: boolean, boardAt?: number,
+ *   kronan?: boolean, kronanLunch?: boolean, kronanEvac?: boolean, kronanUntil?: number, toBridge?: boolean, frozen?: boolean,
+ *   bridgeT?: number, bridgeDir?: number, bridgeGoal?: number, bridgeWhy?: string, bridgeHelp?: boolean, fromBridgeT?: number, refugee?: boolean,
  *   evac?: boolean, evacFrom?: number, evacBack?: boolean, smoked?: boolean, ff?: boolean, ffStairs?: boolean,
  *   trapT?: number, trapNoted?: boolean, darkNoted?: number, noLiftNoted?: boolean, angryNoted?: boolean, collapsed?: boolean,
  *   job?: number|null, workT?: number, extra?: boolean, route?: number[], ri?: number,
@@ -48,7 +50,7 @@ const G = stream('gestalt'), G2 = stream('inkallade');
 import { fl } from './util.js';
 import {
   activityRate, roomUnits, FLOOR_HOURS, FL, NAMES, ROLE_NAMES, floorOpen, OFFICE_FLOORS, SPOTS, STAIR_X, VISIT_WHY,
-  WAIT_X1, WALK, LOBBY, CAFE, MEZZ, floorWith, EL, SKY, CAST, CREW, STATION, TRAIN_X0, TRAIN_X1, DOCK,
+  WAIT_X1, WALK, LOBBY, CAFE, MEZZ, floorWith, EL, SKY, CAST, CREW, STATION, TRAIN_X0, TRAIN_X1, DOCK, SKYWALK_F,
 } from './config.js';
 import { S, clockStr, hour, log, occOf, setOcc } from './state.js';
 import { inFireZone, requestRide, loadKg, personKg, eta, keyed, posOf, costBased, prio, outLong, servesNow } from './dispatch.js';
@@ -64,6 +66,7 @@ import { escalatorClosed, escalatorStopped, onEscalator, walkedEscalator } from 
 import { tourNext, tourSpot } from './tour.js';
 import { guestNext, keyNext, visningSpot } from './visning.js';
 import { sysArrive, sysNext, sysRole, sysSeized, sysSpot } from './systems.js';
+import { bridgeEvac, bridgeOut, enterBridge } from './skywalk.js';
 
 // ---------- Människor ----------
 export const SKIN = ['#ffdbb8', '#f6c48f', '#d9a066', '#a8693f', '#7a4a2a', '#ffe4c8'];
@@ -380,6 +383,10 @@ export function updatePerson(p, dt) {
       if (p.waited > p.patience + 15 && S.power && stranded(p) && canWalk(p)) { toStairs(p, 'Ingen hiss går hit just nu (fel eller service) – tar trapporna'); break; }
       // vaktmästaren på uppdrag (läckan, gondolen, hunden) väntar inte: ingen hiss går – springer i trappan med verktygslådan
       if (p.duty && p.waited > 3 && (stranded(p) || !liftsAvailable())) { toStairs(p, 'Ingen hiss går – springer i trappan'); break; }
+      // hissteknikern på väg till instängda (linbrott, korg mellan två våningar) väntar inte länge: dröjer hissen
+      // springer hen i trappan med serviceväskan (annars kan de sitta kvar medan teknikern står i en kö)
+      if (p.role === 'hisstekniker' && p.job !== null && p.job !== undefined && p.waited > 15 && Math.abs(p.goal - p.floor) <= RESCUE_STAIRS
+        && rescueJob(p)) { toStairs(p, 'Instängda väntar – springer i trappan i stället'); break; }
       if (stairsChoice(p, true)) break;
       // målet hann stänga medan man stod i kön: vänd
       if (p.goal !== undefined && p.goal !== p.floor && closedFor(p, p.goal)) { turnBack(p); break; }
@@ -407,7 +414,7 @@ export function updatePerson(p, dt) {
       p.timer -= dt;
       if (p.timer <= 0) stairsDone(p);
       break;
-    case 'away': case 'incar': case 'platform': break; // utanför huset / i bilen (life.js) / väntar på tåget (train.js)
+    case 'away': case 'incar': case 'platform': case 'bridge': case 'kronan': break; // utanför huset / i bilen (life.js) / väntar på tåget (train.js) / på bron eller i Kronan (skywalk.js)
     case 'assembly': if (!S.fire && S.t >= (p.backAt ?? 0)) backFromAssembly(p); break; // återsamlingsplatsen (brand)
     case 'office':
       p.timer -= dt * activityRate(hour()); // vistelsen räknas i speltid
@@ -434,6 +441,10 @@ export function rerouteStranded() {
 // Den som ska en våning upp eller ett par ner tar ofta trappan direkt, och den som har väntat länge
 // på en kort resa tröttnar och går. Trappan går hela vägen till slutmålet (inga hissbyten).
 export const STAIRS_UP = 1, STAIRS_DOWN = 2, STAIRS_IMPATIENT_UP = 2, STAIRS_IMPATIENT_DOWN = 4;
+/** hur många våningar hissteknikern springer i trappan för att nå instängda när hissen dröjer */
+const RESCUE_STAIRS = 6;
+/** ska teknikern rädda instängda (linbrott, eller ett fel där folk sitter fast)? @param {Person} p */
+const rescueJob = p => { const e = S.elevators[p.job]; return !!e && (e.mode === 'snapped' || !!(e.fault && e.fault.trapped)); };
 /** @param {Person} p */
 const canWalk = p => !p.vip && !p.evac && !p.dog && !(p.cargo && p.cargo.kg >= 15) && p.goal !== undefined;
 /** Tar personen trappan? impatient = har stått i kön en stund. Returnerar true om hen gick. @param {Person} p */
@@ -463,7 +474,9 @@ export function stairsChoice(p, impatient) {
 }
 /** Dit man utryms: de som jobbar, bor eller är på besök samlas utanför entrén (återsamlingsplatsen) – även de som
  *  kom med tåg eller bil. Inhyrd personal och VIP-gästerna tar sin egen utgång. @param {Person} p */
-export const evacFloor = p => (!p.role && !p.vip && !p.movedOut && ['emp', 'vis', 'res'].includes(p.kind) ? LOBBY : p.exitFloor);
+// (brinner det nedanför sky lobbyn går de som är där eller ovanför ut över bron till Kronan, skywalk.js)
+export const evacFloor = p => (!p.role && !p.vip && !p.movedOut && ['emp', 'vis', 'res'].includes(p.kind) ? (bridgeEvac(p) ? SKYWALK_F : LOBBY)
+  : p.exitFloor);
 /**
  * Det brinner dit p ska: ingen går trappan in i brandzonen. Hen går ut till återsamlingsplatsen och kommer in igen
  * när branden är släckt (evacFrom). Gäller de som jobbar, bor och är på besök – inte brandkåren och annan personal.
@@ -529,6 +542,7 @@ export function arriveOnFloor(p) {
   const out = exitOf(p);
   if (p.evac && p.floor === out) { S.stats.evacuated++; if (S.fire) S.fire.evac++; }
   if (p.floor === out && p.leaving) {
+    if (bridgeOut(p)) return; // (ut över bron till Kronan, skywalk.js)
     p.state = 'exiting'; p.spot = null;
     // tunnelbanan: ställ sig på perrongen framför tåget
     if (p.floor === STATION) { p.toTrain = true; p.tx = rand(TRAIN_X0 + 10, TRAIN_X1 - 10); return; }
@@ -557,6 +571,7 @@ export function boardDone(p) {
 }
 /** @param {Person} p */
 export function exitDone(p) {
+  if (p.toBridge) { enterBridge(p); return; } // (vid dörren till bron: ut på den, skywalk.js)
   if (p.toTrain && p.leaving && p.floor === STATION && p.floor === p.exitFloor) {
     p.state = 'platform'; p.face = 1; p.waitStart = S.t;
     pev(p, S.train ? 'Framme på perrongen – tåget står inne!' : 'Väntar på tåget på perrongen');

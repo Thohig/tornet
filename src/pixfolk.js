@@ -83,7 +83,9 @@ export function drawHallPeople() {
   // viktigast), korgarnas repliker, de andras tankebubblor och namnbrickorna
   const sel = list.find(q => q.p === S.sel && q.p.state === 'wait');
   if (sel) thought(sel.p, X(sel.lp.x) + 3, Y(surf(sel.p.floor) + sel.p.depth * 0.6) - 30, 1);
-  for (const { p, lp } of list) if ((!tiny || p === S.sel) && talking(p) && lp.a > 0.5) speech(p, X(lp.x), Y(surf(p.floor) + p.depth * 0.6) - 38 - (p.state === 'wait' ? 12 : 0));
+  // (den som står i kön pratar mest för sig själv: får repliken ingen plats – entrén full av skyltar – hoppas den
+  // över, den står i loggen; den man följer får alltid sin)
+  for (const { p, lp } of list) if ((!tiny || p === S.sel) && talking(p) && lp.a > 0.5) speech(p, X(lp.x), Y(surf(p.floor) + p.depth * 0.6) - 38 - (p.state === 'wait' ? 12 : 0), p.state === 'wait' && p !== S.sel);
   drawCarTalkPx();
   // tankebubblorna: de som väntar på samma hiss till samma våning delar en bubbla ("→6 L1 ×3"),
   // utom den som spåras och när namnbrickorna är på
@@ -128,8 +130,8 @@ export function bark(cx, y) {
 }
 /** @param {Person} p */
 export const talking = p => !!(p.say && S.t < p.say.until);
-/** pratbubbla med namn och replik, med en liten pil ner mot personen @param {Person} p */
-export function speech(p, cx, y) { bubble(`${p.name}: "${p.say.text}"`, cx, y); }
+/** pratbubbla med namn och replik, med en liten pil ner mot personen (optional: hoppas över när den inte får plats) @param {Person} p */
+export function speech(p, cx, y, optional = false) { bubble(`${p.name}: "${p.say.text}"`, cx, y, '#ffffff', optional); }
 /** en replik som måste synas letar plats allt högre upp (med ett streck ner till personen) innan den ger upp */
 const UP = [0, -11, -22, -33, -44, -55, -66, -77, -88];
 export function bubble(str, cx, y0, fill = '#ffffff', optional = false) {

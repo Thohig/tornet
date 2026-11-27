@@ -20,7 +20,7 @@
 import { stream } from './rng.js';
 import { sv } from './sv.js';
 const { pick } = stream('kuppen');
-import { CAFE, CONTROL, DOCK, DOOR_X, LOBBY, ROOF, STATION, TOP, floorWith, floorY } from './config.js';
+import { CAFE, CONTROL, DOCK, DOOR_X, LOBBY, ROOF, SKYWALK, SKYWALK_F, STATION, TOP, floorWith, floorY } from './config.js';
 import { S, incidentOver, log, notice } from './state.js';
 import { blankPerson, pev, pn, releaseSpot, setTrip, toStairs } from './people.js';
 import { speak } from './cast.js';
@@ -30,6 +30,7 @@ import { trainsRunning } from './train.js';
 import { touring } from './visning.js';
 import { inFireZone } from './dispatch.js';
 import { fl } from './util.js';
+import { KRONAN, closedWhy, gangOverBridge, heistHook } from './skywalk.js';
 /** @typedef {import('./people.js').Person} Person */
 
 /** våningen med valvet */
@@ -56,7 +57,8 @@ const GANG = [
 ];
 export const VAN_NAME = 'Fasad & Fönster AB';
 /** flyktvägarna: våning och namn */
-const ROUTES = { van: { f: DOCK, name: 'skåpbilen vid lastkajen' }, heli: { f: ROOF >= 0 ? ROOF : TOP, name: 'en helikopter på taket' }, train: { f: STATION, name: 'tunnelbanan' } };
+const ROUTES = { van: { f: DOCK, name: 'skåpbilen vid lastkajen' }, heli: { f: ROOF >= 0 ? ROOF : TOP, name: 'en helikopter på taket' }, train: { f: STATION, name: 'tunnelbanan' },
+  bro: { f: SKYWALK_F, name: SKYWALK ? sv`bron till ${SKYWALK.to}` : '' } };
 
 /**
  * Kuppen (S.heist). ph: in (skåpbilen backar in, gänget tar sina platser) → hold (huset är kapat, borren går)
@@ -64,7 +66,8 @@ const ROUTES = { van: { f: DOCK, name: 'skåpbilen vid lastkajen' }, heli: { f: 
  * @typedef {{ ph: string, t0: number, van: string, vanX: number, gang: number[], hero: number, heroWho: string, heroStep: number,
  *   heroT: number, steps: number, holdT: number, police: boolean, policeAt: number, plan: string, train: string, power: string,
  *   drill: number, drillOff: number, gold: number, route: string, fleeF: number, fleeT: number, stormAt: number, signal: boolean,
- *   outcome: string, caught: boolean, hostages: number, idFrom: number, talkT: number, talkN: number, tied: boolean }} Heist
+ *   outcome: string, caught: boolean, hostages: number, idFrom: number, talkT: number, talkN: number, tied: boolean,
+ *   bridge: string, across: boolean }} Heist
  */
 
 const H = () => S.heist;
@@ -106,7 +109,7 @@ export function startHeist(warned = false) {
   S.heistWait = null;
   S.heist = { ph: 'in', t0: S.t, van: 'in', vanX: warned ? 70 : -260, gang: [], hero: -1, heroWho: '', heroStep: 0, heroT: 0, steps: 0,
     holdT: 0, police: false, policeAt: 0, plan: 'garage', train: 'go', power: 'wait', drill: 0, drillOff: 0, gold: GOLD,
-    route: '', fleeF: -1, fleeT: 0, stormAt: 0, signal: false, outcome: '', caught: false, hostages: 0, idFrom: S.nextId,
+    route: '', fleeF: -1, fleeT: 0, bridge: '', across: false, stormAt: 0, signal: false, outcome: '', caught: false, hostages: 0, idFrom: S.nextId,
     talkT: 0, talkN: 0, tied: false };
   log(sv`🚐 En skåpbil från ${VAN_NAME} backar in vid lastkajen – fem män i overall kliver ur`, 'alert');
   incidentStarted(DOCK);
@@ -289,6 +292,8 @@ function blocked(k) {
   if (k === 'van') return Hs.police && Hs.plan === 'garage';
   if (k === 'heli') return (Hs.police && Hs.plan === 'tak') || !!S.storm;
   if (k === 'train') return Hs.train === 'stop' || !trainsRunning() || STATION < 0;
+  // (bron: spärrad av polisen, eller stängd för natten, i stormen eller för underhåll – ett bakhåll ser öppet ut)
+  if (k === 'bro') return SKYWALK_F < 0 || Hs.bridge === 'spärr' || !!closedWhy();
   return true;
 }
 /** gänget grips */
@@ -299,6 +304,18 @@ function caught(how) {
   for (const p of gang()) { p.caught = true; p.exitFloor = LOBBY; p.cargo = null; }
   Hs.gold = GOLD;
   end(sv`${how} Alla fem är gripna.`);
+}
+/** en rånare är framme vid Kronans dörr (skywalk.js): bakhåll – gripen; annars borta i Kronans folkvimmel @param {Person} p */
+function robberAcross(p) {
+  const Hs = H();
+  releaseSpot(p); p.dead = true;
+  if (!Hs || Hs.ph === 'done') return;
+  const ambush = Hs.bridge === 'bakhåll';
+  pev(p, ambush ? sv`Polisen väntade i ${KRONAN} – gripen!` : sv`Borta i ${KRONAN}s folkvimmel med guldet`);
+  if (gang().length) return;
+  Hs.across = false;
+  if (ambush) { Hs.caught = true; Hs.gold = GOLD; end(sv`Gänget sprang över bron rakt i polisens bakhåll i ${KRONAN}s sky lobby. Alla fem är gripna.`); }
+  else end(sv`Gänget kom undan över bron till ${KRONAN} med ${GOLD} guldtackor.`);
 }
 /** gänget kom undan */
 function escaped() {
@@ -334,6 +351,7 @@ export function heistChoice(what) {
   else if (what === 'wait') Hs.power = 'wait';
   else if (what === 'garage' || what === 'tak') Hs.plan = what;
   else if (what === 'stop' || what === 'go') Hs.train = what;
+  else if (what === 'spärr' || what === 'bakhåll') { if (SKYWALK_F < 0 || Hs.across) return false; Hs.bridge = what; }
   else if (what === 'storm') { if (!Hs.police) return false; Hs.stormAt = S.t; }
   else return false;
   return true;
@@ -388,6 +406,8 @@ export function heistTick(dt) {
     }
     if (Hs.drill >= 1) { flee(); return; }
   }
+  // (gänget springer över bron: det avgörs i Kronan, robberAcross)
+  if (Hs.across) return;
   if (Hs.police && S.t >= Hs.stormAt) {
     caught(Hs.ph === 'hold' ? sv`Insatsstyrkan gick in via ${Hs.plan === 'garage' ? 'garaget' : 'taket'} och tog gänget innan valvet var öppet.` : sv`Insatsstyrkan gick in via ${Hs.plan === 'garage' ? 'garaget' : 'taket'} och tog gänget på väg ut.`);
     return;
@@ -396,7 +416,10 @@ export function heistTick(dt) {
   if (Hs.ph === 'flee') {
     if (blocked(Hs.route)) { caught(sv`Polisen väntade vid ${ROUTES[Hs.route].name}.`); return; }
     const g = gang();
-    if (g.length && g.every(p => there(p, Hs.fleeF))) { escaped(); return; }
+    if (g.length && g.every(p => there(p, Hs.fleeF))) {
+      if (Hs.route === 'bro') { Hs.across = true; heistHook.across = robberAcross; gangOverBridge(g); log(sv`🏃 Gänget springer över bron till ${KRONAN} med guldet!`, 'alert'); return; }
+      escaped(); return;
+    }
     if (S.t - Hs.fleeT > FLEE_MAX) caught('Gänget hann aldrig ut – polisen tog dem i trapphuset.');
   }
 }

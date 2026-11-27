@@ -9,7 +9,7 @@
 // informationsrutorna), förvarningens klipp `warn` och det sevärda `shots`; panels.js, hud.js och director.js går
 // igenom listan
 import { esc, fl } from './util.js';
-import { DOCK, EL, FIRE_HINT, LOBBY, MEZZ, ROOF, TOP, CONTROL, STATION, FL, floorWith, shaftCX } from './config.js';
+import { DOCK, EL, FIRE_HINT, LOBBY, MEZZ, ROOF, TOP, CONTROL, STATION, FL, floorWith, shaftCX, SKYWALK_F, bridgeX } from './config.js';
 import { S } from './state.js';
 import { canRescue } from './incidents.js';
 import { STORM_HINT, windMs } from './weather.js';
@@ -27,6 +27,9 @@ import { onPlatform, tunnelPossible } from './tunnel.js';
 import { panicPossible, panicWhere } from './panic.js';
 import { partyPossible } from './party.js';
 import { onEscalator, rulltrappaPossible } from './rulltrappa.js';
+import { kronanPossible } from './kronan.js';
+import { hojdPossible } from './hojd.js';
+import { KRONAN, canGoOut, onBridge } from './skywalk.js';
 /** panoramahissen (null om huset saknar en) */
 const panoCar = () => (PANO ? S.elevators[PANO.id] || null : null);
 
@@ -50,6 +53,17 @@ const top = () => (ROOF >= 0 ? ROOF : TOP);
 /** @type {IncUi[]|null} */
 let list = null;
 /** alla poster (i knapparnas ordning) */
+/** stormens rad om bron till Kronan: stäng den eller håll den öppen med vakt (skywalk.js) */
+function bridgeRow(h) {
+  const { chiefLine, acts, choice, bold } = h, X = S.skywalk;
+  if (!X) return '';
+  const n = onBridge().length;
+  const b = (m, txt, why) => choice(`skywalk:${m}`, txt, { on: X.storm === m, why });
+  return `${chiefLine('skywalk', sv`Bron till ${KRONAN}?`)}
+          ${acts(b('close', '🚧 Stäng bron', 'Ingen går ut på glasbron – den som är ute får gå klart'),
+            b('open', '🌉 Öppen med vakt', 'En väktare står vid dörren – man går långsammare, och den som är höjdrädd kan stanna'))}
+          ${n ? h.line(sh`${bold(n)} på bron just nu.`) : ''}`;
+}
 export function incUi() {
   return list ??= [
     // (brandens knapp står för sig i Framkalla, med våningsväljaren – trigHtml i panels.js)
@@ -132,7 +146,8 @@ export function incUi() {
           ${chiefLine('storm', 'Hur ska hissarna köras?')}
           ${acts(b('sway', '🌬️ Svajläge'), b('none', 'Kör som vanligt'))}
           ${hint(STORM_HINT[St.mode])}
-          ${P ? acts(followCar(P, 'Visa panoramahissen')) : ''}`, true));
+          ${P ? acts(followCar(P, 'Visa panoramahissen')) : ''}
+          ${SKYWALK_F >= 0 ? bridgeRow(h) : ''}`, true));
       }
     },
   },
@@ -274,7 +289,10 @@ export function incUi() {
           ${acts(b('stop', '🚇 Stoppa tåget', Hs.train === 'stop', 'Tunnelbanan stannar i tunneln – ingen flykt den vägen', off || Hs.train === 'stop'),
             ikon(`show:${BANK}`, '💰', 'Visa valvet', 'Kameran visar banken'),
             hero ? ikon(`person:${hero.id}`, '🤫', sv`Följ ${esc(hero.name)}`, 'Kameran följer den som blev över') : '')}
-          ${hint('Gänget flyr med skåpbilen, en helikopter på taket eller tunnelbanan – den väg som inte är spärrad. Ingen skjuter och ingen dör.')}`, true));
+          ${SKYWALK_F >= 0 ? acts(b('spärr', '🚧 Spärra bron', Hs.bridge === 'spärr', sv`Polisen stänger bron till ${KRONAN} – ingen flykt den vägen`, off || Hs.across),
+            b('bakhåll', sv`🌉 Bakhåll i ${KRONAN}`, Hs.bridge === 'bakhåll', sv`Bron står öppen – flyr de över den väntar polisen i ${KRONAN}`, off || Hs.across)) : ''}
+          ${hint(SKYWALK_F >= 0 ? sv`Gänget flyr med skåpbilen, en helikopter på taket, tunnelbanan eller över bron till ${KRONAN} – den väg som inte är spärrad. Ingen skjuter och ingen dör.`
+            : 'Gänget flyr med skåpbilen, en helikopter på taket eller tunnelbanan – den väg som inte är spärrad. Ingen skjuter och ingen dör.')}`, true));
       }
     },
     shots: (add, h) => {
@@ -558,6 +576,61 @@ export function incUi() {
       if (S.t - X.t0 < 8) add('rulltrappa', 80, 'floor', LOBBY, '🪜 Rulltrappan tvärstannar', S.t - X.t0 < 1);
       else add('rulltrappa', X.mode === 'walk' && onEscalator().length >= 3 ? 64 : 48, 'floor', LOBBY,
         X.mode === 'close' ? '🚧 Rulltrappan är avspärrad' : '🪜 Folk går i rulltrappan');
+    },
+  },
+  {
+    key: 'kronan',
+    sound: { warn: 'strain' },
+    trig: { icon: '🏢', name: sv`${KRONAN}s hissar kraschar`, hint: sv`Hiss-O-Matic 4000 i granntornet går ner – ${KRONAN}s folk vill ta Tornets hissar ner`, off: () => !kronanPossible(),
+      why: () => (S.kronan ? 'den pågår redan' : SKYWALK_F < 0 ? 'huset har ingen bro' : !canGoOut() ? 'bron är stängd' : S.fire ? 'det brinner i huset' : !S.power ? 'strömmen är borta' : sv`${KRONAN} har stängt`) },
+    warn: (_W, add) => add('warn', 76, 'floor', SKYWALK_F, sv`📻 Det knastrar i radion från ${KRONAN}`, true, bridgeX(0.5)),
+    card: (h, parts) => {
+      const { card, chiefLine, cd, bold, ikon, line, acts, hint, choice } = h;
+      // ---------- Kronans hissar kraschar (incident med val: släpp in grannarna eller bara de egna) ----------
+      const X = S.kronan;
+      if (!X || X.ph !== 'on') return;
+      const coming = S.people.filter(p => p.refugee && !p.dead && (p.state === 'bridge' || p.floor === SKYWALK_F)).length;
+      const now = X.mode === 'open' ? sh`${bold(X.came)} har kommit över bron${coming ? sh`, ${bold(coming)} på väg ner från sky lobbyn` : ''}.`
+        : X.mode === 'own' ? sv`Bron är stängd för dem – ${X.stayed} har fått gå trappan i ${KRONAN}.` : '';
+      const b = (m, txt, why) => choice(`kronan:${m}`, txt, { on: X.mode === m, why });
+      parts.push(card('kronan', 'kronan', sv`🏢 ${KRONAN}s hissar står still`, `
+          ${line(sh`Hiss-O-Matic 4000 har kraschat, och ${KRONAN}s folk står i sin sky lobby. ${now} Supporten väntas hitta felet ${cd(X.t0 + X.len - S.t)}.`)}
+          ${chiefLine('kronan', sv`Får ${KRONAN}s folk ta våra hissar?`)}
+          ${acts(b('open', '🌉 Välkomna över', sv`${KRONAN}s folk går över bron och tar Tornets hissar ner – rusning nedåt från sky lobbyn`),
+            b('own', '🚧 Bara våra egna', sv`Bron stängs för dem – Tornets hissar räcker till Tornets folk`),
+            ikon(`show:${SKYWALK_F}`, '📹', 'Visa sky lobbyn', 'Kameran visar sky lobbyn och bron'))}
+          ${hint(sv`Bron går från sky lobbyn till ${KRONAN}. De som kommer över ska ner till gatan eller tunnelbanan.`)}`, true));
+    },
+    shots: (add) => {
+      const X = S.kronan;
+      if (!X || X.ph !== 'on') return;
+      if (S.t - X.t0 < 8) add('kronan', 76, 'floor', SKYWALK_F, sv`🏢 ${KRONAN}s hissar står still`, S.t - X.t0 < 1, bridgeX(0.7));
+      else if (X.mode === 'open') add('kronan', 58 + Math.min(20, X.came), 'floor', SKYWALK_F, sv`🌉 ${KRONAN}s folk kommer över bron`, false, bridgeX(0.4));
+    },
+  },
+  {
+    key: 'hojd',
+    trig: { icon: '😨', name: 'Höjdskräck på bron', hint: sv`Någon på glasbron till ${KRONAN} tittar ner och vågar inte gå vidare`, off: () => !hojdPossible(),
+      why: () => (S.hojd ? 'någon står redan still på bron' : SKYWALK_F < 0 ? 'huset har ingen bro' : S.fire ? 'det brinner i huset' : 'bron är stängd') },
+    warn: (_W, add) => add('warn', 70, 'floor', SKYWALK_F, '😨 Någon håller hårt i räcket på bron', true, bridgeX(0.5)),
+    card: (h, parts) => {
+      const { card, ikon, line, acts, hint } = h;
+      // ---------- höjdskräck på bron (inget val: vaktmästaren leder hen över) ----------
+      const X = S.hojd;
+      if (!X || X.ph === 'klar') return;
+      const jan = S.people.find(p => p.id === X.jan && !p.dead);
+      const status = X.ph === 'leder' ? sv`${esc(jan ? jan.name : 'Vaktmästaren')} leder hen över, ett steg i taget.`
+        : X.ph === 'ut' ? sv`${esc(jan ? jan.name : 'Vaktmästaren')} går ut på bron.` : jan ? sv`${esc(jan.name)} är på väg till sky lobbyn.` : 'Vaktmästaren är på väg.';
+      parts.push(card('hojd', 'info hojd', '😨 Höjdskräck på bron', `
+          ${line(sv`${esc(X.who)} tittade ner genom glasgolvet och står still mitt på bron till ${KRONAN}. De andra går förbi. ${status}`)}
+          ${acts(ikon(`person:${X.pid}`, '📹', sv`Följ ${esc(X.who)}`, 'Kameran följer den som står på bron'))}
+          ${hint('Inget att välja: det enda som hjälper är någon som tar en i armen.')}`));
+    },
+    shots: (add) => {
+      const X = S.hojd;
+      if (!X || X.ph === 'klar') return;
+      const p = S.people.find(q => q.id === X.pid && !q.dead);
+      add('hojd', X.ph === 'leder' ? 62 : 72, 'floor', SKYWALK_F, X.ph === 'leder' ? '🤝 Ett steg i taget över bron' : '😨 Höjdskräck mitt på bron', S.t - X.t0 < 1, bridgeX(p && p.bridgeT !== undefined ? p.bridgeT : 0.5));
     },
   },
   ];

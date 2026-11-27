@@ -21,10 +21,11 @@
 // samma våning slås ihop till en ("×n"). Allt ritas på ett rutnät i låg upplösning (1 pixel = `PX` = 2
 // världsenheter) som skalas upp utan utjämning; skärmkoordinater räknas om med `VIEW.x0` (se `toWorld`,
 // `placeCarPop`).
+import { SKYWALK_DOOR, closedWhy } from './skywalk.js';
 import { S } from './state.js';
 import {
   BOILER_X, BREAK, CONTROL, DOCK, DOOR_X, EL, SHAFT_W, shaftX, FL, FLOOR_HOURS, floorOpen, FLOORS, floorY, INNER_X1,
-  LAND_X0, LOBBY, MEZZ, SPOTS, STATION, TRAIN_LEN, TRAIN_X0, TRAIN_X1,
+  LAND_X0, LOBBY, MEZZ, SPOTS, STATION, TRAIN_LEN, TRAIN_X0, TRAIN_X1, SKYWALK_F,
 } from './config.js';
 import { blend, dark, light, plain, PX, sprite, text, textW } from './pixart.js';
 import { PAL } from './pixpal.js';
@@ -142,6 +143,7 @@ function hallProps(f, th, top, bot) {
     // soffa med utsikt
     box(base + 22, bot - 10, 26, 7, '#4695b8'); R(base + 22, bot - 13, 26, 4, INK); R(base + 23, bot - 12, 24, 2, '#5aa9cc');
     plantPot(base + 54, true);
+    if (f === SKYWALK_F) bridgeDoor(top, bot);
     return;
   }
   // kontor: vattenautomat och en växt
@@ -249,7 +251,7 @@ export function countOcc() {
   OCC = new Array(FLOORS).fill(0); OCC_IN = new Array(FLOORS).fill(0);
   for (const p of S.people) {
     if (p.dead) continue;
-    if (p.state !== 'ride' && p.state !== 'away' && p.state !== 'incar' && p.state !== 'assembly') OCC[p.floor]++;
+    if (p.state !== 'ride' && p.state !== 'away' && p.state !== 'incar' && p.state !== 'assembly' && p.state !== 'bridge' && p.state !== 'kronan') OCC[p.floor]++;
     if ((p.state === 'office' && !(p.spot && p.spot.win)) || p.state === 'instairs') OCC_IN[p.floor]++;
   }
 }
@@ -357,6 +359,19 @@ function stationHall(bot) {
   box(tx, ty, tw, 13, '#ffffff'); R(tx + 1, ty + 1, tw - 2, 2, '#2a5db0');
   for (let r = 0; r < 4; r++) R(tx + 2, ty + 5 + r * 2, tw - 4 - (r % 2) * 3, 1, '#5b6b80');
   R(tx + Math.round(tw / 2), ty + 13, 1, bot - 3 - ty - 13, INK);
+}
+// ---------- Dörren till skywalken (sky lobbyn) ----------
+// En glasdörr i hallens bakvägg längst till höger med skylten KRONAN och en pil: där går man ut på bron (skywalk.js).
+// Stängd bron: rött och vitt band över dörren.
+function bridgeDoor(top, bot) {
+  const cx = X(SKYWALK_DOOR), dw = 18, dh = Math.min(26, bot - top - 21), dx = cx - dw / 2, dy = bot - 3 - dh;
+  box(dx, dy, dw, dh, '#bfe3f2'); R(dx + dw / 2, dy + 1, 1, dh - 2, PAL.steel);
+  line(dx + 3, dy + dh - 4, dx + 7, dy + 4, 'rgba(255,255,255,.6)');
+  const sw = textW('KRONAN') + 10, sx = Math.round(cx - sw / 2), sy = dy - 11;
+  box(sx, sy, sw, 9, '#1f3f66'); text(g, 'KRONAN', sx + 3, sy + 2, '#ffffff');
+  R(sx + sw - 5, sy + 4, 3, 1, '#ffd23f'); R(sx + sw - 4, sy + 3, 1, 3, '#ffd23f'); // (pilen åt höger)
+  reserve(sx, sy, sw, 9);
+  if (closedWhy()) for (let k = 0; k < dw; k++) R(dx + k, dy + 8 + (k >> 2) % 2, 1, 2, k % 4 < 2 ? '#c81e3a' : '#ffffff');
 }
 // ---------- Pannrummet: dörren i hallen på P1 ----------
 // En ståldörr med varningsrand och en skylt, rör längs väggen och ratten till huvudkranen (vattenläckan, leak.js:

@@ -66,7 +66,10 @@ const INIT = {
   cleaner: /** @type {import('./hoist.js').Cleaner|null} */ (null), hoist: /** @type {import('./hoist.js').Hoist|null} */ (null),
   // olyckorna som vaktmästaren rycker ut till: gondolen som fastnat (gondola.js), den lösa hunden (dog.js), vattenläckan (leak.js)
   gondola: /** @type {import('./gondola.js').Gondola|null} */ (null), dog: /** @type {import('./dog.js').Dog|null} */ (null), leak: /** @type {import('./leak.js').Leak|null} */ (null),
+  hojd: /** @type {import('./hojd.js').Hojd|null} */ (null), // Höjdskräck på bron (hojd.js)
+  kronan: /** @type {import('./kronan.js').Kronan|null} */ (null), // Kronans hissar kraschar (kronan.js)
   rulltrappa: /** @type {import('./rulltrappa.js').Rulltrappa|null} */ (null), // Rulltrappan stannar (rulltrappa.js)
+  skywalk: /** @type {import('./skywalk.js').Skywalk|null} */ (null), // skywalken till granntornet Kronan (skywalk.js)
   // Hiss-O-Matic som kraschar (crash.js), tåget i tunneln (tunnel.js), panik i hissen (panic.js) och firmafesten (party.js, en gång per dygn: partyDay)
   crash: /** @type {import('./crash.js').Crash|null} */ (null), tunnel: /** @type {import('./tunnel.js').Tunnel|null} */ (null),
   panic: /** @type {import('./panic.js').Panic|null} */ (null), party: /** @type {import('./party.js').Party|null} */ (null), partyDay: -1,
@@ -119,7 +122,7 @@ export function newStats() {
     gripes: 0, cups: 0, holds: 0, chats: 0,
     crowdSkips: 0, closePresses: 0, heatStops: 0, relevels: 0, stumbles: 0, doorFights: 0,
     medical: 0, medicSec: 0, moveLoads: 0, moves: 0, moveBroken: 0, stormFaults: 0, learnedParks: 0, upperDeck: 0, escalator: 0,
-    trains: 0, trainIn: 0, trainOut: 0, panoStuck: 0,
+    trains: 0, trainIn: 0, trainOut: 0, panoStuck: 0, bridge: 0, neighbors: 0,
     // styrningens förutsagda väntan (vid senaste tilldelningen) mot den faktiska: summa fel, summa |fel|, antal
     etaErr: 0, etaAbs: 0, etaN: 0,
     // dygnets händelser i tidsordning (dayEvent): det sammanfattningen berättar om

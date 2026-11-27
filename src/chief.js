@@ -35,6 +35,9 @@ import { onPlatform, setTunnelMode } from './tunnel.js';
 import { setPanicMode } from './panic.js';
 import { setPartyMode } from './party.js';
 import { onEscalator, setRulltrappaMode } from './rulltrappa.js';
+import { GORAN, KRONAN, onBridge, setBridgeStorm } from './skywalk.js';
+import { setKronanMode } from './kronan.js';
+import { SKYWALK_F } from './config.js';
 import { changeStrategy } from './actions.js';
 import { STRAT_NAMES } from './config.js';
 import { systems } from './systems.js';
@@ -433,6 +436,46 @@ export function rulltrappaChiefTick() {
     decide('rulltrappa', 'Nu spärras rulltrappan av', sv`${n} trängs i den stillastående rulltrappan`, { inc: 'rulltrappa', floor: LOBBY, say: 'Det är för trångt – spärra av!' });
 }
 
+// --- Skywalken i stormen: i rusningen hålls bron öppen med en väktare vid dörren, så att Kronans folk kommer hem;
+//     annars stängs den. Blåser det upp på riktigt stängs den ändå (den som är ute får gå klart) ---
+const BRIDGE_WIND = 0.72;
+export function skywalkChiefTick() {
+  const X = S.skywalk, C = S.chief;
+  if (!X || !S.storm || SKYWALK_F < 0 || !free('skywalk')) return;
+  const h = hour(), rush = (h >= 7 && h < 9.5) || (h >= 11.2 && h < 12.8) || (h >= 15.5 && h < 18);
+  const o = { inc: 'storm', floor: SKYWALK_F };
+  if (!C.dec.skywalk) {
+    if (rush && setBridgeStorm('open', 'chief'))
+      decide('skywalk', sv`Bron till ${KRONAN} hålls öppen med vakt`, sv`det är rusning – ${KRONAN}s folk ska hem, och en väktare står vid dörren`, { ...o, say: 'Bron är öppen – men gå lugnt!' });
+    else if (setBridgeStorm('close', 'chief'))
+      decide('skywalk', sv`Bron till ${KRONAN} stängs`, 'det är lugnt i huset – ingen behöver gå över en svajande glasbro', { ...o, say: 'Stäng bron till Kronan!' });
+    return;
+  }
+  if (X.storm === 'open' && windAt() > BRIDGE_WIND && setBridgeStorm('close', 'chief'))
+    decide('skywalk', 'Nu stängs bron ändå', sv`vinden är uppe i ${windMs()} m/s${onBridge().length ? sv` – ${onBridge().length} på bron får gå klart` : ''}`, { ...o, say: 'Det blåser för mycket – stäng bron!' });
+}
+
+// --- Kronans hissar kraschar: grannsämja – Kronans folk får ta våra hissar, utom när vi har rusning eller egna
+//     bekymmer (då räcker hissarna inte till båda husen) ---
+export function kronanChiefTick() {
+  const X = S.kronan, C = S.chief;
+  if (!X || X.ph !== 'on' || !free('kronan') || S.t - X.t0 < 3) return;
+  const h = hour(), rush = (h >= 7 && h < 9.5) || (h >= 15.5 && h < 18.5);
+  const trouble = S.fire ? 'det brinner' : !S.power ? 'strömmen är borta' : S.crash ? 'vår egen Hiss-O-Matic ligger nere'
+    : S.elevators.filter(e => e.mode === 'broken' || e.mode === 'snapped').length >= 2 ? 'två av våra hissar är trasiga' : '';
+  const o = { inc: 'kronan', floor: SKYWALK_F };
+  if (!C.dec.kronan) {
+    if (!rush && !trouble && setKronanMode('open', 'chief'))
+      decide('kronan', sv`${KRONAN}s folk får ta våra hissar`, 'det är lugnt hos oss – grannar hjälper grannar', { ...o, say: sv`Hälsa ${GORAN}: välkomna över!` });
+    else if (setKronanMode('own', 'chief'))
+      decide('kronan', 'Vi tar bara våra egna', trouble || 'det är rusning – hissarna räcker inte till två hus', { ...o, say: sv`Tyvärr, ${GORAN}. Inte nu.` });
+    return;
+  }
+  // blir det rusning eller bekymmer medan grannarna strömmar in: stäng bron för dem
+  if (X.mode === 'open' && (rush || trouble) && setKronanMode('own', 'chief'))
+    decide('kronan', 'Nu stänger vi bron för grannarna', trouble || 'rusningen har börjat', { ...o, say: 'Det blev för mycket – stäng bron!' });
+}
+
 // --- Kuppen: polisens insatsledare – vänta ut dem (strömmen klipps inte), gå in via garaget där skåpbilen står ---
 /** den som bestämmer under kuppen (visas på incidentkortet) */
 export const INSATS = 'Insatsledaren';
@@ -447,6 +490,10 @@ function heistChiefTick() {
   } else if (!C.seen.heistPlan && S.t - Hs.policeAt > 12) {
     C.seen.heistPlan = true;
     decide('heist', 'Insatsstyrkan går in via garaget', 'skåpbilen står vid lastkajen – utan den kommer de ingenstans', { ...o, say: 'Vi tar dem vid lastkajen.' });
+  } else if (SKYWALK_F >= 0 && !C.seen.heistBridge && S.t - Hs.policeAt > 18) {
+    C.seen.heistBridge = true;
+    heistChoice('bakhåll');
+    decide('heist', sv`Bakhåll i ${KRONAN} – bron står öppen`, sv`de tror att bron är en väg ut – vi väntar i ${KRONAN}s sky lobby`, { ...o, say: 'Låt bron stå öppen. Vi väntar på andra sidan.' });
   } else if (Hs.signal && !C.seen.heistSignal) {
     C.seen.heistSignal = true;
     decide('heist', 'Ljussignal från taket – vi går in tidigare', sv`${Hs.heroWho || 'någon'} vet var de är`, { ...o, say: 'Vi har kontakt – snart går vi in!' });

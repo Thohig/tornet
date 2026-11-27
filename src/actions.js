@@ -5,6 +5,8 @@
 // spelarens åtgärder via `act()` (tabellen `ACTIONS`), `changeStrategy`, `triggers()` (registrets incidenter och
 // händelserna i `EXTRA_TRIGGERS` – allt som kan framkallas: `act('trigger', typ, mål)` där mål är våning för brand
 // och hiss-id för fel/värme/linbrott)
+import { setBridgeStorm } from './skywalk.js';
+import { setKronanMode } from './kronan.js';
 import { STRAT_NAMES } from './config.js';
 import { S, log } from './state.js';
 import { pev, spawnVisitor } from './people.js';
@@ -82,7 +84,7 @@ export const ACTIONS = {
   chaos: () => startChaos(),
   // kuppen: polisens val – strömmen (cut/wait), var insatsstyrkan går in (garage/tak), tåget (stop/go), gå in nu (storm)
   heist: what => { const H = S.heist; if (!heistChoice(what)) return false; if (what === 'stop') delayTrain();
-    playerChose('heist', { cut: 'Klipp strömmen', wait: 'Vänta ut dem', garage: 'Storma via garaget', tak: 'Storma via taket', stop: 'Stoppa tunnelbanan', go: 'Låt tåget gå', storm: 'Gå in nu!' }[what], { inc: 'heist', floor: H ? null : null }); return true; },
+    playerChose('heist', { cut: 'Klipp strömmen', wait: 'Vänta ut dem', garage: 'Storma via garaget', tak: 'Storma via taket', stop: 'Stoppa tunnelbanan', go: 'Låt tåget gå', storm: 'Gå in nu!', 'spärr': 'Polisen spärrar bron', 'bakhåll': 'Bakhåll i Kronan – bron står öppen' }[what], { inc: 'heist', floor: H ? null : null }); return true; },
   // rundvisningen (ingen incident – den beställs): beställ hos guiden (start), direkt – guiden avbryter rasten (now),
   // gå vidare till nästa stopp (next), avsluta (end)
   visning: what => (what === 'start' ? orderVisning() : what === 'now' ? orderVisning(true) : what === 'next' ? nextVisning() : what === 'end' ? endVisning() : undefined),
@@ -107,6 +109,10 @@ export const ACTIONS = {
   // ett annat datum (Framkalla, eller dagens när spelaren har spelat över midnatt): årstiden, veckodagen och ljuset
   // gäller direkt; temperaturen ligger lika långt från månadens medel som förut (inget nytt slumptal)
   date: d => setDate(d),
+  // skywalken i stormen: stäng bron (close) eller håll den öppen med vakt (open)
+  skywalk: m => { if (!setBridgeStorm(m, 'player')) return false; playerChose('skywalk', m === 'close' ? 'Bron till Kronan stängs' : 'Bron till Kronan hålls öppen med vakt', { inc: 'storm' }); return true; },
+  // Kronans hissar har kraschat: släpp in Kronans folk (open) eller bara Tornets egna (own)
+  kronan: m => { if (!setKronanMode(m, 'player')) return false; playerChose('kronan', m === 'open' ? 'Kronans folk får ta våra hissar' : 'Vi tar bara våra egna', { inc: 'kronan' }); return true; },
   panoRescue: how => { if (!S.pano || !setPanoHow(how, 'player')) return; playerChose('pano', panoText(how), { inc: 'pano', car: S.pano.car }); },
   moveWind: c => { if (!S.move) return; setMoveWind(c); playerChose('move', c === 'varu' ? 'Lasset vid luckan i varuhissen' : 'Lasset vid luckan väntar'); },
 };

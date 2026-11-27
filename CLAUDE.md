@@ -68,6 +68,9 @@ Panelen och pixelgrafiken går inte att köra i Node – det gör `npm run playt
 | `panic.js` | panik i en fullsatt hiss som tvärstannar (`S.panic`, bygger på `trapNext` i service.js): larmet, alla knappar; prata i nödtelefonen eller veva ner korgen (`crankDown` i service.js, `act('panic', …)`); egen slumpström `panik` |
 | `party.js` | firmafesten (`S.party`, en gång per dygn: `S.partyDay`): gäster med ballonger (`p.party`, `balloonFreight` i people.js) och tårtan i varuhissen; ballongerna fastnar i dörrarna (`act('party', …)`); egen slumpström `firmafest` |
 | `rulltrappa.js` | rulltrappan stannar (`S.rulltrappa`): nödstoppet, vaktmästaren som startar den igen, folk som går i den stillastående rulltrappan (`escalatorStopped`, `escalatorTime` i people.js) eller tar nedre däcket när den är avspärrad (`escalatorClosed`, `act('rulltrappa', …)`); egen slumpström `rulltrappa` |
+| `skywalk.js` | skywalken till granntornet Kronan (`BUILDING.skywalk`, `S.skywalk`): grannarna över bron (egen ankomstström `grannar`), lunchen i Kronan, vägen ut (`bridgeOut`/`enterBridge` i people.js, läget `bridge`/`kronan`), öppet eller stängt (`closedWhy`, `canGoOut`/`canComeIn`), utrymning över bron (`bridgeEvac`), stormens beslut (`act('skywalk', …)`), underhållsnätter och Kronans driftchef Göran i driftradion |
+| `kronan.js` | Kronans hissar kraschar (`S.kronan`): Kronans folk vill ta Tornets hissar ner – välkomna över eller bara de egna (`act('kronan', …)`); egen slumpström `kronan` |
+| `hojd.js` | höjdskräck på bron (`S.hojd`): någon står still mitt på bron (`p.frozen`) tills vaktmästaren går ut och leder hen över; egen slumpström `hojd` |
 | `chaos.js` | Murphys lag: kaosknappen (`act('chaos')`, en gång per dygn) startar en kedja (`S.chaos`, `STEPS`) av allt som kan gå fel; egen slumpström `kaos` |
 | `cast.js` | stamgästerna (data i `CAST` i config): återkommande karaktärer med egenheter och repliker (`say`) |
 | `life.js` | garage/bilar, leveransbil, boendes dygnsrutiner, VIP-helikopter |
@@ -84,6 +87,7 @@ Panelen och pixelgrafiken går inte att köra i Node – det gör `npm run playt
 | `pixel.js` | hela bilden i pixelgrafik: `renderPixel` sätter ihop delarna i `pixcore.js` (ritytan, lagren, platsbokningen), `pixbuilding.js`, `pixhall.js`, `pixcars.js`, `pixfolk.js` och `pixroof.js` |
 | `pixart.js` | rutnätsfigurer med automatisk kontur, bitmapstypsnittet 3×5, färghjälp; `TEXTLOG` = textrutorna i bilden för provspelningen |
 | `pixpeople.js` | människor ur `p.look`: sido-/framvy, gångsteg, humör, bagage |
+| `pixskywalk.js` | skywalken i bilden: bron, folket på den, Kronans fasad med Jörgen i gondolen, avspärrningar och väktaren |
 | `pixpal.js` | paletten `PAL` |
 | `view.js` | canvas, kamera, `VIEW.follow`; `detachCam`, manuell scrollning kopplar loss |
 | `incui.js` | incidenterna i gränssnittet (`incUi()`): knappen i Framkalla, kortet, förvarningens klipp, det sevärda och ljudet |
@@ -138,6 +142,7 @@ Det finns ingen topplist, statusrad, låda eller högerklicksmeny: hela gränssn
 - Hisslägen (`e.mode`): `normal`, `recall`, `locked`, `rescue`, `dead`, `lift` (panoramahissen kör ett flyttlass; `e.liftWant` = beställd, tar inga nya), `broken` (trasig, väntar på tekniker; `e.fault.cable` = linbyte, korgen står mellan två våningar), `service`, `snapped` (linbrott: `e.snap.ph` = `fall`/`trapped`/`evac`). `e.hold` = på väg till nattservice (tar inga nya). `e.hijack` = kapad av rånarna under kuppen (tar inga nya, heist.js). `e.wear` följer med till nästa dygn. `outReason(e)` = varför hissen inte tar nya ('' = den tar), grunden för `operational`/`servesNow`/`outLong`. `benched(e)` = tar inga nya just nu (`e.off`, `e.hot`, `e.windLock`, `e.wetLock` – vattenläckan); `e.indep` = oberoende drift (bara flyttgubbarna och ambulansen).
 - `keyed(p)` = har nyckel och använder aldrig hallknapparna (VIP, ambulans, flyttgubbar); `prio(p)` = får en hiss för sig (VIP-låset: VIP, ambulans och räddningstjänsten vid fasaden).
 - Hissetikett: `p.space` (hur trångt man står ut med, 9 = bryr sig inte), `p.polite` (håller upp dörren). Ett fullt däck hämtar ingen (`e.deckFull`).
+- Skywalken: bron går från sky lobbyn (`SKYWALK_F`) till Kronan, som inte simuleras. Folk på bron har läget `bridge` (`p.bridgeT` 0 = Tornets dörr, 1 = Kronans, `p.bridgeDir`), inne i Kronan `kronan`; grannarna har `p.kronan` och sky lobbyn som utgång. Bilden är bredare än tornet (`W` > `TOWER_W`): skalan räknas på tornet och bron nås genom att glida i sidled.
 - Mellanplanet `MEZZ` (våning 1): dit åker man rulltrappa från entrén till expressens övre däck (`p.escalator`).
 - Trappan: `stairsChoice` (korta resor/otåliga, `p.fit`), `p.stairsByChoice` skiljer frivilliga trappresor från utrymning m.m.
 - Brandlägen: `recall` (larmets standard) / `zone` / `none` (`startFire(f, false)` startar utan återkallning); i zonläge spärras hissar som inte når någon säker våning (`e.zoneLock`).

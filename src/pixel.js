@@ -18,6 +18,7 @@
 // lastkajen –, `pixhall.js` – hallarna, kontrollrummet, personalrummet, perrongen –, `pixcars.js` – korgarna,
 // linorna, panoramahissen –, `pixfolk.js` – folket i hallarna, bubblor, telefonsamtalet, spårning, ljudeffekter –
 // och `pixroof.js` – taket, gondolen och hissbalken, flyttlassen, rök, väder, blåljus
+import { drawSkywalkPx, drawSkywalkTalkPx } from './pixskywalk.js';
 import { hour, S } from './state.js';
 import { FLOORS, LOBBY, MEZZ, floorY } from './config.js';
 import { ctx, VIEW } from './view.js';
@@ -54,6 +55,7 @@ export function renderPixel(dt) {
   // (skyltarna om övre däcket efter rulltrappan: de som går i den skymmer dem inte)
   for (const f of [LOBBY, MEZZ]) if (f >= 0 && floorY(f) >= VIEW.camY - 10 && floorY(f + 1) <= VIEW.camY + VIEW.viewH + 10) deckSign(f);
   drawTerracePx(hr);
+  drawSkywalkPx(hr); // (skywalken till Kronan: före korgarna, så att panoramahissen åker framför bron)
   for (const e of S.elevators) drawRopesPx(e);
   drawLanternsPx();
   reserveCarSigns();
@@ -65,6 +67,7 @@ export function renderPixel(dt) {
   lap('gatan');
   reserveLobbySigns();
   drawHallPeople();
+  drawSkywalkTalkPx();
   lap('folk');
   drawPanoPx();
   drawHeliPx();

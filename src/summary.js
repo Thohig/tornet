@@ -54,6 +54,7 @@ export const STATS = [
   { k: 'upperDeck', label: 'Övre däcket', g: 'trafik', w: 1 },
   { k: 'escalator', label: 'Rulltrappan', g: 'trafik', w: 1 },
   { k: 'trainIn', label: 'Av tåget 🚇', g: 'trafik', w: 1 },
+  { k: 'bridge', label: 'Över bron 🌉', g: 'trafik', w: 1 },
   { k: 'trainOut', label: 'På tåget 🚇', g: 'trafik', w: 1 },
   { k: 'wrongPress', label: 'Felknappar 🙈', g: 'trafik', w: 1, better: -1 },
   { k: 'kidPresses', label: 'Barn på alla knappar', g: 'trafik', w: 1 },
