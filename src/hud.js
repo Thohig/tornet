@@ -505,7 +505,7 @@ export function showIntro(mode = S.started ? 'help' : 'start', then = /** @type 
   const touch = matchMedia('(pointer: coarse)').matches, mob = document.body.classList.contains('mob');
   if (mode === 'help') S.paused = true;
   showOverlay(`<div class="card intro"><h1>TORNET${help ? ' · HJÄLP' : ''}</h1>
-    <p>Välkommen till <b>Tornet</b> – åtta hissar styrda av <b>Hiss-O-Matic 3000</b>, ${FL.length} våningar och en massa folk med bråttom. <b>Huset sköter sig självt:</b> driftchefen tar besluten och berättar varför, och regissören 🎬 klipper bilden till det som händer. Luta dig tillbaka och titta.</p>
+    <p>Välkommen till <b>Tornet</b> – nio hissar styrda av <b>Hiss-O-Matic 3000</b>, ${FL.length} våningar och en massa folk med bråttom. <b>Huset sköter sig självt:</b> driftchefen tar besluten och berättar varför, och regissören 🎬 klipper bilden till det som händer. Luta dig tillbaka och titta.</p>
     ${mob ? '<p class="intro-warn">💻 Tornet gör sig bäst på en dator. På mobilen kan du titta på huset – kontrollpanelen, där du framkallar incidenter, byter styrlogik och tar över driftchefens beslut, finns bara på en dator.</p>' : touch ? '<p class="intro-warn">💻 Tornet gör sig bäst på en dator med stor skärm och mus – på mobilen och surfplattan blir bilden liten och allt får inte plats.</p>' : ''}
     ${help && !mob ? `<div class="intro-tour"><button class="btn" id="tour-go"${S.visning ? ' disabled' : ''}>🛎️ BE ${guideName().toUpperCase()} VISA RUNT</button><span>Ny i huset? ${esc(guideName())} visar dig runt och berättar vad du ser.</span></div>` : ''}
     <ul class="intro-short">

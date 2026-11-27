@@ -17,7 +17,7 @@
 // personalrummet), `S.chief.strat` = får byta styrlogik (av i ligan). Dagskiftet: `chiefOnDuty()`; cheferna som
 // personer finns i crew.js (`CHIEFS`, `chiefPerson`) – besluten fattas var de än är
 import { fl } from './util.js';
-import { CREW, LOBBY } from './config.js';
+import { CREW, LOBBY, PENDEL, SHELTER, SKY } from './config.js';
 import { S, clockStr, hour, log } from './state.js';
 import { alarm, crewPerson, lookUp } from './crew.js';
 import { ladderReach, ropeWindy, setPanoHow } from './pano.js';
@@ -35,6 +35,8 @@ import { onPlatform, setTunnelMode } from './tunnel.js';
 import { setPanicMode } from './panic.js';
 import { setPartyMode } from './party.js';
 import { onEscalator, setRulltrappaMode } from './rulltrappa.js';
+import { PIT_LEVEL, setPumparMode } from './pumpar.js';
+import { setOvningOrder } from './shelter.js';
 import { GORAN, KRONAN, onBridge, setBridgeStorm } from './skywalk.js';
 import { setKronanMode } from './kronan.js';
 import { SKYWALK_F } from './config.js';
@@ -349,6 +351,38 @@ export function leakChiefTick() {
   }
   if (L.mode === 'run' && (L.wet.length >= 3 || L.shorts.length) && setLeakMode('stop', 'chief'))
     decide('leak', 'Nu stoppas de blöta hissarna', L.shorts.length ? sv`${S.elevators[L.shorts[0]].name} har redan kortslutits` : sv`vattnet har nått ${L.wet.length} våningar`, { inc: 'leak', floor: L.src, say: 'Stopp! Det rinner för mycket.' });
+}
+
+// --- Pumparna stannar: chefen chansar bara när det är rusning på pendeln och vaktmästaren hinner ner innan vattnet når
+//     gropen; utan ström (vattnet stiger fortare och pumparna kan inte startas) ställs pendelhissen direkt. Hinner
+//     vattnet nästan upp till gropen ställs den ändå ---
+const PUMP_BUSY = 6;
+export function pumparChiefTick() {
+  const X = S.pumpar, C = S.chief;
+  if (!X || X.ph !== 'on' || !free('pumpar') || S.t - X.t0 < 3) return;
+  const waiting = S.people.filter(p => p.state === 'wait' && p.floor === PENDEL).length;
+  if (!C.dec.pumpar) {
+    if (S.power && waiting >= PUMP_BUSY && setPumparMode('run', 'chief'))
+      decide('pumpar', 'Pendelhissen kör vidare', sv`${waiting} väntar vid pendeln – vaktmästaren hinner nog ner innan vattnet når gropen`, { inc: 'pumpar', floor: PENDEL, say: 'Kör på – men skynda er ner till pumparna!' });
+    else if (setPumparMode('stop', 'chief'))
+      decide('pumpar', 'Pendelhissen ställs', S.power ? 'vatten i gropen förstör kontaktorerna – X1 och rulltrappan får ta pendeln en stund' : 'utan ström går pumparna inte att starta, och vattnet stiger fort', { inc: 'pumpar', floor: PENDEL, say: 'Ställ pendelhissen!' });
+    return;
+  }
+  if (X.mode === 'run' && X.level >= PIT_LEVEL - 0.15 && setPumparMode('stop', 'chief'))
+    decide('pumpar', 'Nu ställs pendelhissen', sv`vattnet står ${Math.round(X.level * 100)} % upp – snart i gropen`, { inc: 'pumpar', floor: PENDEL, say: 'Stopp! Vattnet är nästan uppe.' });
+}
+
+// --- Skyddsrumsövningen: sitter fler i höga zonen än i låga börjar övningen uppifrån (de har längst väg, och
+//     hissarna går fulla nedåt); annars nerifrån (de nedersta är snabbt nere och står inte i vägen) ---
+export function ovningChiefTick() {
+  const X = S.ovning;
+  if (!X || X.ph !== 'wait' || !free('ovning') || S.t - X.t0 < 2) return;
+  const seated = S.people.filter(p => !p.dead && p.state === 'office' && !p.role && !p.crewId);
+  const high = seated.filter(p => p.floor > SKY).length, low = seated.length - high;
+  if (high >= low && setOvningOrder('top', 'chief'))
+    decide('ovning', 'Övningen går uppifrån', sv`${high} sitter ovanför sky lobbyn – de har längst väg och får börja`, { inc: 'ovning', floor: SHELTER, say: 'Uppifrån, våning för våning!' });
+  else if (setOvningOrder('bottom', 'chief'))
+    decide('ovning', 'Övningen går nerifrån', sv`de flesta sitter i låga zonen (${low}) – de är snabbt nere och står inte i vägen för dem längre upp`, { inc: 'ovning', floor: SHELTER, say: 'Nerifrån – entrén och låga zonen först!' });
 }
 
 // --- Hiss-O-Matic kraschar: i rusningen (många som väntar) chansar chefen på en omstart – nödläget är för

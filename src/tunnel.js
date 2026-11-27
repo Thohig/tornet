@@ -28,7 +28,7 @@ import { sv } from './sv.js';
 const GIVE_UP = [45, 90];
 
 /** de som väntar på perrongen */
-export const onPlatform = () => S.people.filter(p => p.state === 'platform' && !p.dead);
+export const onPlatform = () => S.people.filter(p => p.state === 'platform' && !p.dead && p.floor === STATION);
 /** de som är på väg till tåget (inte framme på perrongen än) @param {Person} p */
 const toTrain = p => !p.dead && p.state !== 'platform' && p.exitFloor === STATION && p.leaving;
 /** kan tåget fastna nu? (det går tåg, inget står vid perrongen och huset brinner inte) */

@@ -13,7 +13,8 @@
  * Dygnets kalender (S.cal)
  * @typedef {{ date: string|null, wd: number|null, weekend: boolean, month: number|null, day: number|null,
  *   tempMean: number|null, sunrise: number, sunset: number, nightMax: number,
- *   empMul: number, visMul: number, tourMul: number }} Cal
+ *   empMul: number, visMul: number, tourMul: number, hesa: boolean }} Cal
+ * (hesa = provlarmet för Hesa Fredrik går i dag kl 15: första måndagen i mars, juni, september och december – shelter.js)
  */
 
 /** veckodagarna (0 = måndag) och månaderna, som de skrivs i rubriker */
@@ -30,7 +31,9 @@ const WEEKEND = { empMul: 0.2, visMul: 0.6, tourMul: 1.6 };
 
 /** @type {Cal} */
 export const NEUTRAL = Object.freeze({ date: null, wd: null, weekend: false, month: null, day: null, tempMean: null,
-  sunrise: SUNRISE0, sunset: SUNSET0, nightMax: 1, empMul: 1, visMul: 1, tourMul: 1 });
+  sunrise: SUNRISE0, sunset: SUNSET0, nightMax: 1, empMul: 1, visMul: 1, tourMul: 1, hesa: false });
+/** månaderna då Hesa Fredrik provas (första måndagen kl 15) */
+const HESA_MONTHS = [3, 6, 9, 12];
 
 /** '2026-11-27' → { y, m (1–12), d }, eller null om det inte är ett riktigt datum @param {string|null|undefined} s */
 export function parseDate(s) {
@@ -77,6 +80,7 @@ export function dayInfo(date) {
     // ljusa sommarnätter: solen går bara några grader under horisonten och himlen blir aldrig helt mörk
     nightMax: Math.min(1, Math.max(0.3, s.below / 13)),
     ...(weekend ? WEEKEND : { empMul: 1, visMul: 1, tourMul: 1 }),
+    hesa: wd === 0 && p.d <= 7 && HESA_MONTHS.includes(p.m),
   };
 }
 

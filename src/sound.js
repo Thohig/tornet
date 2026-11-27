@@ -202,10 +202,19 @@ function strain(kind) {
   else if (kind === 'fault') sweep(g, 2200, 3400, t, 0.7, 0.8);
   else for (let i = 0; i < 3; i++) sweep(g, 320, 170, t + i * 0.35, 0.3, 0.9); // knarr
 }
+/** Hesa Fredrik: provlarmet ”Viktigt meddelande till allmänheten” – en lång, hes ton som tonar in och ut, långt borta
+ *  över stan (signalen är sju sekunder ljud och fjorton tystnad; här en ton). */
+function hesa() {
+  const g = out(0.16, 0.3, 7.2); if (!g) return;
+  const t = ac.currentTime, o = ac.createOscillator(), o2 = ac.createOscillator(), gg = ac.createGain();
+  o.type = 'sawtooth'; o.frequency.setValueAtTime(380, t); o2.type = 'square'; o2.frequency.setValueAtTime(383, t);
+  gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(0.5, t + 1.2); gg.gain.setValueAtTime(0.5, t + 5.6); gg.gain.linearRampToValueAtTime(0, t + 7);
+  o.connect(gg); o2.connect(gg); gg.connect(g); o.start(t); o2.start(t); o.stop(t + 7.1); o2.stop(t + 7.1);
+}
 // Vilket ljud varje incident gör står i registret (sound i incui.js) – här finns bara ljuden.
 /** @type {Record<import('./incui.js').IncSound, (W?: any) => void>} */
 const INC_FX = { thunder: () => thunder(false), strike: () => thunder(true), buzz: () => buzz(), strain: W => strain(W ? W.type : 'fault'),
-  alarm: () => alarm(), siren: () => siren() };
+  alarm: () => alarm(), siren: () => siren(), hesa: () => hesa() };
 let heardWarn = -1;
 /** senaste stämpeln per incident och ljud ('fire:0' …) */
 const heard = new Map();

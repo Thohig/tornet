@@ -9,7 +9,7 @@
 // informationsrutorna), förvarningens klipp `warn` och det sevärda `shots`; panels.js, hud.js och director.js går
 // igenom listan
 import { esc, fl } from './util.js';
-import { DOCK, EL, FIRE_HINT, LOBBY, MEZZ, ROOF, TOP, CONTROL, STATION, FL, floorWith, shaftCX, SKYWALK_F, bridgeX } from './config.js';
+import { DOCK, EL, FIRE_HINT, LOBBY, MEZZ, ROOF, TOP, CONTROL, STATION, PENDEL, SHELTER, FL, floorWith, shaftCX, SKYWALK_F, bridgeX } from './config.js';
 import { S } from './state.js';
 import { canRescue } from './incidents.js';
 import { STORM_HINT, windMs } from './weather.js';
@@ -30,6 +30,8 @@ import { onEscalator, rulltrappaPossible } from './rulltrappa.js';
 import { kronanPossible } from './kronan.js';
 import { hojdPossible } from './hojd.js';
 import { KRONAN, canGoOut, onBridge } from './skywalk.js';
+import { ESC_LEVEL, PIT_LEVEL, pumparPossible } from './pumpar.js';
+import { drillers, hesaNow, ovningPossible } from './shelter.js';
 /** panoramahissen (null om huset saknar en) */
 const panoCar = () => (PANO ? S.elevators[PANO.id] || null : null);
 
@@ -42,7 +44,7 @@ const panoCar = () => (PANO ? S.elevators[PANO.id] || null : null);
  * - shots(add, h): det som är sevärt medan incidenten pågår (h = visible, name1)
  * - sound: ljudet (sound.js, score.js) – warn = ljudeffekten när förvarningen kommer, on = [stämpel, ljudeffekt]: effekten
  *   spelas när stämpeln (en tid, null = inget) ändras, piece = husmusikens stycke medan den pågår (null = som vanligt)
- * @typedef {'thunder'|'strike'|'buzz'|'strain'|'alarm'|'siren'} IncSound
+ * @typedef {'thunder'|'strike'|'buzz'|'strain'|'alarm'|'siren'|'hesa'} IncSound
  * @typedef {{ key: string, late?: boolean, trig?: { icon: string, name: string, hint: string, off?: () => boolean, why?: () => string },
  *   card?: (h: any, parts: any[]) => void, warn?: (W: any, add: Function, h: any) => void, shots?: (add: Function, h: any) => void,
  *   sound?: { warn?: IncSound, on?: [() => number|null|undefined|false, IncSound][], piece?: () => string|null } }} IncUi
@@ -631,6 +633,77 @@ export function incUi() {
       if (!X || X.ph === 'klar') return;
       const p = S.people.find(q => q.id === X.pid && !q.dead);
       add('hojd', X.ph === 'leder' ? 62 : 72, 'floor', SKYWALK_F, X.ph === 'leder' ? '🤝 Ett steg i taget över bron' : '😨 Höjdskräck mitt på bron', S.t - X.t0 < 1, bridgeX(p && p.bridgeT !== undefined ? p.bridgeT : 0.5));
+    },
+  },
+  {
+    key: 'ovning',
+    // (provlarmet Hesa Fredrik ljuder på provlarmsdagen – stämpeln är dygnet då det gick)
+    sound: { on: [[() => hesaNow() && S.hesaDay + 1, 'hesa']] },
+    trig: { icon: '🛡️', name: 'Skyddsrumsövning', hint: 'Huset övar att gå ner i skyddsrummet i berget, våning för våning', off: () => !ovningPossible(),
+      why: () => (S.ovning ? 'övningen pågår redan' : SHELTER < 0 ? 'huset har inget skyddsrum' : S.fire ? 'det brinner i huset' : !S.power ? 'strömmen är borta' : 'det är natt – alla sover') },
+    card: (h, parts) => {
+      const { card, chiefLine, bold, ikon, line, acts, hint, choice } = h;
+      // ---------- skyddsrumsövningen (val: uppifrån eller nerifrån) ----------
+      const X = S.ovning;
+      if (!X) return;
+      const n = drillers().length;
+      const now = X.ph === 'wait' ? 'Huset väntar på ordningen.'
+        : X.ph === 'in' ? sh`Alla som hann är nere: ${bold(X.inside)} räknas i skyddsrummet.`
+        : sh`${bold(X.inside)} av ${bold(n)} är nere i skyddsrummet.`;
+      const b = (m, txt, why) => choice(`ovning:${m}`, txt, { on: X.order === m, why });
+      parts.push(card('ovning', X.ph === 'in' ? 'info ovning' : 'ovning', '🛡️ Skyddsrumsövning', `
+          ${line(`${X.hesa ? 'Efter provlarmet övar huset att gå ner i skyddsrummet.' : 'Huset övar att gå ner i skyddsrummet i berget.'} ${now}`)}
+          ${X.ph === 'in' ? '' : chiefLine('ovning', 'Uppifrån eller nerifrån?')}
+          ${X.ph === 'in' ? '' : acts(b('top', '⬇️ Uppifrån', 'De som har längst väg börjar – hissarna går fulla nedåt hela tiden'),
+            b('bottom', '⬆️ Nerifrån', 'De nedersta är snabbt nere och står inte i vägen för dem längre upp'),
+            ikon(`show:${SHELTER}`, '📹', 'Visa skyddsrummet', 'Kameran går ner till skyddsrummet'))}
+          ${hint('Till skyddsrummet går X1:s övre däck och pendelhissen – och trappan.')}`, X.ph !== 'in'));
+    },
+    shots: (add) => {
+      const X = S.ovning;
+      if (!X) return;
+      if (X.ph === 'in') add('ovning', 60, 'floor', SHELTER, '🛡️ Räkning i skyddsrummet', S.t - X.inT < 1);
+      else if (X.ph === 'call') add('ovning', 44, 'floor', SHELTER, '🛡️ Huset går ner i skyddsrummet', S.t - X.t0 < 4);
+    },
+  },
+  {
+    key: 'pumpar',
+    sound: { warn: 'strain' },
+    trig: { icon: '🌊', name: 'Pumparna stannar', hint: 'Grundvattenpumparna i berget stannar – vattnet stiger mot pendelhissens grop', off: () => !pumparPossible(),
+      why: () => (S.pumpar ? 'pumparna står redan still' : SHELTER < 0 ? 'huset har inget pumprum' : 'det brinner i huset') },
+    warn: (_W, add) => add('warn', 70, 'floor', SHELTER, '🌊 Det porlar i berget', true),
+    card: (h, parts) => {
+      const { card, chiefLine, bold, ikon, line, acts, hint, choice } = h;
+      // ---------- pumparna stannar (incident med val: pendelhissen kör vidare eller ställs) ----------
+      const X = S.pumpar;
+      if (!X) return;
+      const lvl = Math.round(X.level * 100);
+      if (X.ph === 'drain') {
+        parts.push(card('pumpar', 'info pumpar', '🌊 Pumparna går igen', `
+          ${line(sh`Vattnet sjunker: ${bold(`${lvl} %`)} kvar.`)}`));
+        return;
+      }
+      const jan = S.people.find(p => p.id === X.jan && !p.dead);
+      const status = !S.power ? 'Utan ström går pumparna inte att starta.'
+        : !jan ? 'Vaktmästaren är på väg.'
+        : jan.floor === SHELTER && jan.state === 'office' ? sv`${esc(jan.name)} skruvar i pumpskåpet.`
+        : sv`${esc(jan.name)} är på väg ner till pumprummet.`;
+      const now = X.level >= PIT_LEVEL ? 'Vattnet har nått pendelhissens grop.' : sh`Vattnet står ${bold(`${lvl} %`)} upp mot gropen.`;
+      const b = (m, txt, why) => choice(`pumpar:${m}`, txt, { on: X.mode === m, why });
+      parts.push(card('pumpar', 'pumpar', '🌊 Pumparna har stannat', `
+          ${line(`${X.outage ? 'Strömmen tog pumparna i berget med sig.' : sv`Pumparna i berget har stannat: ${X.cause}.`} ${now} ${status}`)}
+          ${chiefLine('pumpar', 'Pendelhissen kör vidare eller ställs?')}
+          ${acts(b('run', '🚆 Kör vidare', 'Pendeln fungerar som vanligt – men når vattnet gropen går pendelhissen sönder'),
+            b('stop', '🚧 Ställ den', 'Inget går sönder – men alla från pendeln får ta X1 eller rulltrappan'),
+            ikon(`show:${SHELTER}`, '📹', 'Visa pumprummet', 'Kameran går ner till skyddsrummet och pumprummet'))}
+          ${hint('Rulltrappan genom berget stannar när vattnet når dess maskinrum.')}`, true));
+    },
+    shots: (add) => {
+      const X = S.pumpar;
+      if (!X) return;
+      if (S.t - X.t0 < 8) add('pumpar', 76, 'floor', SHELTER, '🌊 Pumparna har stannat', S.t - X.t0 < 1);
+      else if (X.ph === 'on') add('pumpar', X.level >= PIT_LEVEL - 0.1 ? 66 : 46, 'floor', X.level >= ESC_LEVEL ? PENDEL : SHELTER,
+        X.level >= PIT_LEVEL ? '🌊 Vatten i pendelhissens grop' : '🌊 Vattnet stiger i berget');
     },
   },
   ];

@@ -36,7 +36,7 @@ export const escalatorStopped = () => !!S.rulltrappa && S.rulltrappa.ph === 'sto
 /** är rulltrappan avspärrad? */
 export const escalatorClosed = () => escalatorStopped() && S.rulltrappa.mode === 'close';
 /** de som är i rulltrappan just nu (åker, eller går i den när den står still) */
-export const onEscalator = () => S.people.filter(p => !p.dead && p.escalator && p.state === 'instairs');
+export const onEscalator = () => S.people.filter(p => !p.dead && p.escalator && !p.deep && p.state === 'instairs');
 /** kan den stanna nu? (huset har en rulltrappa, strömmen är på och det brinner inte) */
 export const rulltrappaPossible = () => MEZZ >= 0 && !S.rulltrappa && !S.fire && S.power;
 
