@@ -33,7 +33,7 @@ const G = stream('gestalt'), G2 = stream('inkallade');
  *   leaveAt?: number, lunchAt?: number, lunched?: boolean, backAt?: number, cups?: number,
  *   bank?: string|null, fixAt?: number, avoid?: number, kicked?: string, crowdSkip?: string, keepWait?: boolean,
  *   etaAt?: number, lastWait?: number, retypeAt?: number, seenBy?: Record<number, number>, offCar?: number, offAt?: number,
- *   deck?: number, fromUpper?: boolean, escalator?: boolean, hurry?: boolean, moving?: boolean,
+ *   deck?: number, fromUpper?: boolean, escalator?: boolean, escT?: number, hurry?: boolean, moving?: boolean,
  *   stairsByChoice?: boolean, viaStairs?: boolean, nearX?: number,
  *   toTrain?: boolean, fromTrain?: boolean, boardAt?: number,
  *   evac?: boolean, evacFrom?: number, evacBack?: boolean, smoked?: boolean, ff?: boolean, ffStairs?: boolean,
@@ -60,6 +60,7 @@ import { arriveByCar, backFromAssembly, fireReturn, leaveBuilding, resNext, home
 import { CREW_LOOK, crewNext, crewSpot, dutyNext, dutySpot } from './crew.js';
 import { buttonsMode, carButtonMistakes } from './buttons.js';
 import { balloonFreight } from './party.js';
+import { escalatorClosed, escalatorStopped, onEscalator, walkedEscalator } from './rulltrappa.js';
 import { tourNext, tourSpot } from './tour.js';
 import { guestNext, keyNext, visningSpot } from './visning.js';
 import { sysArrive, sysNext, sysRole, sysSeized, sysSpot } from './systems.js';
@@ -170,7 +171,7 @@ export function legDest(from, goal, p) {
   const plan = route(from, goal, ok);
   const hop = plan !== null ? plan : route(from, goal, EL.filter(d => elevatorAllows(d, p))) ?? (from !== SKY ? SKY : goal);
   // dubbeldäck: från entrén upp mot höga zonen kan man ta rulltrappan till mellanplanet och övre däcket
-  if (MEZZ >= 0 && from === LOBBY && hop === SKY && goal > SKY && plan !== null && upperDeckChoice(goal, ok)) return MEZZ;
+  if (MEZZ >= 0 && from === LOBBY && hop === SKY && goal > SKY && plan !== null && escalatorOk(p) && upperDeckChoice(goal, ok)) return MEZZ;
   return hop;
 }
 /** Väljer personen expressens övre däck (via mellanplanet)? Målet 7 nås direkt därifrån. Kostnadsstyrningen
@@ -186,8 +187,18 @@ function upperDeckChoice(goal, ok) {
   }
   return (goal - SKY) % 2 === 1;
 }
+/** Tar personen rulltrappan nu? Inte när den är avspärrad, och står den still går den som bär något tungt eller
+ *  ogärna går (p.fit) hellre till expressens nedre däck (rulltrappa.js) @param {Person} p */
+const escalatorOk = p => !escalatorClosed() && !(escalatorStopped() && p && ((p.cargo && p.cargo.kg >= 15) || p.fit < 0.3));
+/** Hur länge resan i rulltrappan tar (s): 1,6 s när den rullar; står den still går man – uppför flåsar man, och ju
+ *  fler som går samtidigt desto trängre @param {Person} p */
+function escalatorTime(p) {
+  if (!escalatorStopped()) return 1.6;
+  const others = onEscalator().filter(q => q !== p).length;
+  return (p.dest > p.floor ? 6.5 : 4) + 0.8 * others;
+}
 /** Byte mellan entrén och mellanplanet (på väg till eller från expressens övre däck) görs i rulltrappan @param {Person} p */
-const escalatorHop = p => MEZZ >= 0 && p.goal !== undefined
+const escalatorHop = p => MEZZ >= 0 && p.goal !== undefined && !escalatorClosed()
   && ((p.floor === LOBBY && p.dest === MEZZ && p.goal !== MEZZ) || (p.floor === MEZZ && p.dest === LOBBY && p.fromUpper));
 /** @param {Person} p */
 function rideEscalator(p) {
@@ -384,8 +395,12 @@ export function updatePerson(p, dt) {
       if (walk(p, dt, p.evac ? WALK * 1.3 : WALK)) {
         p.state = 'instairs';
         // tung last (båren, möbler) bärs långsammare i trapphuset
-        p.timer = p.escalator ? 1.6 : (2 + Math.abs(p.dest - p.floor) * 1.8) * (p.cargo && p.cargo.kg >= 15 ? 1.4 : 1);
-        pev(p, p.escalator ? sv`Åker rulltrappa ${fl(p.floor)} → ${fl(p.dest)}` : sv`Går i trapphuset ${fl(p.floor)} → ${fl(p.dest)}`);
+        p.timer = p.escalator ? escalatorTime(p) : (2 + Math.abs(p.dest - p.floor) * 1.8) * (p.cargo && p.cargo.kg >= 15 ? 1.4 : 1);
+        if (p.escalator) p.escT = p.timer; // (hela resan i rulltrappan: grafiken ritar dem i den)
+        if (p.escalator && escalatorStopped()) {
+          walkedEscalator();
+          pev(p, p.dest > p.floor ? 'Går uppför den stillastående rulltrappan – flåsar' : 'Går nerför den stillastående rulltrappan');
+        } else pev(p, p.escalator ? sv`Åker rulltrappa ${fl(p.floor)} → ${fl(p.dest)}` : sv`Går i trapphuset ${fl(p.floor)} → ${fl(p.dest)}`);
       }
       break;
     case 'instairs':

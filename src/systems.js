@@ -35,13 +35,14 @@ import { startStorm, stormTick, weatherReset } from './weather.js';
 import { PANO, panoCandidate, rescueNext, triggerPano } from './pano.js';
 import { cableCandidate, foremanNext, techNext, triggerCable, triggerFault, triggerHeat } from './service.js';
 import { busyCars, cableRisk, ffNext, FIRE_FLOORS, incidentStarted, incPick, startFire, startOutage } from './incidents.js';
-import { crashChiefTick, tunnelChiefTick, panicChiefTick, partyChiefTick, dogChiefTick, gondolaChiefTick, leakChiefTick, panoChiefTick } from './chief.js';
+import { crashChiefTick, tunnelChiefTick, panicChiefTick, partyChiefTick, rulltrappaChiefTick, dogChiefTick, gondolaChiefTick, leakChiefTick, panoChiefTick } from './chief.js';
 import { arrivalRate } from './sim.js';
 import { sv } from './sv.js';
 import { crashPossible, crashReset, crashTick, startCrash } from './crash.js';
 import { tunnelPossible, tunnelReset, tunnelTick, startTunnel } from './tunnel.js';
 import { panicPossible, panicReset, panicTick, startPanic } from './panic.js';
 import { partyArrive, partyNext, partyPossible, partyReset, partyTick, startParty } from './party.js';
+import { rulltrappaPossible, rulltrappaReset, rulltrappaTick, startRulltrappa } from './rulltrappa.js';
 /** @typedef {import('./elevators.js').Elevator} Elevator */
 /** @typedef {import('./incidents.js').IncPick} IncPick */
 /** @typedef {import('./people.js').Person} Person */
@@ -182,6 +183,12 @@ export function systems() {
       chief: { tick: partyChiefTick, done: () => !S.party },
       next: partyNext, arrive: partyArrive,
       chaos: { step: 'guests', name: '🎈 firmafest', run: () => startParty() } },
+    // rulltrappan stannar (rulltrappa.js): gå i den stillastående rulltrappan eller spärra av; people.js läser läget
+    { key: 'rulltrappa', tick: rulltrappaTick, reset: rulltrappaReset, on: () => !!S.rulltrappa, trigger: () => startRulltrappa(),
+      weight: () => rulltrappaPossible() && hour() >= 7 && hour() < 20 && 0.3,
+      warnS: 8, warn: () => '🪜 Det gnisslar och skrapar i rulltrappan i entrén…', hit: () => startRulltrappa(),
+      chief: { tick: rulltrappaChiefTick, done: () => !S.rulltrappa },
+      chaos: { step: 'guests', name: '🪜 rulltrappan stannar', run: () => startRulltrappa() } },
     // vädret: stormen blåser (stormen som incident är posten storm ovan); en storm som pågår följer med över dygnsskiftet
     { key: 'weather', tick: stormTick, reset: weatherReset, roll: () => { const st = S.storm; weatherReset(); S.storm = st; } },
   ];

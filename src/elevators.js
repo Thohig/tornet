@@ -18,6 +18,7 @@ import { liftStep } from './hoist.js';
 import { windMul } from './weather.js';
 import { peakHold } from './dispatch.js';
 import { crashRun, crashStop, sweepDir, sweepStop } from './crash.js';
+import { sysBlocks } from './systems.js';
 /** @typedef {import('./people.js').Person} Person */
 
 // ---------- Hissar ----------
@@ -386,6 +387,9 @@ export function load(e, f) {
     const mine = sweep && !keyed(p) ? e.legs.some(l => l.includes(p.floor) && l.includes(p.dest)) && allowedDest(e, p) && elevatorAllows(EL[e.id], p)
       : buttons && !keyed(p) ? p.bank === e.group && e.legs.some(l => l.includes(p.floor) && l.includes(p.dest)) && allowedDest(e, p) && !e.vipLock && !e.indep
         : p.assigned === e.id;
+    // (ett delsystem spärrar – hissarna på den lösa hundens våning: styrningen tilldelar ingen där, men i KNAPPAR
+    // och nödläget kliver man på vilken hiss som helst som öppnar)
+    if (mine && any && sysBlocks(e, p)) continue;
     if (!mine) {
       if (any && !keyed(p)) continue;
       if (p.assigned !== null && !seen(p)) { pev(p, sv`Hiss ${e.name} öppnar – men jag ska ta ${EL[p.assigned].name}`); }

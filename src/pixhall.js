@@ -30,7 +30,7 @@ import { blend, dark, light, plain, PX, sprite, text, textW } from './pixart.js'
 import { PAL } from './pixpal.js';
 import { nightness } from './view.js';
 import { inWindow, personHead, winPos } from './render.js';
-import { PERSON_W, personSprite } from './pixpeople.js';
+import { PERSON_H, PERSON_W, personSprite } from './pixpeople.js';
 import { clamp, fl } from './util.js';
 import { alarm, chiefOnDuty, chiefPerson, CHIEFS } from './chief.js';
 import { nextTrainMin, TRAIN_DOORS, trainDoors } from './train.js';
@@ -41,6 +41,7 @@ import { bubble } from './pixfolk.js';
 import { unlockedFloor } from './visning.js';
 import { fireProg } from './pixroof.js';
 import { wetFloor, wetShaft } from './leak.js';
+import { escalatorClosed, escalatorStopped } from './rulltrappa.js';
 import { sv } from './sv.js';
 /** @typedef {import('./people.js').Person} Person */
 
@@ -209,7 +210,8 @@ export function drawEscalatorPx() {
   if (MEZZ < 0) return;
   const xb = X(DOOR_X) + 84, yb = Y(floorY(LOBBY) - 4) - 3, xt = xb + 70, yt = Y(floorY(MEZZ) - 4) - 3;
   if (yb < -10 || yt > lo.height + 10) return;
-  const L = xt - xb, ph = Math.floor(S.anim * 10) % 4;
+  // (står rulltrappan still rör sig inte stegen; är den avspärrad sitter band över båda ändarna, rulltrappa.js)
+  const stopped = escalatorStopped(), L = xt - xb, ph = stopped ? 0 : Math.floor(S.anim * 10) % 4;
   for (let i = -8; i <= L + 8; i++) {
     const k = clamp(i / L, 0, 1), x = xb + i, y = Math.round(yb + (yt - yb) * k);
     R(x, y - 9, 1, 8, 'rgba(191,234,255,.35)'); // glasräcket
@@ -217,6 +219,20 @@ export function drawEscalatorPx() {
     R(x, y, 1, 1, '#8a909a');                    // stegen
     R(x, y + 1, 1, 3, '#5b6b80'); R(x, y + 4, 1, 1, INK); // fackverket under
     if (i >= 0 && i <= L && (i + ph) % 4 === 0) R(x, y - 1, 1, 1, '#d4d0c8');
+  }
+  // de som åker (eller går) i rulltrappan, efter hur långt de har kommit
+  for (const p of S.people) {
+    if (p.dead || !p.escalator || p.state !== 'instairs') continue;
+    const up = p.dest > p.floor, done = clamp(1 - p.timer / (p.escT || 1.6), 0, 1), k = up ? done : 1 - done;
+    const x = Math.round(xb + L * k), y = Math.round(yb + (yt - yb) * k);
+    const frame = stopped ? Math.floor(S.anim * 6 + p.id) % 4 : 0;
+    g.drawImage(personSprite(p, 'side', frame, up ? 1 : -1), x - PERSON_W / 2, y - PERSON_H);
+  }
+  if (!escalatorClosed()) return;
+  // avspärrningsband i rött och vitt mellan två stolpar, nedanför och ovanför
+  for (const [x, y] of [[xb - 10, yb], [xt + 3, yt]]) {
+    R(x, y - 8, 1, 8, INK); R(x + 7, y - 8, 1, 8, INK);
+    for (let k = 0; k < 6; k++) R(x + 1 + k, y - 6, 1, 2, k % 2 ? '#ffffff' : '#c81e3a');
   }
 }
 

@@ -1960,7 +1960,7 @@ export const PLAYER_ACTIONS = {
   heistTrig: () => act('trigger', 'heist'),
   chaos: () => act('chaos'),
   // vaktmästarens olyckor: gondolen, hunden, vattenläckan – och valen på korten
-  accident: r => act('trigger', ['gondola', 'dog', 'leak', 'crash', 'tunnel', 'panic', 'party'][Math.floor(r() * 7)]),
+  accident: r => act('trigger', ['gondola', 'dog', 'leak', 'crash', 'tunnel', 'panic', 'party', 'rulltrappa'][Math.floor(r() * 8)]),
   gondola: r => act('gondola', ['crank', 'hatch', 'rope'][Math.floor(r() * 3)]),
   dog: r => act('dog', r() < 0.5 ? 'lock' : 'free'),
   leak: r => act('leak', r() < 0.5 ? 'stop' : 'run'),
@@ -1968,6 +1968,7 @@ export const PLAYER_ACTIONS = {
   tunnel: r => act('tunnel', r() < 0.5 ? 'wait' : 'bus'),
   panic: r => act('panic', r() < 0.5 ? 'talk' : 'crank'),
   party: r => act('party', r() < 0.5 ? 'varu' : 'alla'),
+  rulltrappa: r => act('rulltrappa', r() < 0.5 ? 'walk' : 'close'),
   heist: r => act('heist', ['cut', 'wait', 'garage', 'tak', 'stop', 'go', 'storm'][Math.floor(r() * 7)]),
   chiefBack: r => act('chiefBack', ['storm', 'fire', 'power', 'strategy', 'move', 'pano', `heat${Math.floor(r() * S.elevators.length)}`][Math.floor(r() * 7)]),
 };
@@ -3145,6 +3146,51 @@ test('Firmafesten: gästerna kommer med ballonger, tårtan åker varuhissen, bal
     const f = newInvariantFails(w, `frö ${seed}`);
     assert(!f.length, f.join('; '));
     out.push(`${P.guests.length} gäster på ${fl(P.f)} (${P.mode}), fast ${P.stuck}×, poff ${P.popped}`);
+  }
+  return out.join(' · ');
+});
+
+test('Rulltrappan stannar: folk går i den långsamt eller tar nedre däcket när den är avspärrad, och vaktmästaren startar den', () => {
+  const out = [];
+  for (const mode of ['walk', 'close']) {
+    sim(3, { roll: 'mjuk', incLevel: 'av' });
+    while (hour() < 8) step(DT);
+    assert(act('trigger', 'rulltrappa') === true, `${mode}: gick inte att framkalla`);
+    assert(S.rulltrappa && S.rulltrappa.ph === 'stopp', `${mode}: S.rulltrappa sattes inte`);
+    assert(act('rulltrappa', mode), `${mode}: valet gick inte`);
+    const jan = S.rulltrappa.jan;
+    let g = 0, slow = 0, onAfterClose = 0, viaMezz = 0;
+    const was = new Set(S.people.filter(p => p.escalator).map(p => p.id));
+    while (S.rulltrappa && ++g < 600 / DT) {
+      step(DT);
+      for (const p of S.people) {
+        if (!p.escalator || p.state !== 'instairs') continue;
+        if ((p.escT || 0) > 3) slow++;
+        if (mode === 'close' && !was.has(p.id)) onAfterClose++;
+      }
+      if (mode === 'close') viaMezz += S.people.filter(p => p.floor === LOBBY && p.dest === MEZZ && p.goal !== MEZZ && p.state !== 'ride').length;
+    }
+    assert(!S.rulltrappa, `${mode}: rulltrappan startades aldrig igen`);
+    assert(!S.people.some(p => p.id === jan && p.duty && p.duty.kind === 'rulltrappa'), `${mode}: vaktmästaren blev kvar på uppdraget`);
+    if (mode === 'walk') assert(slow > 0, 'ingen gick i den stillastående rulltrappan (långsammare än när den rullar)');
+    else assert(!onAfterClose && !viaMezz, `avspärrad: ${onAfterClose} steg i rulltrappan, ${viaMezz} på väg till mellanplanet`);
+    out.push(`${mode} ${Math.round(g * DT)} s`);
+  }
+  return out.join(' · ');
+});
+
+test('Rulltrappan stannar: driftchefen låter folk gå i den i rusningen och spärrar av den när det är lugnt', () => {
+  const out = [];
+  for (const [h, want] of /** @type {[number, string][]} */ ([[8, 'walk'], [11, 'close']])) {
+    sim(3, { roll: 'mjuk', incLevel: 'av', chief: true });
+    while (hour() < h) step(DT);
+    assert(act('trigger', 'rulltrappa') === true, `kl ${h}: gick inte att framkalla`);
+    let g = 0;
+    while (S.rulltrappa && !S.rulltrappa.mode && ++g < 30 / DT) step(DT);
+    assert(S.rulltrappa && S.rulltrappa.by === 'chief', `kl ${h}: driftchefen bestämde inget`);
+    // (blir det för trångt i rulltrappan spärrar chefen av den – det får hända i rusningen)
+    assert(S.rulltrappa.mode === want, `kl ${h}: ${S.rulltrappa.mode}, väntade ${want}`);
+    out.push(`kl ${h}: ${want}`);
   }
   return out.join(' · ');
 });

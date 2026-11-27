@@ -66,6 +66,7 @@ Panelen och pixelgrafiken går inte att köra i Node – det gör `npm run playt
 | `tunnel.js` | tåget står i tunneln (`S.tunnel`): inga tåg (train.js väntar), perrongen fylls; vänta eller ersättningsbussar (`toStreet` i train.js, `act('tunnel', …)`); egen slumpström `tunnel` |
 | `panic.js` | panik i en fullsatt hiss som tvärstannar (`S.panic`, bygger på `trapNext` i service.js): larmet, alla knappar; prata i nödtelefonen eller veva ner korgen (`crankDown` i service.js, `act('panic', …)`); egen slumpström `panik` |
 | `party.js` | firmafesten (`S.party`, en gång per dygn: `S.partyDay`): gäster med ballonger (`p.party`, `balloonFreight` i people.js) och tårtan i varuhissen; ballongerna fastnar i dörrarna (`act('party', …)`); egen slumpström `firmafest` |
+| `rulltrappa.js` | rulltrappan stannar (`S.rulltrappa`): nödstoppet, vaktmästaren som startar den igen, folk som går i den stillastående rulltrappan (`escalatorStopped`, `escalatorTime` i people.js) eller tar nedre däcket när den är avspärrad (`escalatorClosed`, `act('rulltrappa', …)`); egen slumpström `rulltrappa` |
 | `chaos.js` | Murphys lag: kaosknappen (`act('chaos')`, en gång per dygn) startar en kedja (`S.chaos`, `STEPS`) av allt som kan gå fel; egen slumpström `kaos` |
 | `cast.js` | stamgästerna (data i `CAST` i config): återkommande karaktärer med egenheter och repliker (`say`) |
 | `life.js` | garage/bilar, leveransbil, boendes dygnsrutiner, VIP-helikopter |

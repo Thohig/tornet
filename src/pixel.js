@@ -19,7 +19,7 @@
 // linorna, panoramahissen –, `pixfolk.js` – folket i hallarna, bubblor, telefonsamtalet, spårning, ljudeffekter –
 // och `pixroof.js` – taket, gondolen och hissbalken, flyttlassen, rök, väder, blåljus
 import { hour, S } from './state.js';
-import { FLOORS, floorY } from './config.js';
+import { FLOORS, LOBBY, MEZZ, floorY } from './config.js';
 import { ctx, VIEW } from './view.js';
 import { PX } from './pixart.js';
 import { beginFrame, CY, lo } from './pixcore.js';
@@ -46,11 +46,13 @@ export function renderPixel(dt) {
   lap('himmel/fasad');
   for (let f = 0; f < FLOORS; f++) {
     if (floorY(f) < VIEW.camY - 10 || floorY(f + 1) > VIEW.camY + VIEW.viewH + 10) continue;
-    drawHall(f, hr); terminal(f); floorOverlays(f, hr); deckSign(f);
+    drawHall(f, hr); terminal(f); floorOverlays(f, hr);
   }
   lap('hallar');
   drawSlabsPx();
   drawEscalatorPx();
+  // (skyltarna om övre däcket efter rulltrappan: de som går i den skymmer dem inte)
+  for (const f of [LOBBY, MEZZ]) if (f >= 0 && floorY(f) >= VIEW.camY - 10 && floorY(f + 1) <= VIEW.camY + VIEW.viewH + 10) deckSign(f);
   drawTerracePx(hr);
   for (const e of S.elevators) drawRopesPx(e);
   drawLanternsPx();

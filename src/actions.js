@@ -27,6 +27,7 @@ import { setDogLock } from './dog.js';
 import { setLeakMode } from './leak.js';
 import { setCrashMode } from './crash.js';
 import { setTunnelMode } from './tunnel.js';
+import { setRulltrappaMode } from './rulltrappa.js';
 import { setPanicMode } from './panic.js';
 import { setPartyMode } from './party.js';
 import { sv } from './sv.js';
@@ -94,6 +95,8 @@ export const ACTIONS = {
   leak: m => { if (!setLeakMode(m, 'player')) return false; playerChose('leak', m === 'stop' ? 'Hissarna i de blöta schakten står still' : 'Hissarna i de blöta schakten kör vidare', { inc: 'leak' }); return true; },
   // Hiss-O-Matic har kraschat: nödläge (nod) eller omstart (boot)
   crash: m => { if (!setCrashMode(m, 'player')) return false; playerChose('crash', m === 'boot' ? 'Hiss-O-Matic startas om' : 'Hissarna går i nödläge', { inc: 'crash' }); return true; },
+  // rulltrappan stannar: gå i den (walk) eller spärra av (close)
+  rulltrappa: m => { if (!setRulltrappaMode(m, 'player')) return false; playerChose('rulltrappa', m === 'close' ? 'Rulltrappan spärras av' : 'Folk får gå i rulltrappan', { inc: 'rulltrappa' }); return true; },
   // tåget i tunneln: vänta (wait) eller ersättningsbussar (bus)
   tunnel: m => { if (!setTunnelMode(m, 'player')) return false; playerChose('tunnel', m === 'bus' ? 'Ersättningsbussar på gatan' : 'Vi väntar på tåget', { inc: 'tunnel' }); return true; },
   // panik i hissen: prata i nödtelefonen (talk) eller veva ner korgen (crank)

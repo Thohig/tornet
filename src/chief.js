@@ -34,6 +34,7 @@ import { setCrashMode } from './crash.js';
 import { onPlatform, setTunnelMode } from './tunnel.js';
 import { setPanicMode } from './panic.js';
 import { setPartyMode } from './party.js';
+import { onEscalator, setRulltrappaMode } from './rulltrappa.js';
 import { changeStrategy } from './actions.js';
 import { STRAT_NAMES } from './config.js';
 import { systems } from './systems.js';
@@ -412,6 +413,24 @@ export function partyChiefTick() {
     decide('party', 'Ballongerna tar varuhissen', 'de fastnar i de vanliga hissdörrarna – varuhissen har breda dörrar', { inc: 'party', floor: P.f, say: 'Ballongerna i varuhissen, tack!' });
   else if (setPartyMode('alla', 'chief'))
     decide('party', 'Gästerna åker vilken hiss som helst', V ? sv`${V.name} är upptagen` : 'det finns ingen varuhiss', { inc: 'party', floor: P.f, say: 'Akta dörrarna med ballongerna!' });
+}
+
+// --- Rulltrappan stannar: i rusningen behövs båda expressens däck – folk får gå i den stillastående rulltrappan;
+//     annars spärras den av (nedre däcket räcker, ingen ska snubbla). Blir det för trångt i trappan spärras den ---
+const ESC_CROWD = 5;
+export function rulltrappaChiefTick() {
+  const X = S.rulltrappa, C = S.chief;
+  if (!X || X.ph !== 'stopp' || !free('rulltrappa') || S.t - X.t0 < 3) return;
+  const h = hour(), rush = (h >= 7 && h < 9.5) || (h >= 15.5 && h < 18), n = onEscalator().length;
+  if (!C.dec.rulltrappa) {
+    if (rush && setRulltrappaMode('walk', 'chief'))
+      decide('rulltrappa', 'Folk får gå i rulltrappan', 'det är rusning – vi behöver båda däcken på expressen', { inc: 'rulltrappa', floor: LOBBY, say: 'Gå i den, det är bara trappsteg!' });
+    else if (setRulltrappaMode('close', 'chief'))
+      decide('rulltrappa', 'Rulltrappan spärras av', 'det är lugnt – nedre däcket räcker, och ingen ska snubbla i en stillastående rulltrappa', { inc: 'rulltrappa', floor: LOBBY, say: 'Spärra av den.' });
+    return;
+  }
+  if (X.mode === 'walk' && n >= ESC_CROWD && setRulltrappaMode('close', 'chief'))
+    decide('rulltrappa', 'Nu spärras rulltrappan av', sv`${n} trängs i den stillastående rulltrappan`, { inc: 'rulltrappa', floor: LOBBY, say: 'Det är för trångt – spärra av!' });
 }
 
 // --- Kuppen: polisens insatsledare – vänta ut dem (strömmen klipps inte), gå in via garaget där skåpbilen står ---

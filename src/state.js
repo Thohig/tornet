@@ -63,6 +63,7 @@ const INIT = {
   cleaner: /** @type {import('./hoist.js').Cleaner|null} */ (null), hoist: /** @type {import('./hoist.js').Hoist|null} */ (null),
   // olyckorna som vaktmästaren rycker ut till: gondolen som fastnat (gondola.js), den lösa hunden (dog.js), vattenläckan (leak.js)
   gondola: /** @type {import('./gondola.js').Gondola|null} */ (null), dog: /** @type {import('./dog.js').Dog|null} */ (null), leak: /** @type {import('./leak.js').Leak|null} */ (null),
+  rulltrappa: /** @type {import('./rulltrappa.js').Rulltrappa|null} */ (null), // Rulltrappan stannar (rulltrappa.js)
   // Hiss-O-Matic som kraschar (crash.js), tåget i tunneln (tunnel.js), panik i hissen (panic.js) och firmafesten (party.js, en gång per dygn: partyDay)
   crash: /** @type {import('./crash.js').Crash|null} */ (null), tunnel: /** @type {import('./tunnel.js').Tunnel|null} */ (null),
   panic: /** @type {import('./panic.js').Panic|null} */ (null), party: /** @type {import('./party.js').Party|null} */ (null), partyDay: -1,

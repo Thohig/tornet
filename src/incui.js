@@ -9,7 +9,7 @@
 // informationsrutorna), förvarningens klipp `warn` och det sevärda `shots`; panels.js, hud.js och director.js går
 // igenom listan
 import { esc, fl } from './util.js';
-import { DOCK, EL, FIRE_HINT, LOBBY, ROOF, TOP, CONTROL, STATION, FL, floorWith, shaftCX } from './config.js';
+import { DOCK, EL, FIRE_HINT, LOBBY, MEZZ, ROOF, TOP, CONTROL, STATION, FL, floorWith, shaftCX } from './config.js';
 import { S } from './state.js';
 import { canRescue } from './incidents.js';
 import { STORM_HINT, windMs } from './weather.js';
@@ -26,6 +26,7 @@ import { BOOT_S, crashPossible } from './crash.js';
 import { onPlatform, tunnelPossible } from './tunnel.js';
 import { panicPossible, panicWhere } from './panic.js';
 import { partyPossible } from './party.js';
+import { onEscalator, rulltrappaPossible } from './rulltrappa.js';
 /** panoramahissen (null om huset saknar en) */
 const panoCar = () => (PANO ? S.elevators[PANO.id] || null : null);
 
@@ -522,6 +523,41 @@ export function incUi() {
         else if (cake && (cake.state === 'ride' || cake.state === 'wait')) add('party', 60, 'person', cake.id, '🎂 Tårtan är på väg');
         else add('party', 50, 'floor', X.f, sv`🎈 Fest på ${fl(X.f)}`);
       }
+    },
+  },
+  {
+    key: 'rulltrappa',
+    trig: { icon: '🪜', name: 'Rulltrappan stannar', hint: 'Nödstoppet löser ut och rulltrappan till mellanplanet tvärstannar', off: () => !rulltrappaPossible(),
+      why: () => (S.rulltrappa ? 'rulltrappan står redan still' : MEZZ < 0 ? 'huset har ingen rulltrappa' : S.fire ? 'det brinner i huset' : 'strömmen är borta') },
+    warn: (_W, add) => add('warn', 72, 'floor', LOBBY, '🪜 Det gnisslar i rulltrappan', true),
+    card: (h, parts) => {
+      const { card, chiefLine, bold, ikon, line, acts, hint, choice } = h;
+      // ---------- rulltrappan stannar (incident med val: gå i den eller spärra av) ----------
+      const X = S.rulltrappa;
+      if (!X || X.ph !== 'stopp') return;
+      const jan = S.people.find(p => p.id === X.jan && !p.dead);
+      const n = onEscalator().length;
+      const status = !jan ? 'Vaktmästaren är på väg.'
+        : jan.floor === LOBBY && jan.state === 'office' ? sv`${esc(jan.name)} letar efter det som löste ut nödstoppet.`
+        : sv`${esc(jan.name)} är på väg till rulltrappan.`;
+      const now = X.mode === 'close' ? 'Den är avspärrad – alla tar expressens nedre däck.'
+        : n ? sh`${bold(n)} går i den just nu.` : '';
+      const b = (m, txt, why) => choice(`rulltrappa:${m}`, txt, { on: X.mode === m, why });
+      parts.push(card('rulltrappa', 'rulltrappa', '🪜 Rulltrappan har stannat', `
+          ${line(`${X.stumbled ? sv`Nödstoppet löste ut – ${X.stumbled} snubblade till.` : 'Nödstoppet löste ut.'} ${now} ${status}`)}
+          ${chiefLine('rulltrappa', 'Gå i den eller spärra av?')}
+          ${acts(b('walk', '🚶 Gå i den', 'Båda däcken på expressen används – men det går långsamt och blir trångt i trappan'),
+            b('close', '🚧 Spärra av', 'Alla från entrén tar nedre däcket – längre kö där, men ingen snubblar'),
+            ikon(`show:${LOBBY}`, '📹', 'Visa rulltrappan', 'Kameran visar entrén och rulltrappan'))}
+          ${hint('Rulltrappan går mellan entrén och mellanplanet, där expressens övre däck stannar.')}`, true));
+    },
+    shots: (add) => {
+      // rulltrappan stannar: entrén, sedan mellanplanet där övre däcket stannar (om folk går i rulltrappan)
+      const X = S.rulltrappa;
+      if (!X || X.ph !== 'stopp') return;
+      if (S.t - X.t0 < 8) add('rulltrappa', 80, 'floor', LOBBY, '🪜 Rulltrappan tvärstannar', S.t - X.t0 < 1);
+      else add('rulltrappa', X.mode === 'walk' && onEscalator().length >= 3 ? 64 : 48, 'floor', LOBBY,
+        X.mode === 'close' ? '🚧 Rulltrappan är avspärrad' : '🪜 Folk går i rulltrappan');
     },
   },
   ];
