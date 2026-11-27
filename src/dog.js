@@ -13,7 +13,9 @@
 // person (`p.dog`, rollen `hund`, ritas som pudel i pixfolk.js och pixcars.js) som springer fortare, åker en hiss
 // till en våning den når direkt (`dogNext`) och stannar en stund (`dogTimer`); ägaren/frisören (`p.chase`,
 // `chaseNext`) och vaktmästaren (uppdraget `dog`, flyttas med `moveDuty`) jagar den. Fångad när någon som jagar står
-// på samma våning medan den står still (`CATCH_T`); trött efter `DOG_TIRED_S`. Driftchefen (`dogChiefTick`) eller
+// på samma våning medan den står still – nosar i hallen eller står i hisskön (`dogStill`, `CATCH_T`); trött efter
+// `DOG_TIRED_S` (står den i kön lägger den sig i hallen). Vid brand utryms den som alla andra, men när det är släckt
+// springer den vidare i stället för att gå ut (`endFire` i incidents.js). Driftchefen (`dogChiefTick`) eller
 // spelaren (`act('dog', 'lock'|'free')`) kan spärra hissarna på hundens våning (`dogLockFloor`, i `canTake` i
 // dispatch.js – bara de som jagar kommer därifrån). Egen slumpström `hunden`
 import { stream } from './rng.js';
