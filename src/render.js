@@ -1,7 +1,7 @@
 // Grafikens ingång och logiken för VAR folk syns i bilden (hallen framför hissarna).
 // Själva ritandet sker i pixel.js (och delarna i pix*.js). Allt här är bara grafik: simuleringens p.x ändras aldrig.
 import { clamp } from './util.js';
-import { BX1, CAR_W, DOOR_X, SKYWALK_F, TOP, TOWER_X1, W, WAIT_X1, bridgeX, floorY, shaftX, surf } from './config.js';
+import { BX1, CAR_W, DOOR_X, SKYWALK_F, TOP, TOWER_X1, W, WAIT_X1, floorY, shaftX, surf } from './config.js';
 import { TERRACE_Y } from './hoist.js';
 import { riderPos } from './pano.js';
 import { S } from './state.js';
@@ -10,6 +10,7 @@ import { renderPixel } from './pixel.js';
 import { PX } from './pixart.js';
 import { PERSON_H, PERSON_W } from './pixpeople.js';
 import { windAt } from './weather.js';
+import { SKYWALK_DOOR } from './skywalk.js';
 /** @typedef {import('./people.js').Person} Person */
 
 /** platser i korgen: bakre raden (0–3) och främre raden (4–7), utspridda över korgens bredd */
@@ -42,8 +43,8 @@ export function personHead(p) {
   if (inWindow(p)) { const w = winPos(p); return { x: w.x, y: w.y - 22 }; }
   // firas ner längs fasaden (eller klättrar nerför stegbilens stege) – pano.js
   if (p.state === 'rope') { const r = riderPos(p); if (r) return { x: r.x, y: r.y - 22 }; }
-  // på bron till Kronan (skywalk.js, ritas i pixskywalk.js)
-  if (p.state === 'bridge') return { x: bridgeX(p.bridgeT ?? 0), y: surf(SKYWALK_F) - 70 };
+  // på bron till Kronan (skywalk.js): bron går bakåt ur bild – hen syns bara som en siluett i dörrens glas (pixhall.js)
+  if (p.state === 'bridge') return { x: SKYWALK_DOOR, y: surf(SKYWALK_F) - 82, hidden: true };
   if (p.state === 'ride') {
     const e = p.car, k = e.deck2 ? p.deck || 0 : 0;
     const i = e.passengers.filter(q => !e.deck2 || (q.deck || 0) === k).indexOf(p);

@@ -18,14 +18,13 @@
 // lastkajen –, `pixhall.js` – hallarna, kontrollrummet, personalrummet, perrongen –, `pixcars.js` – korgarna,
 // linorna, panoramahissen –, `pixfolk.js` – folket i hallarna, bubblor, telefonsamtalet, spårning, ljudeffekter –
 // och `pixroof.js` – taket, gondolen och hissbalken, flyttlassen, rök, väder, blåljus
-import { drawSkywalkPx, drawSkywalkTalkPx } from './pixskywalk.js';
 import { hour, S } from './state.js';
 import { FLOORS, LOBBY, MEZZ, floorY } from './config.js';
 import { ctx, VIEW } from './view.js';
 import { PX } from './pixart.js';
 import { beginFrame, CY, lo } from './pixcore.js';
 import { drawCallPx, drawFxPx, drawGagsPx, drawHallPeople, drawHoverPx, drawSelectionPx, resetCallAt } from './pixfolk.js';
-import { countOcc, deckSign, drawChiefPx, drawEscalatorPx, drawHall, drawLeakPx, floorOverlays, resetChiefAt } from './pixhall.js';
+import { countOcc, deckSign, drawBridgeTalkPx, drawChiefPx, drawEscalatorPx, drawHall, drawLeakPx, floorOverlays, resetChiefAt } from './pixhall.js';
 import { drawGroundPx, drawLanternsPx, drawShell, drawSkyAll, drawSlabsPx, drawStreetPx, drawTerracePx, terminal } from './pixbuilding.js';
 import { drawCarPx, drawPanoPx, drawRopesPx, reserveCarSigns } from './pixcars.js';
 import { drawProf, lap } from './prof.js';
@@ -55,7 +54,6 @@ export function renderPixel(dt) {
   // (skyltarna om övre däcket efter rulltrappan: de som går i den skymmer dem inte)
   for (const f of [LOBBY, MEZZ]) if (f >= 0 && floorY(f) >= VIEW.camY - 10 && floorY(f + 1) <= VIEW.camY + VIEW.viewH + 10) deckSign(f);
   drawTerracePx(hr);
-  drawSkywalkPx(hr); // (skywalken till Kronan: före korgarna, så att panoramahissen åker framför bron)
   for (const e of S.elevators) drawRopesPx(e);
   drawLanternsPx();
   reserveCarSigns();
@@ -67,7 +65,7 @@ export function renderPixel(dt) {
   lap('gatan');
   reserveLobbySigns();
   drawHallPeople();
-  drawSkywalkTalkPx();
+  drawBridgeTalkPx();
   lap('folk');
   drawPanoPx();
   drawHeliPx();

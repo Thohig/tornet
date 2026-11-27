@@ -22,7 +22,7 @@
 // världsenheter) som skalas upp utan utjämning; skärmkoordinater räknas om med `VIEW.x0` (se `toWorld`,
 // `placeCarPop`).
 import { SKYWALK_DOOR, closedWhy } from './skywalk.js';
-import { S } from './state.js';
+import { S, hour } from './state.js';
 import {
   BOILER_X, BREAK, CONTROL, DOCK, DOOR_X, EL, SHAFT_W, shaftX, FL, FLOOR_HOURS, floorOpen, FLOORS, floorY, INNER_X1,
   LAND_X0, LOBBY, MEZZ, SPOTS, STATION, TRAIN_LEN, TRAIN_X0, TRAIN_X1, SKYWALK_F,
@@ -38,7 +38,7 @@ import { nextTrainMin, TRAIN_DOORS, trainDoors } from './train.js';
 import { allowed } from './dispatch.js';
 import { ants, box, FLAMES, g, INK, line, lo, once, pill, R, reserve, STAIR_ICON, starSprite, X, Y } from './pixcore.js';
 import { blinkOf } from './pixcars.js';
-import { bubble } from './pixfolk.js';
+import { bubble, talking } from './pixfolk.js';
 import { unlockedFloor } from './visning.js';
 import { fireProg } from './pixroof.js';
 import { wetFloor, wetShaft } from './leak.js';
@@ -361,17 +361,64 @@ function stationHall(bot) {
   R(tx + Math.round(tw / 2), ty + 13, 1, bot - 3 - ty - 13, INK);
 }
 // ---------- Dörren till skywalken (sky lobbyn) ----------
-// En glasdörr i hallens bakvägg längst till höger med skylten KRONAN och en pil: där går man ut på bron (skywalk.js).
-// Stängd bron: rött och vitt band över dörren.
+// En glasdörr i hallens bakvägg med skylten KRONAN: där går man ut på bron (skywalk.js). Bron går bakåt, bort från
+// betraktaren, så den syns inte i bilden – bara genom dörrens glas: brons golv och tak som löper mot Kronans dörr
+// långt bort, och de som är ute på bron som mörka siluetter, mindre ju längre bort de är (p.bridgeT). Den höjdrädda
+// (hojd.js) står still och skakar. På kvällen lyser bron, på underhållsnätter blinkar arbetslampan där ute.
+// Stängd bron: rött och vitt band över dörren. Öppen i stormen: en väktare i gul väst bredvid dörren.
+/** dörrens ruta i ritytan (låga pixlar) @param {number} bot hallens golv */
+const bridgeBox = bot => { const dh = 26; return { dx: Math.round(X(SKYWALK_DOOR) - 9), dw: 18, dh, dy: bot - 3 - dh }; };
 function bridgeDoor(top, bot) {
-  const cx = X(SKYWALK_DOOR), dw = 18, dh = Math.min(26, bot - top - 21), dx = cx - dw / 2, dy = bot - 3 - dh;
-  box(dx, dy, dw, dh, '#bfe3f2'); R(dx + dw / 2, dy + 1, 1, dh - 2, PAL.steel);
-  line(dx + 3, dy + dh - 4, dx + 7, dy + 4, 'rgba(255,255,255,.6)');
-  const sw = textW('KRONAN') + 10, sx = Math.round(cx - sw / 2), sy = dy - 11;
+  const { dx, dw } = bridgeBox(bot), dh = Math.min(26, bot - top - 21), y0 = bot - 3 - dh, cx = dx + dw / 2;
+  const n = nightness(hour()), lit = S.power && n > 0.3;
+  // glaset och bron därute: golvet och taket löper mot Kronans dörr i mitten
+  box(dx, y0, dw, dh, blend('#bfe3f2', '#1c2a3d', n));
+  const hz = y0 + Math.round(dh * 0.45); // (horisonten: där bron tar slut)
+  for (let k = 1; k < dw - 1; k++) {
+    const d = Math.abs(k - dw / 2) / (dw / 2);
+    R(dx + k, hz + 2 + Math.round(d * (dh * 0.55 - 4)), 1, dh, blend('#9aa3ad', '#3a4250', n)); // golvet
+    R(dx + k, y0 + 1, 1, Math.max(1, Math.round((1 - d) * 3)), blend('#d8e6ee', '#2a3a50', n)); // taket
+  }
+  R(dx + 1, y0 + dh - 1, dw - 2, 1, blend('#9aa3ad', '#3a4250', n));
+  R(Math.round(cx) - 1, hz - 3, 3, 5, lit ? '#ffe9a8' : blend('#2a3a50', '#0d1420', n)); // (Kronans dörr långt bort)
+  if (lit) R(dx + 2, y0 + 2, dw - 4, dh - 4, 'rgba(255,240,190,.18)');
+  if (S.skywalk && S.skywalk.maint && closedWhy() === 'underhåll' && Math.floor(S.anim * 2) % 2) R(Math.round(cx) - 2, hz, 5, 2, '#ffd23f');
+  // folket på bron: siluetter, de längst bort först (inte för långt bort – där syns de inte)
+  const out = S.people.filter(p => !p.dead && p.state === 'bridge' && (p.bridgeT ?? 0) < 0.92)
+    .sort((a, b) => (b.bridgeT ?? 0) - (a.bridgeT ?? 0));
+  for (const p of out) {
+    const t = clamp(p.bridgeT ?? 0, 0, 1), hs = Math.round(4 + (1 - t) * (dh - 9)), w = Math.max(1, Math.round(hs / 4));
+    const fy = Math.round(y0 + dh - 2 - t * (y0 + dh - 2 - hz - 2)); // fötterna
+    const side = ((p.id * 7) % 9 - 4) * (1 - t) * 0.8, shake = p.frozen ? Math.floor(S.anim * 12) % 2 : 0;
+    const px = clamp(Math.round(cx + side - w / 2) + shake, dx + 1, dx + dw - 1 - w);
+    const c = blend('#1d2433', '#05070c', n), hd = Math.max(1, w - (w > 2 ? 1 : 0));
+    R(px, fy - hs + hd, w, hs - hd, c); // kroppen
+    R(px + Math.floor((w - hd) / 2), fy - hs, hd, hd, p.frozen ? '#c81e3a' : c); // huvudet (rött: hen vågar inte)
+  }
+  // handtaget och glansen ovanpå (ingen mittpost: den skulle skymma den som står mitt på bron)
+  R(dx + dw - 3, y0 + Math.round(dh / 2) - 2, 1, 5, PAL.steel);
+  line(dx + 3, y0 + dh - 4, dx + 7, y0 + 4, 'rgba(255,255,255,.45)');
+  const sw = textW('KRONAN') + 10, sx = Math.round(cx - sw / 2), sy = y0 - 11;
   box(sx, sy, sw, 9, '#1f3f66'); text(g, 'KRONAN', sx + 3, sy + 2, '#ffffff');
-  R(sx + sw - 5, sy + 4, 3, 1, '#ffd23f'); R(sx + sw - 4, sy + 3, 1, 3, '#ffd23f'); // (pilen åt höger)
   reserve(sx, sy, sw, 9);
-  if (closedWhy()) for (let k = 0; k < dw; k++) R(dx + k, dy + 8 + (k >> 2) % 2, 1, 2, k % 4 < 2 ? '#c81e3a' : '#ffffff');
+  if (closedWhy()) for (let k = 0; k < dw; k++) R(dx + k, y0 + 8 + (k >> 2) % 2, 1, 2, k % 4 < 2 ? '#c81e3a' : '#ffffff');
+  // stormen, öppen med vakt: väktaren bredvid dörren
+  if (S.storm && S.skywalk && S.skywalk.storm === 'open') guard(dx - 6, bot - 3);
+}
+/** väktaren i gul väst (bara grafik) */
+function guard(cx, yb) {
+  R(cx - 2, yb - 16, 5, 5, '#d8a47f'); R(cx - 2, yb - 17, 5, 2, '#1d2433');
+  R(cx - 3, yb - 11, 7, 6, '#ffd23f'); R(cx - 3, yb - 8, 7, 1, '#c0c0c0');
+  R(cx - 2, yb - 5, 2, 5, '#1d2433'); R(cx + 1, yb - 5, 2, 5, '#1d2433');
+}
+/** de som pratar ute på bron (den höjdrädda, vaktmästaren som leder hen) nära dörren: repliken över dörren. Ritas efter
+ *  folket i hallarna, så att den bokar sin plats efter skyltarna (pixel.js); får den ingen plats står den i loggen. */
+export function drawBridgeTalkPx() {
+  if (SKYWALK_F < 0) return;
+  const bot = Y(floorY(SKYWALK_F) - 4), { dy } = bridgeBox(bot);
+  if (dy > lo.height + 10 || dy + 40 < 0) return;
+  const p = S.people.find(q => !q.dead && q.state === 'bridge' && (q.bridgeT ?? 0) < 0.92 && talking(q));
+  if (p) bubble(`${p.name}: "${p.say.text}"`, X(SKYWALK_DOOR), dy - 14, '#ffffff', true);
 }
 // ---------- Pannrummet: dörren i hallen på P1 ----------
 // En ståldörr med varningsrand och en skylt, rör längs väggen och ratten till huvudkranen (vattenläckan, leak.js:

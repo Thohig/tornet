@@ -56,7 +56,6 @@ export function resize() {
   const innerW = r.width - 4, innerH = r.height - 4; // (ramen runt spelytan)
   const VW = W - VIEW.x0; // hela bredden i världsenheter
   const dpr = window.devicePixelRatio || 1;
-  // (skalan räknas på tornet: bron och Kronan till höger nås genom att glida i sidled, de krymper inte huset)
   const fit = innerW / (TOWER_W - VIEW.x0);
   const s = fit >= MIN_SCALE ? fit : Math.max(fit, Math.round(MIN_SCALE * 2 * dpr) / (2 * dpr));
   const padB = mob && !land && !cinema ? 0 : (cinema ? LOWER_PX.cinema : LOWER_PX.std) / s;

@@ -87,7 +87,6 @@ Panelen och pixelgrafiken går inte att köra i Node – det gör `npm run playt
 | `pixel.js` | hela bilden i pixelgrafik: `renderPixel` sätter ihop delarna i `pixcore.js` (ritytan, lagren, platsbokningen), `pixbuilding.js`, `pixhall.js`, `pixcars.js`, `pixfolk.js` och `pixroof.js` |
 | `pixart.js` | rutnätsfigurer med automatisk kontur, bitmapstypsnittet 3×5, färghjälp; `TEXTLOG` = textrutorna i bilden för provspelningen |
 | `pixpeople.js` | människor ur `p.look`: sido-/framvy, gångsteg, humör, bagage |
-| `pixskywalk.js` | skywalken i bilden: bron, folket på den, Kronans fasad med Jörgen i gondolen, avspärrningar och väktaren |
 | `pixpal.js` | paletten `PAL` |
 | `view.js` | canvas, kamera, `VIEW.follow`; `detachCam`, manuell scrollning kopplar loss |
 | `incui.js` | incidenterna i gränssnittet (`incUi()`): knappen i Framkalla, kortet, förvarningens klipp, det sevärda och ljudet |
@@ -142,7 +141,7 @@ Det finns ingen topplist, statusrad, låda eller högerklicksmeny: hela gränssn
 - Hisslägen (`e.mode`): `normal`, `recall`, `locked`, `rescue`, `dead`, `lift` (panoramahissen kör ett flyttlass; `e.liftWant` = beställd, tar inga nya), `broken` (trasig, väntar på tekniker; `e.fault.cable` = linbyte, korgen står mellan två våningar), `service`, `snapped` (linbrott: `e.snap.ph` = `fall`/`trapped`/`evac`). `e.hold` = på väg till nattservice (tar inga nya). `e.hijack` = kapad av rånarna under kuppen (tar inga nya, heist.js). `e.wear` följer med till nästa dygn. `outReason(e)` = varför hissen inte tar nya ('' = den tar), grunden för `operational`/`servesNow`/`outLong`. `benched(e)` = tar inga nya just nu (`e.off`, `e.hot`, `e.windLock`, `e.wetLock` – vattenläckan); `e.indep` = oberoende drift (bara flyttgubbarna och ambulansen).
 - `keyed(p)` = har nyckel och använder aldrig hallknapparna (VIP, ambulans, flyttgubbar); `prio(p)` = får en hiss för sig (VIP-låset: VIP, ambulans och räddningstjänsten vid fasaden).
 - Hissetikett: `p.space` (hur trångt man står ut med, 9 = bryr sig inte), `p.polite` (håller upp dörren). Ett fullt däck hämtar ingen (`e.deckFull`).
-- Skywalken: bron går från sky lobbyn (`SKYWALK_F`) till Kronan, som inte simuleras. Folk på bron har läget `bridge` (`p.bridgeT` 0 = Tornets dörr, 1 = Kronans, `p.bridgeDir`), inne i Kronan `kronan`; grannarna har `p.kronan` och sky lobbyn som utgång. Bilden är bredare än tornet (`W` > `TOWER_W`): skalan räknas på tornet och bron nås genom att glida i sidled.
+- Skywalken: bron går från sky lobbyn (`SKYWALK_F`) till Kronan, som inte simuleras. Folk på bron har läget `bridge` (`p.bridgeT` 0 = Tornets dörr, 1 = Kronans, `p.bridgeDir`), inne i Kronan `kronan`; grannarna har `p.kronan` och sky lobbyn som utgång. Bron går bakåt från dörren i sky lobbyn och syns inte i bilden (`W` = `TOWER_W`): bara genom dörrens glas, där folket på bron är siluetter (`bridgeDoor` i pixhall.js); `personHead` lägger dem vid dörren.
 - Mellanplanet `MEZZ` (våning 1): dit åker man rulltrappa från entrén till expressens övre däck (`p.escalator`).
 - Trappan: `stairsChoice` (korta resor/otåliga, `p.fit`), `p.stairsByChoice` skiljer frivilliga trappresor från utrymning m.m.
 - Brandlägen: `recall` (larmets standard) / `zone` / `none` (`startFire(f, false)` startar utan återkallning); i zonläge spärras hissar som inte når någon säker våning (`e.zoneLock`).
