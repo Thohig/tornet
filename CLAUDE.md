@@ -100,7 +100,7 @@ Panelen och pixelgrafiken går inte att köra i Node – det gör `npm run playt
 | `input.js` | klick, tangenter och alla knappar: `doAction` för `data-act`, `extraActions`, vänsterklick följer |
 | `main.js` | huvudloopen: varje steg fångar sina fel i `guard` och visar dem i `#err` |
 
-Driftcentralen (`CONTROL`, P1) och personalrummet (`BREAK`, P2) ritas i hallen på sina våningar (pixhall.js); personalen syns på sin plats efter `spot.win` (`inWindow`/`winPos` i render.js).
+Driftcentralen (`CONTROL`, P1) och personalrummet (`BREAK`, P2) ritas i hallen på sina våningar (pixhall.js); personalen syns på sin plats efter `spot.win` (`inWindow`/`winPos` i render.js). På stationen ligger platserna ute på perrongen (`win: 'hall'`): kiosken, tidtabellen och bänken ritas i `stationHall` (pixhall.js), och den som sitter på bänken ritas av `seated` i pixfolk.js. Det simuleringen vet om folket och hissarna ska synas i bilden: last har en figur i `CARGO_ROWS` (pixpeople.js), ett läge som tar hissen ur vanlig trafik får en korgskylt i `carSigns` (pixcars.js), och utseenden som beror på läget (rånarnas luvor, `masked`) avgörs i `personSprite`.
 
 Det statiska (stadssiluetten, tegel, fasadfönster, schakt, rampen) ritas i lager via `layer()` i `pixcore.js` och ritas bara om när nyckeln ändras (natten i 32 steg, strömmen, bredden). Något som rör sig eller beror på personer får aldrig ritas i ett lager. Ritytan (`g`, `lo`, `X0`, `CY`) byts bara i pixcore.js (`layer`, `beginFrame`); de andra pix-modulerna läser den, och tillstånd för en bildruta nollställs via funktioner i modulen som äger det (`resetCallAt`, `countOcc` …).
 

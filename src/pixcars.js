@@ -290,6 +290,9 @@ function carSigns(e, G) {
     else if (e.ffCar) slot.top('BRANDHISS', '#ffffff', '#c81e3a');
     else if (e.indep) slot.top('FLYTT · NYCKEL', '#d4a017');
     else if (e.medicHold) slot.top('AMBULANS · VÄNTAR', '#2ec4b6');
+    else if (e.hijack) slot.top('KAPAD', '#ff2d55', '#ffffff');
+    // VIP-låset (sim.js): hissen är reserverad för VIP-gruppen, ambulansen eller räddningstjänsten och tar inga andra
+    else if (e.vipLock) slot.top('RESERVERAD', '#d4a017', INK);
   }
   // förvarning: det gnisslar i korgen
   if (S.warn && S.warn.type === 'fault' && S.warn.car === e.id && e.mode === 'normal') slot.top('GNISSEL…', '#ffe9a8', INK, Math.sin(S.anim * 6) > 0);
@@ -336,6 +339,12 @@ function cabinPx(e, k, x, yb, body, head) {
   } else if (e.freight) for (let n = 0; n < 4; n++) R(ix, iy + 5 + n * 8, iw, 1, 'rgba(27,16,51,.18)');
   else for (let n = 1; n < 4; n++) R(ix + n * Math.round(iw / 4), iy, 1, ih - 6, dark(inner, 0.08));
   if (e.facade) { line(ix + 3, iy + ih - 3, ix + 10, iy + 3, '#ffffff'); line(ix + 7, iy + ih - 3, ix + 14, iy + 3, '#ffffff'); }
+  // slitaget (e.wear, service.js): repor och fläckar på golvet, fler ju mer sliten korgen är (nattservicen tar bort dem)
+  const worn = Math.floor(clamp(e.wear || 0, 0, 1) * 18);
+  for (let n = 0; n < worn; n++) {
+    const h = (e.id * 31 + k * 17 + n * 53) % 211;
+    R(ix + 1 + (h % (iw - 4)), iy + ih - 5 + (h % 5), n % 3 ? 3 : 2, 1, n % 2 ? dark(inner, 0.55) : '#8a6a46');
+  }
   // passagerarna: hörnen först (hissetikett), bakre raden först
   g.save(); g.beginPath(); g.rect(ix, iy, iw, ih); g.clip();
   const out = climber(e);
@@ -349,7 +358,8 @@ function cabinPx(e, k, x, yb, body, head) {
     // last (städvagn, paketkärra, flyttlåda, bår …) står bredvid ägaren – resväskan bakom, resten framför
     // (lasten vänds in mot korgens mitt, annars klipps den av väggen)
     const cx = px + PERSON_W / 2, cy = py + PERSON_H - 1; // (fötterna, som i hallen)
-    const cg = p.cargo && !DOGS[p.cargo.kind] ? cargoSprite(p.cargo.kind, cx > ix + iw / 2 ? -1 : 1) : null;
+    // (framifrån syns inte ryggsäcken på ryggen)
+    const cg = p.cargo && !DOGS[p.cargo.kind] && p.cargo.kind !== 'ryggsäck' ? cargoSprite(p.cargo.kind, cx > ix + iw / 2 ? -1 : 1) : null;
     if (cg && p.cargo.kind === 'resväska') g.drawImage(cg.c, cx + cg.dx, cy - cg.c.height + 1 - cg.lift);
     g.drawImage(personSprite(p, 'front', 0, 1, { blink: blinkOf(p), hot: hotOf(p) }), px, py);
     if (cg && p.cargo.kind !== 'resväska') g.drawImage(cg.c, cx + cg.dx, cy - cg.c.height + 1 - cg.lift);

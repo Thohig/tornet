@@ -15,11 +15,24 @@ import { vpick, vrand } from './rng.js';
 import { VIEW, tinyText } from './view.js';
 import { ants, ARROW, box, g, INK, keepIn, label, line, lo, pill, place, R, reserve, X, Y } from './pixcore.js';
 import { blinkOf, drawCarTalkPx, hoseSpray } from './pixcars.js';
+import { BENCH, benchSeat } from './pixhall.js';
 import { sv } from './sv.js';
 /** @typedef {import('./people.js').Person} Person */
 
 /** @param {Person} p */
 export const hotOf = p => (p.mood || 0) === 2 && Math.sin(S.anim * 8 + p.id) > 0;
+
+/** den som sitter på bänken på perrongen: överkroppen ovanför sitsen, benen hänger ner framför den @param {Person} p */
+function seated(p, fx, bot) {
+  const seatY = bot - BENCH.seat, spr = personSprite(p, 'front', 0, 1, { blink: blinkOf(p), hot: hotOf(p) });
+  const top = seatY - (PERSON_H - 9);
+  g.save(); g.beginPath(); g.rect(fx - PERSON_W, top - 2, PERSON_W * 2, seatY + 1 - (top - 2)); g.clip();
+  g.drawImage(spr, fx - PERSON_W / 2, top);
+  g.restore();
+  benchSeat(bot);
+  const pants = (p.look && p.look.pants) || '#3a3f48';
+  for (const lx of [fx - 3, fx + 1]) { R(lx, seatY + 2, 2, BENCH.seat - 3, pants); R(lx, bot - 4, 2, 1, INK); }
+}
 
 // ---------- Folket i hallarna ----------
 export function drawHallPeople() {
@@ -40,8 +53,12 @@ export function drawHallPeople() {
     if (p.dog) { looseDog(p, fx, fy, dir, walking, frame); g.globalAlpha = 1; continue; }
     const dog = p.cargo ? DOGS[p.cargo.kind] : null;
     // (lasten syns även i kön – städvagnar och paketkärror vid varuhissen ska synas)
-    const cg = dog ? cargoSprite(dog + (walking ? (frame % 2 ? '2' : '') : 'S'), dir) : p.cargo ? cargoSprite(p.cargo.kind, dir) : null;
+    // (portföljen och ryggsäcken syns redan när de hör till utseendet, p.look.acc)
+    const inLook = p.cargo && ((p.cargo.kind === 'portfölj' && p.look.acc === 1) || (p.cargo.kind === 'ryggsäck' && p.look.acc === 5));
+    const cg = dog ? cargoSprite(dog + (walking ? (frame % 2 ? '2' : '') : 'S'), dir) : p.cargo && !inLook ? cargoSprite(p.cargo.kind, dir) : null;
     if (cg && p.cargo.kind === 'resväska') g.drawImage(cg.c, fx + cg.dx, fy - cg.c.height + 1 - cg.lift);
+    // på bänken på perrongen: sitter framifrån, sitsen framför benen (pixhall.js)
+    if (p.state === 'office' && p.spot && p.spot.win === 'hall' && p.spot.k === 'chair') { seated(p, fx, Y(floorY(p.floor) - 4)); g.globalAlpha = 1; continue; }
     g.drawImage(personSprite(p, 'side', frame, dir, { blink: blinkOf(p), hot: hotOf(p) }), fx - PERSON_W / 2, fy - PERSON_H + 1);
     phoneOn(p, fx - PERSON_W / 2, fy - PERSON_H + 1, dir);
     if (cg && p.cargo.kind !== 'resväska') g.drawImage(cg.c, fx + cg.dx, fy - cg.c.height + 1 - cg.lift);

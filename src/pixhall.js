@@ -120,10 +120,11 @@ function hallProps(f, th, top, bot) {
     box(px, bot - 9, 7, 6, '#a65e3a'); R(px + 1, bot - 9, 5, 1, '#c27a54');
     for (let k = 0; k < (big ? 4 : 3); k++) R(px - 2 + k * 3, bot - 16 - (big ? 4 : 0) + (k % 2) * 3, 3, 8 + (big ? 3 : 0), ['#389a5c', '#2f7d4a', '#4caf6a'][k % 3]);
   };
-  if (th === 'garage' || th === 'dock' || th === 'station') {
+  if (th === 'station') { stationHall(bot); return; }
+  if (th === 'garage' || th === 'dock') {
     // betong: gula stolpar och en skylt
     for (const px of [base, base + 46]) { R(px, bot - 14, 3, 11, '#ffd23f'); for (let y = bot - 13; y < bot - 3; y += 4) R(px, y, 3, 2, INK); }
-    if (th !== 'station') { box(base + 12, top + 20, 22, 9, PAL.sign); text(g, th === 'dock' ? 'KAJ' : 'P', base + 23, top + 22, '#ffffff', 'center'); }
+    box(base + 12, top + 20, 22, 9, PAL.sign); text(g, th === 'dock' ? 'KAJ' : 'P', base + 23, top + 22, '#ffffff', 'center');
     return;
   }
   // tavla
@@ -161,6 +162,12 @@ function revolvingDoor(cx, cy, cw, ch, h) {
   // gatan utanför: trottoar, och en gatlykta i mörkret
   R(cx, cy + ch - 6, cw, 6, blend('#c0c0c0', '#4a5060', n));
   if (n > 0.4) { R(cx + cw - 6, cy + 4, 1, ch - 10, INK); R(cx + cw - 8, cy + 3, 5, 2, '#ffe14d'); }
+  // kyla (weather.js): frost i glasets hörn, mer ju kallare det är
+  const frost = Math.round(S.weather.cold * 6);
+  for (let k = 0; k < frost; k++) {
+    R(cx + k, cy, frost - k, 1, 'rgba(255,255,255,.7)'); R(cx + cw - frost + k, cy + k, frost - k, 1, 'rgba(255,255,255,.7)');
+    R(cx, cy + ch - 7 - k, frost - k, 1, 'rgba(255,255,255,.55)');
+  }
   // vingarna (fyra, sedda från sidan): x = cos(vinkeln)
   // (inte personHead/landPos här: de räknar gångriktningen och får bara anropas en gång per bildruta och person)
   const busy = S.people.some(p => p.floor === LOBBY && (p.state === 'exiting' || p.state === 'toQueue'));
@@ -276,6 +283,11 @@ export function drawHall(f, h) {
     const ix = cx + 7, iy = cy + 7, iw = cw - 14, ih = ch - 13;
     R(ix, iy, iw, ih, lit ? blend(acc, '#fff8d0', 0.55) : PAL.dim);
     if (lit) glimpse(f, th, ix, iy, iw, ih, n);
+    // någon har svimmat därinne (ambulansen, visits.js): ett blinkande rött kors i korridoren tills båren kommer
+    if (S.people.some(p => p.collapsed && !p.dead && p.floor === f && p.state === 'office') && Math.sin(S.anim * 5) > -0.3) {
+      box(ix + Math.round(iw / 2) - 4, iy + 1, 9, 9, '#ffffff');
+      R(ix + Math.round(iw / 2) - 1, iy + 2, 3, 7, '#c81e3a'); R(ix + Math.round(iw / 2) - 3, iy + 4, 7, 3, '#c81e3a');
+    }
     for (let r = 0; r < ch - (iy - cy) - ih; r++) {
       const yy = iy + ih + r, k = r / (ch - (iy - cy) - ih);
       const xa = Math.round(ix - k * 7), xb = Math.round(ix + iw + k * 7);
@@ -312,6 +324,39 @@ export function drawHall(f, h) {
   g.restore();
   stairSign(f, false);
   if (f === STATION) drawPlatformPx(top, bot, h);
+}
+// ---------- Stationen: kiosken, tidtabellen och bänken på perrongen ----------
+// Platserna står i THEME_INFO.station (config.js) med win: 'hall', så folket syns här: vid kiosken, framför
+// tidtabellen och på bänken (de som sitter ritas av pixfolk.js, med bänkens sits framför benen – BENCH).
+/** bänken på perrongen (världens x) och sitsens höjd över golvet i bildpunkter – pixfolk.js ritar sitsen över dem som sitter */
+export const BENCH = { x0: 362, x1: 398, seat: 8 };
+/** sitsen framför den som sitter på bänken (efter personen, så att benen hamnar bakom) */
+export function benchSeat(bot) {
+  const bx = X(BENCH.x0), bw = X(BENCH.x1) - bx;
+  R(bx, bot - BENCH.seat, bw, 2, '#b08a5a'); R(bx, bot - BENCH.seat + 2, bw, 1, '#6b4a2b');
+  for (const lx of [bx + 1, bx + bw - 2]) R(lx, bot - BENCH.seat + 3, 1, BENCH.seat - 3, INK);
+}
+function stationHall(bot) {
+  // bänken: ryggstöd mot väggen och sitsen
+  const bx = X(BENCH.x0), bw = X(BENCH.x1) - bx;
+  R(bx, bot - BENCH.seat - 8, bw, 2, '#8a6a46'); R(bx, bot - BENCH.seat - 8, bw, 1, '#b08a5a');
+  for (const lx of [bx + 2, bx + bw - 3]) R(lx, bot - BENCH.seat - 6, 1, 6, '#6b4a2b');
+  benchSeat(bot);
+  // kiosken: en kur med randig markis, lucka med tidningar och godis, disk och skylt
+  const kx = X(398), kw = X(446) - kx, ky = bot - 26;
+  box(kx, ky, kw, 23, '#3b6ea5');
+  for (let i = 0; i < kw + 2; i++) R(kx - 1 + i, ky - 3, 1, 3, Math.floor(i / 3) % 2 ? '#ffffff' : '#c81e3a');
+  R(kx - 1, ky - 3, kw + 2, 1, INK);
+  // (skylten sitter på kuren under markisen – ovanför den sitter stationens namnskylt)
+  R(kx + 1, ky + 1, kw - 2, 7, '#ffffff'); text(g, 'KIOSK', kx + kw / 2, ky + 2, '#c81e3a', 'center'); reserve(kx, ky, kw, 8);
+  R(kx + 2, ky + 9, kw - 4, 7, S.power ? '#fff3b0' : '#5a5a5a');
+  for (let k = 0; k < 4; k++) R(kx + 3 + k * 5, ky + 10 + (k % 2), 4, 5 - (k % 2), ['#f2f2f2', '#ffd23f', '#f2f2f2', '#ff4fa3'][k]);
+  R(kx - 1, ky + 16, kw + 2, 2, '#8a6a46'); R(kx - 1, ky + 16, kw + 2, 1, '#b08a5a');
+  // tidtabellen på väggen: blå rubrik och rader
+  const tx = X(454), tw = X(476) - tx, ty = bot - 29;
+  box(tx, ty, tw, 13, '#ffffff'); R(tx + 1, ty + 1, tw - 2, 2, '#2a5db0');
+  for (let r = 0; r < 4; r++) R(tx + 2, ty + 5 + r * 2, tw - 4 - (r % 2) * 3, 1, '#5b6b80');
+  R(tx + Math.round(tw / 2), ty + 13, 1, bot - 3 - ty - 13, INK);
 }
 // ---------- Pannrummet: dörren i hallen på P1 ----------
 // En ståldörr med varningsrand och en skylt, rör längs väggen och ratten till huvudkranen (vattenläckan, leak.js:

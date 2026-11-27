@@ -163,6 +163,8 @@ async function chaosDays() {
     await page.evaluate(async () => {
       const st = await import('/src/state.js'), sim = await import('/src/sim.js'), a = await import('/src/actions.js');
       (await import('/src/pixart.js')).TEXTLOG.on = true;
+      // (vänta tills starten har byggt huset – utan välkomstruta kan sidan vara här innan newSim har körts)
+      for (let i = 0; i < 300 && !st.S.elevators.length; i++) await new Promise(r => setTimeout(r, 50));
       while (st.hour() < 8.5) sim.step(sim.DT);
       a.act('chaos');
     });

@@ -127,7 +127,7 @@ function drawFoundationPx() {
   }
 }
 /** Gatan utanför (till höger om huset): gatlyktor, busshållplatsen, ett träd och folk som går förbi.
- *  Bara grafik: fotgängarna lånar utseendet av någon i huset och slumpas med vrand. */
+ *  Bara grafik: fotgängarna får egna utseenden (inga dubbelgångare till folket i huset) och slumpas med vrand. */
 const walkers = [];
 let walkerN = 0;
 let walkerT = 0;

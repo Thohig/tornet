@@ -3257,4 +3257,7 @@ export default {
   "en tappad mobil mellan stegen": "a dropped phone between the steps",
   "ett skosnöre som drogs in i kammen": "a shoelace pulled into the comb plate",
   "en resväska som välte längst upp": "a suitcase that toppled over at the top",
+  // korgskyltar: kapad under kuppen, reserverad (VIP-låset)
+  "KAPAD": "HIJACKED",
+  "RESERVERAD": "RESERVED",
 };

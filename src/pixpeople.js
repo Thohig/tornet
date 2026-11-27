@@ -2,6 +2,7 @@
 // Varje person ritas ihop från sitt utseende (p.look) – hudfärg, frisyr, kläder, slips, tillbehör –
 // och sparas per utseende, vy, gångsteg och humör så att varje figur bara byggs en gång.
 import { PAL } from './pixpal.js';
+import { S } from './state.js';
 
 const INK = PAL.ink;
 import { blend, dark, light, fromCells, flipped, sprite } from './pixart.js';
@@ -12,7 +13,7 @@ export const PERSON_W = W + 2, PERSON_H = H + 2;
 
 /**
  * @param {any} look  p.look
- * @param {{ view: 'side'|'front', frame: number, mood: number, blink: boolean, child: boolean, hot: boolean, smoked: boolean }} o
+ * @param {{ view: 'side'|'front', frame: number, mood: number, blink: boolean, child: boolean, hot: boolean, smoked: boolean, mask: boolean }} o
  */
 function build(look, o) {
   const cells = Array.from({ length: H }, () => new Array(W).fill(null));
@@ -90,6 +91,12 @@ function build(look, o) {
   if (o.mood === 0) { set(mx[0], hy + 4, P.M); set(mx[1], hy + 4, P.M); set(mx[0] - 1, hy + 3, P.s); set(mx[1] + 1, hy + 3, P.s); }
   else if (o.mood === 1) { set(mx[0], hy + 4, P.E); set(mx[1], hy + 4, P.E); }
   else { rect(mx[0], hy + 3, mx[1], hy + 4, P.E); set(mx[0], hy + 3, P.W); }
+  // rånarnas luvor (kuppen): svart över hela huvudet, bara ögonen syns – ingen frisyr eller hörlurar ovanpå
+  if (o.mask) {
+    rect(2, hy - 1, 7, hy + 5, '#1b1b22'); rect(ex[0] - 1, hy + 2, ex[1] + 1, hy + 2, P.S);
+    for (const x of ex) set(x, hy + 2, P.E);
+    return fromCells(cells, W, H, 1, INK);
+  }
   // ----- frisyr ovanpå -----
   switch (look.hair) {
     case 0: set(3, hy, light(P.S, 0.5)); break;                                   // flint med glans
@@ -118,15 +125,19 @@ function build(look, o) {
   return fromCells(cells, W, H, 1, INK);
 }
 
+/** rånarna drar på sig luvorna när de har tagit huset (kuppen: gisslan hålls, och flykten) – innan dess är de
+ *  fönsterputsare från ”Fasad & Fönster AB” i overall @param {{ robber?: boolean }} p */
+const masked = p => !!p.robber && !!S.heist && (S.heist.ph === 'hold' || S.heist.ph === 'flee');
 const CACHE = new WeakMap();
 /** figuren för en person; dir < 0 = vänd åt vänster
- * @param {Pick<Person, 'id'|'mood'|'look'> & { child?: boolean, smoked?: boolean }} p */
+ * @param {Pick<Person, 'id'|'mood'|'look'> & { child?: boolean, smoked?: boolean, robber?: boolean }} p */
 export function personSprite(p, view, frame, dir, extra = {}) {
   const look = p.look;
   let m = CACHE.get(look);
   if (!m) { m = new Map(); CACHE.set(look, m); }
-  const o = { view, frame: view === 'front' ? 0 : frame, mood: p.mood || 0, blink: !!extra.blink, child: !!p.child, hot: !!extra.hot, smoked: !!p.smoked };
-  const key = `${o.view}${o.frame}${o.mood}${+o.blink}${+o.child}${+o.hot}${+o.smoked}${dir < 0 && view !== 'front' ? 'L' : 'R'}`;
+  const o = { view, frame: view === 'front' ? 0 : frame, mood: p.mood || 0, blink: !!extra.blink, child: !!p.child, hot: !!extra.hot, smoked: !!p.smoked,
+    mask: masked(p) };
+  const key = `${o.view}${o.frame}${o.mood}${+o.blink}${+o.child}${+o.hot}${+o.smoked}${+o.mask}${dir < 0 && view !== 'front' ? 'L' : 'R'}`;
   let c = m.get(key);
   if (!c) {
     if (dir < 0 && view !== 'front') {
@@ -176,6 +187,11 @@ const CARGO_ROWS = {
   // (ballongerna svävar i snören från handen: långa snören, så att de hamnar ovanför huvudet)
   ballonger: { rows: ['.RR..BB..', 'RRRRBBBB.', 'RRRRBBBB.', '.RRGGBB..', '..GGGG...', '..GGGG...', '...KGK...', '...K.K...', '....K....', '....K....', '....K....',
     '....K....', '....K....', '....K....', '....K....', '....K....', '....K....'], pal: { R: '#ff5d52', B: '#3f7cff', G: '#ffe14d', K: INK }, dx: 1 },
+  // kuppen (heist.js): guldtackorna ur valvet, staplade i famnen
+  guld: { rows: ['.YYYY.', 'YyyyyY', 'YYYYYY', 'yYYYYy', 'YyyyyY', 'YYYYYY'], pal: { Y: '#ffd23f', y: '#b8860b' }, dx: 3 },
+  // last som inte syns i utseendet (p.look): turisternas ryggsäck på ryggen och en portfölj i handen
+  ryggsäck: { rows: ['RR', 'RR', 'Rr', 'RR', 'Rr'], pal: { R: '#ff5d52', r: '#b8322a' }, dx: -7 },
+  portfölj: { rows: ['.KK.', 'BBBB', 'BBBB', 'BBBB'], pal: { B: '#8a5a2b', K: INK }, dx: 2 },
   tårta: { rows: ['.Y..Y..Y.', '.W..W..W.', 'PPPPPPPPP', 'WWWWWWWWW', 'PPRPPPRPP', 'WWWWWWWWW', 'KKKKKKKKK'], pal: { P: '#ff9fc7', W: '#ffffff', R: '#ff5d52', Y: '#ffe14d', K: INK }, dx: 3 },
   // pudeln från hundsalongen i koppel: två gångsteg, sittande (när matte/husse väntar) och framifrån (i hissen)
   pudel: { rows: ['......WW..', '.....WWWW.', '.....WWKWN', 'WW...PWWW.', 'WWwWWWWW..', '..WWWWWW..', '..w....w..', '.WW...WW..'], pal: POODLE, dx: 7 },
@@ -199,6 +215,6 @@ export function cargoSprite(kind, dir) {
     c = dir < 0 ? flipped(r) : r;
     CARGO_CACHE.set(key, c);
   }
-  const lift = kind === 'ballonger' ? 9 : kind === 'tårta' ? 9 : kind === 'pizza' ? 14 : kind === 'verktygslåda' ? 6 : kind === 'flyttlåda' ? 9 : kind === 'filtar' ? 18 : kind === 'bår' || kind === 'bårP' ? 4 : 0;
+  const lift = kind === 'guld' ? 7 : kind === 'ryggsäck' ? 11 : kind === 'portfölj' ? 6 : kind === 'ballonger' ? 9 : kind === 'tårta' ? 9 : kind === 'pizza' ? 14 : kind === 'verktygslåda' ? 6 : kind === 'flyttlåda' ? 9 : kind === 'filtar' ? 18 : kind === 'bår' || kind === 'bårP' ? 4 : 0;
   return { c, dx: dir < 0 ? -d.dx - c.width : d.dx, lift };
 }

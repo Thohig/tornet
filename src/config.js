@@ -80,11 +80,12 @@ export const THEME_INFO = {
   ] },
   garage: { name: 'Garage', short: 'garaget', acc: '#606977', spots: [] },
   // tunnelbanestationen under huset: perrongen är hallen, tåget stannar längs bakväggen (se train.js)
+  // (platserna ligger ute på perrongen och syns där – win: 'hall'; kiosken, tidtabellen och bänken ritas i stationHall, pixhall.js)
   station: { name: 'Tornplan T-bana', short: 'stationen', acc: '#3b6ea5', spots: [
-    { x: 150, k: 'door', label: 'KIOSK', desc: 'Köper en kvällstidning i kiosken' },
-    { x: 262, k: 'stand', face: -1, desc: 'Läser tidtabellen' },
-    { x: 330, k: 'chair', face: 1, lift: 6, desc: 'Sitter på en bänk på perrongen' },
-    { x: 380, k: 'chair', face: 1, lift: 6, desc: 'Sitter på en bänk på perrongen' },
+    { x: 412, k: 'stand', face: 1, win: 'hall', desc: 'Köper en kvällstidning i kiosken' },
+    { x: 464, k: 'stand', face: 1, win: 'hall', desc: 'Läser tidtabellen' },
+    { x: 371, k: 'chair', face: 1, win: 'hall', desc: 'Sitter på en bänk på perrongen' },
+    { x: 389, k: 'chair', face: -1, win: 'hall', desc: 'Sitter på en bänk på perrongen' },
   ] },
   dock: { name: 'Garage & lastkaj', short: 'lastkajen', acc: '#6c6865', spots: [
     { x: 262, k: 'door', staff: true, label: 'FÖRRÅD', desc: 'Letar i förrådet vid lastkajen' },
@@ -204,8 +205,8 @@ crewSpot(LOBBY, { x: 450, k: 'stand', face: -1, where: 'vending', win: 'hall', d
 crewSpot(ROOF, { x: INNER_X1_C - 12, k: 'stand', face: 1, post: 'gondola', win: 'gondola', desc: 'Putsar tornets fönster från gondolen' });
 crewSpot(ROOF, { x: 300, k: 'chair', face: 1, where: 'roof', desc: 'Dricker termoskaffe på en bänk i takträdgården' });
 crewSpot(TERRACE_F, { x: INNER_X1_C - 12, k: 'stand', face: 1, post: 'terrace', win: 'terrace', desc: 'Tar emot möblerna från hissbalken på takterrassen' });
-crewSpot(STATION, { x: 470, k: 'stand', face: 1, where: 'platform', win: 'hall', desc: 'Står på perrongen och tittar på tågen' });
-crewSpot(STATION, { x: 150, k: 'door', where: 'kiosk', desc: 'Köper en korv med bröd i kiosken' });
+crewSpot(STATION, { x: 490, k: 'stand', face: 1, where: 'platform', win: 'hall', desc: 'Står på perrongen och tittar på tågen' });
+crewSpot(STATION, { x: 434, k: 'stand', face: -1, where: 'kiosk', win: 'hall', desc: 'Köper en korv med bröd i kiosken' });
 // pannrummet: dörren i hallen på P1 (pixhall.js) – dagvaktmästarens post, och dit går kvällsvaktmästaren och den som
 // ska stänga huvudkranen (vattenläckan, leak.js)
 crewSpot(DOCK, { x: BOILER_STAND, k: 'stand', face: 1, post: 'boiler', role: 'vaktmästare', win: 'hall', desc: 'Pysslar med pannan i pannrummet' });
