@@ -33,9 +33,9 @@ const G = stream('gestalt'), G2 = stream('inkallade');
  *   leaveAt?: number, lunchAt?: number, lunched?: boolean, backAt?: number, cups?: number,
  *   bank?: string|null, fixAt?: number, avoid?: number, kicked?: string, crowdSkip?: string, keepWait?: boolean,
  *   etaAt?: number, lastWait?: number, retypeAt?: number, seenBy?: Record<number, number>, offCar?: number, offAt?: number,
- *   deck?: number, fromUpper?: boolean, escalator?: boolean, deep?: boolean, deepEsc?: boolean, escT?: number, hurry?: boolean, moving?: boolean,
+ *   deck?: number, fromUpper?: boolean, escalator?: boolean, escT?: number, hurry?: boolean, moving?: boolean,
  *   stairsByChoice?: boolean, viaStairs?: boolean, nearX?: number,
- *   toTrain?: boolean, fromTrain?: boolean, boardAt?: number, drill?: boolean, drillFrom?: number,
+ *   toTrain?: boolean, fromTrain?: boolean, boardAt?: number,
  *   kronan?: boolean, kronanLunch?: boolean, kronanEvac?: boolean, kronanUntil?: number, toBridge?: boolean, frozen?: boolean,
  *   bridgeT?: number, bridgeDir?: number, bridgeGoal?: number, bridgeWhy?: string, bridgeHelp?: boolean, fromBridgeT?: number, refugee?: boolean,
  *   evac?: boolean, evacFrom?: number, evacBack?: boolean, smoked?: boolean, ff?: boolean, ffStairs?: boolean,
@@ -50,7 +50,7 @@ const G = stream('gestalt'), G2 = stream('inkallade');
 import { fl } from './util.js';
 import {
   activityRate, roomUnits, FLOOR_HOURS, FL, NAMES, ROLE_NAMES, floorOpen, OFFICE_FLOORS, SPOTS, STAIR_X, VISIT_WHY,
-  WAIT_X1, WALK, LOBBY, CAFE, MEZZ, floorWith, EL, SKY, CAST, CREW, STATION, PLATFORMS, PENDEL, SHELTER, TRAIN_X0, TRAIN_X1, DOCK, SKYWALK_F,
+  WAIT_X1, WALK, LOBBY, CAFE, MEZZ, floorWith, EL, SKY, CAST, CREW, STATION, TRAIN_X0, TRAIN_X1, DOCK, SKYWALK_F,
 } from './config.js';
 import { S, clockStr, hour, log, occOf, setOcc } from './state.js';
 import { inFireZone, requestRide, loadKg, personKg, eta, keyed, posOf, costBased, prio, outLong, servesNow } from './dispatch.js';
@@ -63,7 +63,6 @@ import { CREW_LOOK, crewNext, crewSpot, dutyNext, dutySpot } from './crew.js';
 import { buttonsMode, carButtonMistakes } from './buttons.js';
 import { balloonFreight } from './party.js';
 import { escalatorClosed, escalatorStopped, onEscalator, walkedEscalator } from './rulltrappa.js';
-import { deepEscalatorShut } from './pumpar.js';
 import { tourNext, tourSpot } from './tour.js';
 import { guestNext, keyNext, visningSpot } from './visning.js';
 import { sysArrive, sysNext, sysRole, sysSeized, sysSpot } from './systems.js';
@@ -174,12 +173,6 @@ export function legDest(from, goal, p) {
   const ok = EL.filter(d => elevatorAllows(d, p) && !down(d.id, p));
   const plan = route(from, goal, ok);
   const hop = plan !== null ? plan : route(from, goal, EL.filter(d => elevatorAllows(d, p))) ?? (from !== SKY ? SKY : goal);
-  // den långa rulltrappan genom berget mellan pendeln och tunnelbanan
-  if (p) p.deepEsc = false;
-  if (p && deepEscOk(p) && plan !== null) {
-    if (from === PENDEL && goal !== PENDEL && goal !== SHELTER && deepChoice(p, from, goal === STATION)) { p.deepEsc = true; return STATION; }
-    if (from === STATION && goal === PENDEL && deepChoice(p, from, true)) { p.deepEsc = true; return PENDEL; }
-  }
   // dubbeldäck: från entrén upp mot höga zonen kan man ta rulltrappan till mellanplanet och övre däcket
   if (MEZZ >= 0 && from === LOBBY && hop === SKY && goal > SKY && plan !== null && escalatorOk(p) && upperDeckChoice(goal, ok)) return MEZZ;
   return hop;
@@ -203,34 +196,10 @@ const escalatorOk = p => !escalatorClosed() && !(escalatorStopped() && p && ((p.
 /** Hur länge resan i rulltrappan tar (s): 1,6 s när den rullar; står den still går man – uppför flåsar man, och ju
  *  fler som går samtidigt desto trängre @param {Person} p */
 function escalatorTime(p) {
-  if (p.deep) return 4.5; // (två våningar genom berget)
   if (!escalatorStopped()) return 1.6;
   const others = onEscalator().filter(q => q !== p).length;
   return (p.dest > p.floor ? 6.5 : 4) + 0.8 * others;
 }
-/** Kan personen ta den långa rulltrappan mellan pendeln och tunnelbanan? Inte med tung last, med nyckel (VIP, bår,
- *  flyttgubbar), på utrymning eller när pumparna har stannat och vattnet står i botten (pumps.js) @param {Person} p */
-const deepEscOk = p => PENDEL >= 0 && STATION >= 0 && !keyed(p) && !p.evac && !(p.cargo && p.cargo.kg >= 15) && !deepEscalatorShut();
-/** Väljer personen rulltrappan? Den som byter tåg tar den gärna (den går direkt mellan perrongerna); den som ska upp i
- *  huset hellre X1 eller pendelhissen, utom när kön vid hissarna är lång. Ingen slump: personens ork (p.fit) och kön. */
-function deepChoice(p, from, direct) {
-  const q = S.people.filter(o => !o.dead && o.floor === from && (o.state === 'wait' || o.state === 'toQueue')).length;
-  return direct ? p.fit > 0.35 || q > 4 : p.fit > 0.75 || q > 9;
-}
-/** Byte mellan pendeln och tunnelbanan i den långa rulltrappan (valt i legDest) @param {Person} p */
-const deepHop = p => !!p.deepEsc && ((p.floor === PENDEL && p.dest === STATION) || (p.floor === STATION && p.dest === PENDEL));
-/** @param {Person} p */
-function rideDeep(p) {
-  p.state = 'stairs'; p.escalator = true; p.deep = true; p.fromUpper = false; p.assigned = null; p.car = null;
-  p.tx = deepEscX(p.floor); p.dir = Math.sign(p.dest - p.floor);
-  S.stats.deepEscalator++;
-  pev(p, p.dest === STATION ? 'Tar den långa rulltrappan upp genom berget till tunnelbanan' : 'Tar den långa rulltrappan ner genom berget till pendeln');
-}
-/** var den långa rulltrappans fot (pendeln) och topp (tunnelbanan) står i hallen (världens x): foten till höger om
- *  pendelns namnskylt, så att rulltrappan inte går bakom den, och toppen vid tunnelbanans perrong */
-export const DEEP_ESC = { foot: 452, top: 540 };
-/** där man kliver på rulltrappan på våning f */
-export const deepEscX = f => (f === PENDEL ? DEEP_ESC.foot : DEEP_ESC.top);
 /** Byte mellan entrén och mellanplanet (på väg till eller från expressens övre däck) görs i rulltrappan @param {Person} p */
 const escalatorHop = p => MEZZ >= 0 && p.goal !== undefined && !escalatorClosed()
   && ((p.floor === LOBBY && p.dest === MEZZ && p.goal !== MEZZ) || (p.floor === MEZZ && p.dest === LOBBY && p.fromUpper));
@@ -280,7 +249,6 @@ export function setTrip(p, goal, why, leaving = goal === p.exitFloor) {
   // redan framme (t.ex. teknikern vars jobb är i entrén där hen kliver in): gå direkt dit, ingen hiss
   if (goal === p.floor) arriveOnFloor(p);
   else if (escalatorHop(p)) rideEscalator(p);
-  else if (deepHop(p)) rideDeep(p);
 }
 /** @param {Person} p */
 export function releaseSpot(p) {
@@ -331,12 +299,11 @@ export function gotoSpot(p, f) {
   if (!p.spot.temp && p.spot.k !== 'door') setOcc(p.spot, p.id);
   p.tx = p.spot.x;
 }
-/** En anställd kommer till jobbet: genom entrén, eller med tunnelbanan eller pendeln (trainX = dörren hen kliver av
- *  vid, trainF = perrongens våning) */
-export function spawnEmployee(trainX = null, trainF = STATION) {
-  const byTrain = trainX !== null && trainF >= 0;
-  const p = makePerson('emp', byTrain ? trainF : LOBBY, byTrain ? trainX : -30 - G.rand(0, 20), G);
-  if (byTrain) p.exitFloor = trainF;
+/** En anställd kommer till jobbet: genom entrén, eller med tunnelbanan (trainX = dörren hen kliver av vid) */
+export function spawnEmployee(trainX = null) {
+  const byTrain = trainX !== null && STATION >= 0;
+  const p = makePerson('emp', byTrain ? STATION : LOBBY, byTrain ? trainX : -30 - G.rand(0, 20), G);
+  if (byTrain) p.exitFloor = STATION;
   if (p.look.acc === 1) withCargo(p, 'portfölj'); else if (p.look.acc === 5) withCargo(p, 'ryggsäck');
   p.home = G.pick(OFFICE_FLOORS);
   const staffIdx = SPOTS[p.home].map((s, i) => (s.staff ? i : -1)).filter(i => i >= 0);
@@ -350,14 +317,13 @@ export function spawnEmployee(trainX = null, trainF = STATION) {
   setTrip(p, p.home, sv`Till jobbet på ${FL[p.home].short}`);
   if (!byTrain && G.rng() < 0.35) arriveByCar(p); // kör till jobbet om det finns plats i garaget
   S.people.push(p);
-  const pendel = byTrain && trainF !== STATION;
-  pev(p, `${byTrain ? (pendel ? 'Kliver av pendeltåget' : 'Kliver av tunnelbanan') : 'Kliver in i entrén'} · ${p.why} (${fl(p.home)})`);
-  log(pendel ? sv`${pn(p)} anländer med pendeln · ska till ${fl(p.home)}` : sv`${pn(p)} anländer${byTrain ? ' med tunnelbanan' : ''} · ska till ${fl(p.home)}`, 'person', null, p.id);
+  pev(p, `${byTrain ? 'Kliver av tunnelbanan' : 'Kliver in i entrén'} · ${p.why} (${fl(p.home)})`);
+  log(sv`${pn(p)} anländer${byTrain ? ' med tunnelbanan' : ''} · ska till ${fl(p.home)}`, 'person', null, p.id);
   return p;
 }
 export const openFloors = (h = hour()) => OFFICE_FLOORS.concat(CAFE).filter(f => floorOpen(f, h) && floorOpen(f, h + 1.2));
 // Besökare går bara till våningar som är öppna. Returnerar null om inget är öppet (t.ex. mitt i natten).
-export function spawnVisitor(floor = LOBBY, x = -30, dest = null, why = null) {
+export function spawnVisitor(floor = 0, x = -30, dest = null, why = null) {
   const h = hour(), open = openFloors(h);
   // dit man ska måste ha öppet en stund till – en resa genom huset tar ungefär en speltimme
   if (dest !== null && dest !== LOBBY && !(floorOpen(dest, h) && floorOpen(dest, h + 1.2))) dest = null;
@@ -438,7 +404,7 @@ export function updatePerson(p, dt) {
         // tung last (båren, möbler) bärs långsammare i trapphuset
         p.timer = p.escalator ? escalatorTime(p) : (2 + Math.abs(p.dest - p.floor) * 1.8) * (p.cargo && p.cargo.kg >= 15 ? 1.4 : 1);
         if (p.escalator) p.escT = p.timer; // (hela resan i rulltrappan: grafiken ritar dem i den)
-        if (p.escalator && !p.deep && escalatorStopped()) {
+        if (p.escalator && escalatorStopped()) {
           walkedEscalator();
           pev(p, p.dest > p.floor ? 'Går uppför den stillastående rulltrappan – flåsar' : 'Går nerför den stillastående rulltrappan');
         } else pev(p, p.escalator ? sv`Åker rulltrappa ${fl(p.floor)} → ${fl(p.dest)}` : sv`Går i trapphuset ${fl(p.floor)} → ${fl(p.dest)}`);
@@ -529,7 +495,7 @@ export function fireDivert(p) {
 /** @param {Person} p */
 export function toStairs(p, why) {
   if (fireDivert(p)) return;
-  p.escalator = false; p.deep = false; p.deepEsc = false; p.fromUpper = false;
+  p.escalator = false; p.fromUpper = false;
   p.state = 'stairs'; p.assigned = null; p.tx = STAIR_X; p.car = null; p.mood = Math.min(p.mood, 1);
   p.dest = p.goal ?? p.dest; p.dir = Math.sign(p.dest - p.floor); // trappan går hela vägen
   pev(p, why);
@@ -538,7 +504,7 @@ export function toStairs(p, why) {
 /** @param {Person} p */
 export function stairsDone(p) {
   p.floor = p.dest; p.x = STAIR_X + 4; p.trips++; p.stairsByChoice = false;
-  if (p.escalator) { p.escalator = false; p.deep = false; p.deepEsc = false; pev(p, sv`Framme på ${fl(p.floor)} med rulltrappan`); arriveOnFloor(p); return; }
+  if (p.escalator) { p.escalator = false; pev(p, sv`Framme på ${fl(p.floor)} med rulltrappan`); arriveOnFloor(p); return; }
   S.stats.stairs++;
   pev(p, sv`Framme på ${fl(p.floor)} via trapporna – flåsar`);
   arriveOnFloor(p);
@@ -567,7 +533,6 @@ export function arriveOnFloor(p) {
     p.dest = legDest(p.floor, p.goal, p); p.dir = Math.sign(p.dest - p.floor);
     p.state = 'toQueue'; p.tx = queueSpot(p.floor); p.assigned = null; p.bank = null; p.fixAt = 0;
     if (escalatorHop(p)) { rideEscalator(p); return; }
-    if (deepHop(p)) { rideDeep(p); return; }
     pev(p, sv`Byter hiss på ${fl(p.floor)} – vidare mot ${fl(p.goal)}`);
     log(sv`↹ ${pn(p)} byter hiss på ${fl(p.floor)} (mot ${fl(p.goal)})`, 'person', null, p.id);
     return;
@@ -580,7 +545,7 @@ export function arriveOnFloor(p) {
     if (bridgeOut(p)) return; // (ut över bron till Kronan, skywalk.js)
     p.state = 'exiting'; p.spot = null;
     // tunnelbanan: ställ sig på perrongen framför tåget
-    if (PLATFORMS.includes(p.floor)) { p.toTrain = true; p.tx = rand(TRAIN_X0 + 10, TRAIN_X1 - 10); return; }
+    if (p.floor === STATION) { p.toTrain = true; p.tx = rand(TRAIN_X0 + 10, TRAIN_X1 - 10); return; }
     p.tx = p.auto && p.auto.floor === p.floor ? p.auto.x + 22 : -40; return;
   }
   p.state = 'exiting';
@@ -607,9 +572,9 @@ export function boardDone(p) {
 /** @param {Person} p */
 export function exitDone(p) {
   if (p.toBridge) { enterBridge(p); return; } // (vid dörren till bron: ut på den, skywalk.js)
-  if (p.toTrain && p.leaving && PLATFORMS.includes(p.floor) && p.floor === p.exitFloor) {
+  if (p.toTrain && p.leaving && p.floor === STATION && p.floor === p.exitFloor) {
     p.state = 'platform'; p.face = 1; p.waitStart = S.t;
-    pev(p, (p.floor === STATION ? S.train : S.pendel.train) ? 'Framme på perrongen – tåget står inne!' : 'Väntar på tåget på perrongen');
+    pev(p, S.train ? 'Framme på perrongen – tåget står inne!' : 'Väntar på tåget på perrongen');
     return;
   }
   // på väg ut när branden släcktes: vänder i dörren och går in igen
@@ -626,7 +591,7 @@ export function exitDone(p) {
   }
   else if (p.kind === 'res') p.timer = p.floor === p.home ? rand(12, 25) : rand(25, 45);
   // framme vid tunnelbanan men inte på väg med tåget (sista tåget har gått): vidare upp till entrén
-  else if (PLATFORMS.includes(p.floor) && !p.role) { p.timer = rand(0.3, 1.2); pev(p, (p.floor === STATION ? S.trainDone : S.pendel.done) ? 'Inga fler tåg i natt – går upp till entrén' : 'Tittar på tidtabellen'); }
+  else if (p.floor === STATION && !p.role) { p.timer = rand(0.3, 1.2); pev(p, S.trainDone ? 'Inga fler tåg i natt – går upp till entrén' : 'Tittar på tidtabellen'); }
   else if (sysArrive(p)) { /* (delsystemen sätter timern: den lösa hunden, de som jagar den, kuppens gäng – systems.js) */ }
   else if (p.role === 'bud') { p.timer = rand(8, 15); S.stats.deliveries++; }
   else if (p.role === 'flyttgubbe') p.timer = moverTimer(p); // (i lägenheten: packar eller skruvar isär nästa lass)

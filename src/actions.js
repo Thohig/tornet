@@ -31,8 +31,6 @@ import { setLeakMode } from './leak.js';
 import { setCrashMode } from './crash.js';
 import { setTunnelMode } from './tunnel.js';
 import { setRulltrappaMode } from './rulltrappa.js';
-import { setPumparMode } from './pumpar.js';
-import { setOvningOrder } from './shelter.js';
 import { setPanicMode } from './panic.js';
 import { setPartyMode } from './party.js';
 import { sv } from './sv.js';
@@ -100,10 +98,6 @@ export const ACTIONS = {
   leak: m => { if (!setLeakMode(m, 'player')) return false; playerChose('leak', m === 'stop' ? 'Hissarna i de blöta schakten står still' : 'Hissarna i de blöta schakten kör vidare', { inc: 'leak' }); return true; },
   // Hiss-O-Matic har kraschat: nödläge (nod) eller omstart (boot)
   crash: m => { if (!setCrashMode(m, 'player')) return false; playerChose('crash', m === 'boot' ? 'Hiss-O-Matic startas om' : 'Hissarna går i nödläge', { inc: 'crash' }); return true; },
-  // skyddsrumsövningen: ordningen uppifrån (top) eller nerifrån (bottom)
-  ovning: m => { if (!setOvningOrder(m, 'player')) return false; playerChose('ovning', m === 'top' ? 'Övningen går uppifrån' : 'Övningen går nerifrån', { inc: 'ovning' }); return true; },
-  // pumparna stannar: pendelhissen kör vidare (run) eller ställs (stop)
-  pumpar: m => { if (!setPumparMode(m, 'player')) return false; playerChose('pumpar', m === 'stop' ? 'Pendelhissen ställs' : 'Pendelhissen kör vidare', { inc: 'pumpar' }); return true; },
   // rulltrappan stannar: gå i den (walk) eller spärra av (close)
   rulltrappa: m => { if (!setRulltrappaMode(m, 'player')) return false; playerChose('rulltrappa', m === 'close' ? 'Rulltrappan spärras av' : 'Folk får gå i rulltrappan', { inc: 'rulltrappa' }); return true; },
   // tåget i tunneln: vänta (wait) eller ersättningsbussar (bus)

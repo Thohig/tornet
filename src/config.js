@@ -87,18 +87,6 @@ export const THEME_INFO = {
     { x: 371, k: 'chair', face: 1, win: 'hall', desc: 'Sitter på en bänk på perrongen' },
     { x: 389, k: 'chair', face: -1, win: 'hall', desc: 'Sitter på en bänk på perrongen' },
   ] },
-  // pendeltåget djupt under huset (en våning under skyddsrummet): perrongen i ett bergrum, tåget stannar längs
-  // bakväggen som tunnelbanan (train.js: linjen 'pt'); tidtabellen ritas i pendelHall och rulltrappan upp till
-  // tunnelbanan i drawDeepEscalatorPx (pixhall.js)
-  pendel: { name: 'Tornplan Pendeltåg', short: 'pendeln', acc: '#5b6f8c', spots: [
-    { x: 352, k: 'stand', face: -1, win: 'hall', desc: 'Läser pendelns tidtabell' },
-    { x: 404, k: 'stand', face: 1, win: 'hall', desc: 'Tittar in i tunneln efter pendeln' },
-  ] },
-  // skyddsrummet i berget mellan tunnelbanan och pendeln (shelter.js): ståldörren, pumprummet (pumps.js) och
-  // ett förråd. Hit går man bara på skyddsrumsövningen och när pumparna ska ses till.
-  shelter: { name: 'Skyddsrummet', short: 'skyddsrummet', acc: '#6f7a5a', spots: [
-    { x: 140, k: 'door', staff: true, label: 'FÖRRÅD', desc: 'Letar efter ficklampor i förrådet' },
-  ] },
   dock: { name: 'Garage & lastkaj', short: 'lastkajen', acc: '#6c6865', spots: [
     { x: 262, k: 'door', staff: true, label: 'FÖRRÅD', desc: 'Letar i förrådet vid lastkajen' },
   ] },
@@ -129,9 +117,6 @@ export const THEME_INFO = {
 // park = var smarta styrningen parkerar den vid olika tider.
 export const BUILDING = {
   floors: [
-    // djupt i berget: pendeltåget och skyddsrummet (bergrum under tunnelbanan)
-    { label: 'PT', theme: 'pendel', tags: ['pendel', 'basement', 'deep'] },
-    { label: 'SR', theme: 'shelter', tags: ['shelter', 'basement', 'deep'] },
     { label: 'TB', theme: 'station', tags: ['station', 'basement'] },
     { label: 'P2', theme: 'garage', tags: ['garage', 'basement', 'break'] },
     { label: 'P1', theme: 'dock', tags: ['garage', 'basement', 'dock', 'control'] },
@@ -162,10 +147,9 @@ export const BUILDING = {
     { name: 'L2', color: '#d35400', group: 'låg', col: 1, start: 'P1', serves: ['TB', 'P2', 'P1', 'E', '1', '2', '3', '4', '5'], park: { day: '3', lunch: 'E', evening: 'E' } },
     // dubbeldäck: nedre däcket stannar på serves, övre däcket samtidigt på våningen ovanför (upper).
     // Till övre däcket i entrén tar man rulltrappan upp till mellanplanet (1).
-    // X1 går ända ner till pendeln: nedre däcket PT ⇄ TB ⇄ E ⇄ 6, övre däcket SR ⇄ P2 ⇄ 1 ⇄ 7 (övre däcket öppnar mot
-    // garaget när nedre står vid tunnelbanan, och mot skyddsrummet vid pendeln); under X2 går garagerampen.
+    // X1 går ända ner till tunnelbanan (övre däcket öppnar då mot garaget på P2); under X2 går garagerampen.
     // Den har en egen grupp (egna hallknappar), eftersom den når våningar som X2 inte når.
-    { name: 'X1', color: '#d4a017', group: 'tbana', col: 3, start: 'E', serves: ['PT', 'TB', 'E', '6'], upper: ['SR', 'P2', '1', '7'], express: true },
+    { name: 'X1', color: '#d4a017', group: 'tbana', col: 3, start: 'E', serves: ['TB', 'E', '6'], upper: ['P2', '1', '7'], express: true },
     { name: 'X2', color: '#b8860b', group: 'express', col: 4, start: '6', serves: ['E', '6'], upper: ['1', '7'], express: true },
     { name: 'H1', color: '#008080', group: 'hög', col: 0, start: '6', serves: ['6', '7', '8', '9', '10', '11', '12', '13', '14', 'T'], park: { day: '6', lunch: '6', evening: '11' } },
     { name: 'H2', color: '#2a5db0', group: 'hög', col: 1, start: '10', serves: ['6', '7', '8', '9', '10', '11', '12', '13', '14', 'T'], park: { day: '10', lunch: '6', evening: '13' } },
@@ -173,8 +157,6 @@ export const BUILDING = {
     // terrace: våningen där panoramahissen har en lastdörr mot takterrassen – bara för hissbalkens flyttlass (hoist.js).
     // Glasröret fortsätter ner genom trottoaren till tunnelbanan (TB): från perrongen åker man direkt upp till taket.
     { name: 'P', color: '#93379e', group: 'panorama', start: 'E', serves: ['TB', 'E', '6', 'T'], facade: true, terrace: '8' },
-    // pendelhissen: en stor korg genom berget mellan pendeln, skyddsrummet och tunnelbanan (under garagerampen)
-    { name: 'PH', color: '#5b6f8c', group: 'pendel', col: 4, start: 'TB', serves: ['PT', 'SR', 'TB'], ratedKg: 1200, park: { day: 'PT', lunch: 'TB', evening: 'TB' } },
   ],
   // Skywalken: en inglasad gångbro från sky lobbyn till granntornet Kronan (skywalk.js). floor = våningen där bron
   // går ut, len = brons längd (världsenheter, utanför panoramahissen), hours = när Kronan har öppet [öppnar, stänger].
@@ -199,10 +181,6 @@ export const DOCK = floorWith('dock');
 export const CONTROL = floorWith('control');   // driftcentralen där driftchefen sitter vid kontrollbordet (chief.js)
 export const BREAK = floorWith('break');       // personalrummet där driftcheferna fikar och väntar på sitt pass
 export const STATION = floorWith('station'); // tunnelbanan under huset (-1 om huset saknar station)
-export const PENDEL = floorWith('pendel'); // pendeltåget djupt under tunnelbanan (-1 om huset saknar det)
-export const SHELTER = floorWith('shelter'); // skyddsrummet i berget (-1 om huset saknar det)
-/** perrongerna: våningar där man kliver på och av tåg (tunnelbanan och pendeln) */
-export const PLATFORMS = [STATION, PENDEL].filter(f => f >= 0);
 export const HOME_FLOORS = floorsWith('home');
 /** bostäder med lastlucka mot fasaden (hissbalken på flyttdagen) */
 export const HATCH_FLOORS = floorsWith('hatch');

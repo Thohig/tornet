@@ -5,7 +5,7 @@ import { sv } from './sv.js';
 const EMP = stream('anställda'), VIS = stream('besökare'), DOG = stream('hundägare'), TOUR = stream('turister'), GYM = stream('kvällspass');
 const WEAR = stream('slitage');
 import { K, fl } from './util.js';
-import { END_H, FLOORS, MAXP, timeScale, pace, setTempo, LOBBY, CAFE, floorWith, floorOpen, EL, ROOF } from './config.js';
+import { END_H, FLOORS, MAXP, timeScale, pace, setTempo, LOBBY, CAFE, floorWith, floorOpen, EL, ROOF, STATION } from './config.js';
 const SPA = floorWith('spa');
 import { S, hooks, hour, log, newStats, notice } from './state.js';
 import { spawnEmployee, spawnStaff, spawnVisitor, updatePerson, spawnPizza, rerouteStranded, spawnDogOwner } from './people.js';
@@ -15,7 +15,7 @@ import { castSchedule } from './cast.js';
 import { makeElevator, updateElevator, releaseCalls } from './elevators.js';
 import { buttonsMode, buttonWaitTick, dispatchCalls } from './buttons.js';
 import { incidentTick, planIncidents } from './incidents.js';
-import { RAIL_SHARE } from './train.js';
+import { TRAIN_SHARE } from './train.js';
 import { medicClear } from './visits.js';
 import { chiefReset, chiefRoll, chiefTick } from './chief.js';
 import { panoTick } from './pano.js';
@@ -86,8 +86,8 @@ export function spawnTick(dt) {
   if (S.fire) return; // vid brand släpps ingen in
   for (const ev of S.sched) if (!ev.done && h >= ev.at) { ev.done = true; ev.run(); }
   if (S.people.length >= MAXP) return;
-  // en del av de anställda kommer med tunnelbanan eller pendeln i stället (train.js tar med dem)
-  if (EMP.rng() < arrivalRate(h) * (1 - RAIL_SHARE) * dt) spawnEmployee();
+  // en del av de anställda kommer med tunnelbanan i stället (train.js tar med dem)
+  if (EMP.rng() < arrivalRate(h) * (STATION >= 0 ? 1 - TRAIN_SHARE : 1) * dt) spawnEmployee();
   const lunch = h >= 11.2 && h < 12.8;
   let v = h >= 9 && h < 17 ? 0.045 : 0;
   if (lunch) v += 0.07;

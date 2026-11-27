@@ -21,11 +21,11 @@
 // samma våning slås ihop till en ("×n"). Allt ritas på ett rutnät i låg upplösning (1 pixel = `PX` = 2
 // världsenheter) som skalas upp utan utjämning; skärmkoordinater räknas om med `VIEW.x0` (se `toWorld`,
 // `placeCarPop`).
-import { SKYWALK_DOOR, closedWhy, kulvertOpen } from './skywalk.js';
+import { SKYWALK_DOOR, closedWhy } from './skywalk.js';
 import { S } from './state.js';
 import {
   BOILER_X, BREAK, CONTROL, DOCK, DOOR_X, EL, SHAFT_W, shaftX, FL, FLOOR_HOURS, floorOpen, FLOORS, floorY, INNER_X1,
-  LAND_X0, LOBBY, MEZZ, SPOTS, STATION, TRAIN_LEN, TRAIN_X0, TRAIN_X1, SKYWALK_F, PENDEL,
+  LAND_X0, LOBBY, MEZZ, SPOTS, STATION, TRAIN_LEN, TRAIN_X0, TRAIN_X1, SKYWALK_F,
 } from './config.js';
 import { blend, dark, light, plain, PX, sprite, text, textW } from './pixart.js';
 import { PAL } from './pixpal.js';
@@ -34,10 +34,7 @@ import { inWindow, personHead, winPos } from './render.js';
 import { PERSON_H, PERSON_W, personSprite } from './pixpeople.js';
 import { clamp, fl } from './util.js';
 import { alarm, chiefOnDuty, chiefPerson, CHIEFS } from './chief.js';
-import { nextTrainMin, PT, TB, TRAIN_DOORS, trainDoors } from './train.js';
-import { DEEP_ESC } from './people.js';
-import { PUMP_X, PIT_LEVEL } from './pumpar.js';
-import { SHELTER_DOOR_X, drillers, hesaNow } from './shelter.js';
+import { nextTrainMin, TRAIN_DOORS, trainDoors } from './train.js';
 import { allowed } from './dispatch.js';
 import { ants, box, FLAMES, g, INK, line, lo, once, pill, R, reserve, STAIR_ICON, starSprite, X, Y } from './pixcore.js';
 import { blinkOf } from './pixcars.js';
@@ -52,7 +49,7 @@ import { sv } from './sv.js';
 // ---------- Hallen på varje våning ----------
 /** Kvällsljus i hallen: väggarna blir blåare, och där någon är (eller i entrén, hemma, i garaget) lyser
  *  taklamporna i varma koner. Ritas före folket, så att de står i ljuset. */
-const ALWAYS_LIT = ['lobby', 'apartments', 'garage', 'dock', 'station', 'sky', 'pendel'];
+const ALWAYS_LIT = ['lobby', 'apartments', 'garage', 'dock', 'station', 'sky'];
 function nightLight(f, th, x0, x1, top, bot, n) {
   if (n < 0.05) return;
   R(x0, top, x1 - x0, bot - top, `rgba(18,22,70,${(0.3 * n).toFixed(3)})`);
@@ -93,8 +90,6 @@ const GLIMPSE = {
   garage: [['..KKKK..', '.KCCCCK.', 'CCCCCCCC', 'CRCCCCRC', '.K....K.'], { K: INK, C: '#5b8fb9', R: '#ff5d52' }],
   dock: [['BBB.BBB.', 'BYB.BYB.', 'BBB.BBB.', 'BBBBBBB.', 'BBYBBYB.', 'BBBBBBB.'], { B: '#b07a45', Y: '#e8d27a' }],
   station: [['YYYYYYYY', 'YKKKKKKY', 'YYYYYYYY', '...KK...', '...KK...'], { Y: '#ffd23f', K: INK }],
-  pendel: [['BBBBBBBB', 'BWWWWWWB', 'BBBBBBBB', '...KK...', '...KK...'], { B: '#24385e', W: '#e4e6ea', K: INK }],
-  shelter: [['GGGGGGGG', 'G......G', 'GBBBBBBG', 'G......G', 'GBBBBBBG', 'GGGGGGGG'], { G: '#6f7a5a', B: '#9aa086' }],
   roof: [['..GG....', '.GGGG...', 'GGGGGG..', '..BB....', '..BB....'], { G: '#389a5c', B: '#8a5a2b' }],
 };
 const glimpseSprite = th => once('glimpse' + th, () => (GLIMPSE[th] ? sprite(GLIMPSE[th][0], GLIMPSE[th][1], null) : null));
@@ -105,8 +100,6 @@ function glimpse(f, th, ix, iy, iw, ih, n) {
   // tv:n hemma och skärmarna i spelstudion flimrar på kvällen
   if (th === 'apartments' && n > 0.4) R(ix, iy, iw, ih, `rgba(111,168,255,${(0.12 + 0.12 * Math.abs(Math.sin(S.anim * 5.3 + f))).toFixed(3)})`);
   if (th === 'server' && Math.sin(S.anim * 9 + f) > 0.6) R(ix + 4, iy + ih - 6, 1, 1, '#7cf06b');
-  // skyddsrummet: kulverten till Kronan är öppen – en grön pil längst in (skywalk.js)
-  if (th === 'shelter' && kulvertOpen()) { const ax = ix + 3, ay = iy + 3; R(ax + 2, ay + 2, 6, 1, '#7cf06b'); R(ax + 1, ay + 1, 1, 3, '#7cf06b'); R(ax, ay + 2, 1, 1, '#7cf06b'); }
   // en skugga som går förbi längst in (någon är inne)
   if (OCC_IN[f] > 0) {
     const per = 7 + (f % 3) * 2, t = (S.anim / per + f * 0.37) % 1;
@@ -129,8 +122,6 @@ function hallProps(f, th, top, bot) {
     for (let k = 0; k < (big ? 4 : 3); k++) R(px - 2 + k * 3, bot - 16 - (big ? 4 : 0) + (k % 2) * 3, 3, 8 + (big ? 3 : 0), ['#389a5c', '#2f7d4a', '#4caf6a'][k % 3]);
   };
   if (th === 'station') { stationHall(bot); return; }
-  if (th === 'pendel') { pendelHall(bot); return; }
-  if (th === 'shelter') { shelterHall(top, bot); return; }
   if (th === 'garage' || th === 'dock') {
     // betong: gula stolpar och en skylt
     for (const px of [base, base + 46]) { R(px, bot - 14, 3, 11, '#ffd23f'); for (let y = bot - 13; y < bot - 3; y += 4) R(px, y, 3, 2, INK); }
@@ -240,7 +231,7 @@ export function drawEscalatorPx() {
   }
   // de som åker (eller går) i rulltrappan, efter hur långt de har kommit
   for (const p of S.people) {
-    if (p.dead || !p.escalator || p.deep || p.state !== 'instairs') continue;
+    if (p.dead || !p.escalator || p.state !== 'instairs') continue;
     const up = p.dest > p.floor, done = clamp(1 - p.timer / (p.escT || 1.6), 0, 1), k = up ? done : 1 - done;
     const x = Math.round(xb + L * k), y = Math.round(yb + (yt - yb) * k);
     const frame = stopped ? Math.floor(S.anim * 6 + p.id) % 4 : 0;
@@ -280,7 +271,6 @@ export function drawHall(f, h) {
     R(x0, bot - 15, x1 - x0, 1, blend(PAL.wainLine, acc, 0.3));
     R(x0, bot - 14, x1 - x0, 1, light(blend(PAL.wain, acc, 0.28), 0.3));
     for (let x = x0 + 8; x < x1 - 2; x += 16) R(x, bot - 12, Math.min(10, x1 - 2 - x), 8, blend(PAL.panel, acc, 0.3));
-    if (th === 'pendel' || th === 'shelter') rockWall(f, x0, x1, top, bot);
   }
   if (th === 'lobby') lobbyFloor(x0, x1, bot);
   else { R(x0, bot - 3, x1 - x0, 3, blend(PAL.floor, acc, 0.25)); R(x0, bot - 3, x1 - x0, 1, light(blend(PAL.floor, acc, 0.25), 0.25)); }
@@ -336,7 +326,6 @@ export function drawHall(f, h) {
   g.restore();
   stairSign(f, false);
   if (f === STATION) drawPlatformPx(top, bot, h);
-  if (f === PENDEL) drawPlatformPx(top, bot, h, PT);
 }
 // ---------- Stationen: kiosken, tidtabellen och bänken på perrongen ----------
 // Platserna står i THEME_INFO.station (config.js) med win: 'hall', så folket syns här: vid kiosken, framför
@@ -370,86 +359,6 @@ function stationHall(bot) {
   box(tx, ty, tw, 13, '#ffffff'); R(tx + 1, ty + 1, tw - 2, 2, '#2a5db0');
   for (let r = 0; r < 4; r++) R(tx + 2, ty + 5 + r * 2, tw - 4 - (r % 2) * 3, 1, '#5b6b80');
   R(tx + Math.round(tw / 2), ty + 13, 1, bot - 3 - ty - 13, INK);
-}
-// ---------- Djupt i berget: pendeln och skyddsrummet ----------
-/** Bergrummet: sprutbetong i grått med fläckar och en båge i taket (väggarna i pendelns och skyddsrummets hallar).
- *  Platserna räknas ur våningens nummer, så att bilden aldrig ändras. */
-function rockWall(f, x0, x1, top, bot) {
-  R(x0, top, x1 - x0, bot - top - 15, '#8a8781');
-  for (let i = 0; i < 70; i++) {
-    const x = x0 + ((i * 37 + f * 11) % Math.max(1, x1 - x0)), y = top + 3 + ((i * 19 + f * 7) % Math.max(1, bot - top - 20));
-    R(x, y, 2 + (i % 3), 1, i % 2 ? '#7a7771' : '#9b9891');
-  }
-  // valvet: en mörkare båge längs taket
-  for (let x = x0; x < x1; x++) { const k = (x - x0) / Math.max(1, x1 - x0), d = Math.round(5 * (1 - 4 * (k - 0.5) ** 2)); R(x, top, 1, 6 - d, '#5d5a56'); }
-}
-/** pendelns perrong: tidtabellen och lampor i bergrummet (platserna i THEME_INFO.pendel) */
-function pendelHall(bot) {
-  const tx = X(338), tw = X(366) - tx, ty = bot - 29;
-  box(tx, ty, tw, 13, '#ffffff'); R(tx + 1, ty + 1, tw - 2, 2, '#24385e');
-  for (let r = 0; r < 4; r++) R(tx + 2, ty + 5 + r * 2, tw - 4 - (r % 2) * 3, 1, '#5b6b80');
-  R(tx + Math.round(tw / 2), ty + 13, 1, bot - 3 - ty - 13, INK);
-  // vatten på golvet när pumparna har stannat (pumpar.js)
-  const P = S.pumpar;
-  if (P && P.level > 0.25) {
-    const w = Math.round((X(INNER_X1) - X(LAND_X0)) * Math.min(1, (P.level - 0.25) / 0.75));
-    R(X(LAND_X0), bot - 2, w, 2, 'rgba(70,140,200,.55)');
-    for (let k = 0; k < w; k += 9) if ((k + Math.floor(S.anim * 4)) % 3 === 0) R(X(LAND_X0) + k, bot - 3, 3, 1, 'rgba(190,230,255,.7)');
-  }
-}
-/** Skyddsrummet: den tjocka ståldörren med ratten (SKYDDSRUM), pumprummets dörr (PUMPAR) med en mätare för vattnet
- *  och en blinkande lampa när pumparna står (pumpar.js). Under övningen står dörren öppen (shelter.js). */
-function shelterHall(top, bot) {
-  // ståldörren: rund ratt och en tjock karm, skylten på dörren (bred nog för texten även på engelska); öppen under övningen
-  const dw = Math.max(26, textW('SKYDDSRUM') + 6), dx = Math.round(X(SHELTER_DOOR_X) - dw / 2), dh = Math.min(28, bot - top - 20), dy = bot - 3 - dh, open = !!S.ovning;
-  box(dx - 2, dy - 2, dw + 4, dh + 2, '#4f5640');
-  if (open) { R(dx, dy, dw, dh, '#2a2f24'); box(dx + dw + 1, dy, 5, dh, '#7c8466'); if (drillers().length) R(dx + 2, dy + 2, dw - 4, dh - 4, 'rgba(255,233,168,.25)'); }
-  else {
-    box(dx, dy, dw, dh, '#7c8466'); R(dx + 1, dy + 1, dw - 2, 1, '#9aa086');
-    const cx = Math.round(dx + dw / 2), cy = dy + Math.round(dh / 2) + 4;
-    R(cx - 4, cy, 9, 1, INK); R(cx, cy - 4, 1, 9, INK); box(cx - 2, cy - 2, 5, 5, '#c0392b');
-  }
-  R(dx + 1, dy + 3, dw - 2, 7, '#ff9f1c'); text(g, 'SKYDDSRUM', dx + dw / 2, dy + 4, INK, 'center'); reserve(dx, dy + 3, dw, 7);
-  // pumprummet: en ståldörr, mätaren och lampan
-  const pw = Math.max(22, textW('PUMPAR') + 4), px = Math.round(X(PUMP_X) - pw / 2), ph = Math.min(26, bot - top - 21), py = bot - 3 - ph;
-  box(px, py, pw, ph, '#7a828c'); R(px + 1, py + 1, pw - 2, 1, '#9aa3ad');
-  R(px + 1, py + 3, pw - 2, 7, '#ffffff'); text(g, 'PUMPAR', px + pw / 2, py + 4, INK, 'center'); reserve(px, py + 3, pw, 7);
-  const P = S.pumpar, lvl = P ? P.level : 0.05, gx = px + pw + 3, gh = ph - 4;
-  box(gx, py + 2, 5, gh, '#101418'); R(gx + 1, py + 2 + gh - 1 - Math.round((gh - 2) * lvl), 3, Math.max(1, Math.round((gh - 2) * lvl)), lvl >= PIT_LEVEL ? '#ff5d52' : '#3f7cff');
-  if (P && P.ph === 'on' && Math.sin(S.anim * 6) > 0) { R(px + pw / 2 - 2, py - 4, 5, 3, '#ff5d52'); R(px + pw / 2 - 3, py - 5, 7, 5, 'rgba(255,93,82,.3)'); }
-  // provlarmet: en högtalare i taket som vibrerar medan Hesa Fredrik ljuder
-  if (hesaNow()) { const hx = X(LAND_X0) + 30, hy = top + 4; box(hx, hy, 8, 5, '#9aa3ad'); for (let k = 0; k < 3; k++) if (Math.floor(S.anim * 6 + k) % 2) R(hx + 10 + k * 3, hy + 1 + (k % 2), 1, 3, '#ffd23f'); }
-}
-/** Den långa rulltrappan genom berget: från pendelns perrong (DEEP_ESC.foot) upp till tunnelbanans (DEEP_ESC.top), i ett
- *  lutande rör genom skyddsrummets hall. Står still när vattnet når maskinrummet (pumpar.js). Ritas efter hallarna. */
-export function drawDeepEscalatorPx() {
-  if (PENDEL < 0 || STATION < 0) return;
-  const xb = X(DEEP_ESC.foot), yb = Y(floorY(PENDEL) - 4) - 3, xt = X(DEEP_ESC.top), yt = Y(floorY(STATION) - 4) - 3;
-  if (yt > lo.height + 10 || yb < -10) return;
-  const stopped = !!S.pumpar && S.pumpar.level >= 0.6, L = xt - xb, ph = stopped ? 0 : Math.floor(S.anim * 10) % 4;
-  // (rulltrappan går bakom pendelns namnskylt högst upp i hallen: bildpunkterna under skylten ritas inte)
-  const nx = X(DOOR_X) + 13, s0 = Y(floorY(PENDEL + 1) + 4) + 5, s1 = s0 + 12, s2 = nx + textW(plain(FL[PENDEL].name)) + 9;
-  /** en lodrät bit av kolumnen x från y0 (h bildpunkter), utom det som ligger bakom skylten */
-  const col = (x, y0, h, c) => {
-    if (x < nx - 2 || x > s2 || y0 + h <= s0 || y0 >= s1) { R(x, y0, 1, h, c); return; }
-    if (y0 < s0) R(x, y0, 1, s0 - y0, c);
-    if (y0 + h > s1) R(x, s1, 1, y0 + h - s1, c);
-  };
-  for (let i = -6; i <= L + 6; i++) {
-    const k = clamp(i / L, 0, 1), x = xb + i, y = Math.round(yb + (yt - yb) * k);
-    // (röret genom berget: bara mellan golven – vid perrongerna öppnar det sig)
-    if (k > 0.06 && k < 0.94) { col(x, y - 13, 13, 'rgba(40,44,52,.55)'); col(x, y - 14, 1, INK); col(x, y - 9, 1, S.power ? '#ffe9a8' : '#5a5a5a'); }
-    else col(x, y - 10, 1, INK); // (ledstången)
-    col(x, y, 1, '#8a909a'); col(x, y + 1, 2, '#5b6b80'); col(x, y + 3, 1, INK);
-    if (i >= 0 && i <= L && (i + ph) % 4 === 0) col(x, y - 1, 1, '#d4d0c8');
-  }
-  // de som åker, efter hur långt de har kommit
-  for (const p of S.people) {
-    if (p.dead || !p.deep || p.state !== 'instairs') continue;
-    const up = p.dest > p.floor, done = clamp(1 - p.timer / (p.escT || 4.5), 0, 1), k = up ? done : 1 - done;
-    const x = Math.round(xb + L * k), y = Math.round(yb + (yt - yb) * k);
-    g.drawImage(personSprite(p, 'side', 0, up ? 1 : -1), x - PERSON_W / 2, y - PERSON_H);
-  }
 }
 // ---------- Dörren till skywalken (sky lobbyn) ----------
 // En glasdörr i hallens bakvägg längst till höger med skylten KRONAN och en pil: där går man ut på bron (skywalk.js).
@@ -671,28 +580,23 @@ function breakRoom(top, bot, h) {
 // Spåret ligger längs perrongens bakvägg mellan två tunnelmynningar; tåget är längre än perrongens synliga
 // del, så bara mitten syns. Allt läses ur S.train (simuleringen) – här ritas bara.
 const TRAIN_BODY = '#b8c0cc', TRAIN_STRIPE = '#2a5db0', TRAIN_GLASS = '#26324a';
-/** pendeltåget: vitt med mörkblå ränder */
-const PENDEL_BODY = '#e4e6ea', PENDEL_STRIPE = '#24385e';
-function drawPlatformPx(top, bot, h, ln = TB) {
-  const tx0 = X(TRAIN_X0), tx1 = X(TRAIN_X1), ty0 = bot - 26, ty1 = bot - 3, pt = ln === PT;
-  const BODY = pt ? PENDEL_BODY : TRAIN_BODY, STRIPE = pt ? PENDEL_STRIPE : TRAIN_STRIPE;
+function drawPlatformPx(top, bot, h) {
+  const tx0 = X(TRAIN_X0), tx1 = X(TRAIN_X1), ty0 = bot - 26, ty1 = bot - 3;
   // spårgropen och tunnelväggen bakom, med kakel ovanför
   R(tx0 - 4, ty0 - 2, tx1 - tx0 + 6, ty1 - ty0 + 2, '#1e2430');
   for (let x = tx0 - 4; x < tx1 + 2; x += 6) R(x, ty0 - 2, 1, ty1 - ty0 + 2, '#262d3b');
-  // (tunnelbanan har kakel bakom spåret, pendelns bergrum sprutbetong)
-  for (let x = tx0 - 4; x < tx1 + 2; x += 4) for (let y = top + 28 - 9; y < ty0 - 2; y += 3) R(x, y, 3, 2, pt ? ((x * 3 + y) % 5 ? '#8d8a84' : '#7a7771') : (x + y) % 7 ? '#d9e2ec' : '#c3cfdc');
-  const T = ln.st().train;
+  for (let x = tx0 - 4; x < tx1 + 2; x += 4) for (let y = top + 28 - 9; y < ty0 - 2; y += 3) R(x, y, 3, 2, (x + y) % 7 ? '#d9e2ec' : '#c3cfdc');
+  const T = S.train;
   if (T) {
     const doors = trainDoors(T);
     g.save(); g.beginPath(); g.rect(tx0, ty0 - 1, tx1 - tx0, ty1 - ty0 + 1); g.clip();
     // tåget: vagnar à 70 världsenheter, nosen långt bort i tunneln åt båda hållen
     const x0 = X(T.x - 160), x1 = X(T.x + TRAIN_LEN + 160), y0 = ty0 + 1, y1 = ty1 - 1;
-    R(x0, y0, x1 - x0, y1 - y0, INK); R(x0, y0 + 1, x1 - x0, y1 - y0 - 2, BODY);
-    R(x0, y0 + 1, x1 - x0, 1, light(BODY, 0.4));
-    R(x0, y1 - 7, x1 - x0, 2, STRIPE);
-    if (pt) R(x0, y0 + 2, x1 - x0, 1, STRIPE); // (pendeln: en rand till upptill)
+    R(x0, y0, x1 - x0, y1 - y0, INK); R(x0, y0 + 1, x1 - x0, y1 - y0 - 2, TRAIN_BODY);
+    R(x0, y0 + 1, x1 - x0, 1, light(TRAIN_BODY, 0.4));
+    R(x0, y1 - 7, x1 - x0, 2, TRAIN_STRIPE);
     // vagnskarvar och fönster
-    for (let wx = X(T.x - 140); wx < x1; wx += 35) R(wx, y0, 1, y1 - y0, dark(BODY, 0.45));
+    for (let wx = X(T.x - 140); wx < x1; wx += 35) R(wx, y0, 1, y1 - y0, dark(TRAIN_BODY, 0.45));
     for (let wx = X(T.x - 160) + 3; wx < x1 - 4; wx += 7) {
       R(wx, y0 + 4, 5, 6, TRAIN_GLASS);
       if (S.power || nightness(h) < 0.5) R(wx, y0 + 4, 5, 1, '#ffe9a8');
@@ -700,7 +604,7 @@ function drawPlatformPx(top, bot, h, ln = TB) {
     // dörrarna glider isär när tåget står inne
     for (const d of TRAIN_DOORS) {
       const cx = X(T.x + d * TRAIN_LEN), gap = Math.round(doors * 3);
-      R(cx - 4, y0 + 2, 8, y1 - y0 - 3, dark(BODY, 0.18));
+      R(cx - 4, y0 + 2, 8, y1 - y0 - 3, dark(TRAIN_BODY, 0.18));
       R(cx - 4, y0 + 3, 3, 7, TRAIN_GLASS); R(cx + 1, y0 + 3, 3, 7, TRAIN_GLASS);
       if (gap) R(cx - gap, y0 + 2, gap * 2, y1 - y0 - 3, '#ffe9a8');
       R(cx, y0 + 2, 1, y1 - y0 - 3, INK);
@@ -717,8 +621,8 @@ function drawPlatformPx(top, bot, h, ln = TB) {
   // perrongkanten med gul linje
   R(tx0 - 6, ty1, tx1 - tx0 + 10, 1, '#ffd23f'); R(tx0 - 6, ty1 + 1, tx1 - tx0 + 10, 1, INK);
   // avgångsskylten: DOS-svart med gul text (ingen klocka – bara minuter kvar i speltid)
-  const m = nextTrainMin(ln), stuck = !pt && S.tunnel && S.tunnel.ph === 'stuck';
-  const msg = pt && m !== null && !T ? sv`PENDELN OM ${m} MIN` : m === null ? 'INGA FLER TÅG' : T ? (T.state === 'in' ? 'TÅGET KOMMER' : T.state === 'stop' ? 'STIG PÅ!' : 'AVGÅR') : stuck ? 'SIGNALFEL – FÖRSENAT' : sv`TÅG OM ${m} MIN`;
+  const m = nextTrainMin(), stuck = S.tunnel && S.tunnel.ph === 'stuck';
+  const msg = m === null ? 'INGA FLER TÅG' : T ? (T.state === 'in' ? 'TÅGET KOMMER' : T.state === 'stop' ? 'STIG PÅ!' : 'AVGÅR') : stuck ? 'SIGNALFEL – FÖRSENAT' : sv`TÅG OM ${m} MIN`;
   const bw = textW(msg) + 6, bx = tx1 - bw, by = top + 16;
   box(bx, by, bw, 9, '#101418'); text(g, msg, bx + 3, by + 2, m === null ? '#ff5d52' : '#ffd23f');
   reserve(bx, by, bw, 9); // (tankebubblorna vid perrongen lägger sig inte över avgångsskylten)
@@ -733,7 +637,7 @@ export function stairSign(f, glow) {
 }
 export function floorOverlays(f, h) {
   const top = Y(floorY(f + 1) + 4), bot = Y(floorY(f) - 4), x0 = X(LAND_X0), x1 = X(INNER_X1);
-  const NO_DIM = ['lobby', 'apartments', 'roof', 'garage', 'dock', 'station', 'pendel', 'shelter'];
+  const NO_DIM = ['lobby', 'apartments', 'roof', 'garage', 'dock', 'station'];
   const th = FL[f].theme, n = nightness(h);
   if (!NO_DIM.includes(th) && floorOpen(f, h)) {
     if (n > 0.05 && !OCC[f]) R(x0, top, x1 - x0, bot - top, `rgba(10,6,34,${0.45 * n})`);

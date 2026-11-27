@@ -6,7 +6,7 @@ import { hour, S } from './state.js';
 import { blend, dark, ellipseSprite, led, light, PX, rgbOf, text, textW } from './pixart.js';
 import {
   BX0, BX1, CAR_H, carPos, DOCK, DOOR_X, EL, FLOORS, floorY, GARAGE_FLOORS, GROUND_Y, H, LAND_X0, LOBBY, ROOF_Y, SEAM_F,
-  SHAFT_W, SHAFT_X0, shaftCX, shaftX, STATION, PENDEL, surf, TOP, TOWER_X1, W,
+  SHAFT_W, SHAFT_X0, shaftCX, shaftX, STATION, surf, TOP, TOWER_X1, W,
 } from './config.js';
 import { clamp, fl } from './util.js';
 import { PAL } from './pixpal.js';
@@ -91,23 +91,10 @@ export function drawGroundPx() {
   const py = Y(GROUND_Y + 44);
   R(0, py - 1, lo.width, 9, INK); R(0, py, lo.width, 7, '#7d786d'); R(0, py + 1, lo.width, 1, '#a8a395'); R(0, py + 5, lo.width, 1, '#5b574e');
   for (let x = -((X0 / PX) % 40); x < lo.width; x += 40) R(x, py - 1, 2, 9, '#5b574e');
-  // djupt i berget (under tunnelbanan): grått berg runt skyddsrummet och pendeln
-  if (PENDEL >= 0) {
-    const r0 = Y(floorY(STATION) + 8);
-    R(0, r0, lo.width, Y(BASE_Y) + 30 - r0, '#6f6c68'); R(0, r0, lo.width, 1, '#4f4c48');
-    for (let i = 0; i < 70; i++) {
-      const wx = (i * 211) % W, x = X(wx), y = Y(floorY(STATION) + 20 + (i * 47) % (floorY(PENDEL) - floorY(STATION) + 60));
-      if (x > -8 && x < lo.width) { R(x, y, 5, 1, '#5d5a56'); R(x + 5, y + 1, 3, 1, '#5d5a56'); }
-    }
-  }
-  // tågens tunnlar ut mot stan (tunnelbanan och pendeln)
-  for (const f of [STATION, PENDEL]) {
-    if (f < 0) continue;
-    const t0 = Y(floorY(f + 1) + 18), t1 = Y(floorY(f) + 2);
-    R(0, t0 - 2, lo.width, t1 - t0 + 4, INK); R(0, t0, lo.width, t1 - t0, '#1e2430');
-    for (let x = -((X0 / PX) % 10); x < lo.width; x += 10) R(x, t0, 1, t1 - t0, '#262d3b');
-    R(0, t1 - 2, lo.width, 1, '#8a909a');
-  }
+  const t0 = Y(floorY(STATION + 1) + 18), t1 = Y(floorY(STATION) + 2);
+  R(0, t0 - 2, lo.width, t1 - t0 + 4, INK); R(0, t0, lo.width, t1 - t0, '#1e2430');
+  for (let x = -((X0 / PX) % 10); x < lo.width; x += 10) R(x, t0, 1, t1 - t0, '#262d3b');
+  R(0, t1 - 2, lo.width, 1, '#8a909a');
   drawFoundationPx();
   // trottoaren och gatan
   R(0, gy, lo.width, 7, PAL.walk); R(0, gy, lo.width, 1, INK); R(0, gy + 7, lo.width, 1, INK);

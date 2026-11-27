@@ -58,8 +58,6 @@ const INIT = {
   // tunnelbanan (train.js): tåget som är inne, nästa och förra avgången, förseningen och om sista tåget har gått
   train: /** @type {import('./train.js').Train|null} */ (null), trainNext: 0, trainLast: /** @type {number|null} */ (null),
   trainDelay: /** @type {{ t0: number, until: number }|null} */ (null), trainDone: false,
-  // pendeltåget (train.js, linjen PT): samma sak för pendeln
-  pendel: /** @type {import('./train.js').LineState} */ ({ train: null, next: 0, last: null, done: false }),
   // garaget, leveransbilen, VIP-helikoptern och ambulansens klockslag (life.js, visits.js)
   autos: /** @type {import('./life.js').Auto[]} */ ([]), nextAutoId: 1, truck: /** @type {import('./life.js').Truck|null} */ (null),
   heli: /** @type {import('./life.js').Heli|null} */ (null), vipVisits: /** @type {import('./life.js').VipVisit[]} */ ([]),
@@ -68,9 +66,6 @@ const INIT = {
   cleaner: /** @type {import('./hoist.js').Cleaner|null} */ (null), hoist: /** @type {import('./hoist.js').Hoist|null} */ (null),
   // olyckorna som vaktmästaren rycker ut till: gondolen som fastnat (gondola.js), den lösa hunden (dog.js), vattenläckan (leak.js)
   gondola: /** @type {import('./gondola.js').Gondola|null} */ (null), dog: /** @type {import('./dog.js').Dog|null} */ (null), leak: /** @type {import('./leak.js').Leak|null} */ (null),
-  // skyddsrumsövningen och provlarmet (shelter.js): hesaDay = dygnet då Hesa Fredrik redan har ljudit, hesaDrill = övningen väntar
-  ovning: /** @type {import('./shelter.js').Ovning|null} */ (null), hesaDay: -1, hesaDrill: false,
-  pumpar: /** @type {import('./pumpar.js').Pumpar|null} */ (null), pumparOut: -1, // Pumparna stannar (pumpar.js); pumparOut = strömavbrottet som redan stoppat dem
   hojd: /** @type {import('./hojd.js').Hojd|null} */ (null), // Höjdskräck på bron (hojd.js)
   kronan: /** @type {import('./kronan.js').Kronan|null} */ (null), // Kronans hissar kraschar (kronan.js)
   rulltrappa: /** @type {import('./rulltrappa.js').Rulltrappa|null} */ (null), // Rulltrappan stannar (rulltrappa.js)
@@ -127,7 +122,7 @@ export function newStats() {
     gripes: 0, cups: 0, holds: 0, chats: 0,
     crowdSkips: 0, closePresses: 0, heatStops: 0, relevels: 0, stumbles: 0, doorFights: 0,
     medical: 0, medicSec: 0, moveLoads: 0, moves: 0, moveBroken: 0, stormFaults: 0, learnedParks: 0, upperDeck: 0, escalator: 0,
-    trains: 0, trainIn: 0, trainOut: 0, pendelTrains: 0, pendelIn: 0, pendelOut: 0, transferRail: 0, deepEscalator: 0, kulvert: 0, panoStuck: 0, bridge: 0, neighbors: 0,
+    trains: 0, trainIn: 0, trainOut: 0, panoStuck: 0, bridge: 0, neighbors: 0,
     // styrningens förutsagda väntan (vid senaste tilldelningen) mot den faktiska: summa fel, summa |fel|, antal
     etaErr: 0, etaAbs: 0, etaN: 0,
     // dygnets händelser i tidsordning (dayEvent): det sammanfattningen berättar om

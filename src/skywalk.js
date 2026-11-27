@@ -8,8 +8,6 @@
 // spelaren väljer det (act('skywalk', 'close'|'open')), under kuppen om polisen spärrar den (heist.js) och för
 // inkommande när Kronans hissar har kraschat och Tornet bara tar sina egna (kronan.js). Under en brand ovanför
 // sky lobbyn går de som är ovanför ut över bron i stället för ner genom huset (evacFloor i people.js).
-// När bron är stängd för stormen eller underhållet går grannarna i stället genom kulverten, en gång under jord från
-// skyddsrummet (SR) till Kronans källare (kulvertOpen): de kommer in där och tar hissen upp, och går ut samma väg.
 // Kronans driftchef Göran pratar ibland med vår i driftradion, och Kronans fönsterputsare Jörgen hänger på
 // Kronans fasad när Hasse är ute.
 //
@@ -24,13 +22,12 @@ import { sv } from './sv.js';
 const NB = stream('grannar'), NG = stream('grannarnas');
 const { rng, rand, pick } = stream('skywalk');
 import { S, hour, log, notice } from './state.js';
-import { CAFE, FL, LOBBY, SHELTER, SKYWALK, SKYWALK_F, WAIT_X1, floorOpen, pace } from './config.js';
+import { CAFE, FL, LOBBY, SKYWALK, SKYWALK_F, WAIT_X1, floorOpen, pace } from './config.js';
 import { makePerson, openFloors, pev, pn, releaseSpot, setTrip } from './people.js';
 import { fireReturn, leaveBuilding } from './life.js';
 import { windAt } from './weather.js';
 import { dutyDone } from './crew.js';
 import { fl } from './util.js';
-import { hesaLine } from './shelter.js';
 /** @typedef {import('./people.js').Person} Person */
 
 /** var dörren ut till bron sitter i sky lobbyns hall (världens x): längst till höger, mot fasaden */
@@ -65,16 +62,6 @@ export function closedWhy(h = hour()) {
   if (S.heist && S.heist.ph !== 'done' && S.heist.bridge === 'spärr') return 'polisen';
   return '';
 }
-/** Kulverten: en gång under jord från skyddsrummet (SR) till Kronans källare. Den öppnas när bron är stängd för stormen
- *  eller underhållet men Kronan har öppet – inte vid brand, och inte när vattnet står i berget (pumpar.js). */
-export function kulvertOpen(h = hour()) {
-  if (SHELTER < 0 || SKYWALK_F < 0 || !S.skywalk || S.fire) return false;
-  if (S.pumpar && S.pumpar.level >= KULVERT_WET) return false;
-  const why = closedWhy(h);
-  return why === 'stormen' || why === 'underhåll';
-}
-/** vattnet når kulverten vid den här nivån (pumpar.js) */
-const KULVERT_WET = 0.4;
 /** kan man gå ut över bron till Kronan nu? */
 export const canGoOut = () => !closedWhy();
 /** kan man komma in över bron från Kronan nu? (inte under en brand, och inte när Tornet bara tar sina egna) */
@@ -92,7 +79,7 @@ function neighborRate(h) {
   return (0.07 + (lunch ? 0.16 : 0)) * pace(h) * S.cal.visMul; // (färre grannar på helgen, calendar.js)
 }
 /** En granne från Kronan kommer över bron: ett ärende på ett kontor eller lunch i Sky Café. */
-export function spawnNeighbor(why = null, goal = null, kulvert = false) {
+export function spawnNeighbor(why = null, goal = null) {
   const h = hour(), lunch = h >= 11.2 && h < 12.8;
   const open = openFloors(h).filter(f => f !== SKYWALK_F || f === CAFE);
   let dest = goal;
@@ -101,20 +88,11 @@ export function spawnNeighbor(why = null, goal = null, kulvert = false) {
     else if (open.length) dest = NG.pick(open);
     else return null;
   }
-  const p = makePerson('vis', kulvert ? SHELTER : SKYWALK_F, kulvert ? -30 : SKYWALK_DOOR, NG);
-  p.kronan = true; p.exitFloor = kulvert ? SHELTER : SKYWALK_F;
-  p.bridgeWhy = why || (dest === CAFE ? sv`Lunch i ${FL[CAFE].name} – grannen från ${KRONAN}` : sv`${FL[dest].visit || 'Ett ärende'} – kommer från ${KRONAN}`);
-  if (kulvert) {
-    // genom kulverten: kliver in i skyddsrummet och tar hissen upp
-    setTrip(p, dest, p.bridgeWhy, false);
-    S.people.push(p);
-    SW().neighbors++; S.stats.neighbors++; S.stats.kulvert++;
-    pev(p, sv`Kommer genom kulverten från ${KRONAN} – bron är stängd · ${p.bridgeWhy} (${fl(dest)})`);
-    log(sv`${pn(p)} kommer genom kulverten från ${KRONAN} · ska till ${fl(dest)}`, 'person', null, p.id);
-    return p;
-  }
+  const p = makePerson('vis', SKYWALK_F, SKYWALK_DOOR, NG);
+  p.kronan = true; p.exitFloor = SKYWALK_F;
   p.state = 'bridge'; p.bridgeT = 1; p.bridgeDir = -1; p.spot = null;
   p.bridgeGoal = dest;
+  p.bridgeWhy = why || (dest === CAFE ? sv`Lunch i ${FL[CAFE].name} – grannen från ${KRONAN}` : sv`${FL[dest].visit || 'Ett ärende'} – kommer från ${KRONAN}`);
   S.people.push(p);
   SW().neighbors++; S.stats.neighbors++; S.stats.bridge++;
   pev(p, sv`Går över bron från ${KRONAN} · ${p.bridgeWhy} (${fl(dest)})`);
@@ -136,35 +114,17 @@ export function bridgeOut(p) {
   if (!p.kronan && !evac && !robber) return false;
   if (!canGoOut() && !robber) {
     if (evac) return false;
-    aroundBridge(p);
+    p.exitFloor = LOBBY;
+    setTrip(p, LOBBY, sv`Bron är stängd (${closedWhy()}) – går ut genom entrén och runt kvarteret`, true);
     return true;
   }
   p.toBridge = true; p.state = 'exiting';
   p.spot = doorSpot(evac ? 'Utrymmer över bron till Kronan' : sv`Går över bron till ${KRONAN}`); p.tx = SKYWALK_DOOR;
   return true;
 }
-/** en granne som ska hem till Kronan när bron är stängd: genom kulverten, eller ut genom entrén och runt kvarteret @param {Person} p */
-function aroundBridge(p) {
-  if (kulvertOpen()) {
-    p.exitFloor = SHELTER;
-    setTrip(p, SHELTER, sv`Bron är stängd (${closedWhy()}) – tar kulverten under jord till ${KRONAN}`, true);
-    return;
-  }
-  p.exitFloor = LOBBY;
-  setTrip(p, LOBBY, sv`Bron är stängd (${closedWhy()}) – går ut genom entrén och runt kvarteret`, true);
-}
-/** p står vid dörren och går ut på bron (exitDone i people.js). Stängdes bron medan hen gick dit vänder hen i dörren:
- *  grannen tar en annan väg hem, och den som skulle äta på Kronans Krog äter i Sky Café i stället @param {Person} p */
+/** p står vid dörren och går ut på bron (exitDone i people.js) @param {Person} p */
 export function enterBridge(p) {
   p.toBridge = false; releaseSpot(p);
-  const robber = p.robber && S.heist && S.heist.route === 'bro';
-  if (!canGoOut() && !robber && !p.evac) {
-    p.spot = null;
-    if (p.kronan) { aroundBridge(p); return; }
-    p.kronanLunch = false;
-    setTrip(p, CAFE >= 0 ? CAFE : p.home ?? LOBBY, sv`Bron stängdes (${closedWhy()}) – äter i ${FL[CAFE].name} i stället`, false);
-    return;
-  }
   p.state = 'bridge'; p.bridgeT = 0; p.bridgeDir = 1; p.spot = null; p.x = SKYWALK_DOOR;
   SW().n++; S.stats.bridge++;
   pev(p, p.evac ? 'Ut på bron – utrymmer till Kronan' : sv`Går ut på bron mot ${KRONAN}`);
@@ -199,7 +159,6 @@ export function skywalkTick(dt) {
   // grannarna (dras varje steg – samma dygn oavsett styrlogik; bara spawnen beror på om bron är öppen)
   const r = NB.rng();
   if (canComeIn() && !S.fire && r < neighborRate(h) * dt) spawnNeighbor();
-  else if (!canComeIn() && kulvertOpen(h) && r < neighborRate(h) * dt) spawnNeighbor(null, null, true); // (genom kulverten)
   // på bron
   for (const p of S.people) {
     if (p.dead) continue;
@@ -301,14 +260,12 @@ function inKronanTick(p) {
     pev(p, p.kronanEvac ? sv`Branden är släckt – går tillbaka över bron från ${KRONAN}` : 'Mätt – går tillbaka över bron');
     return;
   }
-  // bron är stängd: genom kulverten (om den är öppen), annars ner genom Kronan och in genom Tornets entré
-  const kv = !p.kronanEvac && kulvertOpen();
-  p.state = 'toQueue'; p.floor = kv ? SHELTER : LOBBY; p.x = -30 - rand(0, 20);
-  if (kv) S.stats.kulvert++;
+  // bron är stängd: ner genom Kronan och in genom Tornets entré
+  p.state = 'toQueue'; p.floor = LOBBY; p.x = -30 - rand(0, 20);
   const evac = p.kronanEvac;
   p.kronanEvac = false; p.kronanLunch = false; p.evac = false;
   if (evac) { if (!fireReturn(p, 'Tillbaka in efter branden – via entrén')) leaveBuilding(p); return; }
-  setTrip(p, p.home ?? LOBBY, kv ? sv`Bron är stängd – tillbaka genom kulverten` : sv`Bron är stängd – tillbaka via gatan och entrén`, false);
+  setTrip(p, p.home ?? LOBBY, sv`Bron är stängd – tillbaka via gatan och entrén`, false);
 }
 
 // ---------- Kuppen: bron som flyktväg (heist.js) ----------
@@ -350,10 +307,10 @@ const GORAN_LINES = [
 ];
 function goranTalk() {
   const h = hour();
-  const line = hesaLine() || (S.storm ? 'Det blåser rejält hos er också? Bron svajar hit.'
+  const line = S.storm ? 'Det blåser rejält hos er också? Bron svajar hit.'
     : S.fire ? 'Vi ser röken härifrån! Säg till om ni behöver vår sky lobby.'
       : h >= 11.2 && h < 12.8 ? sv`Kön till ${KRONAN}s Krog går ända ut på bron. Era är välkomna!`
-        : pick(GORAN_LINES));
+        : pick(GORAN_LINES);
   log(sv`📻 ${GORAN} i ${KRONAN}: ${line}`, 'chief');
 }
 

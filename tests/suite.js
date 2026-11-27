@@ -10,7 +10,7 @@ import {
 } from '../src/incidents.js';
 import { liftsAvailable, pn, spawnVisitor } from '../src/people.js';
 import { TOUR_N } from '../src/tour.js';
-import { loadKg, allowed, allowedPos, posOf, safeFloor, operational, canTake, stopFloors, isFull, costBased, benched, inFireZone, prio, keyed, outReason } from '../src/dispatch.js';
+import { loadKg, allowed, allowedPos, posOf, safeFloor, operational, canTake, stopFloors, isFull, costBased, benched, inFireZone, prio, keyed } from '../src/dispatch.js';
 import { RATED_KG, FULL_LOAD, VMAX, DEFAULT_TEMPO, dayLength } from '../src/config.js';
 import { needsFreight, mayUseFreight, legDest } from '../src/people.js';
 import { fl } from '../src/util.js';
@@ -23,7 +23,7 @@ import { forceMove, BLANKET_T } from '../src/visits.js';
 import { trafficMode, learnBin, peakHold, PEAK_HOLD } from '../src/dispatch.js';
 import { windAt, startStorm } from '../src/weather.js';
 import { canBrakeTo } from '../src/elevators.js';
-import { MEZZ, STATION, PLATFORMS, PENDEL, SHELTER, TRAIN_X0, TRAIN_X1, SKYWALK, SKYWALK_F } from '../src/config.js';
+import { MEZZ, STATION, TRAIN_X0, TRAIN_X1, SKYWALK, SKYWALK_F } from '../src/config.js';
 import { LAST_H } from '../src/train.js';
 import { FIRE_FLOORS, INC_LEVELS } from '../src/incidents.js';
 import { CONTROL, BREAK } from '../src/config.js';
@@ -268,7 +268,7 @@ function makeWatcher() {
       }
     } else w.deadAssign.clear();
     // tunnelbanan: på perrongen står bara den som ska med tåget – och efter sista tåget ingen alls
-    for (const p of S.people) if (p.state === 'platform' && (!PLATFORMS.includes(p.floor) || p.exitFloor !== p.floor || !p.toTrain || (p.floor === STATION ? S.trainDone : S.pendel.done))) w.hit('badPlatform', null, p, 'står på perrongen utan att ska med tåget');
+    for (const p of S.people) if (p.state === 'platform' && (p.floor !== STATION || p.exitFloor !== STATION || !p.toTrain || S.trainDone)) w.hit('badPlatform', null, p, 'står på perrongen utan att ska med tåget');
     // två tekniker har aldrig samma hiss som jobb, och högst en extra tekniker är inringd
     { const crew = techs(), jobs = crew.filter(t => t.job !== null && t.job !== undefined).map(t => t.job);
       if (new Set(jobs).size !== jobs.length || crew.filter(t => t.extra).length > 1) w.hit('techClash', null, null, 'två tekniker på samma hiss (eller fler än en extra)'); }
@@ -1824,7 +1824,7 @@ test('Tunnelbanan: efter sista tåget går de som tänkte ta tåget ut genom ent
   const w = watcher();
   while (hour() < LAST_H + 1.5) { const b = w.before(); step(DT); w.check(b); }
   assert(S.trainDone, 'sista tåget registrerades aldrig');
-  assert(!S.people.some(q => q.state === 'platform' && q.floor === STATION), 'någon står kvar på perrongen efter sista tåget');
+  assert(!S.people.some(q => q.state === 'platform'), 'någon står kvar på perrongen efter sista tåget');
   assert(!S.people.some(q => q.exitFloor === STATION), 'någon ska fortfarande ut via stationen');
   assert(w.badPlatform === 0, `fel på perrongen ${w.badPlatform} steg`);
   if (!p) return 'ingen sen tågresenär just då';
@@ -1982,7 +1982,7 @@ export const PLAYER_ACTIONS = {
   // ett annat datum: midsommar, lucia (söndag), sommartidens första dag, en vanlig fredag
   date: r => act('date', ['2026-06-20', '2026-12-13', '2026-03-29', '2026-11-27'][Math.floor(r() * 4)]),
   // vaktmästarens olyckor: gondolen, hunden, vattenläckan – och valen på korten
-  accident: r => act('trigger', ['gondola', 'dog', 'leak', 'crash', 'tunnel', 'panic', 'party', 'rulltrappa', 'kronan', 'hojd', 'pumpar'][Math.floor(r() * 11)]),
+  accident: r => act('trigger', ['gondola', 'dog', 'leak', 'crash', 'tunnel', 'panic', 'party', 'rulltrappa', 'kronan', 'hojd'][Math.floor(r() * 10)]),
   gondola: r => act('gondola', ['crank', 'hatch', 'rope'][Math.floor(r() * 3)]),
   dog: r => act('dog', r() < 0.5 ? 'lock' : 'free'),
   leak: r => act('leak', r() < 0.5 ? 'stop' : 'run'),
@@ -1991,8 +1991,6 @@ export const PLAYER_ACTIONS = {
   panic: r => act('panic', r() < 0.5 ? 'talk' : 'crank'),
   party: r => act('party', r() < 0.5 ? 'varu' : 'alla'),
   rulltrappa: r => act('rulltrappa', r() < 0.5 ? 'walk' : 'close'),
-  pumpar: r => act('pumpar', r() < 0.5 ? 'run' : 'stop'),
-  ovning: r => (r() < 0.5 ? act('trigger', 'ovning') : act('ovning', r() < 0.5 ? 'top' : 'bottom')),
   kronan: r => act('kronan', r() < 0.5 ? 'open' : 'own'),
   skywalk: r => act('skywalk', r() < 0.5 ? 'close' : 'open'),
   heist: r => act('heist', ['cut', 'wait', 'garage', 'tak', 'stop', 'go', 'storm', 'spärr', 'bakhåll'][Math.floor(r() * 9)]),
@@ -2086,8 +2084,7 @@ test('Driftchefen: spelaren tar över ett beslut, och lämnar tillbaka det', () 
   return `${chiefDecs().length} beslut av chefen · ${S.chief.log.filter(d => d.by === 'player').length} av spelaren`;
 });
 test('Driftchefen: strömavbrott – reservkraften och auto-räddningen startar av sig själva', () => {
-  // (frö 16: kl 10.2 sitter folk fast mellan våningar – på andra frön kan alla korgar stå vid en våning)
-  sim(16, { chief: true }); runUntil(10.2);
+  sim(15, { chief: true }); runUntil(10.2);
   startOutage();
   const O = S.outage, trapped = S.elevators.reduce((a, e) => a + e.passengers.length, 0);
   runWhile(() => !!S.outage && !(S.outage.gen && S.outage.auto), 20);
@@ -2658,11 +2655,9 @@ test('Mjukt dygnsskifte: huset rullar vidare kl 06 – fel, brand och folk följ
   assert(S.people.some(p => ids.has(p.id)), 'folket i huset försvann vid dygnsskiftet');
   assert(S.stats.served === 0 && S.yesterday && S.yesterday.day === 1, 'dagens statistik ska börja om och gårdagens sparas');
   assert(S.notices.some(n => n.kind === 'day'), 'ingen informationsruta om det nya dygnet');
-  // (felet från i går ska lagas – att hissen får ett nytt fel senare på förmiddagen är dygnets slump)
-  let fixed = false;
-  while (S.day < 2 || hour() < 10) { const b = w.before(); step(DT); w.check(b); if (!e.fault) fixed = true; }
+  runTo(2, 10, w);
   assert(!S.fire, 'branden släcktes aldrig');
-  assert(fixed, `${e.name} lagades aldrig efter skiftet`);
+  assert(!e.fault, `${e.name} lagades aldrig efter skiftet`);
   for (const c of CREW.filter(x => x.until === null)) assert(!crewPerson(c.id), `${c.name} (nattskiftet) gick aldrig hem`);
   for (const c of CREW.filter(x => x.arrive === null)) { const p = crewPerson(c.id); assert(p && (atPost(p) || p.onBreak), `${c.name} (dagskiftet) kom aldrig till sin post`); }
   assert(!S.people.some(p => ['väktare', 'nattdj', 'nattekniker'].includes(p.role)), 'nattpersonalen är kvar på förmiddagen');
@@ -2913,11 +2908,10 @@ test('Rundvisningen efter Berits pass: kvällsvärden Yvonne tar den på kvälle
 
 test('Rundvisningen direkt (ingen incident – den beställs): börjar med den som kan, stängda stopp låses upp av den som har nycklarna', () => {
   const out = [];
-  // (frö 10 kl 6.2: gruppen hinner till ett stopp som inte har öppnat än – det beror på hur fort hissarna är på morgonen)
-  /** @type {[number, string, string, number][]} */
-  const cases = [[6.2, 'ny', 'gunbritt', 10], [21, 'mjuk', 'yvonne', 8]];
-  for (const [at, roll, who, seed] of cases) {
-    sim(seed, { roll, chief: true });
+  /** @type {[number, string, string][]} */
+  const cases = [[6.2, 'ny', 'gunbritt'], [21, 'mjuk', 'yvonne']];
+  for (const [at, roll, who] of cases) {
+    sim(8, { roll, chief: true });
     while (hour() < at) step(DT);
     assert(!triggers().includes('visning'), 'rundvisningen går att framkalla som en incident');
     assert(act('visning', 'now') === true, `kl ${at}: rundvisningen gick inte att beställa direkt`);
@@ -3229,7 +3223,7 @@ test('Firmafesten: gästerna kommer med ballonger, tårtan åker varuhissen, bal
 test('Rulltrappan stannar: folk går i den långsamt eller tar nedre däcket när den är avspärrad, och vaktmästaren startar den', () => {
   const out = [];
   for (const mode of ['walk', 'close']) {
-    sim(4, { roll: 'mjuk', incLevel: 'av' }); // (frö 4: någon går i den stillastående rulltrappan på morgonen)
+    sim(3, { roll: 'mjuk', incLevel: 'av' });
     while (hour() < 8) step(DT);
     assert(act('trigger', 'rulltrappa') === true, `${mode}: gick inte att framkalla`);
     assert(S.rulltrappa && S.rulltrappa.ph === 'stopp', `${mode}: S.rulltrappa sattes inte`);
@@ -3240,7 +3234,7 @@ test('Rulltrappan stannar: folk går i den långsamt eller tar nedre däcket nä
     while (S.rulltrappa && ++g < 600 / DT) {
       step(DT);
       for (const p of S.people) {
-        if (!p.escalator || p.deep || p.state !== 'instairs') continue; // (den långa rulltrappan genom berget räknas inte)
+        if (!p.escalator || p.state !== 'instairs') continue;
         if ((p.escT || 0) > 3) slow++;
         if (mode === 'close' && !was.has(p.id)) onAfterClose++;
       }
@@ -3388,146 +3382,6 @@ test('Kuppen: flyr gänget över bron till ett bakhåll i Kronan grips de där',
   assert(across, 'gänget sprang aldrig över bron');
   assert(S.heist.caught, 'gänget kom undan trots bakhållet');
   return 'gripna i Kronans sky lobby';
-});
-
-// ---------- Djupet: pendeln, rulltrappan genom berget, pumparna, skyddsrummet och kulverten ----------
-test('Pendeltåget: pendlarna kliver av i klump, de som byter tåg går bara mellan perrongerna, och rulltrappan genom berget används', () => {
-  sim(101);
-  const w = watcher();
-  const strays = new Set();
-  let biggest = 0;
-  while (!S.summaryShown) {
-    const b = w.before(); step(DT); w.check(b);
-    const T = S.pendel.train;
-    if (T && T.state === 'stop') biggest = Math.max(biggest, T.n);
-    // de som byter tåg går aldrig upp i huset (bara perrongerna och skyddsrummet som pendelhissen passerar)
-    for (const p of S.people) if (!p.dead && /^Byter från/.test(p.why || '') && ![PENDEL, SHELTER, STATION].includes(p.floor)) strays.add(p.name);
-  }
-  const st = S.stats;
-  assert(st.pendelTrains >= 8, `bara ${st.pendelTrains} pendeltåg på ett dygn`);
-  assert(st.pendelIn > 15 && st.pendelOut > 5, `${st.pendelIn} klev av pendeln och ${st.pendelOut} på`);
-  assert(biggest >= 4, `som mest ${biggest} av samma pendeltåg – ingen klump`);
-  assert(st.transferRail > 5, `bara ${st.transferRail} bytte tåg`);
-  assert(!strays.size, `${[...strays].slice(0, 3).join(', ')} bytte tåg men gick upp i huset`);
-  assert(st.deepEscalator > 0, 'ingen tog rulltrappan genom berget');
-  assert(w.badPlatform === 0, `fel på perrongen ${w.badPlatform} steg`);
-  assert(!S.people.some(p => p.exitFloor === PENDEL), 'någon ska fortfarande ut med pendeln efter sista pendeltåget');
-  return `${st.pendelTrains} pendeltåg · ${st.pendelIn} av (som mest ${biggest}) · ${st.transferRail} bytte tåg · ${st.deepEscalator} i rulltrappan genom berget`;
-});
-test('Pumparna stannar: går att framkalla och tar slut av sig själv', () => {
-  sim(3, { roll: 'mjuk', incLevel: 'av' });
-  while (hour() < 10) step(DT);
-  assert(act('trigger', 'pumpar') === true, 'gick inte att framkalla');
-  assert(S.pumpar, 'S.pumpar sattes inte');
-  let g = 0;
-  while (S.pumpar && ++g < 600 / DT) step(DT);
-  assert(!S.pumpar, 'tog aldrig slut');
-  return `över efter ${Math.round(g * DT)} s`;
-});
-test('Pumparna: kör vidare – pendelhissen går sönder när vattnet når gropen; ställ den – den tar inga nya; rulltrappan stannar', () => {
-  const out = [];
-  for (const mode of ['run', 'stop']) {
-    sim(5, { incLevel: 'av' });
-    runUntil(9);
-    assert(act('trigger', 'pumpar') === true, `${mode}: gick inte att framkalla`);
-    assert(act('pumpar', mode), `${mode}: valet gick inte`);
-    S.pumpar.fixLen = 1e9; // (vaktmästaren får aldrig igång dem – vattnet stiger hela vägen)
-    const PH = S.elevators.find(e => e.group === 'pendel');
-    let broke = false, locked = false, tookNew = false;
-    runWhile(() => S.pumpar.level < 1, 400);
-    // (de som redan var i rulltrappan när vattnet kom åker klart – ingen ny kliver på)
-    const onEsc = new Set(S.people.filter(p => p.deep).map(p => p.id));
-    let newOnEsc = 0;
-    for (let i = 0; i < 40 / DT; i++) {
-      const before = PH.passengers.length + PH.reserved;
-      step(DT);
-      if (PH.mode === 'broken' || PH.breakNext) broke = true;
-      if (outReason(PH) === 'pumpar') locked = true;
-      if (mode === 'stop' && PH.passengers.length + PH.reserved > before && PH.state !== 'doors') tookNew = true;
-      for (const p of S.people) if (p.deep && !onEsc.has(p.id)) { onEsc.add(p.id); newOnEsc++; }
-    }
-    const escShut = newOnEsc === 0;
-    assert(locked, `${mode}: pendelhissen tog nya med vatten i gropen`);
-    if (mode === 'run') assert(broke, 'pendelhissen körde vidare men gick inte sönder när vattnet nådde gropen');
-    else { assert(!broke, 'pendelhissen gick sönder fast den var ställd'); assert(!tookNew, 'den ställda pendelhissen tog nya'); }
-    assert(escShut, `${mode}: någon klev på rulltrappan genom berget med vatten i maskinrummet`);
-    out.push(`${mode}: ${broke ? 'sönder' : 'hel'}`);
-  }
-  return out.join(' · ');
-});
-test('Pumparna: strömavbrottet stoppar dem, och vaktmästaren får inte igång dem förrän strömmen är tillbaka', () => {
-  sim(6, { incLevel: 'av' });
-  runUntil(10);
-  startOutage();
-  runWhile(() => !S.pumpar, 30);
-  assert(S.pumpar && S.pumpar.outage, 'pumparna stannade inte med strömmen');
-  runWhile(() => !!S.outage, 120);
-  assert(!S.outage, 'strömmen kom aldrig tillbaka');
-  assert(S.pumpar === null || S.pumpar.ph === 'drain' || S.pumpar.fixT < S.pumpar.fixLen, 'pumparna startades utan ström');
-  runWhile(() => !!S.pumpar, 400);
-  assert(!S.pumpar, 'pumparna kom aldrig igång efter strömavbrottet');
-  return 'stannade med strömmen · igång efteråt';
-});
-test('Skyddsrumsövningen: huset går ner våning för våning, räknas och går tillbaka – uppifrån eller nerifrån', () => {
-  const out = [];
-  for (const order of ['top', 'bottom']) {
-    sim(7, { incLevel: 'av' });
-    runUntil(10.5);
-    assert(act('trigger', 'ovning') === true, `${order}: gick inte att framkalla`);
-    assert(act('ovning', order), `${order}: ordningen gick inte att välja`);
-    const X = S.ovning, first = X.queue[0];
-    assert(order === 'top' ? first > SKY : first < SKY, `${order}: första våningen var ${fl(first)}`);
-    const w = watcher();
-    let peak = 0;
-    runWhile(() => !!S.ovning, 400, w);
-    for (const p of S.people) if (p.drill) throw new Fail(`${p.name} är kvar på övningen efteråt`);
-    peak = X.inside;
-    assert(!S.ovning, `${order}: övningen tog aldrig slut`);
-    assert(X.total >= 10 && peak >= X.total * 0.6, `${order}: bara ${peak} av ${X.total} kom ner`);
-    const f = newInvariantFails(w, order);
-    assert(!f.length, f.join('; '));
-    out.push(`${order}: ${peak} av ${X.total} nere`);
-  }
-  return out.join(' · ');
-});
-test('Skyddsrumsövningen avbryts av en riktig brand: ingen skickas tillbaka upp mot branden', () => {
-  sim(7, { incLevel: 'av' });
-  runUntil(10.5);
-  assert(act('trigger', 'ovning') === true && act('ovning', 'top'), 'övningen gick inte att starta');
-  runWhile(() => S.ovning.inside < 5, 120);
-  const down = S.people.filter(p => p.drill && p.floor === SHELTER && p.state === 'office').map(p => p.id);
-  assert(down.length >= 5, `bara ${down.length} hann ner`);
-  startFire(FIRE_FLOORS[FIRE_FLOORS.length - 1]);
-  step(DT);
-  assert(!S.ovning, 'övningen fortsatte under branden');
-  const up = S.people.filter(p => down.includes(p.id) && p.goal !== undefined && p.goal > SHELTER && p.why === 'Övningen är slut – tillbaka upp');
-  assert(!up.length, `${up.length} skickades tillbaka upp mot branden`);
-  return `${down.length} stannade i skyddsrummet när det började brinna`;
-});
-test('Hesa Fredrik: provlarmet går första måndagen i kvartalet kl 15, och driftchefen håller skyddsrumsövning efteråt', () => {
-  assert(dayInfo('2026-03-02').hesa && dayInfo('2026-06-01').hesa && dayInfo('2026-12-07').hesa, 'provlarmsdagarna känns inte igen');
-  assert(!dayInfo('2026-03-09').hesa && !dayInfo('2026-04-06').hesa && !NEUTRAL.hesa, 'fel dag blev provlarmsdag');
-  sim(8, { date: '2026-03-02', chief: true, incLevel: 'av' });
-  runUntil(14.9);
-  assert(S.hesaDay !== S.day, 'provlarmet gick för tidigt');
-  runUntil(15.05);
-  assert(S.hesaDay === S.day, 'provlarmet gick inte kl 15');
-  let drill = false;
-  while (hour() < 15.4 && !drill) { step(DT); drill = !!S.ovning && S.ovning.hesa; }
-  assert(drill, 'ingen skyddsrumsövning efter provlarmet');
-  return 'provlarm kl 15 · övning efteråt';
-});
-test('Kulverten: när bron är stängd i stormen kommer grannarna genom kulverten från skyddsrummet och går ut samma väg', () => {
-  sim(9, { incLevel: 'av' });
-  runUntil(10.5);
-  startStorm();
-  assert(act('skywalk', 'close'), 'bron gick inte att stänga');
-  const w = watcher();
-  runWhile(() => !!S.storm && hour() < 13, 300, w);
-  assert(S.stats.kulvert > 0, 'ingen gick genom kulverten');
-  const f = newInvariantFails(w, 'kulverten');
-  assert(!f.length, f.join('; '));
-  return `${S.stats.kulvert} genom kulverten`;
 });
 
 test('Språket: svenska är standard, loggen och dagböckerna blir engelska och svenska visar allt som det är', () => {

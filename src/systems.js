@@ -20,9 +20,9 @@
 // sist (att flytta en ändrar dygnen). Brand och strömavbrott är kärnans egna och läses direkt (`S.fire`, `S.outage`)
 import { S, hour } from './state.js';
 import { fl } from './util.js';
-import { floorOpen, floorWith, LOBBY, OFFICE_FLOORS, SHELTER } from './config.js';
+import { floorOpen, floorWith, LOBBY, OFFICE_FLOORS } from './config.js';
 import { lifeReset, lifeRoll, lifeTick } from './life.js';
-import { trainReset, trainRoll, trainTick } from './train.js';
+import { trainReset, trainTick } from './train.js';
 import { medicNext, moverNext, startMedical, visitsReset, visitsRoll, visitsTick } from './visits.js';
 import { tourReset, tourTick } from './tour.js';
 import { visningReset, visningTick } from './visning.js';
@@ -35,10 +35,7 @@ import { startStorm, stormTick, weatherReset } from './weather.js';
 import { PANO, panoCandidate, rescueNext, triggerPano } from './pano.js';
 import { cableCandidate, foremanNext, techNext, triggerCable, triggerFault, triggerHeat } from './service.js';
 import { busyCars, cableRisk, ffNext, FIRE_FLOORS, incidentStarted, incPick, startFire, startOutage } from './incidents.js';
-import {
-  kronanChiefTick, skywalkChiefTick, crashChiefTick, tunnelChiefTick, panicChiefTick, partyChiefTick, rulltrappaChiefTick,
-  pumparChiefTick, ovningChiefTick, dogChiefTick, gondolaChiefTick, leakChiefTick, panoChiefTick,
-} from './chief.js';
+import { kronanChiefTick, skywalkChiefTick, crashChiefTick, tunnelChiefTick, panicChiefTick, partyChiefTick, rulltrappaChiefTick, dogChiefTick, gondolaChiefTick, leakChiefTick, panoChiefTick } from './chief.js';
 import { arrivalRate } from './sim.js';
 import { sv } from './sv.js';
 import { crashPossible, crashReset, crashTick, startCrash } from './crash.js';
@@ -49,8 +46,6 @@ import { rulltrappaPossible, rulltrappaReset, rulltrappaTick, startRulltrappa } 
 import { KRONAN, skywalkNext, skywalkReset, skywalkRoll, skywalkSpot, skywalkTick } from './skywalk.js';
 import { kronanPossible, kronanReset, kronanTick, startKronan } from './kronan.js';
 import { hojdReset, hojdTick, hojdWeight, startHojd } from './hojd.js';
-import { SHELTER_DOOR_X, shelterReset, shelterTick, startOvning } from './shelter.js';
-import { pumpLock, pumparPossible, pumparReset, pumparTick, startPumpar } from './pumpar.js';
 /** @typedef {import('./elevators.js').Elevator} Elevator */
 /** @typedef {import('./incidents.js').IncPick} IncPick */
 /** @typedef {import('./people.js').Person} Person */
@@ -92,7 +87,7 @@ let list = null;
 export function systems() {
   return list ??= [
     { key: 'life', tick: lifeTick, reset: lifeReset, roll: lifeRoll },
-    { key: 'train', tick: dt => trainTick(dt, arrivalRate), reset: trainReset, roll: trainRoll },
+    { key: 'train', tick: dt => trainTick(dt, arrivalRate), reset: trainReset, roll: () => { if (!S.train) trainReset(); } },
     { key: 'visits', tick: visitsTick, reset: visitsReset, roll: visitsRoll, roles: { 'flyttgubbe': moverNext, 'ambulans': medicNext } },
     { key: 'medical', trigger: () => startMedical() }, // (ingen incident – bara en händelse som rutan berättar om)
     { key: 'tour', tick: tourTick, reset: tourReset },
@@ -211,21 +206,6 @@ export function systems() {
       weight: hojdWeight,
       warnS: 6, warn: () => '😨 Någon på bron till Kronan går allt långsammare och håller i räcket…', hit: () => startHojd(),
       chaos: { step: 'guests', name: '😨 höjdskräck på bron', run: () => startHojd() } },
-    // skyddsrummet (shelter.js): provlarmet Hesa Fredrik och skyddsrumsövningen – de som är med (p.drill) sitter kvar i
-    // skyddsrummet tills alla har räknats; ordningen väljer driftchefen eller spelaren
-    { key: 'ovning', tick: shelterTick, reset: shelterReset, on: () => !!S.ovning, trigger: () => startOvning(),
-      chief: { tick: ovningChiefTick, done: () => !S.ovning || S.ovning.ph === 'in' },
-      next: p => (p.drill && S.ovning && p.floor === SHELTER ? null : undefined),
-      spot: (p, f) => (p.drill && f === SHELTER ? { x: SHELTER_DOOR_X, k: 'door', face: 1, desc: 'Sitter i skyddsrummet under övningen', temp: true } : undefined),
-      arrive: p => { if (!p.drill || p.floor !== SHELTER) return false; p.timer = 3; return true; } },
-    // pumparna i berget stannar (pumpar.js): vattnet stiger i botten, pendelhissen kör vidare eller ställs; strömavbrottet
-    // stoppar dem också (pumparTick). people.js läser rulltrappan (deepEscalatorShut)
-    { key: 'pumpar', tick: pumparTick, reset: pumparReset, on: () => !!S.pumpar, trigger: () => startPumpar(),
-      weight: () => pumparPossible() && hour() >= 7 && hour() < 21 && 0.25,
-      warnS: 10, warn: () => '🌊 Det porlar i dräneringsrännorna nere i berget…', hit: () => startPumpar(),
-      chief: { tick: pumparChiefTick, done: () => !S.pumpar || S.pumpar.ph !== 'on' },
-      out: { id: 'pumpar', text: 'står still – vatten i schaktgropen', test: pumpLock },
-      chaos: { step: 'cars', name: '🌊 pumparna stannar', run: () => startPumpar() } },
     // vädret: stormen blåser (stormen som incident är posten storm ovan); en storm som pågår följer med över dygnsskiftet
     { key: 'weather', tick: stormTick, reset: weatherReset, roll: () => { const st = S.storm; weatherReset(); S.storm = st; } },
   ];

@@ -25,7 +25,7 @@ import { ctx, VIEW } from './view.js';
 import { PX } from './pixart.js';
 import { beginFrame, CY, lo } from './pixcore.js';
 import { drawCallPx, drawFxPx, drawGagsPx, drawHallPeople, drawHoverPx, drawSelectionPx, resetCallAt } from './pixfolk.js';
-import { countOcc, deckSign, drawChiefPx, drawDeepEscalatorPx, drawEscalatorPx, drawHall, drawLeakPx, floorOverlays, resetChiefAt } from './pixhall.js';
+import { countOcc, deckSign, drawChiefPx, drawEscalatorPx, drawHall, drawLeakPx, floorOverlays, resetChiefAt } from './pixhall.js';
 import { drawGroundPx, drawLanternsPx, drawShell, drawSkyAll, drawSlabsPx, drawStreetPx, drawTerracePx, terminal } from './pixbuilding.js';
 import { drawCarPx, drawPanoPx, drawRopesPx, reserveCarSigns } from './pixcars.js';
 import { drawProf, lap } from './prof.js';
@@ -52,7 +52,6 @@ export function renderPixel(dt) {
   lap('hallar');
   drawSlabsPx();
   drawEscalatorPx();
-  drawDeepEscalatorPx();
   // (skyltarna om övre däcket efter rulltrappan: de som går i den skymmer dem inte)
   for (const f of [LOBBY, MEZZ]) if (f >= 0 && floorY(f) >= VIEW.camY - 10 && floorY(f + 1) <= VIEW.camY + VIEW.viewH + 10) deckSign(f);
   drawTerracePx(hr);
