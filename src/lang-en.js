@@ -3293,7 +3293,7 @@ export default {
   "Tornet har samma datum som datorn. Välj ett annat för en annan årstid, veckodag och sol – det gäller tills datorns datum byts": "Tornet has the same date as your computer. Pick another for a different season, weekday and sun – it lasts until your computer's date changes",
   "I dag": "Today",
   "Tillbaka till datorns datum": "Back to your computer's date",
-  // skywalken till Kronan (skywalk.js, kronan.js, hojd.js, pixskywalk.js)
+  // skywalken till Kronan (skywalk.js, kronan.js, hojd.js)
   "{0} har stängt för natten": "{0} has closed for the night",
   "underhåll": "maintenance",
   "stormen": "the storm",

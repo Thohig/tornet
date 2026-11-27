@@ -9,7 +9,7 @@
 // informationsrutorna), förvarningens klipp `warn` och det sevärda `shots`; panels.js, hud.js och director.js går
 // igenom listan
 import { esc, fl } from './util.js';
-import { DOCK, EL, FIRE_HINT, LOBBY, MEZZ, ROOF, TOP, CONTROL, STATION, FL, floorWith, shaftCX, SKYWALK_F, bridgeX } from './config.js';
+import { DOCK, EL, FIRE_HINT, LOBBY, MEZZ, ROOF, TOP, CONTROL, STATION, FL, floorWith, shaftCX, SKYWALK_F } from './config.js';
 import { S } from './state.js';
 import { canRescue } from './incidents.js';
 import { STORM_HINT, windMs } from './weather.js';
@@ -29,7 +29,7 @@ import { partyPossible } from './party.js';
 import { onEscalator, rulltrappaPossible } from './rulltrappa.js';
 import { kronanPossible } from './kronan.js';
 import { hojdPossible } from './hojd.js';
-import { KRONAN, canGoOut, onBridge } from './skywalk.js';
+import { KRONAN, SKYWALK_DOOR, canGoOut, onBridge } from './skywalk.js';
 /** panoramahissen (null om huset saknar en) */
 const panoCar = () => (PANO ? S.elevators[PANO.id] || null : null);
 
@@ -583,7 +583,7 @@ export function incUi() {
     sound: { warn: 'strain' },
     trig: { icon: '🏢', name: sv`${KRONAN}s hissar kraschar`, hint: sv`Hiss-O-Matic 4000 i granntornet går ner – ${KRONAN}s folk vill ta Tornets hissar ner`, off: () => !kronanPossible(),
       why: () => (S.kronan ? 'den pågår redan' : SKYWALK_F < 0 ? 'huset har ingen bro' : !canGoOut() ? 'bron är stängd' : S.fire ? 'det brinner i huset' : !S.power ? 'strömmen är borta' : sv`${KRONAN} har stängt`) },
-    warn: (_W, add) => add('warn', 76, 'floor', SKYWALK_F, sv`📻 Det knastrar i radion från ${KRONAN}`, true, bridgeX(0.5)),
+    warn: (_W, add) => add('warn', 76, 'floor', SKYWALK_F, sv`📻 Det knastrar i radion från ${KRONAN}`, true, SKYWALK_DOOR),
     card: (h, parts) => {
       const { card, chiefLine, cd, bold, ikon, line, acts, hint, choice } = h;
       // ---------- Kronans hissar kraschar (incident med val: släpp in grannarna eller bara de egna) ----------
@@ -604,15 +604,15 @@ export function incUi() {
     shots: (add) => {
       const X = S.kronan;
       if (!X || X.ph !== 'on') return;
-      if (S.t - X.t0 < 8) add('kronan', 76, 'floor', SKYWALK_F, sv`🏢 ${KRONAN}s hissar står still`, S.t - X.t0 < 1, bridgeX(0.7));
-      else if (X.mode === 'open') add('kronan', 58 + Math.min(20, X.came), 'floor', SKYWALK_F, sv`🌉 ${KRONAN}s folk kommer över bron`, false, bridgeX(0.4));
+      if (S.t - X.t0 < 8) add('kronan', 76, 'floor', SKYWALK_F, sv`🏢 ${KRONAN}s hissar står still`, S.t - X.t0 < 1, SKYWALK_DOOR);
+      else if (X.mode === 'open') add('kronan', 58 + Math.min(20, X.came), 'floor', SKYWALK_F, sv`🌉 ${KRONAN}s folk kommer över bron`, false, SKYWALK_DOOR);
     },
   },
   {
     key: 'hojd',
     trig: { icon: '😨', name: 'Höjdskräck på bron', hint: sv`Någon på glasbron till ${KRONAN} tittar ner och vågar inte gå vidare`, off: () => !hojdPossible(),
       why: () => (S.hojd ? 'någon står redan still på bron' : SKYWALK_F < 0 ? 'huset har ingen bro' : S.fire ? 'det brinner i huset' : 'bron är stängd') },
-    warn: (_W, add) => add('warn', 70, 'floor', SKYWALK_F, '😨 Någon håller hårt i räcket på bron', true, bridgeX(0.5)),
+    warn: (_W, add) => add('warn', 70, 'floor', SKYWALK_F, '😨 Någon håller hårt i räcket på bron', true, SKYWALK_DOOR),
     card: (h, parts) => {
       const { card, ikon, line, acts, hint } = h;
       // ---------- höjdskräck på bron (inget val: vaktmästaren leder hen över) ----------
@@ -629,8 +629,7 @@ export function incUi() {
     shots: (add) => {
       const X = S.hojd;
       if (!X || X.ph === 'klar') return;
-      const p = S.people.find(q => q.id === X.pid && !q.dead);
-      add('hojd', X.ph === 'leder' ? 62 : 72, 'floor', SKYWALK_F, X.ph === 'leder' ? '🤝 Ett steg i taget över bron' : '😨 Höjdskräck mitt på bron', S.t - X.t0 < 1, bridgeX(p && p.bridgeT !== undefined ? p.bridgeT : 0.5));
+      add('hojd', X.ph === 'leder' ? 62 : 72, 'floor', SKYWALK_F, X.ph === 'leder' ? '🤝 Ett steg i taget över bron' : '😨 Höjdskräck mitt på bron', S.t - X.t0 < 1, SKYWALK_DOOR);
     },
   },
   ];
