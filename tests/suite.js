@@ -39,7 +39,7 @@ import EN_TEXTS from '../src/lang-en.js';
 import { CUES, PIECES, layout, partOf } from '../src/scoreData.js';
 import { hz, onGrid } from '../src/music.js';
 import { chaosNames, chaosReady } from '../src/chaos.js';
-import { dogLockFloor } from '../src/dog.js';
+import { dogLockFloor, dogStill } from '../src/dog.js';
 import { wetIn } from '../src/leak.js';
 import { crashRun } from '../src/crash.js';
 import { onPlatform, tunnelPossible } from '../src/tunnel.js';
@@ -83,7 +83,7 @@ const ago = t => `${(S.t - t).toFixed(0)} s`;
 const BASE = globalThis.location ? `${location.origin}/` : 'http://localhost:8123/';
 // maxvärden som visas när de är större än så här (under testernas gränser); allt annat visas när det hänt alls
 /** @type {Record<string, number>} */
-const NOTABLE = { maxWait: 120, maxRide: 60, maxTrap: 120, deadAssignMax: 0.5, idleWaitMax: 15, techLostMax: 60 };
+const NOTABLE = { maxWait: 120, maxRide: 60, maxTrap: 120, deadAssignMax: 0.5, idleWaitMax: 15, techLostMax: 60, dogNearMax: 20 };
 /** ett kort fingeravtryck av läget just nu – samma steg i en omspelning ger samma */
 const nowFp = () => `${S.nextId}|${S.stats.served}|${S.people.length}|${S.elevators.map(e => e.pos.toFixed(6)).join(',')}`;
 /** Ett ögonblick: när, var och vem. @param {Elevator|null|undefined} e @param {Person|null|undefined} p @param {string} [text] */
@@ -141,6 +141,8 @@ function makeWatcher() {
     // vaktmästarens olyckor: ingen kliver på en hiss i ett blött schakt som tagits ur drift, och ingen utom de som
     // jagar hunden kliver på där hissarna är spärrade för den
     wetBoard: 0, dogLockBoard: 0,
+    // den lösa hunden: står den still med någon som jagar den bredvid sig ska den bli fångad (CATCH_T)
+    dogNear: null, dogNearMax: 0,
     // var det hände (whereReport): simuleringens start och första gången/rekordet per räknare
     origin: S.origin && { ...S.origin }, ex: /** @type {Record<string, ReturnType<typeof spot>>} */ ({}) };
   /** en regel bröts: räkna, och spara första gången @param {string} k @param {Elevator|null|undefined} e @param {Person|null|undefined} p @param {string} [text] */
@@ -165,6 +167,12 @@ function makeWatcher() {
         const since = w.techLost.get(p.id) ?? S.t; w.techLost.set(p.id, since); if (S.t - since > w.techLostMax) w.top('techLostMax', S.t - since, S.elevators[p.job], p, `står på fel våning med ett jobb i ${ago(since)}`);
       } else w.techLost.delete(p.id);
     }
+    const dog = S.dog && S.dog.ph === 'loose' ? S.people.find(p => p.id === S.dog.dog && !p.dead) : null;
+    const chaser = dog && dogStill(dog) ? S.people.find(p => !p.dead && p.floor === dog.floor && p.state === 'office' && (p.chase || (p.duty && p.duty.kind === 'dog'))) : null;
+    if (chaser) {
+      w.dogNear ??= S.t;
+      if (S.t - w.dogNear > w.dogNearMax) w.top('dogNearMax', S.t - w.dogNear, null, dog, `står still bredvid ${chaser.name} utan att bli fångad i ${ago(w.dogNear)}`);
+    } else w.dogNear = null;
     S.elevators.forEach((e, i) => {
       const vel = e.v * e.dir;
       if (w.prevVel[i] !== undefined && vel * w.prevVel[i] < 0 && Math.abs(vel) > 0.3 && Math.abs(w.prevVel[i]) > 0.3) w.hit('flips', e, null, 'bytte riktning i fart');
@@ -1876,6 +1884,7 @@ function newInvariantFails(w, tag) {
   if (w.wetBoard) f.push(`${tag}: ${w.wetBoard} klev på en hiss som stod still för vattenläckan`);
   if (w.dogLockBoard) f.push(`${tag}: ${w.dogLockBoard} klev på där hissarna var spärrade för hunden`);
   if (w.hostageLeft) f.push(`${tag}: gisslan lämnade Sky Café mitt i kuppen ${w.hostageLeft} gånger`);
+  if (w.dogNearMax > 20) f.push(`${tag}: den lösa hunden stod ${w.dogNearMax.toFixed(0)} s bredvid någon som jagade den utan att bli fångad`);
   if (w.techLostMax > 60) f.push(`${tag}: en tekniker stod ${w.techLostMax.toFixed(0)} s på fel våning med ett jobb`);
   return f;
 }
@@ -2278,6 +2287,51 @@ test('Hunden rymmer: pudeln springer och åker hiss, ägaren och vaktmästaren j
     const f = newInvariantFails(w, `frö ${seed}`);
     assert(!f.length, f.join('; '));
     out.push(`${D.name} ${Math.round(D.t1 - D.t0)} s, ${D.floors.length} vån${lock ? ' (spärrad)' : ''}`);
+  }
+  return out.join(' · ');
+});
+test('Hunden i hisskön: står pudeln och väntar på en hiss som inte kommer fångas den där', () => {
+  const out = [];
+  for (const [seed, at, chief] of [[3, 10, false], [8, 9.5, true]]) {
+    sim(seed, { chief });
+    runUntil(at);
+    act('trigger', 'dog');
+    assert(S.dog, `frö ${seed}: ingen hund`);
+    const D = S.dog, dog = S.people.find(p => p.dog);
+    let g = 0;
+    while (dog.state !== 'wait' && D.ph === 'loose' && ++g < 120 / DT) step(DT);
+    assert(dog.state === 'wait', `frö ${seed}: hunden ställde sig aldrig i hisskön`);
+    // (ingen hiss tar nya: hunden blir stående i kön)
+    for (const e of S.elevators) if (!e.off) act('carOff', e.id);
+    const f0 = dog.floor;
+    g = 0;
+    while (D.ph === 'loose' && ++g < 300 / DT) step(DT);
+    assert(D.ph === 'done', `frö ${seed}: hunden i kön på ${fl(f0)} blev aldrig fångad (${Math.round(g * DT)} s)`);
+    assert(D.f === f0, `frö ${seed}: hunden kom iväg från ${fl(f0)} fast inga hissar gick`);
+    out.push(`${D.name} fångad i kön på ${fl(f0)} efter ${Math.round(g * DT)} s`);
+  }
+  return out.join(' · ');
+});
+test('Hunden och branden: pudeln utryms med de andra men springer vidare när det är släckt – den går inte ut', () => {
+  const out = [];
+  for (const [seed, at] of [[3, 10], [8, 9.5]]) {
+    sim(seed);
+    runUntil(at);
+    act('trigger', 'dog');
+    assert(S.dog, `frö ${seed}: ingen hund`);
+    const D = S.dog, dog = S.people.find(p => p.dog);
+    startFire(idx('2'), false); // (allt från 1 och uppåt utryms)
+    let g = 0;
+    while (!dog.leaving && D.ph === 'loose' && ++g < 60 / DT) step(DT);
+    assert(dog.leaving, `frö ${seed}: hunden utrymdes aldrig`);
+    for (let i = 0; i < 5 / DT; i++) step(DT);
+    if (D.ph !== 'loose') { out.push(`frö ${seed}: fångad under branden`); continue; }
+    endFire();
+    assert(!dog.leaving, `frö ${seed}: hunden är fortfarande på väg ut efter branden (${dog.why})`);
+    g = 0;
+    while (D.ph === 'loose' && ++g < 400 / DT) step(DT);
+    assert(!S.dog || S.dog.ph !== 'loose', `frö ${seed}: hunden blev aldrig fångad efter branden`);
+    out.push(`${D.name} ${D.by ? 'fångad' : 'ute'} efter branden`);
   }
   return out.join(' · ');
 });

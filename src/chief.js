@@ -28,7 +28,7 @@ import { setMoveWind } from './visits.js';
 import { hoistHalt } from './hoist.js';
 import { heistChoice } from './heist.js';
 import { gondolaWindy, setGondolaHow } from './gondola.js';
-import { setDogLock } from './dog.js';
+import { dogStill, setDogLock } from './dog.js';
 import { setLeakMode } from './leak.js';
 import { setCrashMode } from './crash.js';
 import { onPlatform, setTunnelMode } from './tunnel.js';
@@ -325,7 +325,7 @@ export function dogChiefTick() {
   if (S.t - D.t0 < 2) return;
   if (!C.dec.dog) { decide('dog', 'Låter hunden springa', sv`vaktmästaren hjälper till att jaga ${D.name} – hissarna går som vanligt så länge`, { inc: 'dog', floor: D.f, say: sv`Fånga ${D.name}, någon!` }); return; }
   const dog = S.people.find(p => p.id === D.dog && !p.dead);
-  if (!D.lock && S.t - D.t0 > DOG_LOCK_S && dog && dog.state === 'office' && setDogLock(true, 'chief'))
+  if (!D.lock && S.t - D.t0 > DOG_LOCK_S && dog && dogStill(dog) && setDogLock(true, 'chief'))
     decide('dog', sv`Spärrar hissarna på ${fl(D.f)}`, sv`${D.name} har sprungit runt i över en minut – på en våning är hon lätt att fånga, och den som väntar där får ta trappan`, { inc: 'dog', floor: D.f, say: sv`Stäng hissarna på ${fl(D.f)}!` });
 }
 

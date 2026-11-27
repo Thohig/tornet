@@ -101,6 +101,9 @@ export function setDogLock(lock, by) {
   rebuildPicks();
   return true;
 }
+/** hunden står still i hallen – nosar (office) eller står i hisskön (wait): där kan den fångas och hissarna
+ *  spärras @param {Person} p */
+export const dogStill = p => p.state === 'office' || p.state === 'wait';
 /** våningen där hissarna är spärrade för hunden, eller -1 */
 export const dogLockFloor = () => (S.dog && S.dog.ph === 'loose' && S.dog.lock ? S.dog.f : -1);
 /** hundens nästa beslut (rollogiken i people.js): en ny våning den kan åka till direkt, eller stanna @param {Person} p */
@@ -160,9 +163,13 @@ export function dogTick(dt) {
   if (!jan || !jan.duty || jan.duty.kind !== 'dog') { jan = callJanitor('dog', D.f, sv`Hjälper till att fånga ${D.name}`, sv`Försöker locka till sig ${D.name}`); D.jan = jan.id; }
   else moveDuty(jan, D.f, sv`Jagar ${D.name} – hunden är på ${fl(D.f)}`, sv`Försöker locka till sig ${D.name}`);
   // trött: hunden lägger sig och väntar på att bli hämtad
-  if (!D.tired && S.t - D.t0 > DOG_TIRED_S) { D.tired = true; log(sv`🐕 ${D.name} är trött och lägger sig på ${fl(dog.floor)}`, 'alert', null, dog.id); }
-  // fångad: någon som jagar står på samma våning medan hunden står still
-  const near = dog.state === 'office' ? S.people.find(p => !p.dead && p.floor === dog.floor && p.state === 'office' && (p.chase || onDuty(p, 'dog'))) : null;
+  if (!D.tired && S.t - D.t0 > DOG_TIRED_S && dog.state !== 'ride' && dog.state !== 'boarding') {
+    D.tired = true; log(sv`🐕 ${D.name} är trött och lägger sig på ${fl(dog.floor)}`, 'alert', null, dog.id);
+    // (står den i hisskön ger den upp och lägger sig i hallen)
+    if (dog.state === 'wait') { setTrip(dog, dog.floor, 'Trött – lägger sig i hallen', false); rebuildPicks(); }
+  }
+  // fångad: någon som jagar står på samma våning medan hunden står still (nosar i hallen eller står i hisskön)
+  const near = dogStill(dog) ? S.people.find(p => !p.dead && p.floor === dog.floor && p.state === 'office' && (p.chase || onDuty(p, 'dog'))) : null;
   D.catchT = near ? D.catchT + dt : 0;
   if (near && D.catchT >= CATCH_T) finish(D, near, 'caught');
 }
@@ -178,7 +185,7 @@ function finish(D, by, how) {
   D.ph = 'done'; D.t1 = S.t; D.by = by ? by.name : '';
   const dog = byId(D.dog), owner = byId(D.owner), jan = byId(D.jan);
   dutyDone(jan);
-  if (dog) { releaseSpot(dog); dog.dead = true; dog.state = 'away'; }
+  if (dog) { const queued = dog.state === 'wait'; releaseSpot(dog); dog.dead = true; dog.state = 'away'; if (queued) rebuildPicks(); }
   if (owner) {
     // ägaren får tillbaka hunden i koppel (hundfrisören bär tillbaka den till kenneln)
     owner.cargo = { kind: 'pudel', name: D.kennel ? sv`${D.name} (rymlingen)` : 'pudel i koppel', kg: 8 };

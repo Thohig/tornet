@@ -235,6 +235,7 @@ function drawBusPx(T, gy, n) {
   // skylten längs sidan
   R(x + 12, y0 + 10, w - 14, 7, '#ffd23f');
   text(g, 'STADSTUREN', x + 12 + Math.round((w - 14) / 2), y0 + 11, INK, 'center');
+  reserve(x + 12, y0 + 10, w - 14, 7); // (repliker och bubblor som ritas efter gatan lägger sig inte över skylten)
   // hjulen
   for (const hx of [x + 8, x + w - 13]) { R(hx, y0 + h - 5, 7, 5, INK); R(hx + 2, y0 + h - 3, 3, 1, '#7d786d'); }
   if (lit) R(x - 2, y0 + h - 8, 2, 2, '#fff6a8');

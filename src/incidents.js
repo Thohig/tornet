@@ -162,6 +162,11 @@ export function endFire() {
   }
   for (const p of S.people) {
     // den som inte hann ut vänder: den som står i kön direkt, den som är i trappan eller hissen när hen är nere
+    // (den lösa hunden ska inte gå ut: den springer runt som förut och kan fångas igen – dog.js)
+    if (p.dog && p.leaving) {
+      p.leaving = false; p.why = 'Faran över – springer vidare';
+      if (p.state === 'wait' || p.state === 'toQueue') { const x = p.x; setTrip(p, p.floor, p.why, false); p.x = x; }
+    }
     if (p.evac && !p.role && p.state !== 'assembly' && p.evacFrom !== undefined) {
       if (p.state === 'wait' || p.state === 'toQueue') { p.evac = false; fireReturn(p, 'Faran över – tillbaka in'); }
       else p.evacBack = true;

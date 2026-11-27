@@ -47,7 +47,7 @@
 // bilden krymper (css-flex, en `ResizeObserver` på `#stage` räknar om bilden). Välkomstrutan varnar vid varje start.
 import { esc, fl } from './util.js';
 import { CONTROL, CREW, END_H, FL, LOBBY, ROOF, START_H, STRAT_HINT, STRAT_NAMES, TEMPOS, TOP, tempoName } from './config.js';
-import { S, hour, phaseName } from './state.js';
+import { S, clockStr, hour, phaseName } from './state.js';
 import { FIRE_FLOORS, INC_LEVELS, INC_LEVEL_NAMES } from './incidents.js';
 import { VIEW, nightness, resize } from './view.js';
 import { crewNow, startAuto } from './director.js';
@@ -63,6 +63,7 @@ import { SKIP_SPEED, SPEEDS, canSkip, extraActions, skipping, toggleSkip, uiHook
 import { act } from './actions.js';
 import { chaosReady } from './chaos.js';
 import { LEAK_FLOORS } from './leak.js';
+import { busFrom } from './tour.js';
 import { incUi } from './incui.js';
 import { sv } from './sv.js';
 
@@ -233,7 +234,7 @@ function followHtml(F) {
       LEAK_FLOORS.includes(f) ? ikon(`trig:leak:${f}`, '🚿', 'Vattenläcka här', 'Ett vattenrör spricker på den här våningen – vattnet rinner nedåt', false, S.leak ? ' disabled' : '') : '',
       ikon(`visit:${f}`, '🚶', 'Släpp in en besökare', 'En besökare kommer till våningen', false, S.fire ? ' disabled' : ''),
       f === LOBBY ? tourBtn() : '',
-      f === LOBBY ? ikon('bus', '🚌', 'Turistbuss!', 'Stadsturen: en guide och fjorton turister ska se takterrassen och Sky Café. Kommer bara när de har öppet (ungefär 07:30–16)', false, S.fire || S.tour ? ' disabled' : '') : '',
+      f === LOBBY ? busBtn() : '',
     ].join('');
     return { head: sv`📹 Våning ${fl(f)} · ${esc(FL[f].name)}`, body: `<div class="fl-info">${w} väntar på hiss · ${inside} inne${f === CONTROL ? ' · driftcentralen' : ''}</div><div class="row">${acts}</div>` };
   }
@@ -252,8 +253,20 @@ function trigHtml() {
       const hint = why(u.trig.hint, off && (u.trig.why ? u.trig.why() : 'den pågår redan'));
       return ikon(`trig:${u.key}`, u.trig.icon, u.trig.name, hint, false, off ? ' disabled' : '');
     }).join('')
-    + ikon('bus', '🚌', 'Turistbuss!', why('Stadsturen: en guide och fjorton turister ska se takterrassen och Sky Café. Kommer bara när de har öppet (ungefär 07:30–16)', S.fire ? 'det brinner i huset' : S.tour && 'bussen är redan här'), false, S.fire || S.tour ? ' disabled' : '')
+    + busBtn()
     + `</div><div class="row">${chaosBtn()}</div><div class="dim small">Följ en hiss eller våning för att framkalla något just där.</div>`;
+}
+/** första kvarten bussen kan komma (busFrom, tour.js), räknad en gång per kvart */
+let busAt = { q: NaN, h: /** @type {number|null} */ (null) };
+/** turistbussen: verktygstipset säger när den kan komma (Sky Café och takterrassen måste ha öppet) */
+function busBtn() {
+  const q = Math.floor(hour() * 4);
+  if (busAt.q !== q) busAt = { q, h: busFrom() };
+  const h = busAt.h, now = h !== null && h <= hour();
+  const when = h === null ? 'Stängt för i dag – bussen kommer i morgon' : now ? '' : sv`Kommer först kl ${clockStr(h)}`;
+  const hint = 'Stadsturen: en guide och fjorton turister ska se takterrassen och Sky Café. Kommer bara när de har öppet'
+    + (S.fire ? '<br><i>Går inte just nu: det brinner i huset</i>' : S.tour ? '<br><i>Går inte just nu: bussen är redan här</i>' : when ? `<br><i>${when}</i>` : '');
+  return ikon('bus', '🚌', 'Turistbuss!', hint, false, S.fire || S.tour ? ' disabled' : '');
 }
 /** kaosknappen under sitt plastlock: stängt, uppfällt (blinkar), använd i dag eller kedjan pågår */
 function chaosBtn() {
