@@ -1,7 +1,7 @@
 // Grafikens ingång och logiken för VAR folk syns i bilden (hallen framför hissarna).
 // Själva ritandet sker i pixel.js (och delarna i pix*.js). Allt här är bara grafik: simuleringens p.x ändras aldrig.
 import { clamp } from './util.js';
-import { BX1, CAR_W, DOOR_X, SKYWALK_F, TOP, TOWER_X1, W, WAIT_X1, floorY, shaftX, surf } from './config.js';
+import { BX1, CAR_W, DOOR_X, FL, SKYWALK_F, TOP, TOWER_X1, W, WAIT_X1, floorY, shaftX, surf } from './config.js';
 import { TERRACE_Y } from './hoist.js';
 import { riderPos } from './pano.js';
 import { S } from './state.js';
@@ -36,6 +36,8 @@ export function winPos(p) {
     default: return { x: s.x, y: surf(p.floor) - PX * (PERSON_H + (s.k === 'stand' ? 4 : s.win === 'control' ? -5 : -1)) };
   }
 }
+/** syns huvudet i bilden (i hallen, en korg, ett fönster – eller i rummet i Våningarna)? @param {ReturnType<typeof personHead>} h */
+export const seenAt = h => !!h && (!h.hidden || 'room' in h);
 /** @param {Person} p */
 export function personHead(p) {
   // var personens huvud syns just nu (för markörer & träffytor)
@@ -50,10 +52,67 @@ export function personHead(p) {
     const i = e.passengers.filter(q => !e.deck2 || (q.deck || 0) === k).indexOf(p);
     return { x: shaftX(e.id) + 4 + carSlotX(carSlot(i)), y: floorY(e.pos + k + (e.level || 0) * 2.5) - 4 - 62, inCar: e };
   }
-  // i hallen där personen syns, annars "bakom" korridoren på sin våning
+  // i hallen där personen syns, annars "bakom" korridoren på sin våning – eller i rummet (Våningarna, pixrooms.js)
   const lp = landPos(p);
   if (lp) return { x: lp.x, y: surf(p.floor) + p.depth * 0.6 - 70 };
+  const rp = roomPos(p);
+  if (rp) return { x: rp.x, y: surf(p.floor) - (rp.pose === 'stand' ? 52 : 44), hidden: true, room: true };
   return { x: DOOR_X, y: surf(p.floor) - 82, hidden: true };
+}
+// ---------- Var folk syns: rummen (Våningarna) ----------
+// Till vänster om hallen syns rummen i genomskärning. Den som är inne på våningen (läget office, och inte på en
+// plats i hallen eller i ett fönster) får en plats i rummet: ett skrivbord, en stol eller en plats att stå på,
+// efter våningens tema. Platserna delas ut i id-ordning, så att man behåller sin plats medan man är inne.
+// Allt här är bara grafik: simuleringen vet inte om rummen.
+/** @typedef {{ x: number, pose: 'desk'|'chair'|'stand', face: number, jump?: boolean }} Seat */
+/** @param {number} x @param {'desk'|'chair'|'stand'} pose @param {number} [face] @returns {Seat} */
+const seat = (x, pose, face = 1) => ({ x, pose, face });
+const OFFICE = [seat(96, 'desk'), seat(146, 'desk'), seat(196, 'desk'), seat(78, 'stand'), seat(170, 'stand', -1), seat(122, 'stand'), seat(224, 'stand', -1)];
+/** platserna i rummet per tema (världens x mellan rummens väggar) @type {Record<string, Seat[]>} */
+export const ROOM_SEATS = {
+  office: OFFICE, game: OFFICE, law: [seat(104, 'desk'), seat(184, 'desk'), seat(144, 'stand', -1), seat(80, 'stand'), seat(220, 'stand', -1)],
+  ad: [seat(124, 'chair'), seat(160, 'chair'), seat(142, 'chair'), seat(206, 'stand', -1), seat(84, 'stand'), seat(228, 'stand', -1)],
+  bank: [seat(112, 'desk'), seat(160, 'desk'), seat(136, 'stand', -1), seat(84, 'stand'), seat(186, 'stand', -1)],
+  dentist: [seat(152, 'chair'), seat(176, 'stand', -1), seat(86, 'chair'), seat(104, 'chair'), seat(214, 'stand', -1)],
+  radio: [seat(126, 'desk'), seat(170, 'desk'), seat(212, 'stand', -1), seat(86, 'stand')],
+  aerobic: [90, 116, 142, 168, 194, 220].map(x => ({ ...seat(x, 'stand'), jump: true })),
+  server: [seat(214, 'desk'), seat(110, 'stand'), seat(150, 'stand', -1), seat(180, 'stand')],
+  spa: [seat(104, 'stand'), seat(168, 'stand', -1), seat(206, 'stand'), seat(226, 'stand', -1)],
+  lab: [seat(100, 'stand'), seat(136, 'stand'), seat(172, 'stand', -1), seat(216, 'desk')],
+  sky: [seat(90, 'chair'), seat(118, 'chair'), seat(164, 'chair'), seat(192, 'chair'), seat(228, 'stand', -1), seat(140, 'stand')],
+  apartments: [seat(112, 'chair'), seat(130, 'chair'), seat(196, 'stand', -1), seat(220, 'stand'), seat(160, 'stand')],
+  lobby: [seat(102, 'chair'), seat(120, 'chair'), seat(184, 'stand', -1), seat(210, 'stand')],
+  roof: [seat(110, 'chair'), seat(128, 'chair'), seat(184, 'stand'), seat(214, 'stand', -1)],
+  garage: [], dock: [], station: [],
+};
+/** platserna på våning f (temat, med kontorets som standard) */
+export const seatsOf = f => ROOM_SEATS[FL[f].theme] || OFFICE;
+/** syns personen i rummet? (inne på våningen, inte i hallen, ett fönster, en korg eller trapphuset) @param {Person} p */
+const inRoom = p => !p.dead && p.state === 'office' && !inWindow(p) && !(p.spot && p.spot.win === 'hall') && ffSpot(p) === null && !p.collapsed;
+/** @type {{ key: string, at: Map<number, Seat> }} */
+const ROOMS = { key: '', at: new Map() };
+/** var personen sitter eller står i rummet (null = syns inte där: fullt, eller inte inne) @param {Person} p */
+export function roomPos(p) {
+  if (!inRoom(p)) return null;
+  const key = `${S.day}|${S.t}`;
+  if (ROOMS.key !== key) {
+    ROOMS.key = key; ROOMS.at.clear();
+    /** @type {Map<number, Person[]>} */
+    const by = new Map();
+    for (const q of S.people) if (inRoom(q)) { const l = by.get(q.floor); if (l) l.push(q); else by.set(q.floor, [q]); }
+    for (const [f, ps] of by) {
+      const seats = seatsOf(f), free = seats.map(() => true);
+      ps.sort((a, b) => a.id - b.id);
+      for (const q of ps) {
+        // helst samma plats varje gång (efter id), annars nästa lediga
+        for (let k = 0; k < seats.length; k++) {
+          const i = (q.id * 7 + k) % seats.length;
+          if (free[i]) { free[i] = false; ROOMS.at.set(q.id, seats[i]); break; }
+        }
+      }
+    }
+  }
+  return ROOMS.at.get(p.id) || null;
 }
 // ---------- Var folk syns: hallen framför hissarna ----------
 // Simuleringen låter folk gå hela vägen genom rummen, men bilden visar bara hallen. Kön pressas

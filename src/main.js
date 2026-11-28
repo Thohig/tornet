@@ -76,7 +76,7 @@ function frame(now) {
   if (hudT <= 0) { hudT = 0.15; guard('panelen', () => { updatePanel(); rememberPrefs(); }); }
   lap('panelen');
 }
-document.fonts && document.fonts.ready.then(resize);
+document.fonts && document.fonts.ready.then(() => resize());
 requestAnimationFrame(frame);
 
 // Säg till servern att spelet är öppet: serve.py --auto-stop stänger av sig själv

@@ -28,6 +28,8 @@ import { countOcc, deckSign, drawBridgeTalkPx, drawChiefPx, drawEscalatorPx, dra
 import { drawGroundPx, drawLanternsPx, drawShell, drawSkyAll, drawSlabsPx, drawStreetPx, drawTerracePx, terminal } from './pixbuilding.js';
 import { drawCarPx, drawPanoPx, drawRopesPx, reserveCarSigns } from './pixcars.js';
 import { drawProf, lap } from './prof.js';
+import { drawRoom } from './pixrooms.js';
+import { renderLifts } from './pixlifts.js';
 import {
   drawBannersPx, drawBrigadePx, reserveLobbySigns, drawPolicePx, drawCleanerPx, drawHeliPx, drawHoistPx, drawLightningPx, drawMedicPx,
   drawMovePilesPx, drawOutagePx, drawRoofPx, drawSmokePx, drawSnowPx, drawWeatherPx,
@@ -36,6 +38,16 @@ import {
 // ---------- Hela bilden ----------
 export function renderPixel(dt) {
   const { s, w, h } = beginFrame();
+  if (VIEW.mode === 'lifts') {
+    // Hissarna: hela huset schematiskt (pixlifts.js) – textskylten täcker nederkanten som i Våningarna
+    renderLifts(w, h, Math.ceil(VIEW.padB * VIEW.scale / (VIEW.lscale * PX)));
+    lap('hissarna');
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(lo, 0, 0, Math.round(w * PX * s), Math.round(h * PX * s));
+    drawProf(ctx);
+    return;
+  }
   resetCallAt(); resetChiefAt();
   const hr = hour();
   countOcc();
@@ -46,7 +58,7 @@ export function renderPixel(dt) {
   lap('himmel/fasad');
   for (let f = 0; f < FLOORS; f++) {
     if (floorY(f) < VIEW.camY - 10 || floorY(f + 1) > VIEW.camY + VIEW.viewH + 10) continue;
-    drawHall(f, hr); terminal(f); floorOverlays(f, hr);
+    drawRoom(f, hr); drawHall(f, hr); terminal(f); floorOverlays(f, hr);
   }
   lap('hallar');
   drawSlabsPx();

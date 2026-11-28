@@ -3455,4 +3455,8 @@ export default {
   "😨 Någon på bron till Kronan går allt långsammare och håller i räcket…": "😨 Someone on the skywalk to Kronan is walking slower and slower, gripping the rail…",
   "😨 höjdskräck på bron": "😨 fear of heights on the skywalk",
   "Över bron 🌉": "Across the skywalk 🌉",
+  "HISS-O-MATIC 3000 · {0}": "HISS-O-MATIC 3000 · {0}",
+  "{0} väntar · {1} åker": "{0} waiting · {1} riding",
+  "STRÖMAVBROTT": "POWER CUT",
+  "BRANDLARM": "FIRE ALARM",
 };

@@ -27,16 +27,16 @@ import {
   BOILER_X, BREAK, CONTROL, DOCK, DOOR_X, EL, SHAFT_W, shaftX, FL, FLOOR_HOURS, floorOpen, FLOORS, floorY, INNER_X1,
   LAND_X0, LOBBY, MEZZ, SPOTS, STATION, TRAIN_LEN, TRAIN_X0, TRAIN_X1, SKYWALK_F,
 } from './config.js';
-import { blend, dark, light, plain, PX, sprite, text, textW } from './pixart.js';
+import { blend, dark, light, plain, sprite, text, textW } from './pixart.js';
 import { PAL } from './pixpal.js';
 import { nightness } from './view.js';
-import { inWindow, personHead, winPos } from './render.js';
+import { inWindow, personHead, seenAt, winPos } from './render.js';
 import { PERSON_H, PERSON_W, personSprite } from './pixpeople.js';
 import { clamp, fl } from './util.js';
 import { alarm, chiefOnDuty, chiefPerson, CHIEFS } from './chief.js';
 import { nextTrainMin, TRAIN_DOORS, trainDoors } from './train.js';
 import { allowed } from './dispatch.js';
-import { ants, box, FLAMES, g, INK, line, lo, once, pill, R, reserve, STAIR_ICON, starSprite, X, Y } from './pixcore.js';
+import { ants, box, FLAMES, g, INK, line, lo, once, pill, R, reserve, STAIR_ICON, starSprite, X, XW, Y } from './pixcore.js';
 import { blinkOf } from './pixcars.js';
 import { bubble, talking } from './pixfolk.js';
 import { unlockedFloor } from './visning.js';
@@ -306,7 +306,7 @@ export function drawHall(f, h) {
   else hallProps(f, th, top, bot);
   if (f === DOCK) boilerDoor(top, bot);
   // spårad person därinne / muspekaren över korridoren
-  const sel = S.sel && !S.sel.dead && S.sel.floor === f && S.sel.state !== 'ride' && personHead(S.sel)?.hidden;
+  const sel = S.sel && !S.sel.dead && S.sel.floor === f && S.sel.state !== 'ride' && !seenAt(personHead(S.sel));
   if (sel || S.hoverDoor === f) ants(cx - 6, cy - 6, cw + 12, ch + 6, sel ? '#ffe14d' : '#ffffff');
   // antal inne på våningen
   // antal inne: en liten skylt bredvid korridoren, som ett dörrnummer
@@ -747,7 +747,7 @@ export function drawLeakPx() {
     for (const f of L.wet) {
       if (f < e.minF || f > e.maxF) continue;
       const ya = Y(floorY(f + 1)), yb = Y(floorY(f));
-      for (const ox of [2, Math.round(SHAFT_W / PX) - 4]) for (let y = ya; y < yb; y += 4) {
+      for (const ox of [2, XW(shaftX(e.id), SHAFT_W) - 4]) for (let y = ya; y < yb; y += 4) {
         const k = (S.anim * 3 + y * 0.07 + ox) % 1;
         R(sx + ox, y + Math.round(k * 4), 2, 3, waterC(0.75));
       }

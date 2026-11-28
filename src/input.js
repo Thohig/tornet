@@ -12,7 +12,7 @@ import { BX0, CAR_H, CAR_W, DOOR_X, FLOOR_H, GROUND_Y, H, INNER_X1, LOBBY, ROOF_
 import { S, clockStr, hour, log } from './state.js';
 import { busFrom } from './tour.js';
 import { VIEW, camTarget, cv, detachCam, followCar, lookAt, scrollBy, scrollToFloor } from './view.js';
-import { personHead, peopleBehindDoor } from './render.js';
+import { personHead, peopleBehindDoor, seenAt } from './render.js';
 import { foldInc, select } from './hud.js';
 import { toggleSound, unlockSound } from './sound.js';
 import { toggleMusic } from './music.js';
@@ -231,7 +231,7 @@ export function hitPerson(x, y) {
   for (const p of S.people) {
     if (p.state === 'ride') continue;
     const h = personHead(p);
-    if (!h || h.hidden) continue;
+    if (!seenAt(h)) continue;
     if (Math.abs(x - h.x) < 15 && y > h.y - 14 && y < h.y + 70) {
       const d = Math.abs(x - h.x) + Math.abs(y - (h.y + 30)) * 0.3;
       if (d < bd) { bd = d; best = p; }

@@ -2,7 +2,7 @@
 // flyttlassen, rök och brand, strömavbrottet, väder och blixt, ambulansen och brandkåren.
 import { cleanerAt, HOIST_OK, PARK_Y, TERRACE_Y } from './hoist.js';
 import { hour, S } from './state.js';
-import { BX1, DOCK, DOOR_X, EL, FL, FLOOR_H, FLOORS, floorY, GROUND_Y, H, HATCH_FLOORS, INNER_X1, LAND_X0, LOBBY, ROOF_Y, SHAFT_X0, shaftCX, surf, TOP, W } from './config.js';
+import { BX1, DOCK, DOOR_X, EL, FL, FLOOR_H, FLOORS, floorY, GROUND_Y, H, HATCH_FLOORS, INNER_X1, LAND_X0, LOBBY, SHELL_X0, ROOF_Y, SHAFT_X0, shaftCX, surf, TOP, W } from './config.js';
 import { windAt } from './weather.js';
 import { cargoSprite, PERSON_H, PERSON_W, personSprite } from './pixpeople.js';
 import { inWindow } from './render.js';
@@ -246,7 +246,7 @@ export function drawSmokePx() {
   for (let i = 0; i < 14; i++) {
     const k = (S.anim * 0.35 + i / 14) % 1;
     const x = 120 + (i * 37) % 820 + Math.sin(S.anim + i) * 10;
-    if (x < LAND_X0 - 20) continue;
+    if (x < SHELL_X0) continue;
     const y = top + 30 - k * FLOOR_H * 1.8, r = Math.round((10 + k * 22) / PX);
     g.globalAlpha = (1 - k) * 0.55 * (1 - prog);
     g.drawImage(PUFF(r), X(x) - r, Y(y) - r);
@@ -257,18 +257,18 @@ export function drawOutagePx() {
   // strömmen är tillbaka: våningarna tänds en i taget nerifrån och upp
   if (S.power) {
     // förvarning: lamporna flimrar
-    if (S.warn && S.warn.type === 'power' && vrand(0, 1) < 0.3) R(X(LAND_X0 - 20), Y(ROOF_Y - 4), lo.width, Y(BASE_Y) - Y(ROOF_Y - 4), `rgba(8,4,28,${vrand(0.15, 0.45).toFixed(2)})`);
+    if (S.warn && S.warn.type === 'power' && vrand(0, 1) < 0.3) R(X(SHELL_X0), Y(ROOF_Y - 4), lo.width, Y(BASE_Y) - Y(ROOF_Y - 4), `rgba(8,4,28,${vrand(0.15, 0.45).toFixed(2)})`);
     const k = S.powerBack === null ? 1 : (S.t - S.powerBack) / RELIGHT_S;
     if (k >= 1) return;
     for (let f = Math.floor(k * FLOORS); f < FLOORS; f++) {
       const top = Y(floorY(f + 1) + 4), bot = Y(floorY(f) + 4);
       if (bot < 0 || top > lo.height) continue;
-      R(X(LAND_X0 - 20), top, lo.width, bot - top, 'rgba(8,4,28,.55)');
+      R(X(SHELL_X0), top, lo.width, bot - top, 'rgba(8,4,28,.55)');
     }
     return;
   }
   const O = S.outage;
-  R(X(LAND_X0 - 20), Y(ROOF_Y - 4), lo.width, Y(BASE_Y) - Y(ROOF_Y - 4), `rgba(8,4,28,${O && O.gen ? 0.48 : 0.62})`);
+  R(X(SHELL_X0), Y(ROOF_Y - 4), lo.width, Y(BASE_Y) - Y(ROOF_Y - 4), `rgba(8,4,28,${O && O.gen ? 0.48 : 0.62})`);
   const on = Math.sin(S.anim * 5) > 0;
   for (let f = 0; f < FLOORS; f++) {
     const top = Y(floorY(f + 1) + 4);
@@ -307,12 +307,12 @@ export function drawSnowPx(dt) {
   const c = S.weather.cold;
   if (c <= 0) { snow.length = 0; return; }
   const want = Math.round(40 + c * 120), w = windAt();
-  while (snow.length < want) snow.push({ x: vrand(LAND_X0, W), y: vrand(VIEW.camY - 40, VIEW.camY + VIEW.viewH), v: vrand(18, 40), p: vrand(0, 6) });
+  while (snow.length < want) snow.push({ x: vrand(VIEW.x0, W), y: vrand(VIEW.camY - 40, VIEW.camY + VIEW.viewH), v: vrand(18, 40), p: vrand(0, 6) });
   if (snow.length > want) snow.length = want;
   const outside = (x, y) => y < ROOF_Y - 6 || x > BX1 + 8 || (x > UX1 + 8 && y < SEAM_Y - 6) || y > GROUND_Y + 2 && x > BX1;
   for (const f of snow) {
     if (S.started && !S.paused) { f.y += f.v * dt * S.speed; f.x += (Math.sin(S.anim + f.p) * 8 + w * 90) * dt * S.speed; }
-    if (f.y > VIEW.camY + VIEW.viewH + 20 || f.x > W + 10) { f.y = VIEW.camY - vrand(0, 40); f.x = vrand(LAND_X0 - 100, W); }
+    if (f.y > VIEW.camY + VIEW.viewH + 20 || f.x > W + 10) { f.y = VIEW.camY - vrand(0, 40); f.x = vrand(VIEW.x0 - 100, W); }
     if (outside(f.x, f.y)) R(X(f.x), Y(f.y), 1, 1, 'rgba(255,255,255,.85)');
   }
 }

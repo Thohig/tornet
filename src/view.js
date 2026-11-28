@@ -1,7 +1,7 @@
 // Canvas, skalning och kamera.
 import { vrand } from './rng.js';
 import { clamp, mix } from './util.js';
-import { FLOOR_H, H, LAND_X0, TOWER_W, W, floorY, shaftCX } from './config.js';
+import { FLOOR_H, H, NCOL, SHAFT_GAP, SHAFT_W, SHAFT_X0, TOWER_W, VIEW_X0, W, floorY, shaftCX } from './config.js';
 import { S } from './state.js';
 import { sunWarp } from './calendar.js';
 import { personHead } from './render.js';
@@ -18,7 +18,7 @@ export const stage = document.getElementById('stage');
 // Kameran kan vara kopplad till en hiss (follow), till den spårade personen (camSel) eller stå på en våning
 // (camFloor). Manuell scrollning kopplar loss den; lastCam minns vad den senast följde så att den kan kopplas på igen.
 /** @typedef {{ kind: 'car'|'person'|'floor', id: number }} CamTarget */
-export const VIEW = { scale: 1, dpr: 1, camY: 0, viewH: H, x0: LAND_X0, follow: /** @type {number|null} */ (null),
+export const VIEW = { scale: 1, dpr: 1, camY: 0, viewH: H, x0: VIEW_X0, follow: /** @type {number|null} */ (null),
   camSel: false, camFloor: /** @type {number|null} */ (null), lastCam: /** @type {CamTarget|null} */ (null),
   // regissören (director.js): automatisk kamera och den tagning den visar just nu. autoWant = spelaren vill ha
   // regissören (🎬/A, minns i start.js): auto slås av när spelaren tar kameran, och på igen när hen släpper den –
@@ -29,9 +29,92 @@ export const VIEW = { scale: 1, dpr: 1, camY: 0, viewH: H, x0: LAND_X0, follow: 
   panX: 0, panW: 0, panTo: /** @type {number|null} */ (null),
   // textskylten längst ner i bilden (#lower) täcker padB världsenheter: kameran räknar med att bara
   // viewH − padB syns, och kan scrolla padB längre ner så att även stationen hamnar ovanför skylten
-  padB: 0 };
+  padB: 0,
+  // De två vyerna (se nedan): 'floors' = Våningarna (rummen, hallarna och schakten som dörrlist med ett öppet schakt),
+  // 'lifts' = Hissarna (hela huset schematiskt, pixlifts.js). open = schaktkolumnen som visas öppen i Våningarna,
+  // colK = varje kolumns bredd (andel av den riktiga) just nu, lscale = skalan i Hissarna (css-pixlar per världsenhet),
+  // swap = övergången mellan vyerna (0 → 1), swapDir = åt vilket håll den gamla bilden glider ut
+  mode: /** @type {'floors'|'lifts'} */ ('floors'), open: 0, colK: /** @type {number[]} */ ([]), lscale: 1, swap: 1, swapDir: 1 };
 /** css-pixlar som textskylten tar längst ner i bilden (vanligt läge / biografläget) */
 const LOWER_PX = { std: 62, cinema: 118 };
+
+// ---------- Våningarna: schakten som dörrlist ----------
+// (Avbildningen gäller alltid – Hissarna ritar inte världen alls.)
+// I Våningarna är varje schaktkolumn bara en smal list med dörrar (SHUT_K av sin bredd), utom den öppna (VIEW.open)
+// som visas i genomskärning med korgarna, linorna och folket. Det är ren grafik: världens x avbildas styckvis (mapX)
+// innan det ritas – rummen och hallen till vänster och fasaden till höger behåller sin bredd. Hela bredden är
+// alltid densamma (den öppna kolumnen tar det de andra lämnar), så skalan ändras inte när ett annat schakt öppnas.
+export const SHUT_K = 0.36;
+const COL_W = SHAFT_W + SHAFT_GAP, COLS_END = SHAFT_X0 + NCOL * COL_W;
+/** hela schaktdelens bredd i Våningarna (andelar av en kolumn): en öppen kolumn och resten dörrlister */
+const K_SUM = 1 + (NCOL - 1) * SHUT_K;
+VIEW.colK = Array.from({ length: NCOL }, (_, c) => (c === VIEW.open ? 1 : SHUT_K));
+/** hur långt varje kolumn har kommit mot att vara öppen (0 = dörrlist, 1 = öppen) */
+/** @type {number[]} */
+const colU = VIEW.colK.map(k => (k >= 1 ? 1 : 0));
+/** schaktkolumnen för världens x (−1 utanför schakten) */
+export const colAt = x => (x < SHAFT_X0 || x >= COLS_END ? -1 : Math.floor((x - SHAFT_X0) / COL_W));
+/** världens x → x i bilden (världsenheter): i Våningarna är dörrlisterna smalare än schakten */
+export function mapX(x) {
+  if (x <= SHAFT_X0) return x;
+  let m = SHAFT_X0;
+  for (let c = 0; c < NCOL; c++) {
+    const a = SHAFT_X0 + c * COL_W, k = VIEW.colK[c];
+    if (x < a + COL_W) return m + (x - a) * k;
+    m += COL_W * k;
+  }
+  return m + (x - COLS_END);
+}
+/** x i bilden → världens x (omvänt mot mapX) */
+export function unmapX(m) {
+  if (m <= SHAFT_X0) return m;
+  let a = SHAFT_X0;
+  for (let c = 0; c < NCOL; c++) {
+    const w = COL_W * VIEW.colK[c];
+    if (m < a + w) return SHAFT_X0 + c * COL_W + (m - a) / VIEW.colK[c];
+    a += w;
+  }
+  return COLS_END + (m - a);
+}
+/** hur bred en bit av världen (x, bredd w) blir i bilden, i låga pixlar */
+export const mapW = (x, w) => (mapX(x + w) - mapX(x)) / PX;
+/** visas kolumnen c öppen (helt utfälld) just nu? */
+export const colOpen = c => c < 0 || VIEW.colK[c] >= 0.999;
+/** nyckel för lagren: ändras när schakten fälls ut eller ihop */
+export const mapKey = () => VIEW.colK.map(k => k.toFixed(3)).join(',');
+/** Fäll ut kolumnen c (de andra fälls ihop till dörrlister) – mjukt, i några steg per sekund. */
+export function openCol(c) { if (c >= 0 && c < NCOL) VIEW.open = c; }
+const OPEN_S = 0.45, K_STEPS = 10;
+function updateCols(dt) {
+  for (let c = 0; c < NCOL; c++) if (c !== VIEW.open) colU[c] = Math.max(0, colU[c] - dt / OPEN_S);
+  // de andra glider ihop i några steg; den öppna tar det som blir över, så att hela bredden står still
+  let rest = K_SUM;
+  for (let c = 0; c < NCOL; c++) {
+    if (c === VIEW.open) continue;
+    const u = Math.ceil(colU[c] * K_STEPS) / K_STEPS, e = u * u * (3 - 2 * u);
+    VIEW.colK[c] = SHUT_K + (1 - SHUT_K) * e; rest -= VIEW.colK[c];
+  }
+  VIEW.colK[VIEW.open] = rest;
+  colU[VIEW.open] = (rest - SHUT_K) / (1 - SHUT_K);
+}
+
+// ---------- Byta vy ----------
+/** Byt till Våningarna eller Hissarna. Bilden glider över (VIEW.swap) och spelytan räknas om. */
+export function setMode(mode) {
+  if (VIEW.mode === mode) return;
+  snapshot();
+  VIEW.swapDir = mode === 'lifts' ? -1 : 1;
+  VIEW.mode = mode; VIEW.swap = 0;
+  resize(true);
+  S.trackDirty = true;
+}
+/** den gamla bilden under övergången (ritas ovanpå den nya och glider ut, render.js) */
+export const SNAP = document.createElement('canvas');
+function snapshot() {
+  SNAP.width = cv.width; SNAP.height = cv.height;
+  const c = SNAP.getContext('2d');
+  if (c && cv.width && cv.height) c.drawImage(cv, 0, 0);
+}
 // Minsta skala: på en telefon blir huset annars så litet att folk är prickar och skyltarna oläsliga.
 // Är spelytan smalare scrollar bilden i sidled. Skalan avrundas så att en pixel i pixelgrafiken (PX = 2
 // världsenheter) blir ett helt antal skärmpixlar.
@@ -46,7 +129,7 @@ export function screenMode() {
   const land = coarse && window.innerHeight <= LAND_MAX_H && window.innerWidth > window.innerHeight;
   return { mob: window.innerWidth <= 800 || land, land };
 }
-export function resize() {
+export function resize(force = false) {
   // huset fyller hela bredden och kameran visar en del i taget (scrolla eller låt kameran följa)
   const { mob, land } = screenMode(), B = document.body.classList;
   B.toggle('mob', mob); B.toggle('land', mob && land);
@@ -54,19 +137,23 @@ export function resize() {
   // (spelytans höjd sköts av css: i mobilläget tar listen sin plats och bilden resten – ResizeObserver nedan)
   const r = stage.getBoundingClientRect();
   const innerW = r.width - 4, innerH = r.height - 4; // (ramen runt spelytan)
-  const VW = W - VIEW.x0; // hela bredden i världsenheter
+  const VW = mapX(W) - VIEW.x0; // hela bredden i världsenheter (som den ritas i Våningarna)
   const dpr = window.devicePixelRatio || 1;
-  const fit = innerW / (TOWER_W - VIEW.x0);
+  const fit = innerW / (mapX(TOWER_W) - VIEW.x0);
   const s = fit >= MIN_SCALE ? fit : Math.max(fit, Math.round(MIN_SCALE * 2 * dpr) / (2 * dpr));
   const padB = mob && !land && !cinema ? 0 : (cinema ? LOWER_PX.cinema : LOWER_PX.std) / s;
-  const cssW = VW * s, cssH = Math.max(1, Math.min((H + padB) * s, innerH));
+  const fH = Math.max(1, Math.min((H + padB) * s, innerH));
+  // Hissarna: bilden fyller spelytan och hela huset ska få plats på höjden (pixlifts.js räknar ut resten)
+  const lifts = VIEW.mode === 'lifts';
+  const cssW = lifts ? Math.max(1, innerW) : VW * s, cssH = lifts ? Math.max(1, innerH) : fH;
   // samma storlek som förut (Safari skickar resize när adressfältet fälls in): rita inte om canvasen
-  if (cv.width === Math.round(cssW * dpr) && cv.height === Math.round(cssH * dpr) && VIEW.dpr === dpr && VIEW.panW === innerW && VIEW.padB === padB) return;
+  if (!force && cv.width === Math.round(cssW * dpr) && cv.height === Math.round(cssH * dpr) && VIEW.dpr === dpr && VIEW.panW === innerW && VIEW.padB === padB) return;
   VIEW.padB = padB;
   VIEW.panW = innerW;
   cv.style.width = cssW + 'px'; cv.style.height = cssH + 'px';
   cv.width = Math.round(cssW * dpr); cv.height = Math.round(cssH * dpr);
-  VIEW.scale = s; VIEW.dpr = dpr; VIEW.viewH = cssH / s;
+  VIEW.scale = s; VIEW.dpr = dpr; VIEW.viewH = fH / s;
+  VIEW.lscale = liftScale(innerW, innerH, dpr);
   VIEW.camY = clamp(VIEW.camY, 0, camMax());
   setPan(VIEW.panX);
   // går det att scrolla i bilden tar den ett finger själv (två fingrar zoomar sidan som vanligt);
@@ -77,10 +164,17 @@ export function resize() {
 }
 /** Är pixelgrafikens text för liten för att läsas (en pixel i bilden mindre än 1,2 skärmpixlar)?
  * Då hoppar bilden över prat- och tankebubblorna, namnbrickorna, småpratet och ljudeffekterna – de blir bara fläckar. */
-export const tinyText = () => VIEW.scale * PX < 1.2;
+export const tinyText = () => (VIEW.mode === 'lifts' ? VIEW.lscale : VIEW.scale) * PX < 1.2;
+/** Hissarnas skala: hela huset (LIFT_H låga pixlar) på spelytans höjd, men aldrig så litet att texten inte går att läsa;
+ *  en låg pixel blir ett helt antal skärmpixlar när det går */
+export const LIFT_H = 470;
+function liftScale(w, h, dpr) {
+  const s = Math.max(0.62, Math.min(1.6, h / (LIFT_H * PX), w / (300 * PX)));
+  return s * PX * dpr >= 2 ? Math.floor(s * PX * dpr) / (PX * dpr) : s;
+}
 // listen nertill ändrar höjd (raden med det som händer): då ändras spelytan och bilden räknas om
 if (typeof ResizeObserver === 'function') new ResizeObserver(() => resize()).observe(stage);
-window.addEventListener('resize', resize);
+window.addEventListener('resize', () => resize());
 // ---------- Kamera ----------
 export const camMax = () => Math.max(0, H + VIEW.padB - VIEW.viewH);
 /** hur mycket av bilden som syns ovanför textskylten (världsenheter) */
@@ -93,8 +187,8 @@ function setPan(x) {
 }
 /** håll en punkt (världens x) i bild i sidled: flytta bara om den är nära kanten */
 export function keepX(wx) {
-  if (wx == null || panMax() <= 0) return;
-  const cx = (wx - VIEW.x0) * VIEW.scale, l = VIEW.panX + VIEW.panW * 0.2, r = VIEW.panX + VIEW.panW * 0.8;
+  if (wx == null || panMax() <= 0 || VIEW.mode !== 'floors') return;
+  const cx = (mapX(wx) - VIEW.x0) * VIEW.scale, l = VIEW.panX + VIEW.panW * 0.2, r = VIEW.panX + VIEW.panW * 0.8;
   if (cx < l || cx > r) VIEW.panTo = clamp(cx - VIEW.panW * 0.5, 0, panMax());
 }
 export function lookAt(worldY, hold = 4) {
@@ -127,6 +221,8 @@ export function followCar(id) {
   detachCam(); VIEW.follow = id; S.followHold = 0;
 }
 export function updateCamera(dt) {
+  updateCols(dt);
+  if (VIEW.swap < 1) VIEW.swap = Math.min(1, VIEW.swap + dt / SWAP_S);
   const p = S.sel;
   if (VIEW.camSel && (!p || p.dead)) VIEW.camSel = false;
   if (VIEW.follow !== null && S.anim > (S.followHold || 0)) {
@@ -153,7 +249,10 @@ export function updateCamera(dt) {
     setPan(x);
   }
 }
+/** övergången mellan vyerna (sekunder) */
+const SWAP_S = 0.4;
 export function scrollBy(dy, dx = 0) {
+  if (VIEW.mode === 'lifts') return; // (Hissarna visar hela huset)
   // manuell scrollning kopplar loss kameran
   detachCam(); S.camTarget = null; VIEW.panTo = null; VIEW.freeAt = S.anim;
   VIEW.camY = clamp(VIEW.camY + dy, 0, camMax());

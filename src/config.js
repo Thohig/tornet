@@ -287,6 +287,9 @@ export const STAIR_X = BX0 + 6;
 // hall framför schakten med en korridor in mot rummen. Hallen är bred så att köer, terminaler och
 // stamgäster får plats (simuleringen påverkas inte – den räknar med hela våningen 60–619).
 export const LAND_X0 = 250, DOOR_X = LAND_X0 + 32;
+// Våningarna (view.js) visar också rummen till vänster om hallen: tornets yttervägg vid SHELL_X0, bilden börjar
+// en bit utanför (VIEW_X0), och rummen går fram till mellanväggen mot hallen (ROOMS_X1). Bara grafik.
+export const SHELL_X0 = BX0 - 8, VIEW_X0 = BX0 - 24, ROOMS_X1 = LAND_X0 - 6;
 // tunnelbanan: tåget stannar längs perrongens bakvägg mellan TRAIN_X0 och TRAIN_X1 (tunnelmynningar i båda ändar)
 // (fast läge – simuleringen använder det, så det får inte följa hallens bredd)
 export const TRAIN_X0 = 506, TRAIN_X1 = SHAFT_X0 - 8, TRAIN_LEN = TRAIN_X1 - TRAIN_X0;

@@ -1,7 +1,7 @@
 // Pixelgrafik: folket i hallarna (köer, gång, hundar), pratbubblor och tankebubblor, teknikerns
 // telefonsamtal, spårningen och muspekaren, repliker i hallen och ljudeffekterna ("STÄNG!" …).
 import { S } from './state.js';
-import { inWindow, landPos, peopleBehindDoor, personHead } from './render.js';
+import { inWindow, landPos, peopleBehindDoor, personHead, seenAt } from './render.js';
 import { CAR_H, CAR_W, DOOR_X, FL, FLOOR_H, floorY, INNER_X1, LAND_X0, shaftX, surf } from './config.js';
 import { cargoSprite, PERSON_H, PERSON_W, personSprite } from './pixpeople.js';
 import { buttonsMode } from './buttons.js';
@@ -13,7 +13,7 @@ import { noteDetail, stateInfo } from './describe.js';
 import { CREW_BY } from './crew.js';
 import { vpick, vrand } from './rng.js';
 import { VIEW, tinyText } from './view.js';
-import { ants, ARROW, box, g, INK, keepIn, label, line, lo, pill, place, R, reserve, X, Y } from './pixcore.js';
+import { ants, ARROW, box, g, INK, keepIn, label, line, lo, pill, place, R, reserve, X, XW, Y } from './pixcore.js';
 import { blinkOf, drawCarTalkPx, hoseSpray } from './pixcars.js';
 import { BENCH, benchSeat } from './pixhall.js';
 import { sv } from './sv.js';
@@ -216,7 +216,7 @@ export function drawCallPx() {
     // teknikern syns inte (i ett rum eller i trappan): en telefon vid korridoren på hens våning
     const h = personHead(p);
     if (!h) return;
-    at = h.hidden ? { x: X(DOOR_X) + 12, y: Y(floorY(p.floor)) - 30 } : { x: X(h.x) + 3, y: Y(h.y) + 3 };
+    at = !seenAt(h) ? { x: X(DOOR_X) + 12, y: Y(floorY(p.floor)) - 30 } : { x: X(h.x) + 3, y: Y(h.y) + 3 };
     R(at.x - 3, at.y - 1, 6, 9, INK); R(at.x - 2, at.y, 4, 7, '#3a3f4a'); R(at.x - 2, at.y + 1, 4, 2, '#7cf06b'); R(at.x + 1, at.y - 4, 1, 3, INK);
   }
   // ringvågorna växer ut från luren
@@ -236,13 +236,13 @@ export function drawSelectionPx() {
   const p = S.sel;
   if (!p || p.dead) return;
   if (p.state === 'wait' && p.assigned !== null) {
-    const e = S.elevators[p.assigned], x = X(shaftX(e.id) + 4), yt = Y(floorY(e.pos) - 4 - CAR_H);
-    ants(x - 2, yt - 2, CAR_W / PX + 4, CAR_H / PX + 4, '#ffe14d');
-    label(`→ ${p.name}`, x + CAR_W / PX / 2, yt - 12, '#ffe14d');
+    const e = S.elevators[p.assigned], x = X(shaftX(e.id) + 4), yt = Y(floorY(e.pos) - 4 - CAR_H), cw = XW(shaftX(e.id) + 4, CAR_W);
+    ants(x - 2, yt - 2, cw + 4, CAR_H / PX + 4, '#ffe14d');
+    label(`→ ${p.name}`, x + cw / 2, yt - 12, '#ffe14d');
   }
   const h = personHead(p);
   if (!h) return;
-  if (h.hidden) { trackNote(p, X(DOOR_X) + 14, Y(floorY(p.floor)) - 14, true); return; }
+  if (!seenAt(h)) { trackNote(p, X(DOOR_X) + 14, Y(floorY(p.floor)) - 14, true); return; }
   const bob = Math.round(Math.sin(S.anim * 6) * 1.5);
   const hx = X(h.x), hy = Y(h.y) - (p.state === 'wait' ? 17 : 8) + bob;
   g.drawImage(ARROW(), hx - 3, hy - 7);
@@ -271,7 +271,7 @@ export function drawHoverPx() {
   const p = S.hover;
   if (!p || p === S.sel) return;
   const h = personHead(p);
-  if (!h || h.hidden) return;
+  if (!seenAt(h)) return;
   const t = p.state === 'office' ? `${p.name} · ${FL[p.floor].short}` : `${p.name} · ${fl(p.floor)}→${fl(p.dest)}`;
   label(t, X(h.x), Y(h.y) - (p.state === 'wait' ? 20 : 10));
 }
