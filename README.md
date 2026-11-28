@@ -21,6 +21,13 @@ python3 serve.py
 
 Det finns ingen startmeny – det finns ett enda Tornet, och det går hela tiden. Första gången visas uppstarten i DOS-svart och en kort välkomstruta, och sedan erbjuder receptionisten **Berit** en **rundvisning**. Den sker i dygnet som pågår: Berit ringer efter vikarien Kicki till disken och visar en gäst (du) runt i huset, och händer det något – en brand, ett hissfel, en storm – går ni dit och tittar. Berit pratar högt med webbläsarens svenska talsyntes när ljudet är på. Du kan be henne visa runt igen från hjälpen (?), entrén eller hennes ruta när du följer henne.
 
+**Två vyer.** Bilden visar antingen **🏢 Våningarna** eller **🛗 Hissarna**, och du byter med knapparna under uppspelningsraden eller tangenten V:
+
+- **Våningarna** handlar om folket. Rummen till vänster om varje hall syns i genomskärning, med fönster mot himlen och inredning efter våningen: tandläkarstolen, bankvalvet, radiostudions ON AIR-lampa, aerobicspeglarna, serverhyllorna, labbänken, caféet, soffan och tv:n hemma och bilarna i garaget. De som är inne sitter vid sina skrivbord eller står på sina platser, och rummen är mörka på kvällen när ingen är där. Hissarna syns inte här, utom panoramahissen utanpå fasaden: den som ska åka går in genom väggen i hallens högerkant.
+- **Hissarna** visar schakten: korgarna med dem som åker, linorna, dörrarna, våningsdisplayerna och maskinrummet.
+
+Följer du en hiss byter bilden till Hissarna, och klickar du på en våning byter den till Våningarna. Regissören väljer vy efter det den visar: hissfel, nödsänkningar och fullsatta korgar i Hissarna, allt annat i Våningarna. Med `?vy=hissar` i adressen börjar spelet i Hissarna.
+
 Allt som går att ställa in görs i kontrollpanelen medan huset går: styrlogik, slumpen (hur ofta incidenter kommer), driftchefen, felknappar och underhåll. Valen minns till nästa gång. Dygnet rullar alltid vidare kl 06.
 
 Spelet visas på **svenska** som standard; med flaggorna längst upp till höger i panelen (eller under Inställningar ⚙️) byter du till **engelska** (och tillbaka) mitt i ett dygn – allt i panelen och bilden, även det som redan hänt, byter språk direkt. Koden och simuleringen är skrivna på svenska; översättningen sker när texten visas (`src/lang.js`, `src/lang-en.js`). Texter med värden skrivs sv`…` (`src/sv.js`) och vet då sin mall, så att översättningen inte behöver gissa var värdena börjar och slutar. Panelens meningar med värden i fetstil eller nedräkningar skrivs sh`…` och översätts som hela meningar.
@@ -39,7 +46,7 @@ Adressparametrar:
 - **Varuhissen V** tar städvagnar, paket, flyttlass och brandkåren.
 - **Panoramahissen P** åker i ett glasrör utanpå fasaden, hela vägen från perrongen upp till taket.
 - **Tunnelbanestationen** Tornplan T-bana ligger under huset: perrongen har kiosk, tidtabell och en bänk, och tåget kommer med folk i klump.
-- **Skywalken:** en inglasad gångbro från sky lobbyn till granntornet **Kronan**, som syns i bildens högerkant (dra i bilden eller låt regissören glida dit). Grannarna kommer över bron med ärenden och för att äta i Sky Café, Tornets folk äter lunch på Kronans Krog, och Kronans driftchef Göran pratar i radion. Bron har öppet 06.30–22.
+- **Skywalken:** en inglasad gångbro från sky lobbyn till granntornet **Kronan**. Bron går bakåt ur bild från glasdörren i sky lobbyn, och de som är ute på den syns som siluetter genom glaset. Grannarna kommer över bron med ärenden och för att äta i Sky Café, Tornets folk äter lunch på Kronans Krog, och Kronans driftchef Göran pratar i radion. Bron har öppet 06.30–22.
 - **Kalendern:** Tornet har samma datum som datorn. Årstiden styr temperaturen, solen styr ljuset (mörkt halv fyra i december, ljusa nätter vid midsommar), och på helgen är huset glesare. Framkalla har ett datumval för att prova en annan dag.
 - **Folket:** anställda, besökare, boende, nattpersonal och stamgäster med egna egenheter. Bland stamgästerna finns Gunnar som hatar att vänta, Doris som håller upp dörren och Majken, 87, som pratar med alla i hissen.
 - **Personalen:** driftchefer, bildproducenter, en receptionist (med vikarien Kicki när hon visar runt) och en fönsterputsare. De har skift, raster och poster.
@@ -61,12 +68,13 @@ Styrlogiken kan bytas medan huset kör:
 
 | | |
 |---|---|
-| Klick i bilden | Följ en person, hiss eller våning |
+| Klick i bilden | Följ en person, hiss eller våning (en hiss visas i Hissarna, en våning i Våningarna) |
 | Mellanslag | Paus |
 | 1 / 2, − / + | Hastighet (¼× ½× 1× 2×) |
 | N | ⏩ Spola fram natten (kvällen och natten, stannar på morgonen eller när något händer) |
 | F | Koppla loss eller på kameran |
 | A | Regissören (automatisk kamera) – på från start, tar kameran igen när du släpper den; A stänger av den |
+| V | Byt vy: Våningarna eller Hissarna |
 | H | Biografläge |
 | T | Namnbrickor |
 | S | Byt styrlogik |
@@ -76,7 +84,7 @@ Styrlogiken kan bytas medan huset kör:
 
 Allt annat finns i kontrollpanelen till vänster. Varje ikon förklaras när du håller muspekaren över den. Går något fel i spelet fryser det inte: felet visas i en röd ruta nere till vänster (klicka för att stänga) – skicka gärna texten om du ser den.
 
-**Tornet gör sig bäst på en dator.** På mobilen tittar man: bilden fyller skärmen, regissören väljer vad som visas om du inte tar kameran själv, och det finns ingen kontrollpanel. Nertill finns en rad med det som händer och en list med ❚❚ paus, 🎬 regissören (intryckt: regissören klipper åt dig, uppsläppt: fri kamera), ⏩ spola fram natten (på kvällen och natten), ? hjälp och språket. Spelet går alltid i 1×. Tryck på en person, en hiss eller en våning så följer kameran den, och dra i bilden för att se resten av huset. Välkomstrutan varnar vid varje start att framkalla, styrning och driftchefens beslut bara finns på datorn. På tvären ligger listen som en smal kolumn till höger.
+**Tornet gör sig bäst på en dator.** På mobilen tittar man: bilden fyller skärmen, regissören väljer vad som visas om du inte tar kameran själv, och det finns ingen kontrollpanel. Nertill finns en rad med det som händer och en list med ❚❚ paus, 🎬 regissören (intryckt: regissören klipper åt dig, uppsläppt: fri kamera), 🏢/🛗 byt vy, ⏩ spola fram natten (på kvällen och natten), ? hjälp och språket. Spelet går alltid i 1×. Tryck på en person, en hiss eller en våning så följer kameran den, och dra i bilden för att se resten av huset. Välkomstrutan varnar vid varje start att framkalla, styrning och driftchefens beslut bara finns på datorn. På tvären ligger listen som en smal kolumn till höger.
 
 ## Utveckling
 

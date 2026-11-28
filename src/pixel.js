@@ -4,8 +4,10 @@
 // Bara grafik: läser simuleringens tillstånd men ändrar det aldrig (utom S.fx-listan, som den
 // tecknade grafiken också räknar ner).
 //
-// Här sätts bilden ihop (renderPixel). Delarna ritas i:
+// Här sätts bilden ihop (renderPixel). Bilden har två vyer (VIEW.mode, view.js): Våningarna med rummen och hallarna
+// men inga hissar, och Hissarna med schakten och korgarna. Delarna ritas i:
 //   pixcore.js     ritytan, lagren (layer), platsbokningen (reserve/place) och ritverktygen
+//   pixrooms.js    rummen till vänster om hallarna (bara i Våningarna)
 //   pixbuilding.js himlen, gatan, fasaden, schakten, rampen, terrassen och lastkajen
 //   pixhall.js     hallarna på varje våning, kontrollrummet, personalrummet och perrongen
 //   pixcars.js     hisskorgarna, linorna och panoramahissen på fasaden

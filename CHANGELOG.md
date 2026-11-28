@@ -6,6 +6,7 @@
 - **Hissarna** är huset som det alltid har ritats, men bara schakten: korgarna med folket, linorna, dörrarna, displayerna och maskinrummet.
 - **Följer man en hiss byter bilden till Hissarna, och visar man en våning till Våningarna.** Regissören väljer vy efter tagningen (`shotView` i director.js): en hiss i Hissarna, allt annat i Våningarna. Byter spelaren vy själv tar hen kameran, och regissören tar den igen efter en stund som vanligt.
 - Bara grafik: simuleringen, dygnen och facit är oförändrade. Provspelningen har två nya ögonblick (*frö21-hissarna* och *frö21-rummen*).
+- Provspelningen räknar bara den synliga delen av text som ritas inom ett klipp (`TEXTLOG.clip` i pixart.js). Textremsan i driftcentralens fönster rullar långa repliker, och en pratbubbla bredvid fönstret gav ett falskt larm om text över text.
 
 ## 2026-11-27 – skywalken går bakåt, bilden är smal igen
 - **Bron till Kronan syns inte längre i bilden.** Den går bakåt från dörren i sky lobbyn, ut ur bild, och bilden är tornets bredd igen (`W` = `TOWER_W`): ingen glidning i sidled, och Kronans remsa, Jörgen i gondolen och pixskywalk.js är borta. Simuleringen är oförändrad (bron var bara grafik), så dygnen och facit är desamma.
