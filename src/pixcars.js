@@ -10,10 +10,10 @@ import { PAL } from './pixpal.js';
 import { exposure, windAt } from './weather.js';
 import { vpick, vrand } from './rng.js';
 import { nextOut, techOf, WARM_AT } from './service.js';
-import { colAt, colOpen, VIEW } from './view.js';
+import { liftsShown, VIEW } from './view.js';
 import { carSlot, carSlotX } from './render.js';
 import { cabinKg } from './dispatch.js';
-import { ants, box, CY, g, INK, label, line, lo, PUFF, R, reserve, X, XW, Y } from './pixcore.js';
+import { ants, box, CY, g, INK, label, line, lo, PUFF, R, reserve, X, Y } from './pixcore.js';
 import { winFig } from './pixhall.js';
 import { shaftBot, shaftTop } from './pixbuilding.js';
 import { bark, DOGS, hotOf, phoneOn, speech, talking } from './pixfolk.js';
@@ -63,11 +63,11 @@ export function drawPanoPx() {
 }
 
 // ---------- Hissarna ----------
-/** syns korgen i genomskärning (det öppna schaktet i Våningarna, eller panoramahissen på fasaden)? @param {Elevator} e */
-export const shown = e => colOpen(colAt(shaftX(e.id)));
+/** syns korgen? I Hissarna alla, i Våningarna bara panoramahissen på fasaden (view.js) @param {Elevator} e */
+export const shown = e => liftsShown() || !!e.facade;
 /** korgens läge i lågupplösta pixlar, null om den är utanför bilden @param {Elevator} e */
 function carGeom(e) {
-  if (!shown(e)) return null; // (i Våningarna syns korgen bara i det öppna schaktet – annars en dörrlist, stripCarPx)
+  if (!shown(e)) return null;
   // nivåfel: korgen står en aning för lågt eller högt när linorna töjer sig (överdrivet så att det syns)
   const lv = (e.level || 0) * 2.5 + (e.mode === 'broken' && e.fault && e.fault.kind === 'level' ? Math.sin(S.anim * 9) * 0.03 : 0);
   const x = X(shaftX(e.id) + 4), cw = CAR_W / PX, chh = CAR_H / PX;
@@ -140,8 +140,6 @@ export function drawRopesPx(e) {
  *  show = false: platsen hålls men skylten är släckt (blinkar). book = platsen bokas (reserve) i stället för att ritas. */
 const slot = {
   cx: 0, yt: 0, chh: 0, topUsed: false, midUsed: false, book: false,
-  /** @type {{ s: string, fill: string, color: string, show: boolean }[]|null} samlar skyltarna i stället för att rita dem (carLabels) */
-  collect: null,
   /** @param {number} cx @param {number} yt @param {number} chh */
   reset(cx, yt, chh) { this.cx = cx; this.yt = yt; this.chh = chh; this.topUsed = this.midUsed = false; },
   /** @param {string} s @param {string} fill @param {string} [color] */
@@ -149,7 +147,6 @@ const slot = {
   /** @param {string} s @param {string} fill @param {string} [color] */
   mid(s, fill, color = INK, show = true, dy = 0) { if (this.midUsed) return; this.midUsed = true; this.put(s, this.yt + this.chh / 2 - 4 + dy, fill, color, show); },
   put(s, y, fill, color, show) {
-    if (this.collect) { this.collect.push({ s, fill, color, show }); return; }
     if (this.book) { const w = textW(plain(s)) + 5; reserve(Math.round(this.cx - w / 2), y, w, 9); } else if (show) label(s, this.cx, y, fill, color);
   },
 };
@@ -223,7 +220,6 @@ function drawCableRescue(e, G) {
 const climber = e => (e.snap && e.snap.ph === 'evac' && S.t > e.snap.nextOut - e.snap.climb * 0.7 ? nextOut(e) : null);
 /** @param {Elevator} e */
 export function drawCarPx(e) {
-  if (!shown(e)) { stripCarPx(e); return; }
   const G = carGeom(e);
   if (!G) return;
   const { x, cw, chh, ybOf, top, yb, yt } = G;
@@ -248,34 +244,6 @@ export function drawCarPx(e) {
     for (let n = 0; n < 2; n++) R(x - 1 + (n ? cw + 1 : 0), yt + Math.round(vrand(4, chh - 4)), 1, 1, '#ffd23f');
   }
   carSigns(e, G);
-}
-/** Ett hopfällt schakt i Våningarna: bara landningsdörrarna syns. Står korgen inne med öppna dörrar syns den i
- *  dörröppningen (de främsta passagerarna och hur många fler som är med); annars visar en ljuslist vid sidan var
- *  korgen är bakom väggen. Ett fel blinkar över dörren. @param {Elevator} e */
-function stripCarPx(e) {
-  const sx = shaftX(e.id), x = X(sx), w = XW(sx, SHAFT_W);
-  const yb = Y(floorY(e.pos + (e.level || 0) * 2.5) - 4), chh = Math.round(CAR_H / PX), yt = yb - chh;
-  if (yt > lo.height + 20 || yb < -20) return;
-  const off = e.off || e.mode === 'locked' || e.mode === 'broken' || e.mode === 'snapped' || e.mode === 'service' || e.hot;
-  const body = off ? PAL.carOff : e.color;
-  // ljuslisten längs schaktets högerkant: korgens höjd, i hissens färg
-  R(x + w - 2, yt, 2, chh, INK); R(x + w - 2, yt + 1, 1, chh - 2, light(body, 0.2));
-  // korgen står inne: dörrarna glider upp och man ser in
-  const open = e.state === 'doors' ? clamp(e.door, 0, 1) : 0;
-  if (open > 0.05) {
-    const dw = w - 4, ow = Math.max(2, Math.round(dw * open)), ox = x + 2 + Math.round((dw - ow) / 2), dh = chh - 1;
-    R(ox, yb - dh, ow, dh, INK); R(ox + 1, yb - dh + 1, ow - 2, dh - 1, e.freight ? PAL.cabinFreight : PAL.cabin);
-    R(ox + 1, yb - dh + 1, ow - 2, 2, body);
-    g.save(); g.beginPath(); g.rect(ox + 1, yb - dh + 3, ow - 2, dh - 3); g.clip();
-    const ps = e.passengers.filter(p => !p.dog).slice(0, Math.max(1, Math.floor((ow - 2) / (PERSON_W - 2))));
-    ps.forEach((p, i) => g.drawImage(personSprite(p, 'front', 0, 1, { blink: blinkOf(p), hot: hotOf(p) }), ox + 1 + i * (PERSON_W - 2), yb - 1 - PERSON_H));
-    g.restore();
-    const more = e.passengers.length - ps.length;
-    if (more > 0 && open > 0.6) text(g, `+${more}`, ox + ow - 1, yb - dh + 4, '#ffffff', 'right', 1, INK);
-  }
-  // något är fel: ett blinkande utropstecken över dörren
-  if ((e.mode === 'broken' || e.mode === 'snapped' || e.hot) && Math.sin(S.anim * 6) > -0.2) label('!', x + Math.round(w / 2), yt - 10, '#ff2d55', '#ffffff');
-  if (VIEW.follow === e.id) ants(x - 1, yt - 1, w + 2, chh + 2, '#7dff9a');
 }
 /** Stamgästerna som pratar i korgarna: repliken ritas efter gatan och folket i hallarna (pixfolk.js), så att
  *  skyltarna där – brandbilens, hallens – redan har bokat sin plats */
@@ -334,11 +302,6 @@ function carSigns(e, G) {
   if (e.mode === 'normal' && S.power && e.restartAt && S.t < e.restartAt) slot.top('OMSTART', '#7dff9a');
   if (e.mode === 'normal' && !e.hold && e.heat >= WARM_AT && e.state === 'moving') slot.top('VARM', '#ff8c42');
   if (crashRun(e)) slot.top('NÖDLÄGE', '#3f7cff', '#ffffff'); // (Hiss-O-Matic har kraschat – crash.js)
-}
-/** Korgens skyltar som en lista (den viktigaste först) – Hissarna (pixlifts.js) visar samma skyltar som korgen. @param {Elevator} e */
-export function carLabels(e) {
-  slot.collect = [];
-  try { carSigns(e, { x: 0, cw: 0, chh: 0, yt: 0 }); return slot.collect; } finally { slot.collect = null; }
 }
 /** strömavbrott: folk sitter fast i en korg som stannade mellan våningarna @param {Elevator} e */
 const trappedInOutage = e => !S.power && e.mode === 'normal' && e.passengers.length > 0;

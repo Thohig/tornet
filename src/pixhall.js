@@ -29,7 +29,7 @@ import {
 } from './config.js';
 import { blend, dark, light, plain, sprite, text, textW } from './pixart.js';
 import { PAL } from './pixpal.js';
-import { nightness } from './view.js';
+import { liftsShown, nightness } from './view.js';
 import { inWindow, personHead, seenAt, winPos } from './render.js';
 import { PERSON_H, PERSON_W, personSprite } from './pixpeople.js';
 import { clamp, fl } from './util.js';
@@ -742,7 +742,7 @@ export function drawLeakPx() {
   const L = S.leak;
   if (!L || L.ph === 'done' || L.shut) return;
   for (const e of S.elevators) {
-    if (!wetShaft(e)) continue;
+    if (!wetShaft(e) || !(e.facade || liftsShown())) continue; // (hisschakten syns bara i Hissarna)
     const sx = X(shaftX(e.id));
     for (const f of L.wet) {
       if (f < e.minF || f > e.maxF) continue;

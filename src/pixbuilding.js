@@ -1,9 +1,9 @@
 // Pixelgrafik: det som står still eller rör sig utanför hallarna – himlen, stadssiluetten, gatan med
 // fotgängare, brandbilen och turistbussen, tornets fasad, schakten, garagerampen, terrassen,
 // bjälklagen, lastkajen och våningsdisplayerna vid schaktdörrarna.
-import { clouds, colAt, colOpen, nightness, skyAt, skyline, stars } from './view.js';
+import { clouds, colAt, colShut, liftsShown, nightness, skyAt, skyline, stars, VIEW } from './view.js';
 import { hour, S } from './state.js';
-import { blend, dark, ellipseSprite, led, ledW, light, PX, rgbOf, text, textW } from './pixart.js';
+import { blend, dark, ellipseSprite, led, light, PX, rgbOf, text, textW } from './pixart.js';
 import {
   BX0, BX1, CAR_H, carPos, DOCK, DOOR_X, EL, FLOORS, floorY, GARAGE_FLOORS, GROUND_Y, H, LOBBY, ROOF_Y, SEAM_F, SHELL_X0,
   SHAFT_W, SHAFT_X0, shaftCX, shaftX, STATION, surf, TOP, TOWER_X1, W,
@@ -117,7 +117,7 @@ function drawFoundationPx() {
   for (let x = bx0 + 6; x < bx1 - 2; x += 22) { R(x, y0 + 5, 3, rock - y0 + 4, '#8a857a'); R(x + 3, y0 + 5, 1, rock - y0 + 4, '#6d695f'); }
   // schaktgroparna: där bärlinan slutar står korgen på buffertarna om den åker för långt
   for (const e of EL) {
-    if (e.facade || e.minF !== 0) continue;
+    if (e.facade || e.minF !== 0 || colShut(colAt(shaftX(e.id)))) continue;
     const x = X(shaftX(e.id)) + 2, w = XW(shaftX(e.id), SHAFT_W) - 4;
     if (x > lo.width || x + w < 0) continue;
     R(x - 1, y0, w + 2, 15, INK); R(x, y0, w, 14, '#2a2f38'); R(x, y0 + 12, w, 2, '#3a4150');
@@ -275,7 +275,7 @@ function brickWall(x0, y0, x1, y1) {
 }
 export function drawShell(h) {
   const ns = nightStep(h);
-  layer('shell', `${ns}|${S.power}`, () => drawShellStatic(ns));
+  layer('shell', `${ns}|${S.power}|${VIEW.mode}`, () => drawShellStatic(ns));
   drawRampCarsPx();
   drawDockTrucksPx();
 }
@@ -349,7 +349,8 @@ function drawShellStatic(nn) {
   for (const c of COLS) {
     const x = X(c.x);
     for (let f = 0; f < FLOORS; f++) {
-      if (c.els.some(e => f >= e.minF && f <= e.topF + 1) || c.x + SHAFT_W > TOWER_X1[f]) continue;
+      // (i Våningarna finns inga hissar: hisskolumnerna är ihopfällda till en vägg och de andra är fasad – view.js)
+      if (c.x + SHAFT_W > TOWER_X1[f] || (liftsShown() ? c.els.some(e => f >= e.minF && f <= e.topF + 1) : colShut(colAt(c.x)))) continue;
       const top = Y(floorY(f + 1) + 6), bot = Y(floorY(f) - 6);
       if (bot < 0 || top > lo.height) continue;
       if (f < LOBBY) { if (!RAMP_COLS.includes(c) || f < RAMP_F) R(x - 2, top - 1, XW(c.x, SHAFT_W) + 4, bot - top + 2, PAL.basement); continue; }
@@ -366,8 +367,8 @@ function drawShellStatic(nn) {
   }
   drawRampPx();
   towerFacade();
-  // schakten
-  for (const e of INSIDE_EL) {
+  // schakten (bara i Hissarna)
+  for (const e of liftsShown() ? INSIDE_EL : []) {
     const x = X(shaftX(e.id)), t = Y(shaftTop(e)), b = Y(shaftBot(e)), w = XW(shaftX(e.id), SHAFT_W);
     R(x - 2, t, w + 5, b - t, PAL.shaftOuter); R(x, t, w, b - t, PAL.shaft);
     R(x + 1, t, 2, b - t, PAL.rail); R(x + w - 3, t, 2, b - t, PAL.rail);
@@ -378,7 +379,7 @@ function drawShellStatic(nn) {
   }
   // staplade zoner: ett mellanbjälklag med maskin där låga zonens schakt slutar och höga zonens börjar
   for (const e of INSIDE_EL) {
-    if (!stackedAbove(e)) continue;
+    if (!stackedAbove(e) || !liftsShown()) continue;
     const x = X(shaftX(e.id)), y = Y(shaftTop(e)), w = XW(shaftX(e.id), SHAFT_W);
     R(x - 2, y - 1, w + 5, 4, INK); R(x - 1, y, w + 3, 2, PAL.slab);
     for (let k = 4; k < w - 4; k += 6) R(x + k, y, 3, 1, '#ffe14d');
@@ -486,7 +487,7 @@ export function drawTerracePx(h) {
   R(x0 + 1, y - 16, x1 - x0 - 2, 1, INK);
   for (let x = x0 + 3; x < x1 - 1; x += 10) R(x, y - 16, 1, 14, INK);
   // krukväxter, parasoll och bänkar i luckorna mellan expresshissarnas maskinhus
-  const houses = INSIDE_EL.filter(e => e.maxF < TOP && !stackedAbove(e) && shaftX(e.id) >= UX1).map(e => X(shaftCX(e.id))).sort((p, q) => p - q);
+  const houses = INSIDE_EL.filter(e => liftsShown() && e.maxF < TOP && !stackedAbove(e) && shaftX(e.id) >= UX1).map(e => X(shaftCX(e.id))).sort((p, q) => p - q);
   const gaps = [], cols = ['#389a5c', '#2f7d4a', '#4caf6a'];
   let from = x0 + 2;
   for (const hx of houses) { gaps.push([from, hx - 13]); from = hx + 14; }
@@ -513,7 +514,7 @@ export function drawSlabsPx() {
   for (let f = 0; f <= FLOORS; f++) {
     const y = Y(floorY(f)) - 2;
     if (y < -4 || y > lo.height + 4) continue;
-    const holes = INSIDE_EL.filter(e => e.minF < f && f <= e.topF).map(e => [shaftX(e.id), shaftX(e.id) + SHAFT_W]).sort((a, b) => a[0] - b[0]);
+    const holes = INSIDE_EL.filter(e => liftsShown() && e.minF < f && f <= e.topF).map(e => [shaftX(e.id), shaftX(e.id) + SHAFT_W]).sort((a, b) => a[0] - b[0]);
     // bjälklaget når ut till tornets kant: den bredaste av våningarna över och under
     const edge = Math.max(f < FLOORS ? TOWER_X1[f] : 0, f > 0 ? TOWER_X1[f - 1] : 0);
     let a = f === FLOORS ? SHAFT_X0 - 8 : SHELL_X0;
@@ -523,7 +524,7 @@ export function drawSlabsPx() {
     for (const [s0, s1] of segs) { const x = X(s0), w = X(s1) - x; R(x, y, w, 4, INK); R(x, y + 1, w, 2, PAL.slab); R(x, y + 1, w, 1, PAL.slabHi); }
   }
   // dörrkarmar vid varje hållplats
-  for (const e of INSIDE_EL) for (const f of e.serves) {
+  for (const e of liftsShown() ? INSIDE_EL : []) for (const f of e.serves) {
     const x = X(shaftX(e.id)) + 1, y = Y(surf(f) - CAR_H - 3), w = XW(shaftX(e.id), SHAFT_W) - 2, h = Math.round((CAR_H + 3) / PX);
     if (y > lo.height || y + h < 0) continue;
     R(x, y, w, 1, PAL.frame); R(x, y, 1, h, PAL.frame); R(x + w - 1, y, 1, h, PAL.frame);
@@ -532,7 +533,7 @@ export function drawSlabsPx() {
 /** våningsdisplayerna sitter på hallväggen framför schakten: ritas efter linorna (som annars skymmer dem) men före korgarna */
 export function drawLanternsPx() {
   drawLandingDoorsPx();
-  for (const e of S.elevators) for (const f of e.serves) lantern(e, f);
+  for (const e of S.elevators) if (liftsShown() || e.facade) for (const f of e.serves) lantern(e, f);
 }
 /** Landningsdörrarna: stängda skjutdörrar vid varje hållplats, så att schakten ser ut som en vägg med
  *  dörrar. Korgen ritas ovanpå, och när den står inne syns dess egna dörrar glida upp. */
@@ -540,7 +541,7 @@ function drawLandingDoorsPx() {
   // på kvällen mörknar dörrarna med hallen
   const k = nightness(hour()) * 0.5, nt = c => (k > 0.02 ? blend(c, '#1e2440', k) : c);
   const C0 = nt('#8a909a'), C1 = nt('#a7adb6'), C2 = nt('#c8ccd2'), C3 = nt('#959ba5'), C4 = nt('#5b6370');
-  for (const e of INSIDE_EL) for (const f of e.serves) {
+  for (const e of liftsShown() ? INSIDE_EL : []) for (const f of e.serves) {
     const x = X(shaftX(e.id)) + 2, w = XW(shaftX(e.id), SHAFT_W) - 4, yb = Y(surf(f)), h = Math.round(CAR_H / PX) - 1, y = yb - h;
     if (y > lo.height || yb < 0) continue;
     const half = w >> 1;
@@ -557,7 +558,6 @@ function drawLandingDoorsPx() {
  *  Destinationsstyrning (övriga lägen): det finns inga hallknappar – displayen är bredare och visar i stället
  *  vilka våningar hissen ska till med dem som väntar här (som "5 8 12" i verkliga hus). @param {Elevator} e */
 function lantern(e, f) {
-  if (!colOpen(colAt(shaftX(e.id)))) { stripLantern(e, f); return; }
   const buttons = buttonsMode(), w = buttons ? 31 : 45;
   const x = X(shaftCX(e.id)) - Math.floor(w / 2), y = Y(floorY(f) - 108);
   if (y < -14 || y > lo.height) return;
@@ -595,29 +595,6 @@ function lantern(e, f) {
     const c = lit ? '#ffe14d' : PAL.dim;
     if (d > 0) { R(lx + 2, ly, 1, 1, c); R(lx + 1, ly + 1, 3, 1, c); R(lx, ly + 2, 5, 1, c); }
     else { R(lx, ly, 5, 1, c); R(lx + 1, ly + 1, 3, 1, c); R(lx + 2, ly + 2, 1, 1, c); }
-  }
-}
-/** Displayen över en dörrlist (Våningarna, hopfällt schakt): bara korgens våning och riktning, och bara där
- *  något händer – som den breda displayen. @param {Elevator} e */
-function stripLantern(e, f) {
-  const sx = shaftX(e.id), cw = XW(sx, SHAFT_W), w = Math.min(cw - 2, 19), x = X(sx) + Math.round((cw - w) / 2), y = Y(floorY(f) - 108);
-  if (y < -14 || y > lo.height) return;
-  box(x, y, w, 11, PAL.lantern);
-  if (!(S.power || (S.outage && S.outage.gen))) return;
-  const cp = carPos(e.id, f), up = f - cp, here = Math.abs(e.pos - cp) < 0.05 && e.state === 'doors';
-  const waiting = buttonsMode() ? (hallLit(e.group, f, 1) || hallLit(e.group, f, -1)) : destsAt(e, f).length > 0;
-  if (!here && !waiting && Math.abs(e.pos - cp) > 1.5 && !e.carCalls.has(cp) && !assignedTo(e, cp, 1) && !assignedTo(e, cp, -1)) {
-    R(x + Math.floor(w / 2) - 1, y + 5, 3, 1, PAL.dim);
-    return;
-  }
-  reserve(x, y, w, 11);
-  const col = here ? '#7dff9a' : PAL.led, s = fl(Math.round(e.pos) + up);
-  // riktningen som en liten pil till vänster om siffran (när den får plats)
-  const arrow = e.dir && (e.state === 'moving' || here) && ledW(s) + 5 <= w - 2;
-  led(g, s, x + Math.round(w / 2) + (arrow ? 2 : 0), y + 2, col, 'center');
-  if (arrow) {
-    const ax = x + 2, ay = y + 4;
-    if (e.dir > 0) { R(ax + 1, ay, 1, 1, col); R(ax, ay + 1, 3, 1, col); } else { R(ax, ay, 3, 1, col); R(ax + 1, ay + 1, 1, 1, col); }
   }
 }
 /** målvåningarna för dem som väntar på våning f och har fått hissen e (i färdriktningen, närmast först) @param {Elevator} e */

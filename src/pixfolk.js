@@ -2,7 +2,7 @@
 // telefonsamtal, spårningen och muspekaren, repliker i hallen och ljudeffekterna ("STÄNG!" …).
 import { S } from './state.js';
 import { inWindow, landPos, peopleBehindDoor, personHead, seenAt } from './render.js';
-import { CAR_H, CAR_W, DOOR_X, FL, FLOOR_H, floorY, INNER_X1, LAND_X0, shaftX, surf } from './config.js';
+import { BX1, CAR_H, CAR_W, DOOR_X, FL, FLOOR_H, floorY, INNER_X1, LAND_X0, shaftX, surf } from './config.js';
 import { cargoSprite, PERSON_H, PERSON_W, personSprite } from './pixpeople.js';
 import { buttonsMode } from './buttons.js';
 import { plain, PX, text, textW } from './pixart.js';
@@ -12,7 +12,7 @@ import { CALL_REPLY } from './service.js';
 import { noteDetail, stateInfo } from './describe.js';
 import { CREW_BY } from './crew.js';
 import { vpick, vrand } from './rng.js';
-import { VIEW, tinyText } from './view.js';
+import { liftsShown, VIEW, tinyText } from './view.js';
 import { ants, ARROW, box, g, INK, keepIn, label, line, lo, pill, place, R, reserve, X, XW, Y } from './pixcore.js';
 import { blinkOf, drawCarTalkPx, hoseSpray } from './pixcars.js';
 import { BENCH, benchSeat } from './pixhall.js';
@@ -40,7 +40,9 @@ export function drawHallPeople() {
   for (const p of S.people) {
     if (p.dead) continue;
     const lp = landPos(p);
-    if (lp) list.push({ p, lp });
+    // (Våningarna har inga hissar: den som går in i ett schakt försvinner genom väggen i hallens högerkant –
+    // utom på väg ut till panoramahissen på fasaden)
+    if (lp && (liftsShown() || !(lp.x > INNER_X1 + 2 && lp.x < BX1))) list.push({ p, lp });
   }
   list.sort((a, b) => (a.p.depth - b.p.depth) || (a.p.id - b.p.id));
   for (const { p, lp } of list) {
@@ -235,13 +237,13 @@ export function drawCallPx() {
 export function drawSelectionPx() {
   const p = S.sel;
   if (!p || p.dead) return;
-  if (p.state === 'wait' && p.assigned !== null) {
+  if (p.state === 'wait' && p.assigned !== null && (liftsShown() || S.elevators[p.assigned].facade)) {
     const e = S.elevators[p.assigned], x = X(shaftX(e.id) + 4), yt = Y(floorY(e.pos) - 4 - CAR_H), cw = XW(shaftX(e.id) + 4, CAR_W);
     ants(x - 2, yt - 2, cw + 4, CAR_H / PX + 4, '#ffe14d');
     label(`→ ${p.name}`, x + cw / 2, yt - 12, '#ffe14d');
   }
   const h = personHead(p);
-  if (!h) return;
+  if (!h || ('inCar' in h && !h.inCar.facade && !liftsShown())) return; // (i en hiss: syns i Hissarna)
   if (!seenAt(h)) { trackNote(p, X(DOOR_X) + 14, Y(floorY(p.floor)) - 14, true); return; }
   const bob = Math.round(Math.sin(S.anim * 6) * 1.5);
   const hx = X(h.x), hy = Y(h.y) - (p.state === 'wait' ? 17 : 8) + bob;

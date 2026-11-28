@@ -192,7 +192,13 @@ function playHtml() {
   return `<div class="pl-top"><span class="pl-logo" data-hint="Hissarna styrs av Hiss-O-Matic 3000">TORNET</span><span class="pl-sun">${night ? '🌙' : '☀️'}</span>`
     + `<span class="pl-ph"><b>${phaseName(h)}</b> · ${wx}<br><span class="dim">Dag ${S.day} · ${S.people.length} i huset · frö ${S.seed}</span></span>${flagsHtml()}</div>`
     + `<div class="pl-ctl">${ikon('pause', S.paused ? '▶' : '❚❚', S.paused ? 'Spela' : 'Paus', 'Mellanslag', S.paused)}${speeds}${skipBtn()}<span class="sp"></span><span class="pl-cam">${camTools()}</span>`
-    + `${ikon('help', '?', 'Hjälp', 'Handgreppen, tangenterna och mer om huset')}</div>${timelineHtml()}`;
+    + `${ikon('help', '?', 'Hjälp', 'Handgreppen, tangenterna och mer om huset')}</div>${modeHtml()}${timelineHtml()}`;
+}
+/** de två vyerna: Våningarna (folket, rummen och hallarna) och Hissarna (schakten och korgarna) */
+function modeHtml() {
+  const f = VIEW.mode === 'floors';
+  return `<div class="pl-view">${btn('mode:floors', '🏢 Våningarna', f, '<b>Våningarna</b><br>Rummen och hallarna – folket i huset (V)')}`
+    + `${btn('mode:lifts', '🛗 Hissarna', !f, '<b>Hissarna</b><br>Schakten och korgarna med dem som åker (V)')}</div>`;
 }
 // ---------- Språket: två pixelflaggor längst upp till höger ----------
 // (ritade som SVG i 16×10 rutor utan utjämning; texterna står på respektive språk och översätts inte)
@@ -446,6 +452,8 @@ function barHtml() {
   const c = crewNow(), who = c ? esc(c.who.name) : 'Regissören';
   return ikon('pause', S.paused ? '▶' : '❚❚', S.paused ? 'Spela' : 'Paus', 'Pausa eller spela', S.paused)
     + ikon('auto', '🎬', 'Regissören', VIEW.autoWant ? sv`${who} klipper bilden åt dig – tryck för fri kamera` : 'Fri kamera: dra i bilden och tryck på det du vill följa – tryck så klipper regissören åt dig', VIEW.autoWant)
+    + (VIEW.mode === 'lifts' ? ikon('mode:floors', '🏢', 'Våningarna', 'Rummen och hallarna – folket i huset')
+      : ikon('mode:lifts', '🛗', 'Hissarna', 'Schakten och korgarna med dem som åker'))
     + (skipping() ? ikon('skip', '⏩', 'Sluta spola', sv`Spolar natten i ${SKIP_SPEED}× – tryck för att sluta`, true)
       : canSkip() ? ikon('skip', '⏩', 'Till morgonen', sv`Spola fram natten i ${SKIP_SPEED}× – stannar på morgonen eller när något händer`) : '')
     + `<span class="m-sep"></span>` + ikon('help', '?', 'Hjälp', 'Vad du tittar på – och varför Tornet gör sig bäst på en dator')

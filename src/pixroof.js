@@ -9,7 +9,7 @@ import { inWindow } from './render.js';
 import { clamp, fl } from './util.js';
 import { PAL } from './pixpal.js';
 import { plain, PX, text, textW } from './pixart.js';
-import { nightness, VIEW } from './view.js';
+import { liftsShown, nightness, VIEW } from './view.js';
 import { WARM_AT } from './service.js';
 import { vrand } from './rng.js';
 import { box, CY, g, HELI, INK, label, line, lo, pill, PUFF, R, RELIGHT_S, reserve, visibleX, wheelSprite, X, Y } from './pixcore.js';
@@ -101,9 +101,13 @@ function movePile(f, items) {
 // ---------- Taket, helikoptern, incidenter ----------
 export function drawRoofPx() {
   const n = nightness(hour());
-  box(X(SHAFT_X0 - 8), Y(ROOF_Y - 50), Math.round((UX1 - SHAFT_X0 + 4) / PX), 24, PAL.machine);
-  R(X(SHAFT_X0 - 8) + 1, Y(ROOF_Y - 50) + 1, Math.round((UX1 - SHAFT_X0 + 4) / PX) - 2, 1, PAL.machineHi);
-  text(g, 'MASKINRUM', X(SHAFT_X0), Y(ROOF_Y - 50) + 2, INK);
+  // hissarnas maskinrum syns bara i Hissarna (i Våningarna bara panoramahissens hjul ovanför fasaden)
+  const lifts = liftsShown();
+  if (lifts) {
+    box(X(SHAFT_X0 - 8), Y(ROOF_Y - 50), Math.round((UX1 - SHAFT_X0 + 4) / PX), 24, PAL.machine);
+    R(X(SHAFT_X0 - 8) + 1, Y(ROOF_Y - 50) + 1, Math.round((UX1 - SHAFT_X0 + 4) / PX) - 2, 1, PAL.machineHi);
+    text(g, 'MASKINRUM', X(SHAFT_X0), Y(ROOF_Y - 50) + 2, INK);
+  }
   /** @param {Elevator} e */
   const wheel = (e, cx, cy) => {
     g.drawImage(wheelSprite(e.color, Math.floor(((e.distance * 2.2) % (Math.PI / 3)) / (Math.PI / 3) * 6)), X(cx) - 8, Y(cy) - 8);
@@ -135,7 +139,8 @@ export function drawRoofPx() {
   };
   for (const e of S.elevators) {
     const cx = shaftCX(e.id);
-    if (EL[e.id].facade) { box(X(UX1 + 4), Y(ROOF_Y - 26), Math.round((cx - UX1 + 2) / PX), 4, PAL.steel); wheel(e, cx, ROOF_Y - 20); continue; }
+    if (EL[e.id].facade) { box(X(UX1 + 4), Y(ROOF_Y - 26), X(cx + 2) - X(UX1 + 4), 4, PAL.steel); wheel(e, cx, ROOF_Y - 20); continue; }
+    if (!lifts) continue;
     if (EL[e.id].maxF >= TOP) { wheel(e, cx, ROOF_Y - 20); continue; }
     if (stackedAbove(EL[e.id])) continue; // maskinen sitter i mellanbjälklaget under höga zonen
     const y = shaftTop(EL[e.id]);
@@ -143,9 +148,10 @@ export function drawRoofPx() {
     wheel(e, cx, y - 19);
   }
   // skylten på taket
-  const sx0 = SHAFT_X0 - 16, sx1 = UX1 + 16; // skylten får skjuta ut lite över det smala tornet
+  // (i Våningarna står den över takträdgården: hisschakten under är ihopfällda)
+  const sx0 = lifts ? SHAFT_X0 - 16 : LAND_X0 + 40, sx1 = UX1 + 16; // skylten får skjuta ut lite över det smala tornet
   // (skylten slutar ovanför maskinrummet: 16 + 36 låga pixlar = 88 < ROOF_Y - 50)
-  for (const px of [sx0 + 60, sx1 - 60]) R(X(px) - 1, Y(88), 3, Y(ROOF_Y - 50) - Y(88), INK);
+  for (const px of [sx0 + 60, sx1 - 60]) R(X(px) - 1, Y(88), 3, Y(ROOF_Y - (lifts ? 50 : 4)) - Y(88), INK);
   const bx = X(sx0), by = Y(16), bw = X(sx1) - bx, bh = 36;
   box(bx, by, bw, bh, PAL.sign); R(bx + 1, by + 1, bw - 2, 1, PAL.signHi); R(bx + 1, by + bh - 2, bw - 2, 1, PAL.signLo);
   const nb = Math.floor((bw - 12) / 10);
@@ -157,7 +163,7 @@ export function drawRoofPx() {
   // (textens överkant är accentraden och konturen – två rader ovanför bokstäverna)
   text(g, 'SKYSKRAPAN', bx + bw / 2, by + Math.round((bh - 5 * ts) / 2) - 2 * ts, '#ffffff', 'center', ts, INK);
   const ax = X(UX1 - 24);
-  R(ax, Y(16), 2, Y(ROOF_Y - 50) - Y(16), INK); R(ax - 7, Y(60), 16, 2, INK); R(ax - 5, Y(80), 12, 2, INK);
+  R(ax, Y(16), 2, Y(ROOF_Y - (lifts ? 50 : 4)) - Y(16), INK); R(ax - 7, Y(60), 16, 2, INK); R(ax - 5, Y(80), 12, 2, INK);
   // vimpel i masten: står rakt ut i stormen
   const w = windAt(), fl0 = Y(40), flen = 5 + Math.round(w * 16);
   for (let i = 0; i < flen; i++) {

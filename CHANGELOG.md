@@ -1,5 +1,12 @@
 # Ändringar
 
+## 2026-11-28 – två vyer: Våningarna och Hissarna
+- **Spelaren växlar mellan två vyer** med knapparna 🏢 Våningarna / 🛗 Hissarna under uppspelningsraden, tangenten V eller 🏢/🛗 i mobilens list (`VIEW.mode`, `setMode` i view.js). Bilden glider över när vyn byts. `?vy=hissar` startar i Hissarna.
+- **Våningarna** handlar om folket: inga hissar syns (bara panoramahissen på fasaden). Hisschakten fälls ihop till en vägg i hallens högerkant (`mapX` i view.js), och den som ska åka går in genom den. Rummen till vänster om hallen syns för första gången (pixrooms.js): fönster mot himlen, inredning efter våningens tema – tandläkarstolen, bankvalvet, ON AIR-lampan, aerobicspeglarna, serverhyllorna, labbänken, caféet, soffan och tv:n hemma, de parkerade bilarna i garaget – och de som är inne sitter vid sina skrivbord eller står på sina platser (`roomPos`/`ROOM_SEATS` i render.js). De går att klicka på och följa. Rummen är mörka när ingen är där på kvällen och när våningen har stängt.
+- **Hissarna** är huset som det alltid har ritats, men bara schakten: korgarna med folket, linorna, dörrarna, displayerna och maskinrummet.
+- **Följer man en hiss byter bilden till Hissarna, och visar man en våning till Våningarna.** Regissören väljer vy efter tagningen (`shotView` i director.js): en hiss i Hissarna, allt annat i Våningarna. Byter spelaren vy själv tar hen kameran, och regissören tar den igen efter en stund som vanligt.
+- Bara grafik: simuleringen, dygnen och facit är oförändrade. Provspelningen har två nya ögonblick (*frö21-hissarna* och *frö21-rummen*).
+
 ## 2026-11-27 – skywalken går bakåt, bilden är smal igen
 - **Bron till Kronan syns inte längre i bilden.** Den går bakåt från dörren i sky lobbyn, ut ur bild, och bilden är tornets bredd igen (`W` = `TOWER_W`): ingen glidning i sidled, och Kronans remsa, Jörgen i gondolen och pixskywalk.js är borta. Simuleringen är oförändrad (bron var bara grafik), så dygnen och facit är desamma.
 - **Genom dörrens glas** (`bridgeDoor` i pixhall.js) syns bron i perspektiv mot Kronans dörr, och de som är ute på bron som siluetter, mindre ju längre bort de är. Den höjdrädda står still och skakar med rött huvud. Bron lyser på kvällen, arbetslampan blinkar på underhållsnätter, och väktaren står bredvid dörren när bron hålls öppen i stormen. Repliker från bron står över dörren (`drawBridgeTalkPx`), och regissören och den man följer på bron går till dörren.

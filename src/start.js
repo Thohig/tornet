@@ -21,7 +21,7 @@ import { getLang, setLang, tr } from './lang.js';
 import { extraActions, followCarOnly, followFloor, followPerson } from './input.js';
 import { repaintAll } from './panels.js';
 import { startAuto } from './director.js';
-import { VIEW, screenMode } from './view.js';
+import { VIEW, screenMode, setMode } from './view.js';
 import { sv } from './sv.js';
 import { act } from './actions.js';
 import { dateParts, ymd } from './calendar.js';
@@ -90,6 +90,8 @@ export function startGame(repro) {
 }
 function go() {
   S.started = true;
+  // ?vy=hissar: börja i Hissarna (provspelningen, länkar till ett ögonblick)
+  if (/^(hissar|lifts)$/.test(new URLSearchParams(location.search).get('vy') || '')) setMode('lifts');
   if (moment) { S.paused = true; VIEW.autoWant = false; followMoment(moment.follow); return; } // (ingen logg, ingen regissör: ögonblicket som det var)
   const mob = screenMode().mob;
   if (prefs().dir) startAuto();

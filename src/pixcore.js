@@ -5,7 +5,7 @@ import { PAL } from './pixpal.js';
 import { ellipseSprite, fromCells, light, plain, PX, sprite, text, TEXTLOG, textW } from './pixart.js';
 import { H, W } from './config.js';
 import { clamp } from './util.js';
-import { cv, mapKey, mapX, nightness, VIEW } from './view.js';
+import { cv, mapX, nightness, VIEW } from './view.js';
 import { S } from './state.js';
 import { profLayer, profOn } from './prof.js';
 import { getLang } from './lang.js';
@@ -20,7 +20,7 @@ const G = /** @type {CanvasRenderingContext2D} */ (LO.getContext('2d'));
 // lo/g är ritytan som ritfunktionerna skriver till just nu: bilden, eller ett statiskt lager (se layer)
 export let lo = LO, g = G;
 export let X0 = 0, CY = 0;
-/** världens x/y → pixel i ritytan (i Våningarna är schakten utom det öppna smalare: mapX i view.js) */
+/** världens x/y → pixel i ritytan (i Våningarna är hisschakten ihopfällda: mapX i view.js) */
 export const X = x => Math.round((mapX(x) - X0) / PX);
 /** hur bred en bit av världen (från x, w världsenheter) blir i ritytan */
 export const XW = (x, w) => X(x + w) - X(x);
@@ -37,7 +37,7 @@ export const R = (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(x, y, w, h); }
 const layers = new Map();
 export function layer(name, key, draw) {
   let L = layers.get(name);
-  const full = `${key}|${LO.width}|${X0}|${mapKey()}|${getLang()}`; // (språket: skyltarna i lagren ritas om när det byts)
+  const full = `${key}|${LO.width}|${X0}|${getLang()}`; // (språket: skyltarna i lagren ritas om när det byts)
   if (!L || L.key !== full) {
     if (!L) { const c = document.createElement('canvas'); L = { c, g: /** @type {CanvasRenderingContext2D} */ (c.getContext('2d')), key: '' }; layers.set(name, L); }
     L.c.width = LO.width; L.c.height = Math.ceil(H / PX) + 4; // (att sätta storleken tömmer lagret)
@@ -107,10 +107,10 @@ export function reserve(x, y, w, h) { taken.push({ x, y, w, h }); }
 /** En ny bildruta: ritytan får fönstrets storlek, kameran läses av och platsbokningen töms.
  *  Ger skalan (skärmpixlar per världsenhet) och ritytans storlek i låga pixlar. */
 export function beginFrame() {
-  const s = (VIEW.mode === 'lifts' ? VIEW.lscale : VIEW.scale) * VIEW.dpr;
+  const s = VIEW.scale * VIEW.dpr;
   const w = Math.ceil(cv.width / s / PX) + 1, h = Math.ceil(cv.height / s / PX) + 2;
   if (lo.width !== w || lo.height !== h) { lo.width = w; lo.height = h; }
-  X0 = VIEW.x0; CY = VIEW.mode === 'lifts' ? 0 : Math.floor(VIEW.camY / PX);
+  X0 = VIEW.x0; CY = Math.floor(VIEW.camY / PX);
   g.setTransform(1, 0, 0, 1, 0, 0); g.imageSmoothingEnabled = false; g.globalAlpha = 1;
   taken = [];
   if (TEXTLOG.on) { TEXTLOG.ctx = G; TEXTLOG.list = []; } // (provspelningen: textrutorna i bildrutan)
@@ -119,7 +119,7 @@ export function beginFrame() {
 /** Det som syns i sidled, i låga pixlar [vänster, höger]: på mobilen i närbild är bilden bredare än skärmen och
  *  flyttad VIEW.panX css-pixlar (view.js) – text som hålls inom hela bilden kan hamna utanför skärmen. */
 export function visibleX() {
-  const k = lo.width / Math.max(1, VIEW.mode === 'lifts' ? VIEW.panW : (mapX(W) - VIEW.x0) * VIEW.scale); // låga pixlar per css-pixel
+  const k = lo.width / Math.max(1, (mapX(W) - VIEW.x0) * VIEW.scale); // låga pixlar per css-pixel
   const vx0 = VIEW.panX * k;
   return [vx0, VIEW.panW > 0 ? Math.min(lo.width, vx0 + VIEW.panW * k) : lo.width];
 }

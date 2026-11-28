@@ -516,7 +516,7 @@ export function showIntro(mode = S.started ? 'help' : 'start', then = /** @type 
       <li><b>Kontrollpanelen</b> anpassar sig efter vad som händer: när det är lugnt kan du framkalla incidenter och byta styrlogik, när något händer visar den bara det.</li>`}
       ${mob ? '' : `<li>Hissen eller våningen du följer har egna knappar: framkalla ett hissfel, en brand eller släpp in besökare just där.</li>
       <li>Knapparna är <b>ikoner</b> – ${touch ? 'håll fingret på en' : 'vila musen på en'} så står det vad den gör.</li>`}
-      ${mob ? '' : touch ? '<li><b>Dra</b> i bilden med ett finger för att se resten av huset; två fingrar zoomar.</li>' : `<li class="intro-keys"><kbd>Mellanslag</kbd> paus · <kbd>−</kbd>/<kbd>+</kbd> hastighet · <kbd>N</kbd> spola fram natten · <kbd>H</kbd> biografläge · <kbd>S</kbd> styrlogik · <kbd>T</kbd> namnbrickor · <kbd>F</kbd> koppla loss/på kameran · <kbd>A</kbd> regissör (kameran väljer själv) · <kbd>Esc</kbd> sluta följa/tillbaka</li>`}
+      ${mob ? '' : touch ? '<li><b>Dra</b> i bilden med ett finger för att se resten av huset; två fingrar zoomar.</li>' : `<li class="intro-keys"><kbd>Mellanslag</kbd> paus · <kbd>−</kbd>/<kbd>+</kbd> hastighet · <kbd>N</kbd> spola fram natten · <kbd>H</kbd> biografläge · <kbd>S</kbd> styrlogik · <kbd>T</kbd> namnbrickor · <kbd>F</kbd> koppla loss/på kameran · <kbd>A</kbd> regissör (kameran väljer själv) · <kbd>V</kbd> våningarna/hissarna · <kbd>Esc</kbd> sluta följa/tillbaka</li>`}
     </ul>
     <button class="btn" id="go">${help ? 'TILLBAKA' : 'KÖR!'}</button>
     <details class="intro-more"><summary>Mer om huset</summary>

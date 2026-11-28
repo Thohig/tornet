@@ -61,6 +61,8 @@ const MOMENTS = [
   { name: 'frö21-lunch', q: 'seed=21&h=12.4&follow=6', views: ['dator'] },
   { name: 'frö21-kväll', q: 'seed=21&h=17.6&follow=E', views: ['dator'] },
   { name: 'frö21-taket', q: 'seed=21&h=19.5&follow=T', views: ['dator'] },
+  { name: 'frö21-hissarna', q: 'seed=21&h=17.3&vy=hissar', views: ['dator', 'mobil'] },
+  { name: 'frö21-rummen', q: 'seed=21&h=10.6&follow=8', views: ['dator'] },
   { name: 'frö5-natt', q: 'seed=5&h=23.2', views: ['dator'] },
   { name: 'frö5-perrong', q: 'seed=5&h=7.9&follow=TB', views: ['dator'] },
   { name: 'frö7-incident1', seed: 7, inc: 0, views: ['dator', 'mobil'] },

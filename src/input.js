@@ -8,10 +8,10 @@
 // finns ingen högerklicksmeny
 import { act, ACTIONS } from './actions.js';
 import { clamp } from './util.js';
-import { BX0, CAR_H, CAR_W, DOOR_X, FLOOR_H, GROUND_Y, H, INNER_X1, LOBBY, ROOF_Y, STRAT_NAMES, TOP, WAIT_X1, floorY, shaftX, surf } from './config.js';
+import { BX0, LAND_X0, CAR_H, CAR_W, DOOR_X, FLOOR_H, GROUND_Y, H, INNER_X1, LOBBY, ROOF_Y, STRAT_NAMES, TOP, WAIT_X1, floorY, shaftX, surf } from './config.js';
 import { S, clockStr, hour, log } from './state.js';
 import { busFrom } from './tour.js';
-import { VIEW, camTarget, cv, detachCam, followCar, lookAt, scrollBy, scrollToFloor } from './view.js';
+import { VIEW, camTarget, cv, detachCam, followCar, lookAt, scrollBy, scrollToFloor, setMode, unmapX } from './view.js';
 import { personHead, peopleBehindDoor, seenAt } from './render.js';
 import { foldInc, select } from './hud.js';
 import { toggleSound, unlockSound } from './sound.js';
@@ -72,6 +72,14 @@ export function reattachCam() {
   }
 }
 /** F: koppla loss kameran om den följer något, annars koppla på den igen */
+/** Byt vy (spelarens val: Våningarna ⇄ Hissarna). Spelaren tar då kameran – regissören vilar en stund och väljer
+ *  sedan vy själv igen. @param {'floors'|'lifts'|''} [mode] tom = den andra */
+export function toggleView(mode = '') {
+  const want = mode || (VIEW.mode === 'lifts' ? 'floors' : 'lifts');
+  if (VIEW.auto) { VIEW.auto = false; VIEW.shot = null; }
+  VIEW.freeAt = S.anim;
+  setMode(want);
+}
 export function toggleCam() { if (camTarget()) { detachCam(); VIEW.freeAt = S.anim; } else reattachCam(); }
 /** följ nästa person som är inne på våningen f (klick på korridoren) */
 export function followInside(f) {
@@ -82,7 +90,7 @@ function bus() {
   if (!S.started || S.fire) return;
   const n = act('bus');
   if (n < 0) return; // (en buss står redan vid hållplatsen)
-  const x = VIEW.x0 + 200, y = surf(LOBBY) - 90; // (i hallen – rummen till vänster om VIEW.x0 syns inte)
+  const x = LAND_X0 + 200, y = surf(LOBBY) - 90; // (i hallen)
   if (!n) {
     const h = busFrom();
     const text = h === null ? 'STÄNGT – KOM IMORGON!' : sv`FÖRST KL ${clockStr(h)}!`;
@@ -141,6 +149,7 @@ export function doAction(cmd) {
   }
   else if (a === 'unfollow') unfollow();
   else if (a === 'auto') toggleAuto();
+  else if (a === 'mode') toggleView(b === 'lifts' ? 'lifts' : b === 'floors' ? 'floors' : '');
   else if (a === 'cam') { if (b === 'off') { detachCam(); VIEW.freeAt = S.anim; } else reattachCam(); }
   else if (a === 'pow') {
     if (b === 'gen') act('generator');
@@ -199,6 +208,7 @@ window.addEventListener('keydown', ev => {
   if (ev.code === 'KeyM') toggleSound();
   if (ev.code === 'KeyF') toggleCam();
   if (ev.code === 'KeyA') toggleAuto();
+  if (ev.code === 'KeyV') toggleView();
   if (ev.code === 'KeyS') { cycleStrategy(); log(`Styrlogik: ${STRAT_NAMES[S.strategy]}`, 'sys'); }
   if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'].includes(ev.code)) {
     ev.preventDefault();
@@ -217,7 +227,7 @@ window.addEventListener('keydown', ev => {
 // ---------- Bilden ----------
 export function toWorld(ev) {
   const r = cv.getBoundingClientRect();
-  return { x: (ev.clientX - r.left) / VIEW.scale + VIEW.x0, y: (ev.clientY - r.top) / VIEW.scale + VIEW.camY };
+  return { x: unmapX((ev.clientX - r.left) / VIEW.scale + VIEW.x0), y: (ev.clientY - r.top) / VIEW.scale + VIEW.camY };
 }
 /** vilken våningskorridor (dörr) ligger under muspekaren? */
 export function hitDoor(x, y) {
@@ -241,6 +251,7 @@ export function hitPerson(x, y) {
 }
 export function hitCar(x, y) {
   for (const e of S.elevators) {
+    if (!e.facade && VIEW.mode !== 'lifts') continue; // (i Våningarna syns bara panoramahissen)
     const cx = shaftX(e.id) + 4, yb = floorY(e.pos) - 4;
     if (x >= cx && x <= cx + CAR_W && y >= yb - CAR_H && y <= yb) return e;
   }

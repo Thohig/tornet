@@ -17,7 +17,7 @@ import { CREW_BY, atPost, crewPerson, postFloor } from './crew.js';
 import { S, hour } from './state.js';
 import { cap, fl } from './util.js';
 import { vpick, vrand } from './rng.js';
-import { VIEW, camMax, camTarget, detachCam, keepX, seeH } from './view.js';
+import { VIEW, camMax, camTarget, detachCam, keepX, seeH, setMode } from './view.js';
 import { personHead } from './render.js';
 import { cleanerAt } from './hoist.js';
 import { dockTruckX } from './pixbuilding.js';
@@ -238,6 +238,12 @@ function rate(s, current = false) {
   return s.score - bored - (i < 0 ? 0 : (MEMORY - i) * 6) + vrand(0, 6);
 }
 
+/** Vilken vy tagningen visas i: en hiss i Hissarna, allt annat i Våningarna – där syns bara panoramahissen på
+ *  fasaden. @param {Shot} s @returns {'floors'|'lifts'} */
+export function shotView(s) {
+  if (s.kind === 'car') return S.elevators[s.id] && S.elevators[s.id].facade ? 'floors' : 'lifts';
+  return 'floors';
+}
 /** Var tagningen är just nu (världens y), eller null om den inte längre går att visa. */
 function shotY(s) {
   if (s.kind === 'floor') return floorY(s.id) - FLOOR_H / 2;
@@ -335,6 +341,7 @@ export function updateDirector() {
     }
   }
   if (!s) return;
+  if (VIEW.mode !== shotView(s)) setMode(shotView(s));
   // texten kan ändras medan tagningen pågår (väntetid, antal, "faller!" → "fångapparaten tog"), och målet också:
   // panoramaräddningen går från korgen till den som firas ner, brandmannen man följde har gått in, teknikern
   // som ringer kliver ur hissen – samma tagning, så kameran följer med i stället för att stå kvar

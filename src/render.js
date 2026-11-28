@@ -5,7 +5,7 @@ import { BX1, CAR_W, DOOR_X, FL, SKYWALK_F, TOP, TOWER_X1, W, WAIT_X1, floorY, s
 import { TERRACE_Y } from './hoist.js';
 import { riderPos } from './pano.js';
 import { S } from './state.js';
-import { clouds } from './view.js';
+import { clouds, cv, SNAP, VIEW } from './view.js';
 import { renderPixel } from './pixel.js';
 import { PX } from './pixart.js';
 import { PERSON_H, PERSON_W } from './pixpeople.js';
@@ -202,4 +202,9 @@ export function render(dt) {
   // molnen driver fortare när det blåser
   if (S.started && !S.paused) { const w = 1 + windAt() * 5; for (const c of clouds) { c.x += c.v * dt * S.speed * w; if (c.x > W + 80) c.x = -80; } }
   renderPixel(dt);
+  // övergången mellan vyerna: den gamla bilden glider ut åt sidan över den nya (view.js, setMode)
+  if (VIEW.swap < 1 && SNAP.width) {
+    const ctx = cv.getContext('2d'), u = VIEW.swap * VIEW.swap * (3 - 2 * VIEW.swap);
+    if (ctx) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1 - u * 0.5; ctx.drawImage(SNAP, Math.round(VIEW.swapDir * u * cv.width), 0, cv.width, cv.height); ctx.globalAlpha = 1; }
+  }
 }
