@@ -27,7 +27,7 @@ import {
   BOILER_X, BREAK, CONTROL, DOCK, DOOR_X, EL, SHAFT_W, shaftX, FL, FLOOR_HOURS, floorOpen, FLOORS, floorY, INNER_X1,
   LAND_X0, LOBBY, MEZZ, SPOTS, STATION, TRAIN_LEN, TRAIN_X0, TRAIN_X1, SKYWALK_F,
 } from './config.js';
-import { blend, dark, light, plain, sprite, text, textW } from './pixart.js';
+import { blend, dark, light, plain, sprite, text, TEXTLOG, textW } from './pixart.js';
 import { PAL } from './pixpal.js';
 import { liftsShown, nightness } from './view.js';
 import { inWindow, personHead, seenAt, winPos } from './render.js';
@@ -468,12 +468,13 @@ function controlRoom(top, bot) {
   const C0 = S.chief, say = C0 && C0.on && C0.say && S.t < C0.say.until ? C0.say : null;
   R(wx, wy, ww, 7, say ? '#000000' : '#000080');
   g.save(); g.beginPath(); g.rect(wx + 1, wy, ww - 9, 7); g.clip();
+  TEXTLOG.clip = { x: wx + 1, w: ww - 9 }; // (provspelningen: bara det som syns i remsan räknas)
   if (say) {
     const str = plain(say.text.toUpperCase()), tw = textW(str), room = ww - 10;
     const off = tw <= room ? 0 : Math.floor(((S.t - say.t0) * 22) % (tw + 24)) - 12;
     text(g, str, wx + 2 - Math.max(0, off), wy + 1, say.dec ? '#ffd23f' : '#7dff9a');
   } else text(g, 'DRIFTCENTRAL', wx + 3, wy + 1, '#ffffff');
-  g.restore();
+  g.restore(); TEXTLOG.clip = null;
   reserve(wx - 2, wy - 2, ww + 4, 9);
   // larmljuset: snurrar rött under incidenter och färgar rummet
   const lx = wx + ww - 6;

@@ -174,6 +174,8 @@ function scaleUp(src, k) {
  * hamnade i bilden, så att text som ritas över annan text går att hitta. ctx = bildens ritning (pixcore.js
  * sätter den i beginFrame), text i lagren räknas inte. */
 export const TEXTLOG = { on: false, ctx: /** @type {CanvasRenderingContext2D|null} */ (null),
+  /** text som ritas inom ett klipp (textremsan i driftcentralens fönster): bara det som syns räknas */
+  clip: /** @type {{ x: number, w: number }|null} */ (null),
   list: /** @type {{ s: string, x: number, y: number, w: number, h: number, at: string }[]} */ ([]) };
 /** rita text; align 'left' | 'center' | 'right'; y = textens överkant (accentraden) */
 export function text(g, str, x, y, color = INK, align = 'left', scale = 1, outline = null) {
@@ -186,7 +188,8 @@ export function text(g, str, x, y, color = INK, align = 'left', scale = 1, outli
     // raden, den första med ett namn ger funktionen, även när texten ritas i en anonym funktion)
     const own = (new Error().stack || '').split('\n').filter(l => /\/src\/(pix(?!art|core)\w*|render)\.js/.test(l));
     const fn = own.map(l => (l.match(/at ([\w$]+) \(/) || [])[1]).find(Boolean) || '';
-    TEXTLOG.list.push({ s: tr(str), x: Math.round(x - dx), y: Math.round(y), w: s.width, h: s.height,
+    const c = TEXTLOG.clip, x0 = Math.round(x - dx), x1 = c ? Math.max(x0, c.x) : x0, w = c ? Math.min(x0 + s.width, c.x + c.w) - x1 : s.width;
+    if (w > 0) TEXTLOG.list.push({ s: tr(str), x: x1, y: Math.round(y), w, h: s.height,
       at: `${fn} ${((own[0] || '').match(/\/src\/([\w.]+:\d+)/) || [])[1] || ''}`.trim() });
   }
   return s.width;
